@@ -1,0 +1,894 @@
+---
+title: "Day 35: Project - Spec-Driven AI Coder"
+description: "Build a multi-phase agent IDE that plans, implements, and tests code following formal specifications."
+week: 5
+---
+
+<ReadingTime minutes={50} />
+
+<SkillLevel level="expert" description="Advanced capstone" />
+
+<Prerequisites
+  items={[
+    "Completed orchestration patterns (Day 09)",
+    "Understanding of autonomous loops (Day 20)",
+    "Familiarity with code generation and AST",
+    "Experience with test-driven development",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Implement spec-driven development with AI agents",
+    "Separate planning from implementation in agent workflows",
+    "Build multi-agent systems with strict phase boundaries",
+    "Create verification agents that validate implementations",
+    "Design agent systems that prevent scope creep and hallucination",
+  ]}
+/>
+
+---
+
+## Project Overview
+
+Build **SpecCoder**: a terminal-based AI coding assistant that follows a formal three-phase process—Plan, Implement, Test—to build applications from high-level requirements.
+
+<Callout type="info">
+  **The Philosophy:** This project implements "King Mode"—the planner agent
+  thinks architecturally but never writes code. The implementer agent writes
+  code but never makes architectural decisions. This separation prevents the
+  common failure mode of agents that start coding before thinking.
+</Callout>
+
+---
+
+## Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Phase 1: Planning (King Mode)"
+        User([👤 User Goal]) --> Planner[🧠 Planner Agent]
+        Planner --> Spec[📋 spec.md]
+        Planner -.->|"NO CODE"| X1[❌]
+    end
+    
+    subgraph "Phase 2: Implementation"
+        Spec --> Implementer[⚙️ Implementer Agent]
+        Implementer --> Code[💻 Source Files]
+        Implementer -.->|"NO ARCHITECTURE"| X2[❌]
+    end
+    
+    subgraph "Phase 3: Verification"
+        Code --> Tester[🧪 Tester Agent]
+        Spec --> Tester
+        Tester --> Report[📊 Test Report]
+        Report -->|"FAIL"| Implementer
+        Report -->|"PASS"| Done([✅ Complete])
+    end
+    
+    style Planner fill:#f9f,stroke:#333
+    style Implementer fill:#bbf,stroke:#333
+    style Tester fill:#bfb,stroke:#333
+`}
+/>
+
+---
+
+## The Three Phases
+
+<OrchestratorPattern
+  orchestratorName="SpecCoder Orchestrator"
+  orchestratorModel="State Machine"
+  specialists={[
+    {
+      name: "Planner",
+      role: "Architecture & spec generation",
+      model: "Claude Opus",
+      icon: "brain",
+    },
+    {
+      name: "Implementer",
+      role: "Code generation from spec",
+      model: "GPT-4",
+      icon: "cpu",
+    },
+    {
+      name: "Tester",
+      role: "Verification & validation",
+      model: "Claude Sonnet",
+      icon: "bug",
+    },
+  ]}
+  workflow={[
+    "User Goal",
+    "Plan (spec.md)",
+    "Implement (code)",
+    "Test (verify)",
+    "Done or Loop",
+  ]}
+  parallelExecution={false}
+/>
+
+| Phase         | Agent       | Input       | Output       | Constraints              |
+| :------------ | :---------- | :---------- | :----------- | :----------------------- |
+| **Plan**      | Planner     | User goal   | spec.md      | NO code generation       |
+| **Implement** | Implementer | spec.md     | Source files | NO architectural changes |
+| **Test**      | Tester      | Code + spec | Test report  | NO code fixes            |
+
+---
+
+## Part 1: The Planner Agent (King Mode)
+
+The Planner thinks architecturally but **never writes implementation code**.
+
+````python
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from pathlib import Path
+
+class FileSpec(BaseModel):
+    path: str
+    purpose: str
+    exports: List[str]
+    dependencies: List[str]
+
+class ComponentSpec(BaseModel):
+    name: str
+    type: str  # "page", "component", "utility", "api"
+    description: str
+    props: Optional[List[dict]] = None
+    methods: Optional[List[dict]] = None
+
+class ArchitectureSpec(BaseModel):
+    project_name: str
+    description: str
+    tech_stack: List[str]
+    file_structure: List[FileSpec]
+    components: List[ComponentSpec]
+    data_flow: str
+    constraints: List[str]
+    acceptance_criteria: List[str]
+
+class PlannerAgent:
+    """Phase 1: Architectural planning without code generation."""
+
+    SYSTEM_PROMPT = """You are an expert software architect operating in "King Mode".
+
+Your role is to create detailed architectural specifications for software projects.
+
+CRITICAL RULES:
+1. You MUST NOT write any implementation code
+2. You MUST NOT include code snippets, even as examples
+3. You ONLY produce architectural specifications
+4. Focus on WHAT needs to be built, not HOW to code it
+5. Define clear interfaces, data flows, and acceptance criteria
+
+Your output is a spec.md file that another agent will implement."""
+
+    def __init__(self):
+        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+
+    async def plan(self, user_goal: str) -> ArchitectureSpec:
+        """Generate architectural specification from user goal."""
+
+        prompt = f"""{self.SYSTEM_PROMPT}
+
+USER GOAL:
+{user_goal}
+
+Create a detailed architectural specification including:
+
+1. PROJECT OVERVIEW
+   - Name and description
+   - Tech stack choices with justification
+
+2. FILE STRUCTURE
+   - Every file that needs to be created
+   - Purpose of each file
+   - What each file exports
+   - Dependencies between files
+
+3. COMPONENT SPECIFICATIONS
+   - Each component/module needed
+   - Props/parameters for each
+   - Methods/functions each should have
+   - How components interact
+
+4. DATA FLOW
+   - How data moves through the application
+   - State management approach
+   - API contracts if applicable
+
+5. CONSTRAINTS
+   - Technical constraints
+   - Performance requirements
+   - Security considerations
+
+6. ACCEPTANCE CRITERIA
+   - Specific, testable criteria for "done"
+   - Edge cases to handle
+
+Respond in JSON matching this structure:
+{{
+  "project_name": "string",
+  "description": "string",
+  "tech_stack": ["string"],
+  "file_structure": [
+    {{"path": "string", "purpose": "string", "exports": ["string"], "dependencies": ["string"]}}
+  ],
+  "components": [
+    {{"name": "string", "type": "string", "description": "string", "props": [], "methods": []}}
+  ],
+  "data_flow": "string",
+  "constraints": ["string"],
+  "acceptance_criteria": ["string"]
+}}
+
+Remember: NO CODE. Only specifications."""
+
+        response = await self.llm.ainvoke(prompt)
+
+        import json
+        data = json.loads(response.content)
+        return ArchitectureSpec(**data)
+
+    def generate_spec_md(self, spec: ArchitectureSpec) -> str:
+        """Generate human-readable spec.md file."""
+
+        lines = [
+            f"# {spec.project_name}",
+            "",
+            f"_{spec.description}_",
+            "",
+            "## Tech Stack",
+            "",
+        ]
+
+        for tech in spec.tech_stack:
+            lines.append(f"- {tech}")
+
+        lines.extend([
+            "",
+            "## File Structure",
+            "",
+            "```",
+        ])
+
+        for file in spec.file_structure:
+            lines.append(f"{file.path}")
+            lines.append(f"  Purpose: {file.purpose}")
+            lines.append(f"  Exports: {', '.join(file.exports)}")
+            if file.dependencies:
+                lines.append(f"  Depends on: {', '.join(file.dependencies)}")
+            lines.append("")
+
+        lines.extend([
+            "```",
+            "",
+            "## Components",
+            "",
+        ])
+
+        for comp in spec.components:
+            lines.extend([
+                f"### {comp.name} ({comp.type})",
+                "",
+                comp.description,
+                "",
+            ])
+
+            if comp.props:
+                lines.append("**Props:**")
+                for prop in comp.props:
+                    lines.append(f"- `{prop.get('name')}`: {prop.get('type')} - {prop.get('description', '')}")
+                lines.append("")
+
+            if comp.methods:
+                lines.append("**Methods:**")
+                for method in comp.methods:
+                    lines.append(f"- `{method.get('name')}()`: {method.get('description', '')}")
+                lines.append("")
+
+        lines.extend([
+            "## Data Flow",
+            "",
+            spec.data_flow,
+            "",
+            "## Constraints",
+            "",
+        ])
+
+        for constraint in spec.constraints:
+            lines.append(f"- {constraint}")
+
+        lines.extend([
+            "",
+            "## Acceptance Criteria",
+            "",
+        ])
+
+        for i, criteria in enumerate(spec.acceptance_criteria, 1):
+            lines.append(f"{i}. {criteria}")
+
+        return "\n".join(lines)
+
+    async def run(self, user_goal: str, output_dir: Path) -> Path:
+        """Execute planning phase and write spec.md."""
+
+        print("🧠 Phase 1: Planning (King Mode)")
+        print("   Analyzing requirements...")
+
+        spec = await self.plan(user_goal)
+        spec_content = self.generate_spec_md(spec)
+
+        spec_path = output_dir / "spec.md"
+        spec_path.write_text(spec_content)
+
+        # Also save JSON for programmatic access
+        json_path = output_dir / "spec.json"
+        json_path.write_text(spec.model_dump_json(indent=2))
+
+        print(f"   ✅ Generated: {spec_path}")
+        print(f"   📁 {len(spec.file_structure)} files planned")
+        print(f"   🧩 {len(spec.components)} components specified")
+
+        return spec_path
+````
+
+---
+
+## Part 2: The Implementer Agent
+
+The Implementer writes code but **never makes architectural decisions**.
+
+```python
+class ImplementerAgent:
+    """Phase 2: Code generation strictly following the spec."""
+
+    SYSTEM_PROMPT = """You are an expert code implementer.
+
+Your role is to write code that EXACTLY matches the provided specification.
+
+CRITICAL RULES:
+1. You MUST follow the spec.md exactly
+2. You MUST NOT add features not in the spec
+3. You MUST NOT change the architecture
+4. You MUST NOT skip any specified file or component
+5. If something is unclear, implement the simplest version that meets the spec
+
+You implement WHAT the spec says, not what you think would be better."""
+
+    def __init__(self):
+        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.2)
+
+    async def implement_file(
+        self,
+        file_spec: FileSpec,
+        full_spec: ArchitectureSpec,
+        existing_files: dict[str, str]
+    ) -> str:
+        """Implement a single file according to spec."""
+
+        # Find relevant component specs
+        relevant_components = [
+            c for c in full_spec.components
+            if c.name in file_spec.exports or file_spec.path.endswith(f"{c.name.lower()}.tsx")
+        ]
+
+        component_details = "\n".join([
+            f"Component: {c.name}\n  Type: {c.type}\n  Description: {c.description}\n  Props: {c.props}\n  Methods: {c.methods}"
+            for c in relevant_components
+        ])
+
+        # Include dependency file contents
+        dependency_context = ""
+        for dep in file_spec.dependencies:
+            if dep in existing_files:
+                dependency_context += f"\n--- {dep} ---\n{existing_files[dep]}\n"
+
+        prompt = f"""{self.SYSTEM_PROMPT}
+
+SPECIFICATION:
+Project: {full_spec.project_name}
+Tech Stack: {', '.join(full_spec.tech_stack)}
+
+FILE TO IMPLEMENT:
+Path: {file_spec.path}
+Purpose: {file_spec.purpose}
+Must Export: {', '.join(file_spec.exports)}
+Dependencies: {', '.join(file_spec.dependencies)}
+
+COMPONENT DETAILS:
+{component_details}
+
+EXISTING DEPENDENCIES:
+{dependency_context}
+
+CONSTRAINTS:
+{chr(10).join(f'- {c}' for c in full_spec.constraints)}
+
+Write the complete implementation for {file_spec.path}.
+Output ONLY the code, no explanations or markdown."""
+
+        response = await self.llm.ainvoke(prompt)
+        return response.content.strip()
+
+    async def run(self, spec_path: Path, output_dir: Path) -> List[Path]:
+        """Execute implementation phase."""
+
+        print("⚙️ Phase 2: Implementation")
+
+        # Load spec
+        spec_json = (spec_path.parent / "spec.json").read_text()
+        import json
+        spec = ArchitectureSpec(**json.loads(spec_json))
+
+        created_files = []
+        existing_files = {}
+
+        # Sort files by dependencies (implement dependencies first)
+        sorted_files = self._topological_sort(spec.file_structure)
+
+        for file_spec in sorted_files:
+            print(f"   Implementing: {file_spec.path}")
+
+            code = await self.implement_file(file_spec, spec, existing_files)
+
+            # Write file
+            file_path = output_dir / file_spec.path
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(code)
+
+            created_files.append(file_path)
+            existing_files[file_spec.path] = code
+
+        print(f"   ✅ Created {len(created_files)} files")
+        return created_files
+
+    def _topological_sort(self, files: List[FileSpec]) -> List[FileSpec]:
+        """Sort files so dependencies come first."""
+
+        # Build dependency graph
+        file_map = {f.path: f for f in files}
+        visited = set()
+        result = []
+
+        def visit(path: str):
+            if path in visited:
+                return
+            visited.add(path)
+
+            if path in file_map:
+                for dep in file_map[path].dependencies:
+                    visit(dep)
+                result.append(file_map[path])
+
+        for f in files:
+            visit(f.path)
+
+        return result
+```
+
+---
+
+## Part 3: The Tester Agent
+
+The Tester verifies implementation against spec but **never fixes code**.
+
+```python
+class TestResult(BaseModel):
+    file: str
+    passed: bool
+    issues: List[str]
+    suggestions: List[str]
+
+class TestReport(BaseModel):
+    overall_passed: bool
+    files_tested: int
+    files_passed: int
+    results: List[TestResult]
+    acceptance_criteria_met: List[dict]
+
+class TesterAgent:
+    """Phase 3: Verification without code modification."""
+
+    SYSTEM_PROMPT = """You are a strict code reviewer and tester.
+
+Your role is to verify that implementations match their specifications.
+
+CRITICAL RULES:
+1. You MUST NOT modify any code
+2. You MUST NOT suggest architectural changes
+3. You ONLY report whether the implementation matches the spec
+4. Be specific about what doesn't match
+5. Reference specific spec requirements in your findings"""
+
+    def __init__(self):
+        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+
+    async def verify_file(
+        self,
+        file_path: Path,
+        file_spec: FileSpec,
+        full_spec: ArchitectureSpec
+    ) -> TestResult:
+        """Verify a single file against its spec."""
+
+        code = file_path.read_text()
+
+        prompt = f"""{self.SYSTEM_PROMPT}
+
+SPECIFICATION FOR {file_spec.path}:
+Purpose: {file_spec.purpose}
+Must Export: {', '.join(file_spec.exports)}
+Dependencies: {', '.join(file_spec.dependencies)}
+
+IMPLEMENTATION:
+\`\`\`
+{code}
+\`\`\`
+
+Verify:
+1. Does the file serve its stated purpose?
+2. Does it export all required items?
+3. Does it use the correct dependencies?
+4. Does it follow the project constraints: {full_spec.constraints}
+
+Respond in JSON:
+{{
+  "passed": boolean,
+  "issues": ["specific issue descriptions"],
+  "suggestions": ["improvement suggestions that don't change architecture"]
+}}"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        import json
+        data = json.loads(response.content)
+
+        return TestResult(
+            file=str(file_path),
+            passed=data["passed"],
+            issues=data["issues"],
+            suggestions=data["suggestions"]
+        )
+
+    async def verify_acceptance_criteria(
+        self,
+        spec: ArchitectureSpec,
+        output_dir: Path
+    ) -> List[dict]:
+        """Verify acceptance criteria are met."""
+
+        # Gather all code
+        all_code = ""
+        for file_spec in spec.file_structure:
+            file_path = output_dir / file_spec.path
+            if file_path.exists():
+                all_code += f"\n--- {file_spec.path} ---\n{file_path.read_text()}\n"
+
+        results = []
+
+        for criteria in spec.acceptance_criteria:
+            prompt = f"""{self.SYSTEM_PROMPT}
+
+ACCEPTANCE CRITERIA:
+{criteria}
+
+ALL PROJECT CODE:
+{all_code}
+
+Does the implementation meet this acceptance criteria?
+Respond in JSON:
+{{
+  "criteria": "{criteria}",
+  "met": boolean,
+  "evidence": "specific evidence from code",
+  "gaps": ["what's missing if not met"]
+}}"""
+
+            response = await self.llm.ainvoke(prompt)
+
+            import json
+            results.append(json.loads(response.content))
+
+        return results
+
+    async def run(self, spec_path: Path, output_dir: Path) -> TestReport:
+        """Execute testing phase."""
+
+        print("🧪 Phase 3: Verification")
+
+        # Load spec
+        spec_json = (spec_path.parent / "spec.json").read_text()
+        import json
+        spec = ArchitectureSpec(**json.loads(spec_json))
+
+        results = []
+
+        # Verify each file
+        for file_spec in spec.file_structure:
+            file_path = output_dir / file_spec.path
+
+            if not file_path.exists():
+                results.append(TestResult(
+                    file=file_spec.path,
+                    passed=False,
+                    issues=[f"File not created: {file_spec.path}"],
+                    suggestions=[]
+                ))
+                continue
+
+            print(f"   Testing: {file_spec.path}")
+            result = await self.verify_file(file_path, file_spec, spec)
+            results.append(result)
+
+        # Verify acceptance criteria
+        print("   Checking acceptance criteria...")
+        criteria_results = await self.verify_acceptance_criteria(spec, output_dir)
+
+        files_passed = sum(1 for r in results if r.passed)
+        criteria_met = sum(1 for c in criteria_results if c["met"])
+
+        overall_passed = (
+            files_passed == len(results) and
+            criteria_met == len(criteria_results)
+        )
+
+        report = TestReport(
+            overall_passed=overall_passed,
+            files_tested=len(results),
+            files_passed=files_passed,
+            results=results,
+            acceptance_criteria_met=criteria_results
+        )
+
+        # Print summary
+        print(f"   📊 Files: {files_passed}/{len(results)} passed")
+        print(f"   ✓ Criteria: {criteria_met}/{len(criteria_results)} met")
+        print(f"   {'✅ ALL TESTS PASSED' if overall_passed else '❌ TESTS FAILED'}")
+
+        return report
+```
+
+---
+
+## Part 4: The Orchestrator
+
+```python
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Literal, Optional
+from pathlib import Path
+
+class SpecCoderState(TypedDict):
+    user_goal: str
+    output_dir: str
+    phase: Literal["planning", "implementing", "testing", "complete", "failed"]
+    spec_path: Optional[str]
+    created_files: List[str]
+    test_report: Optional[dict]
+    iteration: int
+    max_iterations: int
+
+class SpecCoder:
+    """Main orchestrator for the spec-driven coding workflow."""
+
+    def __init__(self, output_dir: str = "./output"):
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(exist_ok=True)
+
+        self.planner = PlannerAgent()
+        self.implementer = ImplementerAgent()
+        self.tester = TesterAgent()
+
+    async def plan_node(self, state: SpecCoderState) -> dict:
+        """Execute planning phase."""
+        spec_path = await self.planner.run(
+            state["user_goal"],
+            Path(state["output_dir"])
+        )
+        return {
+            "spec_path": str(spec_path),
+            "phase": "implementing"
+        }
+
+    async def implement_node(self, state: SpecCoderState) -> dict:
+        """Execute implementation phase."""
+        created = await self.implementer.run(
+            Path(state["spec_path"]),
+            Path(state["output_dir"])
+        )
+        return {
+            "created_files": [str(f) for f in created],
+            "phase": "testing"
+        }
+
+    async def test_node(self, state: SpecCoderState) -> dict:
+        """Execute testing phase."""
+        report = await self.tester.run(
+            Path(state["spec_path"]),
+            Path(state["output_dir"])
+        )
+
+        if report.overall_passed:
+            return {
+                "test_report": report.model_dump(),
+                "phase": "complete"
+            }
+
+        # Check if we should retry
+        if state["iteration"] < state["max_iterations"]:
+            return {
+                "test_report": report.model_dump(),
+                "phase": "implementing",  # Loop back
+                "iteration": state["iteration"] + 1
+            }
+
+        return {
+            "test_report": report.model_dump(),
+            "phase": "failed"
+        }
+
+    def route_after_test(self, state: SpecCoderState) -> str:
+        if state["phase"] == "complete":
+            return "end"
+        if state["phase"] == "failed":
+            return "end"
+        return "implement"  # Retry
+
+    def build_workflow(self):
+        workflow = StateGraph(SpecCoderState)
+
+        workflow.add_node("plan", self.plan_node)
+        workflow.add_node("implement", self.implement_node)
+        workflow.add_node("test", self.test_node)
+
+        workflow.add_edge(START, "plan")
+        workflow.add_edge("plan", "implement")
+        workflow.add_edge("implement", "test")
+        workflow.add_conditional_edges("test", self.route_after_test, {
+            "implement": "implement",
+            "end": END
+        })
+
+        return workflow.compile()
+
+    async def run(self, user_goal: str, max_iterations: int = 3) -> dict:
+        """Run the complete spec-driven workflow."""
+
+        print("=" * 60)
+        print("🚀 SpecCoder - Spec-Driven AI Development")
+        print("=" * 60)
+        print(f"\nGoal: {user_goal}\n")
+
+        workflow = self.build_workflow()
+
+        result = await workflow.ainvoke({
+            "user_goal": user_goal,
+            "output_dir": str(self.output_dir),
+            "phase": "planning",
+            "spec_path": None,
+            "created_files": [],
+            "test_report": None,
+            "iteration": 0,
+            "max_iterations": max_iterations
+        })
+
+        print("\n" + "=" * 60)
+        if result["phase"] == "complete":
+            print("✅ PROJECT COMPLETE")
+            print(f"   Output: {self.output_dir}")
+        else:
+            print("❌ PROJECT FAILED")
+            print("   Review test_report for details")
+        print("=" * 60)
+
+        return result
+
+# CLI Interface
+async def main():
+    import sys
+
+    if len(sys.argv) < 2:
+        print("Usage: python speccoder.py '<project description>'")
+        print("\nExample:")
+        print("  python speccoder.py 'A todo list app with React'")
+        sys.exit(1)
+
+    goal = sys.argv[1]
+    coder = SpecCoder(output_dir="./generated_project")
+    await coder.run(goal)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+```
+
+---
+
+## Usage Example
+
+```bash
+# Run SpecCoder
+python speccoder.py "Build a simple calculator web app with HTML, CSS, and JavaScript.
+It should support basic operations (add, subtract, multiply, divide),
+have a clean UI with number buttons, and handle division by zero gracefully."
+```
+
+**Output:**
+
+```
+============================================================
+🚀 SpecCoder - Spec-Driven AI Development
+============================================================
+
+Goal: Build a simple calculator web app...
+
+🧠 Phase 1: Planning (King Mode)
+   Analyzing requirements...
+   ✅ Generated: ./generated_project/spec.md
+   📁 4 files planned
+   🧩 3 components specified
+
+⚙️ Phase 2: Implementation
+   Implementing: index.html
+   Implementing: styles.css
+   Implementing: calculator.js
+   Implementing: app.js
+   ✅ Created 4 files
+
+🧪 Phase 3: Verification
+   Testing: index.html
+   Testing: styles.css
+   Testing: calculator.js
+   Testing: app.js
+   Checking acceptance criteria...
+   📊 Files: 4/4 passed
+   ✓ Criteria: 5/5 met
+   ✅ ALL TESTS PASSED
+
+============================================================
+✅ PROJECT COMPLETE
+   Output: ./generated_project
+============================================================
+```
+
+---
+
+<Exercise
+  title="Extend SpecCoder"
+  difficulty="expert"
+  objectives={[
+    "Add a Refiner agent that improves code quality without changing functionality",
+    "Implement actual test execution (not just LLM verification)",
+    "Add support for multi-file refactoring based on test failures",
+    "Create a web UI for the workflow"
+  ]}
+  hints={[
+    "The Refiner should run after tests pass to improve code quality",
+    "Use subprocess to actually run tests (pytest, jest, etc.)",
+    "Track which files caused test failures to target fixes"
+  ]}
+>
+
+**Challenge:** Extend SpecCoder with:
+
+1. **Actual Test Execution**: Run real tests, not just LLM verification
+2. **Refiner Agent**: Improve code quality after tests pass
+3. **Incremental Mode**: Update existing projects based on spec changes
+
+</Exercise>
+
+---
+
+<ModuleSummary
+  points={[
+    "Spec-driven development separates planning from implementation",
+    "King Mode: Planners think architecturally but never write code",
+    "Implementers follow specs exactly without making architectural decisions",
+    "Testers verify but never fix—they report issues for the next iteration",
+    "This separation prevents scope creep and hallucination in AI coding",
+  ]}
+/>

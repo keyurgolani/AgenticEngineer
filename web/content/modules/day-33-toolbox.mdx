@@ -1,0 +1,551 @@
+---
+title: "Day 33: The Agentic Toolbox"
+description: "Essential tools, configurations, and quick-start templates for production agents."
+week: 5
+---
+
+## Your Production Toolkit
+
+This module is a reference guide—bookmark it. Here you'll find battle-tested configurations, starter templates, and the tools that production teams actually use.
+
+---
+
+## 33.1 Essential Tools by Category
+
+### Orchestration Frameworks
+
+| Tool                | Best For                  | Install                                       |
+| :------------------ | :------------------------ | :-------------------------------------------- |
+| **LangGraph**       | Production state machines | `pip install langgraph`                       |
+| **CrewAI**          | Role-based teams          | `pip install crewai`                          |
+| **AutoGen**         | Research/prototyping      | `pip install autogen-agentchat`               |
+| **Semantic Kernel** | Enterprise .NET           | `dotnet add package Microsoft.SemanticKernel` |
+
+### Vector Databases
+
+| Tool         | Best For               | Install                       |
+| :----------- | :--------------------- | :---------------------------- |
+| **ChromaDB** | Local development      | `pip install chromadb`        |
+| **LanceDB**  | Embedded production    | `pip install lancedb`         |
+| **Pinecone** | Managed cloud          | `pip install pinecone-client` |
+| **Qdrant**   | Self-hosted production | `docker run qdrant/qdrant`    |
+
+### Local LLM Inference
+
+| Tool          | Best For            | Install                                          |
+| :------------ | :------------------ | :----------------------------------------------- |
+| **Ollama**    | Easy local models   | `curl -fsSL https://ollama.com/install.sh \| sh` |
+| **LM Studio** | GUI experimentation | Download from lmstudio.ai                        |
+| **vLLM**      | Production serving  | `pip install vllm`                               |
+| **llama.cpp** | CPU inference       | Build from source                                |
+
+### Observability
+
+| Tool           | Best For              | Install                   |
+| :------------- | :-------------------- | :------------------------ |
+| **LangSmith**  | LangChain ecosystem   | Cloud service             |
+| **Langfuse**   | Open-source tracing   | `pip install langfuse`    |
+| **AgentPrism** | Visual debugging      | `npm install agent-prism` |
+| **AgentOps**   | Production monitoring | `pip install agentops`    |
+
+### Code Execution
+
+| Tool       | Best For                    | Install                            |
+| :--------- | :-------------------------- | :--------------------------------- |
+| **E2B**    | Managed sandboxes           | `pip install e2b-code-interpreter` |
+| **Docker** | Self-hosted isolation       | System install                     |
+| **gVisor** | Enhanced container security | `apt install runsc`                |
+
+---
+
+## 33.2 Quick-Start Templates
+
+### Basic ReAct Agent
+
+```python
+"""Minimal ReAct agent template."""
+from openai import OpenAI
+import json
+
+client = OpenAI()
+
+SYSTEM_PROMPT = """You are a helpful assistant with tools.
+
+Available tools:
+- search(query): Search the web
+- calculate(expression): Evaluate math
+
+Respond in JSON:
+{"thought": "...", "action": "tool_name", "action_input": {...}}
+or
+{"thought": "...", "action": "final_answer", "action_input": "..."}
+"""
+
+def run_agent(user_input: str, max_iterations: int = 5) -> str:
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_input}
+    ]
+
+    for _ in range(max_iterations):
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.1
+        )
+
+        content = response.choices[0].message.content
+        parsed = json.loads(content)
+
+        if parsed["action"] == "final_answer":
+            return parsed["action_input"]
+
+        # Execute tool and continue
+        result = execute_tool(parsed["action"], parsed["action_input"])
+        messages.append({"role": "assistant", "content": content})
+        messages.append({"role": "user", "content": f"Observation: {result}"})
+
+    return "Max iterations reached"
+```
+
+### LangGraph Workflow Template
+
+```python
+"""LangGraph workflow template."""
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Annotated, List
+import operator
+
+class AgentState(TypedDict):
+    messages: Annotated[List, operator.add]
+    current_step: str
+
+def node_a(state: AgentState) -> dict:
+    return {"messages": ["Completed step A"], "current_step": "b"}
+
+def node_b(state: AgentState) -> dict:
+    return {"messages": ["Completed step B"], "current_step": "done"}
+
+def router(state: AgentState) -> str:
+    if state["current_step"] == "done":
+        return END
+    return state["current_step"]
+
+# Build graph
+workflow = StateGraph(AgentState)
+workflow.add_node("a", node_a)
+workflow.add_node("b", node_b)
+workflow.add_edge(START, "a")
+workflow.add_conditional_edges("a", router)
+workflow.add_conditional_edges("b", router)
+
+app = workflow.compile()
+result = app.invoke({"messages": [], "current_step": "a"})
+```
+
+### MCP Server Template
+
+```python
+"""MCP server template."""
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("my-server")
+
+@mcp.tool()
+async def my_tool(param1: str, param2: int = 10) -> str:
+    """Description of what this tool does.
+
+    Args:
+        param1: Description of param1
+        param2: Description of param2 (default: 10)
+
+    Returns:
+        Description of return value
+    """
+    return f"Result: {param1}, {param2}"
+
+@mcp.resource("myserver://data")
+async def get_data() -> str:
+    """Get some data."""
+    return "Data content here"
+
+if __name__ == "__main__":
+    mcp.run()
+```
+
+### RAG Pipeline Template
+
+```python
+"""RAG pipeline template."""
+import chromadb
+from openai import OpenAI
+
+client = OpenAI()
+chroma = chromadb.Client()
+collection = chroma.create_collection("docs")
+
+def ingest(texts: list[str], ids: list[str]):
+    collection.add(documents=texts, ids=ids)
+
+def query(question: str, n_results: int = 3) -> str:
+    results = collection.query(query_texts=[question], n_results=n_results)
+    context = "\n\n".join(results["documents"][0])
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": f"Answer based on context:\n{context}"},
+            {"role": "user", "content": question}
+        ]
+    )
+    return response.choices[0].message.content
+```
+
+---
+
+## 33.3 Configuration Files
+
+### Claude Desktop MCP Config
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/path/to/allowed/dir"
+      ]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "postgresql://user:pass@localhost/db"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..."
+      }
+    }
+  }
+}
+```
+
+### Docker Compose for Agent Stack
+
+```yaml
+version: "3.8"
+
+services:
+  agent:
+    build: .
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHROMA_HOST=chromadb
+    depends_on:
+      - chromadb
+      - postgres
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  langfuse:
+    image: langfuse/langfuse:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres/langfuse
+
+volumes:
+  chroma_data:
+  postgres_data:
+```
+
+### Kubernetes Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ai-agent
+  template:
+    metadata:
+      labels:
+        app: ai-agent
+    spec:
+      serviceAccountName: ai-agent-sa
+      containers:
+        - name: agent
+          image: myregistry/ai-agent:v1
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ai-secrets
+                  key: openai-api-key
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-agent-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-agent-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "patch"]
+```
+
+---
+
+## 33.4 Environment Setup Scripts
+
+### macOS/Linux Setup
+
+```bash
+#!/bin/bash
+# setup-agent-env.sh
+
+# Install Python dependencies
+pip install langchain langgraph langchain-openai chromadb
+pip install crewai autogen-agentchat
+pip install e2b-code-interpreter
+pip install langfuse agentops
+
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3.1:8b-instruct-q4_K_M
+ollama pull nomic-embed-text
+
+# Install MCP servers
+npm install -g @modelcontextprotocol/server-filesystem
+npm install -g @modelcontextprotocol/server-postgres
+npm install -g @modelcontextprotocol/server-github
+
+# Create project structure
+mkdir -p agent_project/{agents,tools,memory,tests}
+touch agent_project/{.env,.gitignore,requirements.txt}
+
+echo "Setup complete! Don't forget to set your API keys in .env"
+```
+
+### .env Template
+
+```bash
+# LLM Providers
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_API_KEY=...
+
+# Vector Databases
+PINECONE_API_KEY=...
+PINECONE_ENVIRONMENT=...
+
+# Observability
+LANGCHAIN_API_KEY=...
+LANGCHAIN_TRACING_V2=true
+LANGFUSE_PUBLIC_KEY=...
+LANGFUSE_SECRET_KEY=...
+
+# External Services
+GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...
+SLACK_BOT_TOKEN=xoxb-...
+POSTGRES_CONNECTION_STRING=postgresql://...
+
+# Execution
+E2B_API_KEY=...
+```
+
+---
+
+## 33.5 Debugging Cheatsheet
+
+### Common Issues and Solutions
+
+| Issue               | Cause                    | Solution                                     |
+| :------------------ | :----------------------- | :------------------------------------------- |
+| Agent loops forever | No termination condition | Add max_iterations, check for "final_answer" |
+| Context too long    | Accumulating history     | Implement summarization, use sliding window  |
+| Tool not found      | Wrong tool name          | Check tool registration, use exact names     |
+| JSON parse error    | LLM output malformed     | Add retry logic, use structured output       |
+| Rate limited        | Too many API calls       | Add exponential backoff, batch requests      |
+| Memory leak         | Unbounded state growth   | Implement memory compaction                  |
+
+### Debug Logging
+
+```python
+import logging
+
+# Enable detailed logging
+logging.basicConfig(level=logging.DEBUG)
+
+# LangChain specific
+import langchain
+langchain.debug = True
+
+# Or use callbacks
+from langchain.callbacks import StdOutCallbackHandler
+agent.run("query", callbacks=[StdOutCallbackHandler()])
+```
+
+---
+
+## 33.6 Performance Optimization
+
+### Token Efficiency
+
+```python
+# Bad: Sending full history every time
+messages = full_conversation_history  # Could be 100k tokens!
+
+# Good: Summarize and truncate
+def optimize_context(messages, max_tokens=4000):
+    # Keep system prompt
+    system = messages[0]
+
+    # Keep last N messages
+    recent = messages[-5:]
+
+    # Summarize the rest
+    if len(messages) > 6:
+        middle = messages[1:-5]
+        summary = summarize(middle)
+        return [system, {"role": "system", "content": f"Summary: {summary}"}] + recent
+
+    return messages
+```
+
+### Parallel Tool Execution
+
+```python
+import asyncio
+
+async def execute_tools_parallel(tool_calls: list) -> list:
+    """Execute multiple tool calls in parallel."""
+    tasks = [execute_tool(call) for call in tool_calls]
+    return await asyncio.gather(*tasks)
+```
+
+### Caching
+
+```python
+from functools import lru_cache
+import hashlib
+
+@lru_cache(maxsize=1000)
+def cached_embedding(text: str) -> list:
+    """Cache embeddings to avoid redundant API calls."""
+    return get_embedding(text)
+
+def cache_key(query: str, context: str) -> str:
+    """Generate cache key for LLM responses."""
+    return hashlib.md5(f"{query}:{context}".encode()).hexdigest()
+```
+
+---
+
+## 33.7 Security Checklist
+
+```markdown
+## Pre-Deployment Security Checklist
+
+### Input Validation
+
+- [ ] Sanitize all user inputs
+- [ ] Implement prompt injection detection
+- [ ] Validate tool parameters
+
+### Execution Security
+
+- [ ] Use sandboxed code execution (E2B/Docker)
+- [ ] Implement resource limits (CPU, memory, time)
+- [ ] Disable network access for untrusted code
+
+### Data Protection
+
+- [ ] Never log sensitive data (API keys, PII)
+- [ ] Encrypt data at rest and in transit
+- [ ] Implement data retention policies
+
+### Access Control
+
+- [ ] Use least-privilege service accounts
+- [ ] Rotate API keys regularly
+- [ ] Implement rate limiting
+
+### Monitoring
+
+- [ ] Log all agent actions
+- [ ] Set up anomaly detection
+- [ ] Create incident response playbook
+```
+
+---
+
+## 📚 Quick Reference Links
+
+### Documentation
+
+- [LangGraph Docs](https://langchain-ai.github.io/langgraph/)
+- [MCP Specification](https://modelcontextprotocol.io/)
+- [CrewAI Docs](https://docs.crewai.com/)
+- [E2B Docs](https://e2b.dev/docs)
+
+### GitHub Repositories
+
+- [LangGraph Examples](https://github.com/langchain-ai/langgraph/tree/main/examples)
+- [MCP Servers](https://github.com/modelcontextprotocol/servers)
+- [Awesome AI Agents](https://github.com/e2b-dev/awesome-ai-agents)
+
+### Benchmarks
+
+- [SWE-bench](https://www.swebench.com/)
+- [AgentBench](https://github.com/THUDM/AgentBench)
+- [WebArena](https://webarena.dev/)
+
+---
+
+_This toolbox is a living document. Bookmark it and return often as the ecosystem evolves._

@@ -1,0 +1,46 @@
+# IDE
+.kiro
+.vscode
+.idea
+
+# Git
+.git
+.gitignore
+
+# Dependencies (will be installed in container)
+web/node_modules
+node_modules
+
+# Next.js build output
+web/.next
+web/out
+
+# Testing
+coverage
+
+# Misc
+.DS_Store
+*.pem
+*.log
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Docker files
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Documentation
+*.md
+!web/README.md
+
+# Infra
+infra/
+
+# Debug files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

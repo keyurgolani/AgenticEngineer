@@ -1,0 +1,97 @@
+---
+title: "Project 4: The Autonomous Legacy Code Refactorer"
+description: "Safely upgrade a Python 2 codebase or add Type Hints using Neuro-Symbolic AI (LLM + AST)."
+week: 3
+day: 17
+---
+
+**Objective:** Safely upgrade a Python 2 codebase to Python 3, or add Type Hints, without breaking the build.
+
+## 7.1 The Problem: "Blind" Refactoring
+
+If you ask an LLM to "rewrite this file to add type hints," it will often:
+
+1.  Delete comments.
+2.  Change formatting.
+3.  Hallucinate attributes.
+
+<Callout type="tip">
+  **Solution: Neuro-Symbolic AI.** Use the LLM as the **Brain** (Decision Maker)
+  and an AST Parser as the **Hands** (surgeon).
+</Callout>
+
+## 7.2 Architecture: LLM + AST
+
+1.  **Parse**: Convert code to a Concrete Syntax Tree (LibCST).
+2.  **Plan**: Ask LLM: "Which functions need what return types? Return JSON."
+3.  **Patch**: Deterministically apply the JSON plan to the Tree.
+
+<div className="my-8">
+<Mermaid
+  chart={`
+graph TD
+    Code[Legacy Code] --> Parse[LibCST Parser]
+    Parse -->|Function Signatures| LLM
+    LLM -->|JSON Plan| Transformer[AST Transformer]
+    Parse --> Transformer
+    Transformer --> NewCode[Refactored Code]
+
+    style Transformer fill:#f9f,stroke:#333
+
+`}
+/>
+
+</div>
+
+## 7.3 Practical Implementation
+
+_Prerequisites: `pip install libcst`_
+
+### Step 1: The Planner (LLM)
+
+We don't send the whole file if it's huge. We iterate over functions.
+
+```python
+# Prompt:
+# "Analyze this function signature. Infer the return type based on the variable names.
+# Output JSON: {'function_name': 'calculate_total', 'return_type': 'float'}"
+```
+
+### Step 2: The Surgeon (LibCST)
+
+This code is **100% deterministic**. It cannot hallucinate.
+
+```python
+import libcst as cst
+
+class TypeHintTransformer(cst.CSTTransformer):
+    def __init__(self, plan):
+        self.plan = plan # {'func_name': 'int', ...}
+
+    def leave_FunctionDef(self, original, updated):
+        fname = original.name.value
+        if fname in self.plan:
+            # Create the annotation node
+            new_type = self.plan[fname]
+            annotation = cst.Annotation(annotation=cst.Name(new_type))
+
+            # Return the updated node with the new return annotation
+            return updated.with_changes(returns=annotation)
+        return updated
+
+# Execution
+source = "def add(a, b): return a + b"
+plan = {"add": "int"}
+
+tree = cst.parse_module(source)
+transformer = TypeHintTransformer(plan)
+new_tree = tree.visit(transformer)
+print(new_tree.code)
+# Output: def add(a, b) -> int: return a + b
+```
+
+<Exercise title="Refactorer Lab">
+  1. Take a file with 10 functions missing type hints. 2. Run the Agent. 3.
+  **Verify**: Did it keep your comments? Did it mess up indentation? (LibCST
+  guarantees it won't).
+</Exercise>

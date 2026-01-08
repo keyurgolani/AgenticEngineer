@@ -1,0 +1,183 @@
+---
+title: "Day 00: Environment Setup"
+description: "Prepare your local environment and mindset for the 30-day Agentic AI journey."
+week: 1
+day: 0
+---
+
+# Day 00: Environment Setup & Prerequisites
+
+Welcome to **Agentic Engineer**. Before we dive into the code on Day 01, we need to ensure your machine and your mind are ready.
+
+## The Agentic Mindset
+
+Building Agents is different from building traditional software.
+
+- **Deterministic vs. Probabilistic:** Traditional code is deterministic (1+1=2). LLMs are probabilistic (1+1 might be 2, or "Two", or a poem about math). You must design for uncertainty.
+- **Tools, not Features:** You aren't just building features; you are building _tools_ for an AI to use.
+- **Iteration is Key:** Your first prompt will fail. Your first agent loop will get stuck. This isn't a bug; it's the process.
+
+<Callout type="important">
+  **Goal:** strict types, loose prompts. Be rigid with your infrastructure but
+  flexible with your intelligence layer.
+</Callout>
+
+This shift requires a fundamental change in how we approach problems:
+
+![The Agentic Mindset: Deterministic vs Probabilistic](/images/agentic-mindset.png)
+
+## System Prerequisites
+
+We strongly recommend a Unix-based environment (macOS or Linux). Windows users should use WSL2.
+
+<Steps>
+
+<Step title="Node.js & TypeScript">
+We use Node.js for the frontend (Next.js) and lightweight agents.
+
+- **Requirement:** Node v18.17.0 or higher.
+- **Recommendation:** Use `nvm` (Node Version Manager).
+
+```bash
+# Install nvm (if not already installed)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+
+# Install and use LTS version
+nvm install --lts
+nvm use --lts
+```
+
+</Step>
+
+<Step title="Python Environment">
+We use Python for backend agents, graph logic, and data processing.
+
+- **Requirement:** Python 3.10 or higher.
+- **Recommendation:** Use `uv` (a fast Python package manager) or `conda`.
+
+```bash
+# Install uv (Recommended for speed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# OR use standard pip/venv
+python3 -m venv venv
+source venv/bin/activate
+```
+
+</Step>
+
+<Step title="Docker">
+Required for running local LLMs (Ollama) and sandboxed environments (E2B simulation).
+
+- [Install Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- Verify with `docker --version`
+
+</Step>
+
+</Steps>
+
+## API Access
+
+You will need access to foundation models. We refrain from using "free tiers" for production-grade agent engineering as rate limits will block your progress.
+
+| Provider      | Purpose                                    | Key Variable        |
+| :------------ | :----------------------------------------- | :------------------ |
+| **OpenAI**    | General Reasoning (GPT-4o)                 | `OPENAI_API_KEY`    |
+| **Anthropic** | Coding & Complex Logic (Claude 3.5 Sonnet) | `ANTHROPIC_API_KEY` |
+| **Tavily**    | Search Tool for Agents                     | `TAVILY_API_KEY`    |
+
+_(Optional later: E2B for sandboxing, LangSmith for tracing)_
+
+## IDE Setup
+
+We recommend **VS Code** with the following extensions to maintain sanity:
+
+- **ESLint & Prettier:** For strict code formatting.
+- **Python (Microsoft):** Essential debugging tools.
+- **MDX:** For viewing these course materials locally.
+- **Pretty TypeScript Errors:** Makes TS errors readable.
+
+### Recommended Configuration
+
+Create a `.vscode/settings.json` file to auto-format on save:
+
+```json
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  }
+}
+```
+
+And a root `.editorconfig` for consistent coding styles:
+
+```ini
+root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+```
+
+## Setting Up the Repository
+
+<Terminal
+  command="git clone https://github.com/your-username/agentic-engineer-course.git
+cd agentic-engineer-course
+npm install
+# If using Python for later modules:
+uv venv && uv pip install -r requirements.txt"
+/>
+
+### Configure Environment
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env.local
+```
+
+Open `.env.local` and populate your keys:
+
+```bash
+# .env.local
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-...
+TAVILY_API_KEY=tvly-...
+```
+
+## Verify Installation
+
+Run the following command to check if your environment is ready:
+
+<Terminal
+  command="npm run verify"
+  output="> Checking Node.js... OK (v20.10.0)
+> Checking Python... OK (3.11.0)
+> Checking Docker... OK
+> Verifying API Keys...
+  - OpenAI: OK
+  - Anthropic: OK
+> Environment checks passed. Ready for Day 01."
+/>
+
+## One Last Thing
+
+<Exercise
+  title="Hello Agent"
+  difficulty="Easy"
+  objectives={[
+    "Create your OpenAI/Anthropic accounts",
+    "Generate an API Key",
+    "Verify you can make a simple curl request",
+    "Star this repository",
+  ]}
+/>
+
+You are now ready to begin. See you on Day 01.

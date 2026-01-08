@@ -1,0 +1,73 @@
+---
+title: "Day 04: Lab - Hello World Router"
+description: "Building your first Graph: A simple router agent."
+week: 1
+---
+
+### 4.1 Concept
+
+We will build a simple "Router" agent.
+
+- If the user says "Hello", we respond.
+- If the user says "Search", we (simulated) search.
+
+### 4.2 Code
+
+_Prerequisite: `pip install langgraph`_
+
+```python
+from typing import TypedDict, Literal
+from langgraph.graph import StateGraph, END
+
+class AgentState(TypedDict):
+    input: str
+    decision: str
+
+def router_node(state: AgentState):
+    # Simple logic (no LLM yet to keep it fast)
+    user_input = state['input'].lower()
+    if "search" in user_input:
+        return {"decision": "search"}
+    return {"decision": "chat"}
+
+def search_node(state: AgentState):
+    return {"decision": "Executing Search..."}
+
+def chat_node(state: AgentState):
+    return {"decision": "Chatting..."}
+
+workflow = StateGraph(AgentState)
+workflow.add_node("router", router_node)
+workflow.add_node("search", search_node)
+workflow.add_node("chat", chat_node)
+
+workflow.set_entry_point("router")
+
+# Conditional Edge
+def decide_route(state):
+    if state["decision"] == "search":
+        return "search"
+    return "chat"
+
+workflow.add_conditional_edges(
+    "router",
+    decide_route
+)
+
+workflow.add_edge("search", END)
+workflow.add_edge("chat", END)
+
+app = workflow.compile()
+print(app.invoke({"input": "I want to search for cats"}))
+```
+
+### 4.3 Output
+
+![Semantic Router Switch](/images/semantic_router.png)
+
+Run this in your terminal. You should see it route to the search node.
+
+<Terminal
+  command="python router.py"
+  output="{'input': 'I want to search for cats', 'decision': 'Executing Search...'}"
+/>

@@ -1,0 +1,44 @@
+---
+title: "The Tooling Standard (MCP)"
+description: "The 'USB-C' of AI: Standardizing how agents connect to data and tools."
+week: 1
+day: 3
+---
+
+## 3.1 The "USB-C" of AI
+
+Before 2025, every tool integration was custom.
+
+- "I want to connect to Postgres" -> Import `langchain_postgres`.
+- "I want to connect to Slack" -> Import `slack_sdk`.
+
+This is unscalable. The **Model Context Protocol (MCP)** standardizes this. You write a tool **once**, and it works for Claude, Cursor, and any custom Agent.
+
+## 3.2 Key Concepts
+
+- **Clients**: The Agent (e.g., Claude Desktop, your script).
+- **Servers**: The Tool Provider (e.g., a process giving access to SQLite).
+- **Resources**: Passive data (files, logs). GET requests.
+- **Tools**: Active functions (execute_query). POST requests.
+
+## 3.3 Implementation: Using the Python SDK
+
+We will use MCP in Project 5, but here is the mental model:
+
+```python
+# The Old Way (Proprietary)
+# import specific_library
+# result = specific_library.do_thing()
+
+# The Agentic Way (MCP)
+# client.connect("sqlite-server")
+# tools = client.list_tools()
+# >> ["query_db", "list_tables"]
+# client.call_tool("query_db", {"sql": "SELECT * FROM users"})
+```
+
+<Callout type="important">
+  **Why this matters:** This decouples your agent logic from the tools. You can
+  swap the "SQLite Server" with a "Postgres Server" and your agent code _does
+  not change_, as long as the tools have the same schema.
+</Callout>

@@ -1,0 +1,133 @@
+---
+title: "Project 1: The 'Deep Research' Analyst"
+description: "Build a system that can write a high-fidelity 5,000-word report on a technical topic using recursion and planning."
+week: 2
+day: 8
+---
+
+**Objective:** Build a system that can write a high-fidelity 5,000-word report on a technical topic.
+
+## 4.1 The Challenge
+
+Asking GPT-4 "Write a deep report on Quantum Computing" results in a flat, generic 500-word essay. To get 5,000 words of depth, you need **Recursion** and **Planning**.
+
+## 4.2 Architecture: The Supervisor Pattern
+
+We will use a hierarchical graph.
+
+1.  **Chief Editor (Supervisor)**: Breaks the topic into a Table of Contents.
+2.  **Researcher (Worker)**: Googles a specific sub-topic.
+3.  **Writer (Worker)**: Compiles the research into prose.
+
+<div className="my-8">
+  <Mermaid
+    chart={`
+graph TD
+    User([User Topic]) --> Editor[Chief Editor Node]
+    Editor -->|Plan Outline| Map{Map Step}
+    Map -->|Parallel Exec| R1[Researcher: Section 1]
+    Map -->|Parallel Exec| R2[Researcher: Section 2]
+    Map -->|Parallel Exec| R3[Researcher: Section 3]
+    R1 --> Join{Reduce Step}
+    R2 --> Join
+    R3 --> Join
+    Join --> Writer[Writer Node]
+    Writer --> Final([Report MD])
+`}
+  />
+</div>
+
+## 4.3 Practical Implementation
+
+_Prerequisites: `pip install langgraph langchain_openai tavily-python`_
+
+### Step 1: Define the State
+
+We need a state that holds the "Outline" and the "Completed Sections".
+
+```python
+from typing import TypedDict, List, Annotated
+import operator
+
+class ResearchState(TypedDict):
+    topic: str
+    outline: List[str]
+    # This magic annotation joins the dictionaries from parallel workers!
+    completed_sections: Annotated[dict, operator.ior]
+    final_report: str
+```
+
+### Step 2: The Chief Editor (Planner)
+
+This node generates the plan. It doesn't do research.
+
+```python
+from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_openai import ChatOpenAI
+
+# Structured Output Schema
+class Outline(BaseModel):
+    sections: List[str] = Field(description="List of section headers")
+
+editor_model = ChatOpenAI(model="gpt-4o").with_structured_output(Outline)
+
+def editor_node(state: ResearchState):
+    plan = editor_model.invoke(f"Plan a comprehensive report on: {state['topic']}")
+    return {"outline": plan.sections}
+```
+
+### Step 3: The Researcher (Worker)
+
+<Callout type="warning">
+  **CRITICAL:** This node runs in parallel for _each section_. It uses **Context
+  Isolation**. Ideally, it does not see the other sections, keeping its context
+  clean.
+</Callout>
+
+```python
+from langchain_community.tools.tavily_search import TavilySearchResults
+
+def researcher_node(state: ResearchState):
+    # NOTE: In a mapping step, 'state' might just be the single section name
+    section_topic = state # Simplified for demo
+
+    search = TavilySearchResults(max_results=3)
+    results = search.invoke(section_topic)
+
+    summary_model = ChatOpenAI(model="gpt-3.5-turbo")
+    summary = summary_model.invoke(f"Summarize these notes for section '{section_topic}': {results}")
+
+    return {"completed_sections": {section_topic: summary.content}}
+```
+
+### Step 4: The Graph Wiring
+
+```python
+from langgraph.graph import StateGraph, END
+
+workflow = StateGraph(ResearchState)
+workflow.add_node("editor", editor_node)
+workflow.add_node("researcher", researcher_node)
+workflow.add_node("writer", writer_node) # Implemented similarly
+
+workflow.set_entry_point("editor")
+
+# Conditional Edge: Map the outline to N researcher nodes
+def map_sections(state):
+    return [("researcher", section) for section in state['outline']]
+
+# NOTE: LangGraph's map/reduce syntax differs slightly by version.
+# Conceptually, we fan-out here.
+workflow.add_edge("editor", "researcher")
+workflow.add_edge("researcher", "writer")
+workflow.add_edge("writer", END)
+
+app = workflow.compile()
+```
+
+<Exercise title="Deep Research Lab">
+  1. Run the code with the topic "The History of Espresso Machines". 2. Observe
+  the console. You should see 3-5 parallel calls to Tavily. 3. **Challenge:**
+  Add a "Reviewer" node after the Writer that checks if the word count is >
+  5000. If `false`, loop back to Editor with instructions to "Expand section 2".
+</Exercise>

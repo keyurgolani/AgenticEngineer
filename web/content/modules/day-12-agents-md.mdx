@@ -1,0 +1,553 @@
+---
+title: "Day 12: The agents.md Standard"
+description: "Documenting agent capabilities for humans and machines alike."
+week: 2
+---
+
+## Why Document Agents?
+
+As agents become more complex and numerous, we need a standard way to describe what they can do. The `agents.md` file serves as a "user manual" that both humans and other AI systems can understand.
+
+> **Key Insight**: A well-documented agent is a trustworthy agent. Clear boundaries and capabilities build confidence.
+
+---
+
+## 12.1 The agents.md Standard
+
+The `agents.md` file is an open standard for documenting AI agent capabilities. It was recently donated to the Agentic AI Foundation alongside MCP.
+
+### Core Sections
+
+```markdown
+# Agent Name
+
+## Overview
+
+Brief description of what this agent does.
+
+## Capabilities
+
+- What the agent CAN do
+- Tools it has access to
+- Data sources it can query
+
+## Limitations
+
+- What the agent CANNOT do
+- Boundaries and restrictions
+- Known failure modes
+
+## Usage
+
+How to interact with the agent effectively.
+
+## Examples
+
+Sample interactions and expected outputs.
+```
+
+---
+
+## 12.2 Complete agents.md Template
+
+````markdown
+# Research Assistant Agent
+
+## Overview
+
+An AI agent specialized in conducting research on technical topics,
+synthesizing information from multiple sources, and producing
+structured reports.
+
+## Version
+
+- Agent Version: 2.1.0
+- Last Updated: 2026-01-07
+- Maintainer: engineering@company.com
+
+## Tech Stack
+
+- **Framework**: LangGraph 0.2.x
+- **LLM**: GPT-4o (primary), Claude 3.5 Sonnet (fallback)
+- **Vector DB**: ChromaDB
+- **Search**: Tavily API
+- **Language**: Python 3.11+
+
+## Capabilities
+
+### Core Functions
+
+- [x] Web search and information retrieval
+- [x] Document summarization
+- [x] Multi-source synthesis
+- [x] Citation generation
+- [x] Structured report writing
+
+### Tools Available
+
+| Tool         | Description               | Rate Limit |
+| :----------- | :------------------------ | :--------- |
+| `web_search` | Search the web via Tavily | 100/hour   |
+| `read_url`   | Fetch and parse web pages | 50/hour    |
+| `summarize`  | Summarize long documents  | No limit   |
+| `cite`       | Generate citations        | No limit   |
+
+### Data Access
+
+- Public web content
+- Company knowledge base (read-only)
+- Research paper databases (via API)
+
+## Limitations
+
+### Cannot Do
+
+- Access private/authenticated websites
+- Modify any databases or files
+- Execute arbitrary code
+- Access real-time data (stock prices, etc.)
+- Process images or videos
+
+### Known Issues
+
+- May struggle with highly technical jargon in niche fields
+- Citation format may need manual verification
+- Rate limits may cause delays on large research tasks
+
+### Boundaries
+
+- Maximum report length: 5,000 words
+- Maximum sources per report: 20
+- Timeout: 10 minutes per research task
+
+## Authentication
+
+- Requires valid API key in `X-Agent-Key` header
+- Rate limited to 100 requests/day per key
+
+## Usage
+
+### Basic Request
+
+```json
+{
+  "task": "research",
+  "topic": "Quantum computing applications in cryptography",
+  "depth": "comprehensive",
+  "format": "markdown"
+}
+```
+````
+
+### Configuration Options
+
+| Option            | Type   | Default    | Description                          |
+| :---------------- | :----- | :--------- | :----------------------------------- |
+| `depth`           | string | "standard" | "quick", "standard", "comprehensive" |
+| `format`          | string | "markdown" | "markdown", "json", "html"           |
+| `max_sources`     | int    | 10         | Maximum sources to cite              |
+| `include_summary` | bool   | true       | Include executive summary            |
+
+## Examples
+
+### Example 1: Quick Research
+
+**Input:**
+
+```json
+{ "task": "research", "topic": "MCP protocol", "depth": "quick" }
+```
+
+**Output:**
+
+```markdown
+# MCP Protocol Overview
+
+The Model Context Protocol (MCP) is an open standard...
+[500-word summary with 3 sources]
+```
+
+### Example 2: Comprehensive Report
+
+**Input:**
+
+```json
+{
+  "task": "research",
+  "topic": "AI agents in healthcare",
+  "depth": "comprehensive",
+  "max_sources": 15
+}
+```
+
+**Output:**
+
+```markdown
+# AI Agents in Healthcare: A Comprehensive Analysis
+
+## Executive Summary
+
+...
+
+## 1. Introduction
+
+...
+
+[3000-word report with 15 sources]
+```
+
+## Error Handling
+
+### Error Codes
+
+| Code   | Meaning             | Resolution                  |
+| :----- | :------------------ | :-------------------------- |
+| `E001` | Rate limit exceeded | Wait and retry              |
+| `E002` | Invalid topic       | Provide clearer topic       |
+| `E003` | Timeout             | Reduce scope or retry       |
+| `E004` | Source unavailable  | Agent will use alternatives |
+
+### Retry Policy
+
+- Automatic retry: 3 attempts with exponential backoff
+- Manual retry: Available via `retry` endpoint
+
+## Monitoring
+
+### Health Check
+
+```bash
+GET /health
+# Returns: {"status": "healthy", "version": "2.1.0"}
+```
+
+### Metrics
+
+- Request latency (p50, p95, p99)
+- Success rate
+- Token usage
+- Source retrieval success rate
+
+## Changelog
+
+### v2.1.0 (2026-01-07)
+
+- Added comprehensive research depth option
+- Improved citation accuracy
+- Added fallback to Claude 3.5 Sonnet
+
+### v2.0.0 (2025-11-15)
+
+- Migrated to LangGraph
+- Added streaming support
+- Breaking: Changed request format
+
+## Contact
+
+- Issues: github.com/company/research-agent/issues
+- Slack: #research-agent-support
+- Email: agent-support@company.com
+
+````
+
+---
+
+## 12.3 Best Practices from 2,500+ Repositories
+
+GitHub analyzed over 2,500 repositories with agents.md files. Here are the key findings:
+
+### What Works
+
+1. **Specific Tech Stack Versions**
+   ```markdown
+   ## Tech Stack
+   - React 18.2.0
+   - TypeScript 5.3
+   - Node.js 20 LTS
+````
+
+Not just "React" but the specific version.
+
+2. **Executable Commands**
+
+   ```markdown
+   ## Commands
+
+   - `npm run dev` - Start development server
+   - `npm test` - Run test suite
+   - `npm run lint` - Check code style
+   ```
+
+3. **Clear Boundaries**
+
+   ```markdown
+   ## Do NOT
+
+   - Modify package.json without approval
+   - Delete test files
+   - Change authentication logic
+   ```
+
+4. **Testing Procedures**
+   ```markdown
+   ## Testing
+
+   1. Run `npm test` before committing
+   2. Ensure coverage > 80%
+   3. All E2E tests must pass
+   ```
+
+### What Doesn't Work
+
+- Vague descriptions ("handles data")
+- Missing version information
+- No examples
+- Outdated documentation
+
+---
+
+## 12.4 agents.md for Different Agent Types
+
+### Coding Agent
+
+```markdown
+# Code Assistant Agent
+
+## Capabilities
+
+- Code generation in Python, JavaScript, TypeScript
+- Code review and suggestions
+- Bug fixing
+- Test generation
+- Documentation writing
+
+## Coding Standards
+
+- Follow project's ESLint/Prettier config
+- Use TypeScript strict mode
+- Write tests for new functions
+- Add JSDoc comments
+
+## File Access
+
+- Can read: All files in workspace
+- Can write: src/, tests/, docs/
+- Cannot write: .env, package.json, CI configs
+
+## Code Review Checklist
+
+- [ ] No hardcoded secrets
+- [ ] Error handling present
+- [ ] Types are explicit
+- [ ] Tests included
+```
+
+### Data Analysis Agent
+
+```markdown
+# Data Analyst Agent
+
+## Capabilities
+
+- SQL query generation and execution
+- Statistical analysis
+- Data visualization
+- Report generation
+
+## Data Access
+
+- Read: analytics_db (all tables)
+- Read: warehouse.public schema
+- No write access to any database
+
+## Query Limits
+
+- Max rows returned: 10,000
+- Query timeout: 30 seconds
+- No DELETE, UPDATE, or DROP statements
+
+## Output Formats
+
+- Tables: Markdown or CSV
+- Charts: PNG or SVG
+- Reports: Markdown with embedded charts
+```
+
+### Customer Support Agent
+
+```markdown
+# Support Agent
+
+## Capabilities
+
+- Answer product questions
+- Troubleshoot common issues
+- Create support tickets
+- Escalate to human agents
+
+## Knowledge Sources
+
+- Product documentation
+- FAQ database
+- Previous ticket resolutions
+
+## Escalation Triggers
+
+- Customer requests human agent
+- Issue unresolved after 3 attempts
+- Sensitive topics (billing disputes, legal)
+- Angry/frustrated customer detected
+
+## Response Guidelines
+
+- Always greet by name if available
+- Acknowledge the issue before solving
+- Provide step-by-step instructions
+- Offer follow-up assistance
+```
+
+---
+
+## 12.5 Machine-Readable agents.md
+
+For agent-to-agent communication, include structured data:
+
+```markdown
+# Agent Name
+
+<!-- AGENT_METADATA
+{
+  "name": "research-agent",
+  "version": "2.1.0",
+  "capabilities": ["web_search", "summarize", "cite"],
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "topic": {"type": "string"},
+      "depth": {"type": "string", "enum": ["quick", "standard", "comprehensive"]}
+    },
+    "required": ["topic"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "report": {"type": "string"},
+      "sources": {"type": "array"}
+    }
+  },
+  "rate_limits": {
+    "requests_per_hour": 100,
+    "tokens_per_request": 10000
+  }
+}
+-->
+
+## Overview
+
+...
+```
+
+---
+
+## 🧪 Lab Exercise: Document Your Agent
+
+**Objective**: Create a comprehensive agents.md for an agent you've built or plan to build.
+
+### Requirements
+
+1. Include all standard sections
+2. Be specific about capabilities AND limitations
+3. Provide at least 2 usage examples
+4. Include error handling documentation
+5. Add machine-readable metadata
+
+### Template to Complete
+
+````markdown
+# [Your Agent Name]
+
+## Overview
+
+[One paragraph description]
+
+## Version
+
+- Agent Version:
+- Last Updated:
+- Maintainer:
+
+## Tech Stack
+
+- **Framework**:
+- **LLM**:
+- **Tools**:
+
+## Capabilities
+
+### Core Functions
+
+- [ ]
+- [ ]
+- [ ]
+
+### Tools Available
+
+| Tool | Description | Rate Limit |
+| :--- | :---------- | :--------- |
+|      |             |            |
+
+## Limitations
+
+### Cannot Do
+
+-
+-
+
+### Known Issues
+
+-
+
+## Usage
+
+### Basic Request
+
+```json
+{}
+```
+````
+
+## Examples
+
+### Example 1
+
+**Input:**
+**Output:**
+
+## Error Handling
+
+| Code | Meaning | Resolution |
+| :--- | :------ | :--------- |
+|      |         |            |
+
+```
+
+---
+
+## 📚 Key Takeaways
+
+1. **agents.md** is the standard for documenting agent capabilities
+2. **Specificity** matters—versions, limits, boundaries
+3. **Examples** are essential for understanding
+4. **Machine-readable** metadata enables agent-to-agent discovery
+5. **Limitations** are as important as capabilities
+
+---
+
+## 🔗 Further Reading
+
+- [How to Write a Great agents.md - GitHub Blog](https://github.blog/ai-and-ml/github-copilot/how-to-write-a-great-agents-md/)
+- [Agentic AI Foundation](https://agenticaifoundation.org/)
+- [agents.md Specification](https://github.com/agenticaifoundation/agents-md)
+
+**Tomorrow**: We put it all together in a CrewAI lab, building a complete multi-agent system.
+```

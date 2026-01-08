@@ -1,0 +1,808 @@
+---
+title: "Day 34: Project - Interactive Onboarding Assistant"
+description: "Build a RAG-powered onboarding system that transforms documents into interactive learning experiences."
+week: 5
+---
+
+<ReadingTime minutes={40} />
+
+<SkillLevel level="advanced" description="Capstone project" />
+
+<Prerequisites
+  items={[
+    "Completed RAG fundamentals (Day 05)",
+    "Understanding of vector databases",
+    "Familiarity with document processing",
+    "Experience with interactive UI patterns",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Build a production RAG system with citation tracking",
+    "Generate interactive learning materials from source documents",
+    "Create conversational agents grounded in specific knowledge bases",
+    "Implement quiz and flashcard generation from content",
+    "Design multi-modal learning experiences",
+  ]}
+/>
+
+---
+
+## Project Overview
+
+Build **OnboardBot**: an intelligent onboarding assistant that transforms company documents into an interactive learning dashboard with study guides, quizzes, practice simulations, and a grounded Q&A agent.
+
+<Callout type="info">
+  **Why This Project?** Onboarding is a universal business problem. This project
+  teaches you to build RAG systems that don't just answer questions—they
+  actively teach and verify comprehension.
+</Callout>
+
+---
+
+## Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Document Ingestion"
+        Docs[📄 Source Documents] --> Parser[Document Parser]
+        Parser --> Chunker[Smart Chunker]
+        Chunker --> Embedder[Embedding Model]
+        Embedder --> VectorDB[(Vector DB)]
+    end
+    
+    subgraph "OnboardBot Agents"
+        VectorDB --> StudyGuide[📚 Study Guide Generator]
+        VectorDB --> QuizMaker[❓ Quiz Generator]
+        VectorDB --> Simulator[🎭 Practice Simulator]
+        VectorDB --> QABot[💬 Q&A Agent]
+    end
+    
+    subgraph "User Interface"
+        StudyGuide --> Dashboard[📊 Learning Dashboard]
+        QuizMaker --> Dashboard
+        Simulator --> Dashboard
+        QABot --> Dashboard
+        Dashboard --> User([👤 Learner])
+    end
+    
+    style VectorDB fill:#f9f,stroke:#333
+    style Dashboard fill:#bbf,stroke:#333
+`}
+/>
+
+---
+
+## Part 1: Document Ingestion Pipeline
+
+```python
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    Docx2txtLoader,
+    UnstructuredMarkdownLoader
+)
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+from pathlib import Path
+from typing import List
+from pydantic import BaseModel
+
+class DocumentChunk(BaseModel):
+    content: str
+    source: str
+    page: int
+    chunk_id: str
+    metadata: dict
+
+class DocumentIngester:
+    """Ingest and process documents for the knowledge base."""
+
+    SUPPORTED_EXTENSIONS = {
+        ".pdf": PyPDFLoader,
+        ".docx": Docx2txtLoader,
+        ".md": UnstructuredMarkdownLoader,
+    }
+
+    def __init__(self, collection_name: str = "onboarding_kb"):
+        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            separators=["\n\n", "\n", ". ", " ", ""]
+        )
+        self.collection_name = collection_name
+        self.vectorstore = None
+
+    def load_document(self, file_path: Path) -> List[DocumentChunk]:
+        """Load a single document."""
+        ext = file_path.suffix.lower()
+
+        if ext not in self.SUPPORTED_EXTENSIONS:
+            raise ValueError(f"Unsupported file type: {ext}")
+
+        loader_class = self.SUPPORTED_EXTENSIONS[ext]
+        loader = loader_class(str(file_path))
+        documents = loader.load()
+
+        # Split into chunks
+        chunks = self.text_splitter.split_documents(documents)
+
+        return [
+            DocumentChunk(
+                content=chunk.page_content,
+                source=file_path.name,
+                page=chunk.metadata.get("page", 0),
+                chunk_id=f"{file_path.stem}_{i}",
+                metadata={
+                    "source": file_path.name,
+                    "page": chunk.metadata.get("page", 0),
+                    "total_pages": len(documents)
+                }
+            )
+            for i, chunk in enumerate(chunks)
+        ]
+
+    def ingest_directory(self, directory: Path) -> int:
+        """Ingest all documents from a directory."""
+        all_chunks = []
+
+        for file_path in directory.iterdir():
+            if file_path.suffix.lower() in self.SUPPORTED_EXTENSIONS:
+                print(f"📄 Processing: {file_path.name}")
+                chunks = self.load_document(file_path)
+                all_chunks.extend(chunks)
+
+        # Create vector store
+        texts = [c.content for c in all_chunks]
+        metadatas = [c.metadata for c in all_chunks]
+
+        self.vectorstore = Chroma.from_texts(
+            texts=texts,
+            embedding=self.embeddings,
+            metadatas=metadatas,
+            collection_name=self.collection_name,
+            persist_directory="./chroma_db"
+        )
+
+        print(f"✅ Ingested {len(all_chunks)} chunks from {len(list(directory.iterdir()))} documents")
+        return len(all_chunks)
+
+    def search(self, query: str, k: int = 5) -> List[tuple]:
+        """Search the knowledge base with relevance scores."""
+        if not self.vectorstore:
+            raise ValueError("No documents ingested yet")
+
+        results = self.vectorstore.similarity_search_with_relevance_scores(
+            query, k=k
+        )
+        return results
+```
+
+---
+
+## Part 2: Study Guide Generator
+
+```python
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+from typing import List
+
+class StudySection(BaseModel):
+    title: str
+    summary: str
+    key_points: List[str]
+    sources: List[str]
+
+class StudyGuide(BaseModel):
+    topic: str
+    sections: List[StudySection]
+    estimated_time_minutes: int
+    difficulty: str
+
+class StudyGuideGenerator:
+    """Generate comprehensive study guides from the knowledge base."""
+
+    def __init__(self, ingester: DocumentIngester):
+        self.ingester = ingester
+        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
+
+    async def generate(self, topic: str) -> StudyGuide:
+        """Generate a study guide for a topic."""
+
+        # Retrieve relevant content
+        results = self.ingester.search(topic, k=10)
+
+        # Build context with source tracking
+        context_parts = []
+        sources = set()
+
+        for doc, score in results:
+            if score > 0.5:  # Relevance threshold
+                context_parts.append(doc.page_content)
+                sources.add(doc.metadata.get("source", "Unknown"))
+
+        context = "\n\n---\n\n".join(context_parts)
+
+        # Generate study guide
+        prompt = f"""Based on the following source material, create a comprehensive study guide for: {topic}
+
+SOURCE MATERIAL:
+{context}
+
+Create a study guide with:
+1. 3-5 logical sections covering the topic
+2. Each section should have:
+   - A clear title
+   - A 2-3 sentence summary
+   - 3-5 key points to remember
+3. Estimate total study time
+4. Rate difficulty (beginner/intermediate/advanced)
+
+IMPORTANT: Only include information that is directly supported by the source material.
+For each section, note which source documents it draws from.
+
+Respond in JSON format matching this structure:
+{{
+  "topic": "string",
+  "sections": [
+    {{
+      "title": "string",
+      "summary": "string",
+      "key_points": ["string"],
+      "sources": ["filename.pdf"]
+    }}
+  ],
+  "estimated_time_minutes": number,
+  "difficulty": "beginner|intermediate|advanced"
+}}
+"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        # Parse response
+        import json
+        data = json.loads(response.content)
+        return StudyGuide(**data)
+
+    def format_as_markdown(self, guide: StudyGuide) -> str:
+        """Format study guide as readable markdown."""
+        lines = [
+            f"# Study Guide: {guide.topic}",
+            f"",
+            f"**Estimated Time:** {guide.estimated_time_minutes} minutes",
+            f"**Difficulty:** {guide.difficulty.title()}",
+            f"",
+            "---",
+            ""
+        ]
+
+        for i, section in enumerate(guide.sections, 1):
+            lines.extend([
+                f"## {i}. {section.title}",
+                f"",
+                section.summary,
+                f"",
+                "**Key Points:**",
+            ])
+
+            for point in section.key_points:
+                lines.append(f"- {point}")
+
+            lines.extend([
+                f"",
+                f"*Sources: {', '.join(section.sources)}*",
+                f"",
+            ])
+
+        return "\n".join(lines)
+```
+
+---
+
+## Part 3: Quiz Generator
+
+```python
+from enum import Enum
+from typing import Optional
+
+class QuestionType(Enum):
+    MULTIPLE_CHOICE = "multiple_choice"
+    TRUE_FALSE = "true_false"
+    SHORT_ANSWER = "short_answer"
+
+class QuizQuestion(BaseModel):
+    question: str
+    question_type: QuestionType
+    options: Optional[List[str]] = None  # For multiple choice
+    correct_answer: str
+    explanation: str
+    source: str
+    difficulty: int = Field(ge=1, le=5)
+
+class Quiz(BaseModel):
+    topic: str
+    questions: List[QuizQuestion]
+    passing_score: float = 0.7
+
+class QuizGenerator:
+    """Generate quizzes to test comprehension."""
+
+    def __init__(self, ingester: DocumentIngester):
+        self.ingester = ingester
+        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.5)
+
+    async def generate(
+        self,
+        topic: str,
+        num_questions: int = 10,
+        difficulty: int = 3
+    ) -> Quiz:
+        """Generate a quiz on a topic."""
+
+        # Retrieve relevant content
+        results = self.ingester.search(topic, k=15)
+
+        context_parts = []
+        for doc, score in results:
+            if score > 0.4:
+                context_parts.append(f"[Source: {doc.metadata.get('source')}]\n{doc.page_content}")
+
+        context = "\n\n".join(context_parts)
+
+        prompt = f"""Create a quiz to test understanding of: {topic}
+
+SOURCE MATERIAL:
+{context}
+
+Generate {num_questions} questions at difficulty level {difficulty}/5.
+
+Mix of question types:
+- 60% multiple choice (4 options, one correct)
+- 20% true/false
+- 20% short answer
+
+For each question:
+1. Base it ONLY on the source material
+2. Include the source document name
+3. Provide a clear explanation for the correct answer
+4. Rate difficulty 1-5
+
+Respond in JSON:
+{{
+  "topic": "string",
+  "questions": [
+    {{
+      "question": "string",
+      "question_type": "multiple_choice|true_false|short_answer",
+      "options": ["A", "B", "C", "D"] or null,
+      "correct_answer": "string",
+      "explanation": "string",
+      "source": "filename.pdf",
+      "difficulty": 1-5
+    }}
+  ],
+  "passing_score": 0.7
+}}
+"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        import json
+        data = json.loads(response.content)
+
+        # Convert question types
+        for q in data["questions"]:
+            q["question_type"] = QuestionType(q["question_type"])
+
+        return Quiz(**data)
+
+    def grade_quiz(self, quiz: Quiz, answers: List[str]) -> dict:
+        """Grade a completed quiz."""
+        correct = 0
+        results = []
+
+        for i, (question, answer) in enumerate(zip(quiz.questions, answers)):
+            is_correct = answer.lower().strip() == question.correct_answer.lower().strip()
+            if is_correct:
+                correct += 1
+
+            results.append({
+                "question_num": i + 1,
+                "correct": is_correct,
+                "your_answer": answer,
+                "correct_answer": question.correct_answer,
+                "explanation": question.explanation
+            })
+
+        score = correct / len(quiz.questions)
+        passed = score >= quiz.passing_score
+
+        return {
+            "score": score,
+            "correct": correct,
+            "total": len(quiz.questions),
+            "passed": passed,
+            "results": results
+        }
+```
+
+---
+
+## Part 4: Practice Simulator
+
+```python
+class SimulationScenario(BaseModel):
+    title: str
+    context: str
+    objective: str
+    customer_persona: str
+    expected_outcomes: List[str]
+
+class SimulationTurn(BaseModel):
+    role: str  # "customer" or "agent"
+    message: str
+    feedback: Optional[str] = None
+
+class PracticeSimulator:
+    """Simulate conversations for practice (e.g., sales objections)."""
+
+    def __init__(self, ingester: DocumentIngester):
+        self.ingester = ingester
+        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+        self.current_scenario: Optional[SimulationScenario] = None
+        self.conversation_history: List[SimulationTurn] = []
+
+    async def create_scenario(self, scenario_type: str) -> SimulationScenario:
+        """Generate a practice scenario based on training materials."""
+
+        # Search for relevant training content
+        results = self.ingester.search(f"{scenario_type} training objections handling", k=10)
+
+        context = "\n".join([doc.page_content for doc, _ in results])
+
+        prompt = f"""Based on this training material, create a realistic practice scenario:
+
+TRAINING MATERIAL:
+{context}
+
+SCENARIO TYPE: {scenario_type}
+
+Create a scenario with:
+1. A specific situation title
+2. Context/background
+3. Clear objective for the trainee
+4. A customer persona with specific concerns
+5. Expected outcomes (what good looks like)
+
+Respond in JSON:
+{{
+  "title": "string",
+  "context": "string",
+  "objective": "string",
+  "customer_persona": "string",
+  "expected_outcomes": ["string"]
+}}
+"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        import json
+        data = json.loads(response.content)
+        self.current_scenario = SimulationScenario(**data)
+        self.conversation_history = []
+
+        return self.current_scenario
+
+    async def get_customer_response(self, agent_message: str) -> SimulationTurn:
+        """Generate customer response based on scenario."""
+
+        if not self.current_scenario:
+            raise ValueError("No active scenario")
+
+        # Add agent message to history
+        self.conversation_history.append(
+            SimulationTurn(role="agent", message=agent_message)
+        )
+
+        history_text = "\n".join([
+            f"{turn.role.upper()}: {turn.message}"
+            for turn in self.conversation_history
+        ])
+
+        prompt = f"""You are playing a customer in a training simulation.
+
+SCENARIO: {self.current_scenario.title}
+YOUR PERSONA: {self.current_scenario.customer_persona}
+CONTEXT: {self.current_scenario.context}
+
+CONVERSATION SO FAR:
+{history_text}
+
+Respond as the customer would. Be realistic - raise objections, ask questions,
+show skepticism where appropriate. Don't make it too easy.
+
+If the agent has successfully addressed your concerns, you can indicate
+willingness to proceed.
+
+Respond with just your customer dialogue (no labels or formatting).
+"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        customer_turn = SimulationTurn(
+            role="customer",
+            message=response.content
+        )
+        self.conversation_history.append(customer_turn)
+
+        return customer_turn
+
+    async def get_feedback(self) -> dict:
+        """Get feedback on the practice session."""
+
+        if not self.current_scenario or len(self.conversation_history) < 2:
+            raise ValueError("Not enough conversation to evaluate")
+
+        history_text = "\n".join([
+            f"{turn.role.upper()}: {turn.message}"
+            for turn in self.conversation_history
+        ])
+
+        prompt = f"""Evaluate this practice conversation:
+
+SCENARIO: {self.current_scenario.title}
+OBJECTIVE: {self.current_scenario.objective}
+EXPECTED OUTCOMES: {self.current_scenario.expected_outcomes}
+
+CONVERSATION:
+{history_text}
+
+Provide feedback:
+1. Overall score (1-10)
+2. What was done well
+3. Areas for improvement
+4. Specific suggestions
+5. Did they achieve the objective?
+
+Respond in JSON:
+{{
+  "score": number,
+  "strengths": ["string"],
+  "improvements": ["string"],
+  "suggestions": ["string"],
+  "objective_achieved": boolean
+}}
+"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        import json
+        return json.loads(response.content)
+```
+
+---
+
+## Part 5: Grounded Q&A Agent
+
+```python
+class Citation(BaseModel):
+    text: str
+    source: str
+    page: int
+    relevance: float
+
+class GroundedAnswer(BaseModel):
+    answer: str
+    citations: List[Citation]
+    confidence: float
+    follow_up_questions: List[str]
+
+class GroundedQAAgent:
+    """Q&A agent that only answers from the knowledge base."""
+
+    def __init__(self, ingester: DocumentIngester):
+        self.ingester = ingester
+        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+
+    async def answer(self, question: str) -> GroundedAnswer:
+        """Answer a question with citations."""
+
+        # Retrieve relevant content
+        results = self.ingester.search(question, k=8)
+
+        # Build context with citation markers
+        context_parts = []
+        citations = []
+
+        for i, (doc, score) in enumerate(results):
+            if score > 0.3:
+                marker = f"[{i+1}]"
+                context_parts.append(f"{marker} {doc.page_content}")
+                citations.append(Citation(
+                    text=doc.page_content[:200] + "...",
+                    source=doc.metadata.get("source", "Unknown"),
+                    page=doc.metadata.get("page", 0),
+                    relevance=score
+                ))
+
+        if not context_parts:
+            return GroundedAnswer(
+                answer="I don't have information about that in my knowledge base.",
+                citations=[],
+                confidence=0.0,
+                follow_up_questions=[]
+            )
+
+        context = "\n\n".join(context_parts)
+
+        prompt = f"""Answer this question using ONLY the provided sources.
+
+QUESTION: {question}
+
+SOURCES:
+{context}
+
+Rules:
+1. ONLY use information from the sources above
+2. Cite sources using [1], [2], etc.
+3. If the sources don't contain the answer, say so
+4. Be concise but complete
+5. Suggest 2-3 follow-up questions
+
+Respond in JSON:
+{{
+  "answer": "Your answer with [citations]",
+  "confidence": 0.0-1.0,
+  "follow_up_questions": ["string"]
+}}
+"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        import json
+        data = json.loads(response.content)
+
+        return GroundedAnswer(
+            answer=data["answer"],
+            citations=citations[:5],  # Top 5 citations
+            confidence=data["confidence"],
+            follow_up_questions=data["follow_up_questions"]
+        )
+
+    def format_answer(self, answer: GroundedAnswer) -> str:
+        """Format answer with citations for display."""
+        lines = [
+            answer.answer,
+            "",
+            "---",
+            "**Sources:**"
+        ]
+
+        for i, citation in enumerate(answer.citations, 1):
+            lines.append(f"[{i}] {citation.source}, p.{citation.page}")
+
+        if answer.follow_up_questions:
+            lines.extend([
+                "",
+                "**You might also want to know:**"
+            ])
+            for q in answer.follow_up_questions:
+                lines.append(f"- {q}")
+
+        return "\n".join(lines)
+```
+
+---
+
+## Part 6: Putting It Together
+
+```python
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Literal, Optional
+
+class OnboardingState(TypedDict):
+    user_id: str
+    action: Literal["study", "quiz", "practice", "ask"]
+    topic: Optional[str]
+    question: Optional[str]
+    result: Optional[dict]
+
+class OnboardBot:
+    """Main OnboardBot orchestrator."""
+
+    def __init__(self, documents_path: str):
+        self.ingester = DocumentIngester()
+        self.ingester.ingest_directory(Path(documents_path))
+
+        self.study_generator = StudyGuideGenerator(self.ingester)
+        self.quiz_generator = QuizGenerator(self.ingester)
+        self.simulator = PracticeSimulator(self.ingester)
+        self.qa_agent = GroundedQAAgent(self.ingester)
+
+    async def handle_study(self, topic: str) -> dict:
+        guide = await self.study_generator.generate(topic)
+        return {
+            "type": "study_guide",
+            "content": self.study_generator.format_as_markdown(guide),
+            "data": guide.model_dump()
+        }
+
+    async def handle_quiz(self, topic: str, num_questions: int = 10) -> dict:
+        quiz = await self.quiz_generator.generate(topic, num_questions)
+        return {
+            "type": "quiz",
+            "data": quiz.model_dump()
+        }
+
+    async def handle_practice(self, scenario_type: str) -> dict:
+        scenario = await self.simulator.create_scenario(scenario_type)
+        return {
+            "type": "practice_scenario",
+            "data": scenario.model_dump()
+        }
+
+    async def handle_question(self, question: str) -> dict:
+        answer = await self.qa_agent.answer(question)
+        return {
+            "type": "answer",
+            "content": self.qa_agent.format_answer(answer),
+            "data": answer.model_dump()
+        }
+
+# Usage
+async def main():
+    bot = OnboardBot("./training_documents")
+
+    # Generate a study guide
+    study = await bot.handle_study("customer objection handling")
+    print(study["content"])
+
+    # Generate a quiz
+    quiz = await bot.handle_quiz("product features", num_questions=5)
+    print(f"Generated {len(quiz['data']['questions'])} questions")
+
+    # Ask a question
+    answer = await bot.handle_question("What is our refund policy?")
+    print(answer["content"])
+```
+
+---
+
+<Exercise
+  title="Extend OnboardBot"
+  difficulty="advanced"
+  objectives={[
+    "Add progress tracking per user",
+    "Implement spaced repetition for quiz questions",
+    "Create a learning path recommendation system",
+    "Add support for video/audio content"
+  ]}
+  hints={[
+    "Use a simple database to track user progress and quiz scores",
+    "Spaced repetition: resurface questions the user got wrong after increasing intervals",
+    "Learning paths can be generated based on quiz performance gaps"
+  ]}
+>
+
+**Challenge:** Extend OnboardBot with:
+
+1. **Progress Tracking**: Track which topics each user has studied and their quiz scores
+2. **Adaptive Learning**: Recommend topics based on quiz performance
+3. **Flashcard Mode**: Generate flashcards from key terms in documents
+
+</Exercise>
+
+---
+
+<ModuleSummary
+  points={[
+    "RAG systems can do more than Q&A—they can generate learning materials",
+    "Citation tracking is essential for grounded, trustworthy responses",
+    "Quiz generation tests comprehension and identifies knowledge gaps",
+    "Practice simulations provide safe environments for skill development",
+    "Structured output (Pydantic models) ensures consistent, usable results",
+  ]}
+/>

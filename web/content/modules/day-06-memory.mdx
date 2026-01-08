@@ -1,0 +1,685 @@
+---
+title: "Day 06: Agent Memory Systems"
+description: "Implementing short-term, long-term, and episodic memory for persistent agents."
+week: 1
+day: 6
+---
+
+<ReadingTime minutes={30} />
+
+<SkillLevel level="intermediate" description="Hands-on Python implementation" />
+
+<Prerequisites
+  items={[
+    "Completed Day 05: RAG",
+    "Understanding of vector databases",
+    "Python classes and data structures",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Distinguish between the four types of agent memory",
+    "Implement working memory for current task state",
+    "Build episodic memory using vector databases",
+    "Create semantic memory for facts and preferences",
+    "Integrate all memory types into a unified system",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Working Memory",
+      definition:
+        "Short-term storage for the current task—like RAM in a computer",
+    },
+    {
+      term: "Episodic Memory",
+      definition:
+        "Storage of past experiences and interactions for later retrieval",
+    },
+    {
+      term: "Semantic Memory",
+      definition: "Long-term storage of facts, knowledge, and user preferences",
+    },
+    {
+      term: "Procedural Memory",
+      definition:
+        "Learned patterns and successful workflows the agent can reuse",
+    },
+    {
+      term: "Memory Persistence",
+      definition: "Saving memory to disk so it survives across sessions",
+    },
+  ]}
+/>
+
+---
+
+## The Memory Hierarchy
+
+<ConceptIntro
+  title="Agent Memory Systems"
+  analogy="Think about how you remember things. Your working memory holds what you're actively thinking about (like a phone number you're about to dial). Your episodic memory stores experiences (what you did yesterday). Your semantic memory holds facts (Paris is in France). Your procedural memory stores skills (how to ride a bike). Agents need all four types to be truly useful."
+  technicalDef="Agent memory systems provide persistence across interactions. Working memory holds current task state in the context window. Episodic memory stores past interactions in a vector database. Semantic memory stores facts and preferences. Procedural memory captures successful patterns for reuse."
+  whyItMatters="Without memory, every conversation starts from scratch. Memory enables personalization, learning from mistakes, and building on past work—the difference between a useful assistant and a forgetful chatbot."
+/>
+
+Human cognition relies on multiple memory systems working together. Production agents need the same—working memory for immediate tasks, episodic memory for experiences, and semantic memory for facts.
+
+<RealWorldExample
+  title="A Personal Assistant That Remembers"
+  scenario="You've been working with an AI assistant for months on a software project."
+  implementation="The agent remembers: (Working) Your current task is fixing a bug. (Episodic) Last week you struggled with a similar bug and solved it by checking the logs. (Semantic) You prefer Python over JavaScript, and your codebase uses PostgreSQL. (Procedural) When you say 'deploy', it knows to run your specific deployment script."
+  takeaway="Each memory type serves a different purpose. Together, they create an assistant that truly knows you and your project."
+/>
+
+---
+
+## 6.1 Memory Types for Agents
+
+![Agent Memory Architecture](/images/memory_systems.png)
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph Working Memory
+        WM[Current Task Context]
+        WM --> Scratchpad[Scratchpad]
+        WM --> ActiveGoals[Active Goals]
+    end
+    
+    subgraph Episodic Memory
+        EM[Past Experiences]
+        EM --> Conversations[Conversation History]
+        EM --> Actions[Action Traces]
+    end
+    
+    subgraph Semantic Memory
+        SM[Facts & Knowledge]
+        SM --> UserPrefs[User Preferences]
+        SM --> DomainKnowledge[Domain Knowledge]
+    end
+    
+    subgraph Procedural Memory
+        PM[Learned Skills]
+        PM --> Patterns[Successful Patterns]
+        PM --> Workflows[Workflow Templates]
+    end
+    
+    style WM fill:#f9f,stroke:#333
+    style EM fill:#bbf,stroke:#333
+    style SM fill:#bfb,stroke:#333
+    style PM fill:#ff9,stroke:#333
+`}
+/>
+
+### Memory Type Comparison
+
+| Memory Type    | What It Stores      | Persistence | Access Pattern     | Human Analogy                |
+| :------------- | :------------------ | :---------- | :----------------- | :--------------------------- |
+| **Working**    | Current task state  | Session     | Direct read/write  | What you're thinking now     |
+| **Episodic**   | Past interactions   | Long-term   | Temporal retrieval | What you did yesterday       |
+| **Semantic**   | Facts and knowledge | Permanent   | Semantic search    | Things you learned in school |
+| **Procedural** | Learned behaviors   | Permanent   | Pattern matching   | How to ride a bike           |
+
+---
+
+## 6.2 Implementing Working Memory
+
+Working memory holds the agent's current focus—active goals, intermediate results, and task state.
+
+```python
+from dataclasses import dataclass, field
+from typing import Any, Dict, List
+from datetime import datetime
+
+@dataclass
+class WorkingMemory:
+    """Agent's short-term working memory."""
+
+    # Current task context
+    current_goal: str = ""
+    sub_goals: List[str] = field(default_factory=list)
+
+    # Scratchpad for intermediate results
+    scratchpad: Dict[str, Any] = field(default_factory=dict)
+
+    # Recent observations (sliding window)
+    observations: List[Dict] = field(default_factory=list)
+    max_observations: int = 10
+
+    def set_goal(self, goal: str):
+        """Set the current high-level goal."""
+        self.current_goal = goal
+        self.sub_goals = []
+        self.scratchpad = {}
+
+    def add_sub_goal(self, sub_goal: str):
+        """Add a sub-goal to the current task."""
+        self.sub_goals.append(sub_goal)
+
+    def complete_sub_goal(self, sub_goal: str):
+        """Mark a sub-goal as complete."""
+        if sub_goal in self.sub_goals:
+            self.sub_goals.remove(sub_goal)
+
+    def write(self, key: str, value: Any):
+        """Write to scratchpad."""
+        self.scratchpad[key] = {
+            "value": value,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    def read(self, key: str) -> Any:
+        """Read from scratchpad."""
+        if key in self.scratchpad:
+            return self.scratchpad[key]["value"]
+        return None
+
+    def add_observation(self, observation: Dict):
+        """Add an observation, maintaining sliding window."""
+        self.observations.append({
+            **observation,
+            "timestamp": datetime.now().isoformat()
+        })
+
+        # Keep only recent observations
+        if len(self.observations) > self.max_observations:
+            self.observations = self.observations[-self.max_observations:]
+
+    def to_context(self) -> str:
+        """Convert working memory to context string for LLM."""
+        parts = []
+
+        if self.current_goal:
+            parts.append(f"Current Goal: {self.current_goal}")
+
+        if self.sub_goals:
+            parts.append(f"Remaining Sub-goals: {', '.join(self.sub_goals)}")
+
+        if self.scratchpad:
+            scratchpad_str = "\n".join([
+                f"  - {k}: {v['value']}"
+                for k, v in self.scratchpad.items()
+            ])
+            parts.append(f"Scratchpad:\n{scratchpad_str}")
+
+        if self.observations:
+            recent = self.observations[-3:]  # Last 3 observations
+            obs_str = "\n".join([
+                f"  - {o.get('action', 'unknown')}: {o.get('result', '')[:100]}"
+                for o in recent
+            ])
+            parts.append(f"Recent Observations:\n{obs_str}")
+
+        return "\n\n".join(parts)
+```
+
+---
+
+## 6.3 Implementing Episodic Memory
+
+Episodic memory stores past experiences—conversations, actions, and their outcomes.
+
+```python
+import json
+from pathlib import Path
+import chromadb
+from datetime import datetime
+
+class EpisodicMemory:
+    """Long-term storage of agent experiences."""
+
+    def __init__(self, persist_path: str = "./episodic_memory"):
+        self.persist_path = Path(persist_path)
+        self.persist_path.mkdir(exist_ok=True)
+
+        # Vector store for semantic search over episodes
+        self.chroma = chromadb.PersistentClient(path=str(self.persist_path / "chroma"))
+        self.collection = self.chroma.get_or_create_collection("episodes")
+
+        # JSON store for full episode data
+        self.episodes_file = self.persist_path / "episodes.jsonl"
+
+    def store_episode(self, episode: Dict):
+        """Store a complete interaction episode."""
+        episode_id = f"ep_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+
+        # Create searchable summary
+        summary = self._create_summary(episode)
+
+        # Store in vector DB for retrieval
+        self.collection.add(
+            documents=[summary],
+            metadatas=[{
+                "episode_id": episode_id,
+                "timestamp": datetime.now().isoformat(),
+                "goal": episode.get("goal", ""),
+                "outcome": episode.get("outcome", "unknown")
+            }],
+            ids=[episode_id]
+        )
+
+        # Store full episode in JSONL
+        with open(self.episodes_file, "a") as f:
+            f.write(json.dumps({
+                "id": episode_id,
+                "timestamp": datetime.now().isoformat(),
+                **episode
+            }) + "\n")
+
+        return episode_id
+
+    def _create_summary(self, episode: Dict) -> str:
+        """Create a searchable summary of an episode."""
+        parts = []
+
+        if "goal" in episode:
+            parts.append(f"Goal: {episode['goal']}")
+
+        if "actions" in episode:
+            actions = [a.get("action", "") for a in episode["actions"][:5]]
+            parts.append(f"Actions: {', '.join(actions)}")
+
+        if "outcome" in episode:
+            parts.append(f"Outcome: {episode['outcome']}")
+
+        if "learnings" in episode:
+            parts.append(f"Learnings: {episode['learnings']}")
+
+        return " | ".join(parts)
+
+    def recall_similar(self, query: str, n_results: int = 5) -> List[Dict]:
+        """Recall episodes similar to the query."""
+        results = self.collection.query(
+            query_texts=[query],
+            n_results=n_results
+        )
+
+        episodes = []
+        for metadata in results["metadatas"][0]:
+            episode = self._load_episode(metadata["episode_id"])
+            if episode:
+                episodes.append(episode)
+
+        return episodes
+
+    def recall_recent(self, n: int = 5) -> List[Dict]:
+        """Recall the most recent episodes."""
+        episodes = []
+
+        if self.episodes_file.exists():
+            with open(self.episodes_file, "r") as f:
+                lines = f.readlines()
+                for line in lines[-n:]:
+                    episodes.append(json.loads(line))
+
+        return episodes
+
+    def _load_episode(self, episode_id: str) -> Dict:
+        """Load full episode data by ID."""
+        if self.episodes_file.exists():
+            with open(self.episodes_file, "r") as f:
+                for line in f:
+                    episode = json.loads(line)
+                    if episode.get("id") == episode_id:
+                        return episode
+        return None
+
+    def to_context(self, query: str = None, n: int = 3) -> str:
+        """Convert relevant episodes to context string."""
+        if query:
+            episodes = self.recall_similar(query, n)
+        else:
+            episodes = self.recall_recent(n)
+
+        if not episodes:
+            return "No relevant past experiences found."
+
+        parts = ["Relevant Past Experiences:"]
+        for ep in episodes:
+            parts.append(f"- Goal: {ep.get('goal', 'unknown')}")
+            parts.append(f"  Outcome: {ep.get('outcome', 'unknown')}")
+            if ep.get("learnings"):
+                parts.append(f"  Learning: {ep['learnings']}")
+
+        return "\n".join(parts)
+```
+
+---
+
+## 6.4 Implementing Semantic Memory
+
+Semantic memory stores facts, user preferences, and domain knowledge.
+
+```python
+class SemanticMemory:
+    """Long-term storage of facts and knowledge."""
+
+    def __init__(self, persist_path: str = "./semantic_memory"):
+        self.persist_path = Path(persist_path)
+        self.persist_path.mkdir(exist_ok=True)
+
+        self.chroma = chromadb.PersistentClient(path=str(self.persist_path / "chroma"))
+
+        # Separate collections for different knowledge types
+        self.facts = self.chroma.get_or_create_collection("facts")
+        self.preferences = self.chroma.get_or_create_collection("preferences")
+        self.domain = self.chroma.get_or_create_collection("domain_knowledge")
+
+    def store_fact(self, fact: str, source: str = "observation", confidence: float = 1.0):
+        """Store a fact with metadata."""
+        fact_id = f"fact_{hash(fact) % 10**8}"
+
+        self.facts.upsert(
+            documents=[fact],
+            metadatas=[{
+                "source": source,
+                "confidence": confidence,
+                "timestamp": datetime.now().isoformat()
+            }],
+            ids=[fact_id]
+        )
+
+    def store_preference(self, user_id: str, preference: str, value: Any):
+        """Store a user preference."""
+        pref_id = f"pref_{user_id}_{hash(preference) % 10**6}"
+
+        self.preferences.upsert(
+            documents=[f"{preference}: {value}"],
+            metadatas=[{
+                "user_id": user_id,
+                "preference_key": preference,
+                "preference_value": str(value),
+                "timestamp": datetime.now().isoformat()
+            }],
+            ids=[pref_id]
+        )
+
+    def recall_facts(self, query: str, n: int = 5) -> List[str]:
+        """Recall facts relevant to a query."""
+        results = self.facts.query(
+            query_texts=[query],
+            n_results=n
+        )
+        return results["documents"][0] if results["documents"] else []
+
+    def get_user_preferences(self, user_id: str) -> Dict[str, str]:
+        """Get all preferences for a user."""
+        results = self.preferences.get(
+            where={"user_id": user_id}
+        )
+
+        prefs = {}
+        for metadata in results["metadatas"]:
+            prefs[metadata["preference_key"]] = metadata["preference_value"]
+
+        return prefs
+
+    def to_context(self, query: str, user_id: str = None) -> str:
+        """Convert relevant knowledge to context string."""
+        parts = []
+
+        # Relevant facts
+        facts = self.recall_facts(query, n=5)
+        if facts:
+            parts.append("Relevant Facts:")
+            for fact in facts:
+                parts.append(f"  - {fact}")
+
+        # User preferences
+        if user_id:
+            prefs = self.get_user_preferences(user_id)
+            if prefs:
+                parts.append(f"\nUser Preferences:")
+                for k, v in prefs.items():
+                    parts.append(f"  - {k}: {v}")
+
+        return "\n".join(parts) if parts else "No relevant knowledge found."
+```
+
+---
+
+## 6.5 The Unified Memory System
+
+Combine all memory types into a coherent system:
+
+```python
+class AgentMemorySystem:
+    """Unified memory system combining all memory types."""
+
+    def __init__(self, agent_id: str, persist_path: str = "./agent_memory"):
+        self.agent_id = agent_id
+        base_path = Path(persist_path) / agent_id
+
+        self.working = WorkingMemory()
+        self.episodic = EpisodicMemory(str(base_path / "episodic"))
+        self.semantic = SemanticMemory(str(base_path / "semantic"))
+
+    def build_context(self, query: str, user_id: str = None) -> str:
+        """Build complete memory context for LLM."""
+        sections = []
+
+        # Working memory (always included)
+        working_ctx = self.working.to_context()
+        if working_ctx:
+            sections.append(f"## Working Memory\n{working_ctx}")
+
+        # Episodic memory (relevant experiences)
+        episodic_ctx = self.episodic.to_context(query, n=3)
+        if episodic_ctx and "No relevant" not in episodic_ctx:
+            sections.append(f"## Past Experiences\n{episodic_ctx}")
+
+        # Semantic memory (relevant facts)
+        semantic_ctx = self.semantic.to_context(query, user_id)
+        if semantic_ctx and "No relevant" not in semantic_ctx:
+            sections.append(f"## Knowledge Base\n{semantic_ctx}")
+
+        return "\n\n".join(sections)
+
+    def start_task(self, goal: str):
+        """Initialize memory for a new task."""
+        self.working.set_goal(goal)
+
+    def record_action(self, action: str, result: str, success: bool):
+        """Record an action in working memory."""
+        self.working.add_observation({
+            "action": action,
+            "result": result,
+            "success": success
+        })
+
+    def complete_task(self, outcome: str, learnings: str = None):
+        """Complete a task and store the episode."""
+        episode = {
+            "goal": self.working.current_goal,
+            "actions": self.working.observations,
+            "scratchpad": self.working.scratchpad,
+            "outcome": outcome,
+            "learnings": learnings
+        }
+
+        self.episodic.store_episode(episode)
+
+        # Extract and store any facts learned
+        if learnings:
+            self.semantic.store_fact(learnings, source="task_completion")
+
+        # Clear working memory
+        self.working = WorkingMemory()
+
+    def learn_preference(self, user_id: str, preference: str, value: Any):
+        """Learn a user preference."""
+        self.semantic.store_preference(user_id, preference, value)
+```
+
+---
+
+## 6.6 Memory-Augmented Agent
+
+Integrate the memory system with our agent:
+
+```python
+class MemoryAugmentedAgent:
+    """Agent with full memory capabilities."""
+
+    def __init__(self, agent_id: str, model: str = "gpt-4o-mini"):
+        self.client = OpenAI()
+        self.model = model
+        self.memory = AgentMemorySystem(agent_id)
+        self.tools = {}
+
+    def run(self, user_input: str, user_id: str = None) -> str:
+        """Run agent with memory context."""
+        # Start task
+        self.memory.start_task(user_input)
+
+        # Build memory-augmented context
+        memory_context = self.memory.build_context(user_input, user_id)
+
+        system_prompt = f"""You are a helpful assistant with memory.
+
+{memory_context}
+
+Use your memory to provide personalized, context-aware responses.
+Learn from past experiences to improve your performance.
+"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input}
+        ]
+
+        # Run agent loop (simplified)
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.1
+        )
+
+        result = response.choices[0].message.content
+
+        # Record completion
+        self.memory.complete_task(
+            outcome="success",
+            learnings=self._extract_learnings(user_input, result)
+        )
+
+        return result
+
+    def _extract_learnings(self, query: str, response: str) -> str:
+        """Extract learnings from an interaction (simplified)."""
+        # In production, use LLM to extract key learnings
+        return f"Successfully answered query about: {query[:50]}..."
+```
+
+---
+
+<Exercise
+  title="Build a Personal Assistant with Memory"
+  difficulty="intermediate"
+  objectives={[
+    "Remember user's name and preferences",
+    "Recall relevant past conversations",
+    "Learn from successful interactions",
+    "Persist memory across sessions"
+  ]}
+  hints={[
+    "Start with just semantic memory for preferences",
+    "Use ChromaDB's persistent client to save across sessions",
+    "Test by restarting your Python script and checking if memories persist"
+  ]}
+>
+
+### Test Scenarios
+
+```python
+# Session 1
+agent.run("My name is Alice and I prefer Python over JavaScript", user_id="alice")
+agent.run("What's the best way to parse JSON?", user_id="alice")
+
+# Session 2 (new session, same user)
+agent.run("What language should I use for this project?", user_id="alice")
+# Should remember Alice prefers Python!
+```
+
+</Exercise>
+
+---
+
+<ProgressCheckpoint
+  title="Memory Systems Check"
+  questions={[
+    {
+      question:
+        "What's the difference between working memory and episodic memory?",
+      answer:
+        "Working memory holds the current task state (like RAM)—it's fast but temporary. Episodic memory stores past experiences in a vector database—it persists long-term and is retrieved when relevant.",
+    },
+    {
+      question:
+        "Why would you use semantic memory instead of just storing everything in episodic memory?",
+      answer:
+        "Semantic memory stores facts and preferences that are always true (user prefers Python), while episodic memory stores specific experiences (last Tuesday's debugging session). Facts don't need temporal context.",
+    },
+    {
+      question:
+        "How does the unified memory system decide what context to include?",
+      answer:
+        "It builds context selectively: working memory is always included (current task), episodic memory is searched for relevant past experiences, and semantic memory is queried for relevant facts and user preferences.",
+    },
+    {
+      question:
+        "What happens when you call `complete_task()` on the memory system?",
+      answer:
+        "It stores the entire task as an episode in episodic memory, extracts any learnings as facts in semantic memory, and clears working memory for the next task.",
+    },
+  ]}
+/>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Including all memories in every prompt",
+      fix: "Be selective—retrieve only relevant memories based on the current query",
+    },
+    {
+      mistake: "Not persisting memory to disk",
+      fix: "Use ChromaDB's PersistentClient or save to files for cross-session memory",
+    },
+    {
+      mistake: "Storing raw conversation logs as memories",
+      fix: "Extract and structure key information: decisions, preferences, outcomes",
+    },
+    {
+      mistake: "Forgetting to clear working memory between tasks",
+      fix: "Call complete_task() or reset working memory when starting new tasks",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Four memory types: Working (current), Episodic (experiences), Semantic (facts), Procedural (skills)",
+    "Working memory = context window; Episodic/Semantic = vector databases",
+    "Memory should be selective—retrieve relevant context, not everything",
+    "Persist memory to disk for cross-session continuity",
+    "The unified system builds context by combining all memory types intelligently",
+  ]}
+/>
+
+---
+
+## 🔗 Further Reading
+
+- [MemGPT: Towards LLMs as Operating Systems](https://arxiv.org/abs/2310.08560)
+- [Generative Agents: Interactive Simulacra](https://arxiv.org/abs/2304.03442)
+- [OpenMemory - CaviraOSS](https://github.com/CaviraOSS/OpenMemory)
+
+**Tomorrow**: Week 1 Capstone—building a complete research assistant.

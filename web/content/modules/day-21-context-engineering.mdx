@@ -1,0 +1,487 @@
+---
+title: "Day 21: Context Engineering"
+description: "From vibe coding to structured, reliable context delivery for production agentic systems."
+week: 3
+---
+
+<ReadingTime minutes={25} />
+
+<SkillLevel level="advanced" description="Production architecture" />
+
+<Prerequisites
+  items={[
+    "Understanding of RAG fundamentals (Day 05)",
+    "Experience with API integrations and error handling",
+    "Familiarity with async programming patterns",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Distinguish context engineering from prompt engineering",
+    "Design parallel data fetching pipelines for agent context",
+    "Implement resilient context gathering with retries and fallbacks",
+    "Structure context delivery for reliable agent reasoning",
+    "Build production-grade context pipelines",
+  ]}
+/>
+
+---
+
+## Beyond Prompt Engineering
+
+Prompt engineering is about crafting the right words. **Context engineering** is about building reliable systems that deliver the right information to those prompts.
+
+<ConceptIntro
+  title="Context Engineering"
+  analogy="Prompt engineering is like writing a good exam question. Context engineering is like building the entire educational system that prepares students to answer it—textbooks, lectures, study materials, all delivered reliably and on time."
+  technicalDef="Context engineering is a structured, systematic methodology for gathering, processing, and delivering reliable context to AI systems. It transforms messy, long-running data workflows into predictable, reproducible reasoning pipelines."
+  whyItMatters="The difference between 'vibe coding' and production systems. Vibe coding hopes the agent figures it out. Context engineering guarantees the agent has what it needs."
+/>
+
+---
+
+## 21.1 The Context Engineering Stack
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Context Sources"
+        S1[📄 Documents]
+        S2[🔍 Web Search]
+        S3[📊 APIs]
+        S4[🗄️ Databases]
+        S5[📁 File System]
+    end
+    
+    subgraph "Context Pipeline"
+        F[Parallel Fetcher] --> P[Processor]
+        P --> V[Validator]
+        V --> C[Compressor]
+        C --> S[Structurer]
+    end
+    
+    subgraph "Delivery"
+        S --> Agent[🤖 Agent]
+    end
+    
+    S1 --> F
+    S2 --> F
+    S3 --> F
+    S4 --> F
+    S5 --> F
+    
+    style F fill:#f9f,stroke:#333
+    style Agent fill:#bbf,stroke:#333
+`}
+/>
+
+### The Five Stages
+
+| Stage         | Purpose                         | Example                             |
+| :------------ | :------------------------------ | :---------------------------------- |
+| **Fetch**     | Gather raw data from sources    | Query APIs, search web, read files  |
+| **Process**   | Transform into usable format    | Parse HTML, extract text, normalize |
+| **Validate**  | Ensure data quality             | Check freshness, verify sources     |
+| **Compress**  | Reduce to essential information | Summarize, deduplicate, truncate    |
+| **Structure** | Format for agent consumption    | JSON schema, markdown sections      |
+
+---
+
+## 21.2 Parallel Data Fetching
+
+<ProductionPattern
+  type="performance"
+  title="Parallel Context Gathering"
+  problem="Sequential data fetching creates latency bottlenecks. Fetching from 5 sources at 2 seconds each = 10 seconds total. Users won't wait."
+  solution="Fetch from all sources in parallel using async/await. 5 sources at 2 seconds each = 2 seconds total (plus overhead)."
+  implementation={`Use asyncio.gather() or Promise.all() to parallelize fetches.
+Implement per-source timeouts to prevent slow sources from blocking.
+Use circuit breakers to skip consistently failing sources.
+Cache results to avoid redundant fetches.`}
+  antiPatterns={[
+    "Sequential fetching from multiple sources",
+    "No timeouts on external API calls",
+    "Failing the entire pipeline if one source fails",
+    "Re-fetching unchanged data on every request",
+  ]}
+  bestPractices={[
+    "Parallel fetch with individual timeouts",
+    "Graceful degradation when sources fail",
+    "Aggressive caching with TTL",
+    "Circuit breakers for flaky sources",
+  ]}
+/>
+
+```python
+import asyncio
+from typing import Optional
+from dataclasses import dataclass
+
+@dataclass
+class ContextSource:
+    name: str
+    fetcher: callable
+    timeout: float = 5.0
+    required: bool = False
+
+class ParallelContextFetcher:
+    def __init__(self, sources: list[ContextSource]):
+        self.sources = sources
+        self.cache = {}
+
+    async def fetch_source(self, source: ContextSource, query: str) -> Optional[dict]:
+        """Fetch from a single source with timeout and error handling."""
+        cache_key = f"{source.name}:{query}"
+
+        # Check cache first
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+
+        try:
+            result = await asyncio.wait_for(
+                source.fetcher(query),
+                timeout=source.timeout
+            )
+            self.cache[cache_key] = result
+            return result
+        except asyncio.TimeoutError:
+            print(f"⏱️ Timeout fetching from {source.name}")
+            return None
+        except Exception as e:
+            print(f"❌ Error fetching from {source.name}: {e}")
+            if source.required:
+                raise  # Re-raise if this source is required
+            return None
+
+    async def fetch_all(self, query: str) -> dict:
+        """Fetch from all sources in parallel."""
+        tasks = [
+            self.fetch_source(source, query)
+            for source in self.sources
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        context = {}
+        for source, result in zip(self.sources, results):
+            if result and not isinstance(result, Exception):
+                context[source.name] = result
+
+        return context
+
+# Usage
+async def gather_research_context(topic: str) -> dict:
+    sources = [
+        ContextSource("arxiv", fetch_arxiv_papers, timeout=10.0),
+        ContextSource("github", fetch_github_repos, timeout=5.0),
+        ContextSource("web", fetch_web_search, timeout=8.0),
+        ContextSource("docs", fetch_documentation, timeout=3.0, required=True),
+    ]
+
+    fetcher = ParallelContextFetcher(sources)
+    return await fetcher.fetch_all(topic)
+```
+
+---
+
+## 21.3 Automated Resilience
+
+Real-world data sources fail. Context engineering builds resilience into the pipeline.
+
+```python
+import asyncio
+from functools import wraps
+from typing import TypeVar, Callable
+
+T = TypeVar('T')
+
+def with_retry(
+    max_attempts: int = 3,
+    backoff_factor: float = 2.0,
+    exceptions: tuple = (Exception,)
+):
+    """Decorator for exponential backoff retry."""
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        async def wrapper(*args, **kwargs) -> T:
+            last_exception = None
+
+            for attempt in range(max_attempts):
+                try:
+                    return await func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    if attempt < max_attempts - 1:
+                        wait_time = backoff_factor ** attempt
+                        print(f"Retry {attempt + 1}/{max_attempts} in {wait_time}s")
+                        await asyncio.sleep(wait_time)
+
+            raise last_exception
+        return wrapper
+    return decorator
+
+class CircuitBreaker:
+    """Prevent repeated calls to failing services."""
+
+    def __init__(self, failure_threshold: int = 5, reset_timeout: float = 60.0):
+        self.failure_threshold = failure_threshold
+        self.reset_timeout = reset_timeout
+        self.failures = 0
+        self.last_failure_time = 0
+        self.state = "closed"  # closed, open, half-open
+
+    async def call(self, func: Callable, *args, **kwargs):
+        if self.state == "open":
+            if time.time() - self.last_failure_time > self.reset_timeout:
+                self.state = "half-open"
+            else:
+                raise CircuitBreakerOpen("Circuit breaker is open")
+
+        try:
+            result = await func(*args, **kwargs)
+            if self.state == "half-open":
+                self.state = "closed"
+                self.failures = 0
+            return result
+        except Exception as e:
+            self.failures += 1
+            self.last_failure_time = time.time()
+            if self.failures >= self.failure_threshold:
+                self.state = "open"
+            raise
+
+# Resilient fetcher with retry and circuit breaker
+class ResilientFetcher:
+    def __init__(self):
+        self.circuit_breakers = {}
+
+    @with_retry(max_attempts=3, backoff_factor=2.0)
+    async def fetch_with_retry(self, source: str, url: str) -> dict:
+        """Fetch with automatic retry on failure."""
+        if source not in self.circuit_breakers:
+            self.circuit_breakers[source] = CircuitBreaker()
+
+        return await self.circuit_breakers[source].call(
+            self._do_fetch, url
+        )
+```
+
+---
+
+## 21.4 Structured Context Delivery
+
+Raw data isn't useful. Context must be structured for reliable agent consumption.
+
+```python
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
+
+class SourceMetadata(BaseModel):
+    """Metadata about a context source."""
+    name: str
+    url: Optional[str] = None
+    fetched_at: datetime
+    freshness: str = Field(description="fresh, stale, or unknown")
+    confidence: float = Field(ge=0, le=1, description="Source reliability")
+
+class ContextSection(BaseModel):
+    """A structured section of context."""
+    title: str
+    content: str
+    source: SourceMetadata
+    relevance_score: float = Field(ge=0, le=1)
+    token_count: int
+
+class StructuredContext(BaseModel):
+    """Complete structured context for agent consumption."""
+    query: str
+    sections: list[ContextSection]
+    total_tokens: int
+    sources_used: int
+    sources_failed: list[str]
+    generated_at: datetime
+
+    def to_prompt_format(self, max_tokens: int = 8000) -> str:
+        """Convert to agent-consumable format."""
+        lines = [
+            f"# Context for: {self.query}",
+            f"_Generated: {self.generated_at.isoformat()}_",
+            f"_Sources: {self.sources_used} used, {len(self.sources_failed)} failed_",
+            ""
+        ]
+
+        # Sort by relevance, include until token budget exhausted
+        sorted_sections = sorted(
+            self.sections,
+            key=lambda s: s.relevance_score,
+            reverse=True
+        )
+
+        current_tokens = 0
+        for section in sorted_sections:
+            if current_tokens + section.token_count > max_tokens:
+                lines.append(f"\n_[{len(sorted_sections) - len(lines) + 4} sections truncated due to token limit]_")
+                break
+
+            lines.extend([
+                f"## {section.title}",
+                f"_Source: {section.source.name} | Confidence: {section.source.confidence:.0%}_",
+                "",
+                section.content,
+                ""
+            ])
+            current_tokens += section.token_count
+
+        return "\n".join(lines)
+
+# Context builder
+class ContextBuilder:
+    def __init__(self, fetcher: ParallelContextFetcher):
+        self.fetcher = fetcher
+
+    async def build(self, query: str, max_tokens: int = 8000) -> StructuredContext:
+        """Build structured context from raw sources."""
+        raw_context = await self.fetcher.fetch_all(query)
+
+        sections = []
+        failed_sources = []
+
+        for source_name, data in raw_context.items():
+            if data is None:
+                failed_sources.append(source_name)
+                continue
+
+            # Process and structure each source
+            section = self.process_source(source_name, data, query)
+            sections.append(section)
+
+        return StructuredContext(
+            query=query,
+            sections=sections,
+            total_tokens=sum(s.token_count for s in sections),
+            sources_used=len(sections),
+            sources_failed=failed_sources,
+            generated_at=datetime.now()
+        )
+```
+
+---
+
+## 21.5 Complete Pipeline Example
+
+```python
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict
+
+class ResearchState(TypedDict):
+    query: str
+    raw_context: dict
+    structured_context: str
+    analysis: str
+    final_report: str
+
+async def gather_context(state: ResearchState) -> dict:
+    """Stage 1: Parallel context gathering."""
+    fetcher = ParallelContextFetcher([
+        ContextSource("arxiv", fetch_arxiv, timeout=10),
+        ContextSource("github", fetch_github, timeout=5),
+        ContextSource("web", fetch_web, timeout=8),
+    ])
+
+    raw = await fetcher.fetch_all(state["query"])
+    return {"raw_context": raw}
+
+def process_context(state: ResearchState) -> dict:
+    """Stage 2: Process and structure context."""
+    builder = ContextBuilder()
+    structured = builder.build_sync(
+        state["query"],
+        state["raw_context"],
+        max_tokens=8000
+    )
+    return {"structured_context": structured.to_prompt_format()}
+
+def analyze_context(state: ResearchState) -> dict:
+    """Stage 3: Agent analyzes structured context."""
+    response = llm.invoke([
+        {"role": "system", "content": "You are a research analyst. Analyze the provided context and extract key insights."},
+        {"role": "user", "content": f"Query: {state['query']}\n\n{state['structured_context']}"}
+    ])
+    return {"analysis": response.content}
+
+def generate_report(state: ResearchState) -> dict:
+    """Stage 4: Generate final report."""
+    response = llm.invoke([
+        {"role": "system", "content": "Generate a comprehensive research report based on the analysis."},
+        {"role": "user", "content": state["analysis"]}
+    ])
+    return {"final_report": response.content}
+
+# Build pipeline
+workflow = StateGraph(ResearchState)
+workflow.add_node("gather", gather_context)
+workflow.add_node("process", process_context)
+workflow.add_node("analyze", analyze_context)
+workflow.add_node("report", generate_report)
+
+workflow.add_edge(START, "gather")
+workflow.add_edge("gather", "process")
+workflow.add_edge("process", "analyze")
+workflow.add_edge("analyze", "report")
+workflow.add_edge("report", END)
+
+app = workflow.compile()
+
+# Run
+result = await app.ainvoke({
+    "query": "Latest advances in multi-agent AI systems"
+})
+print(result["final_report"])
+```
+
+---
+
+<RealWorldExample
+  title="Production Research Agent"
+  scenario="A financial analyst needs to research a company before an earnings call. They need data from SEC filings, news articles, analyst reports, and social sentiment—all within 30 seconds."
+  implementation="Context engineering pipeline: (1) Parallel fetch from 6 sources with 5s timeouts each, (2) Circuit breakers skip sources that failed recently, (3) Results processed into structured sections with confidence scores, (4) Compressed to 8000 tokens prioritizing high-confidence recent sources, (5) Delivered to agent in consistent markdown format."
+  takeaway="Without context engineering, this would take 30+ seconds and fail unpredictably. With it, reliable results in under 10 seconds with graceful degradation when sources fail."
+/>
+
+---
+
+<ProgressCheckpoint
+  title="Context Engineering Check"
+  questions={[
+    {
+      question:
+        "What's the difference between prompt engineering and context engineering?",
+      answer:
+        "Prompt engineering crafts the right words. Context engineering builds reliable systems that deliver the right information to those prompts—handling fetching, processing, validation, and structured delivery.",
+    },
+    {
+      question: "Why use parallel fetching instead of sequential?",
+      answer:
+        "Sequential fetching creates latency bottlenecks. 5 sources at 2s each = 10s sequential vs 2s parallel. Users won't wait, and agents need fresh context quickly.",
+    },
+    {
+      question: "What are the five stages of a context pipeline?",
+      answer:
+        "Fetch (gather raw data), Process (transform to usable format), Validate (ensure quality), Compress (reduce to essentials), Structure (format for agent consumption).",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Context engineering is systematic, reliable context delivery—not vibe coding",
+    "Parallel fetching with timeouts prevents latency bottlenecks",
+    "Resilience patterns (retry, circuit breaker) handle real-world failures",
+    "Structured context with metadata enables reliable agent reasoning",
+    "Production pipelines combine all stages into reproducible workflows",
+  ]}
+/>

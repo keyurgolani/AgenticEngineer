@@ -1,0 +1,388 @@
+---
+title: "Building the Loop (LangGraph Basics)"
+description: "Implementing your first cognitive control loop using Python and LangGraph."
+week: 1
+day: 3
+---
+
+<ReadingTime minutes={25} />
+
+<SkillLevel level="intermediate" description="Hands-on Python coding" />
+
+<Prerequisites
+  items={[
+    "Completed Day 00, 01, 02",
+    "Python environment ready (uv/pip)",
+    "Basic Python knowledge (functions, dictionaries, type hints)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Explain the three core concepts of LangGraph: Nodes, Edges, and State",
+    "Build a minimal agent graph from scratch",
+    "Understand how state flows through the graph",
+    "Add conditional edges for decision-making",
+    "Visualize and debug your agent's execution",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Node",
+      definition:
+        "A Python function that performs work in the graph (reasoning, tool calls)",
+    },
+    {
+      term: "Edge",
+      definition: "A connection between nodes that defines control flow",
+    },
+    {
+      term: "State",
+      definition:
+        "A shared dictionary that persists data across the graph execution",
+    },
+    {
+      term: "Conditional Edge",
+      definition:
+        "An edge that routes to different nodes based on the current state",
+    },
+    {
+      term: "Compile",
+      definition: "Converting the graph definition into a runnable application",
+    },
+  ]}
+/>
+
+---
+
+## 3.1 From Concepts to Code
+
+In Day 01, we learned that agents require a **Loop** to handle uncertainty. Today, we build that loop.
+
+<ConceptIntro
+  title="LangGraph"
+  analogy="Think of LangGraph like a flowchart that can actually run. Each box in the flowchart is a 'node' (a Python function), and the arrows between boxes are 'edges' (control flow). Unlike a static flowchart, LangGraph can loop back, make decisions, and remember what happened at each step."
+  technicalDef="LangGraph is a library for building stateful, graph-based agent workflows. It models agents as directed graphs where nodes are functions, edges define control flow, and state is a shared dictionary that persists across execution."
+  whyItMatters="LangGraph gives you explicit control over agent behavior. Unlike 'magic' frameworks that hide the logic, you can see exactly how your agent makes decisions and debug when things go wrong."
+/>
+
+We use **LangGraph**, a library built on top of LangChain specifically designed for creating stateful, cyclical graphs.
+
+### The Graph Model
+
+LangGraph treats your agent as a graph where:
+
+| Component | What It Is                    | Example                                      |
+| :-------- | :---------------------------- | :------------------------------------------- |
+| **Nodes** | Python functions that do work | `call_model()`, `use_tool()`                 |
+| **Edges** | Connections defining flow     | "After reasoning, check if done"             |
+| **State** | Shared memory dictionary      | `{"messages": [...], "tool_results": [...]}` |
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "LangGraph Concepts"
+        State[(📦 State)] --> Node1[🔧 Node 1]
+        Node1 --> Edge{🔀 Edge}
+        Edge -->|"condition A"| Node2[🔧 Node 2]
+        Edge -->|"condition B"| Node3[🔧 Node 3]
+        Node2 --> State
+        Node3 --> State
+    end
+    
+    style State fill:#f9f,stroke:#333
+    style Edge fill:#bbf,stroke:#333
+`}
+/>
+
+---
+
+## 3.2 The 'Hello World' of Agents
+
+Let's build a minimal "ReAct" (Reason + Act) loop step by step.
+
+### Step 1: Define the State
+
+The state is the memory of our graph. It typically holds the list of messages.
+
+```python
+from typing import TypedDict, Annotated, List
+import operator
+
+class AgentState(TypedDict):
+    # 'operator.add' means new messages are appended to the list, not overwriting it
+    messages: Annotated[List[str], operator.add]
+```
+
+<Callout type="info">
+**What's `Annotated[List[str], operator.add]`?**
+
+This tells LangGraph how to merge state updates. When a node returns `{"messages": ["new message"]}`, it should _append_ to the existing list, not replace it. This is crucial for building up conversation history.
+
+</Callout>
+
+### Step 2: Define the Node (The Brain)
+
+Nodes are just standard Python functions that take the **State** as input and return an **Update** to the state.
+
+```python
+def call_model(state):
+    """The 'brain' of our agent - decides what to do."""
+    # In a real agent, this would call OpenAI/Anthropic
+    # For now, we simulate a simple decision
+    last_message = state['messages'][-1]
+
+    if "hello" in last_message.lower():
+        return {"messages": ["World!"]}
+
+    return {"messages": ["I don't understand."]}
+```
+
+<Callout type="tip">
+  **Key Pattern:** Nodes receive the full state, but only return the *changes*
+  they want to make. LangGraph handles merging these changes back into the
+  state.
+</Callout>
+
+### Step 3: Build the Graph
+
+We wire the nodes and edges together.
+
+```python
+from langgraph.graph import StateGraph, END
+
+# Initialize graph with our State schema
+workflow = StateGraph(AgentState)
+
+# Add our node
+workflow.add_node("agent", call_model)
+
+# Set the entry point (where the loop starts)
+workflow.set_entry_point("agent")
+
+# Add an edge: After 'agent' runs, go to END (finish)
+workflow.add_edge("agent", END)
+
+# Compile the graph into a runnable application
+app = workflow.compile()
+```
+
+### Step 4: Run It
+
+```python
+final_state = app.invoke({"messages": ["Hello there"]})
+print(final_state['messages'])
+# Output: ['Hello there', 'World!']
+```
+
+<RealWorldExample
+  title="What Just Happened?"
+  scenario="We invoked the graph with an initial message 'Hello there'."
+  implementation="1. Graph started at 'agent' node. 2. Node received state: {'messages': ['Hello there']}. 3. Node returned: {'messages': ['World!']}. 4. LangGraph merged: ['Hello there'] + ['World!'] = ['Hello there', 'World!']. 5. Edge led to END, so execution stopped."
+  takeaway="The state accumulates as the graph runs. Each node sees the full history and adds to it."
+/>
+
+---
+
+## 3.3 Visualizing the Graph
+
+One of the best features of LangGraph is the ability to visualize your logic.
+
+![Thinking Loop ReAct Cycle](/images/thinking_loop.png)
+
+<div className="my-8">
+  <Mermaid
+    chart={`
+graph TD
+    Start([▶️ Start]) --> Agent[🧠 Agent Node]
+    Agent --> End([🏁 End])
+    
+    style Agent fill:#bbf,stroke:#333
+`}
+  />
+</div>
+
+This is a trivial linear graph. Real power comes when we add **Conditional Edges**, allowing the graph to loop back to the `Agent` node if a tool needs to be called.
+
+---
+
+## 3.4 Adding Conditional Logic
+
+Let's make our agent smarter by adding a decision point:
+
+```python
+from langgraph.graph import StateGraph, END
+
+class AgentState(TypedDict):
+    messages: Annotated[List[str], operator.add]
+    should_continue: bool
+
+def call_model(state):
+    """Decide what to do based on the message."""
+    last_message = state['messages'][-1].lower()
+
+    if "search" in last_message:
+        return {
+            "messages": ["I'll search for that..."],
+            "should_continue": True  # Need to use a tool
+        }
+    else:
+        return {
+            "messages": ["Here's my answer!"],
+            "should_continue": False  # Done
+        }
+
+def use_tool(state):
+    """Simulate using a search tool."""
+    return {"messages": ["[Search results: Found 3 relevant documents]"]}
+
+def route_decision(state) -> str:
+    """Decide which node to go to next."""
+    if state.get("should_continue", False):
+        return "tool"
+    return END
+
+# Build the graph
+workflow = StateGraph(AgentState)
+workflow.add_node("agent", call_model)
+workflow.add_node("tool", use_tool)
+
+workflow.set_entry_point("agent")
+
+# Conditional edge: after agent, check where to go
+workflow.add_conditional_edges(
+    "agent",
+    route_decision,
+    {
+        "tool": "tool",
+        END: END
+    }
+)
+
+# After tool, go back to agent (the loop!)
+workflow.add_edge("tool", "agent")
+
+app = workflow.compile()
+```
+
+<Mermaid
+  chart={`
+graph TD
+    Start([▶️ Start]) --> Agent[🧠 Agent]
+    Agent -->|"should_continue=True"| Tool[🔧 Tool]
+    Agent -->|"should_continue=False"| End([🏁 End])
+    Tool --> Agent
+    
+    style Agent fill:#f9f,stroke:#333
+    style Tool fill:#bbf,stroke:#333
+`}
+/>
+
+<Callout type="success">
+  **This is the core agent pattern!** The agent reasons, decides if it needs a
+  tool, uses the tool, then reasons again with the new information. This loop
+  continues until the agent decides it's done.
+</Callout>
+
+---
+
+<ProgressCheckpoint
+  title="LangGraph Basics Check"
+  questions={[
+    {
+      question: "What are the three core components of a LangGraph graph?",
+      answer:
+        "Nodes (Python functions that do work), Edges (connections defining control flow), and State (shared dictionary that persists across execution).",
+    },
+    {
+      question:
+        "What does `Annotated[List[str], operator.add]` do in the state definition?",
+      answer:
+        "It tells LangGraph to append new values to the list instead of replacing it. This is how conversation history accumulates.",
+    },
+    {
+      question: "How do you create a loop in LangGraph?",
+      answer:
+        "Add an edge from a later node back to an earlier node. For example: tool → agent creates a loop where the agent can use tools multiple times.",
+    },
+    {
+      question:
+        "What's the difference between `add_edge` and `add_conditional_edges`?",
+      answer:
+        "`add_edge` always goes to the same next node. `add_conditional_edges` calls a routing function to decide which node to go to based on the current state.",
+    },
+  ]}
+/>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Forgetting to compile the graph before running",
+      fix: "Always call `workflow.compile()` to get a runnable app",
+    },
+    {
+      mistake: "Returning the full state from nodes instead of just updates",
+      fix: "Nodes should return only the changes: `{'messages': ['new']}` not the entire state",
+    },
+    {
+      mistake: "Creating infinite loops without exit conditions",
+      fix: "Always have a path to END. Use state flags like `should_continue` to control when to stop",
+    },
+    {
+      mistake: "Not using `operator.add` for list fields",
+      fix: "Without it, each node's return will overwrite the list instead of appending",
+    },
+  ]}
+/>
+
+---
+
+<Exercise
+  title="Your First Graph"
+  difficulty="intermediate"
+  objectives={[
+    "Install langgraph: `pip install langgraph`",
+    "Run the Hello World script locally",
+    "Modify the `call_model` function to handle a new keyword (e.g., 'bye')",
+    "Add a conditional edge that loops back when the user says 'more'"
+  ]}
+  hints={[
+    "Start with the simple example, then add complexity",
+    "Use print statements to see what state looks like at each step",
+    "The routing function receives the full state—use it to make decisions"
+  ]}
+>
+
+**Challenge:** Create a graph that:
+
+1. Greets the user when they say "hello"
+2. Says goodbye when they say "bye"
+3. Asks "What else?" and loops back when they say "more"
+
+</Exercise>
+
+---
+
+<ModuleSummary
+  points={[
+    "LangGraph models agents as graphs: Nodes (functions) + Edges (flow) + State (memory)",
+    "State uses `Annotated` with reducers like `operator.add` to control how updates merge",
+    "Nodes receive full state, return only changes",
+    "Conditional edges enable decision-making and loops",
+    "The core agent pattern: Reason → (maybe) Act → Observe → Repeat",
+  ]}
+/>
+
+---
+
+### Coming Up Next
+
+In **Day 04**, we'll explore advanced loop patterns including:
+
+- Tool calling with real LLMs
+- Error handling and retries
+- Human-in-the-loop checkpoints

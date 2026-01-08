@@ -1,0 +1,493 @@
+---
+title: "Day 04: Building Agent Loops"
+description: "Implementing the ReAct pattern and your first autonomous agent from scratch."
+week: 1
+---
+
+## From Theory to Code
+
+Today we build our first agent from scratch. No frameworks, no magic—just Python and an LLM. Understanding the fundamentals will make you a better architect when we introduce LangGraph later.
+
+---
+
+## 4.1 The Agent Loop Architecture
+
+Every agent follows the same fundamental loop:
+
+<Mermaid
+  chart={`
+graph TD
+    Start([User Input]) --> Parse[Parse Request]
+    Parse --> Think[LLM: Generate Thought]
+    Think --> Decide{Action Type?}
+    
+    Decide -->|Tool Call| Execute[Execute Tool]
+    Execute --> Observe[Capture Output]
+    Observe --> Think
+    
+    Decide -->|Final Answer| Format[Format Response]
+    Format --> End([Return to User])
+    
+    Decide -->|Error| Handle[Error Handler]
+    Handle --> Think
+    
+    style Think fill:#f9f,stroke:#333
+    style Execute fill:#bbf,stroke:#333
+    style Handle fill:#f96,stroke:#333
+`}
+/>
+
+/>
+
+<StepAnimation
+  steps={[
+    {
+      id: 1,
+      title: "1. Parse Request",
+      description:
+        "The agent receives user input and breaks it down into goals.",
+    },
+    {
+      id: 2,
+      title: "2. Think (Reasoning)",
+      description: "The LLM analyzes the goal and decides if it needs tools.",
+    },
+    {
+      id: 3,
+      title: "3. Decide Action",
+      description:
+        "The agent selects a specific tool (e.g., 'search_web') and arguments.",
+    },
+    {
+      id: 4,
+      title: "4. Execute Tool",
+      description:
+        "The system runs the tool code and captures the output (Observation).",
+    },
+    {
+      id: 5,
+      title: "5. Observe & Repeat",
+      description: "The agent reads the observation and decides the next step.",
+    },
+  ]}
+/>
+
+---
+
+## 4.2 Building a Minimal Agent
+
+Let's build a complete agent in ~100 lines of Python:
+
+````python
+import json
+import re
+from openai import OpenAI
+
+class SimpleAgent:
+    def __init__(self, model: str = "gpt-4o-mini"):
+        self.client = OpenAI()
+        self.model = model
+        self.tools = {}
+        self.max_iterations = 10
+
+    def register_tool(self, name: str, func, description: str):
+        """Register a tool the agent can use."""
+        self.tools[name] = {
+            "function": func,
+            "description": description
+        }
+
+    def _build_system_prompt(self) -> str:
+        tool_docs = "\n".join([
+            f"- {name}: {info['description']}"
+            for name, info in self.tools.items()
+        ])
+
+        return f"""You are a helpful assistant with access to tools.
+
+Available Tools:
+{tool_docs}
+
+Respond in this JSON format:
+{{
+  "thought": "Your reasoning about what to do",
+  "action": "tool_name OR final_answer",
+  "action_input": {{"param": "value"}} OR "your final response"
+}}
+
+Always think before acting. Use tools to gather information.
+When you have enough information, use action: "final_answer".
+"""
+
+    def _parse_response(self, content: str) -> dict:
+        """Extract JSON from LLM response."""
+        # Handle markdown code blocks
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0]
+
+        return json.loads(content.strip())
+
+    def _execute_tool(self, name: str, input_data) -> str:
+        """Execute a registered tool."""
+        if name not in self.tools:
+            return f"Error: Unknown tool '{name}'"
+
+        try:
+            if isinstance(input_data, dict):
+                result = self.tools[name]["function"](**input_data)
+            else:
+                result = self.tools[name]["function"](input_data)
+            return str(result)
+        except Exception as e:
+            return f"Error executing {name}: {str(e)}"
+
+    def run(self, user_input: str) -> str:
+        """Run the agent loop."""
+        messages = [
+            {"role": "system", "content": self._build_system_prompt()},
+            {"role": "user", "content": user_input}
+        ]
+
+        for iteration in range(self.max_iterations):
+            # Get LLM response
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.1
+            )
+
+            content = response.choices[0].message.content
+            messages.append({"role": "assistant", "content": content})
+
+            # Parse the response
+            try:
+                parsed = self._parse_response(content)
+            except json.JSONDecodeError:
+                messages.append({
+                    "role": "user",
+                    "content": "Please respond with valid JSON."
+                })
+                continue
+
+            thought = parsed.get("thought", "")
+            action = parsed.get("action", "")
+            action_input = parsed.get("action_input", {})
+
+            print(f"💭 Thought: {thought}")
+            print(f"🎯 Action: {action}")
+
+            # Check for final answer
+            if action == "final_answer":
+                return action_input if isinstance(action_input, str) else json.dumps(action_input)
+
+            # Execute tool
+            observation = self._execute_tool(action, action_input)
+            print(f"👁️ Observation: {observation[:200]}...")
+
+            # Add observation to context
+            messages.append({
+                "role": "user",
+                "content": f"Observation: {observation}"
+            })
+
+        return "Max iterations reached. Please try a simpler request."
+````
+
+---
+
+## 4.3 Adding Tools
+
+Tools are just Python functions with descriptions:
+
+```python
+import os
+import subprocess
+
+def read_file(path: str) -> str:
+    """Read contents of a file."""
+    try:
+        with open(path, 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return f"File not found: {path}"
+
+def list_directory(path: str = ".") -> str:
+    """List files in a directory."""
+    try:
+        files = os.listdir(path)
+        return "\n".join(files)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def run_python(code: str) -> str:
+    """Execute Python code and return output."""
+    try:
+        result = subprocess.run(
+            ["python", "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        return result.stdout or result.stderr
+    except subprocess.TimeoutExpired:
+        return "Error: Code execution timed out"
+
+def search_web(query: str) -> str:
+    """Search the web (simulated)."""
+    # In production, use Tavily, SerpAPI, or similar
+    return f"Search results for '{query}': [Simulated results]"
+
+# Register tools with the agent
+agent = SimpleAgent()
+agent.register_tool("read_file", read_file, "Read a file. Input: {path: string}")
+agent.register_tool("list_directory", list_directory, "List directory contents. Input: {path: string}")
+agent.register_tool("run_python", run_python, "Execute Python code. Input: {code: string}")
+agent.register_tool("search_web", search_web, "Search the web. Input: {query: string}")
+```
+
+---
+
+## 4.4 Running the Agent
+
+<Terminal 
+  command="python agent.py"
+  output={`>>> User: What Python files are in the current directory and what do they do?
+
+💭 Thought: I need to first list the directory to find Python files.
+🎯 Action: list_directory
+👁️ Observation: agent.py
+tools.py
+config.py
+README.md...
+
+💭 Thought: I found several Python files. Let me read agent.py to understand what it does.
+🎯 Action: read_file
+👁️ Observation: import json
+import re
+from openai import OpenAI
+
+class SimpleAgent:...
+
+💭 Thought: agent.py contains the main agent implementation. Let me check tools.py.
+🎯 Action: read_file
+👁️ Observation: def read_file(path: str) -> str:...
+
+💭 Thought: I now have enough information to provide a summary.
+🎯 Action: final_answer
+
+> > > Result: The directory contains:
+
+- agent.py: Main agent loop implementation with tool execution
+- tools.py: Tool definitions (read_file, list_directory, etc.)
+- config.py: Configuration settings`}
+  />
+
+---
+
+## 4.5 Adding Memory
+
+For multi-turn conversations, we need to persist state:
+
+```python
+class AgentWithMemory(SimpleAgent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.conversation_history = []
+        self.working_memory = {}  # Key-value store for facts
+
+    def remember(self, key: str, value: str):
+        """Store a fact in working memory."""
+        self.working_memory[key] = value
+
+    def recall(self, key: str) -> str:
+        """Retrieve a fact from working memory."""
+        return self.working_memory.get(key, "Not found")
+
+    def _build_system_prompt(self) -> str:
+        base_prompt = super()._build_system_prompt()
+
+        # Add memory context
+        if self.working_memory:
+            memory_str = "\n".join([
+                f"- {k}: {v}" for k, v in self.working_memory.items()
+            ])
+            base_prompt += f"\n\nWorking Memory:\n{memory_str}"
+
+        return base_prompt
+
+    def run(self, user_input: str) -> str:
+        # Add to conversation history
+        self.conversation_history.append({
+            "role": "user",
+            "content": user_input
+        })
+
+        result = super().run(user_input)
+
+        self.conversation_history.append({
+            "role": "assistant",
+            "content": result
+        })
+
+        return result
+```
+
+---
+
+## 4.6 Error Handling and Retries
+
+Production agents need robust error handling:
+
+```python
+import time
+from typing import Optional
+
+class RobustAgent(AgentWithMemory):
+    def __init__(self, *args, max_retries: int = 3, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.max_retries = max_retries
+
+    def _execute_tool_with_retry(self, name: str, input_data) -> str:
+        """Execute tool with exponential backoff retry."""
+        last_error = None
+
+        for attempt in range(self.max_retries):
+            try:
+                result = self._execute_tool(name, input_data)
+                if not result.startswith("Error"):
+                    return result
+                last_error = result
+            except Exception as e:
+                last_error = str(e)
+
+            # Exponential backoff
+            if attempt < self.max_retries - 1:
+                wait_time = 2 ** attempt
+                print(f"⚠️ Retry {attempt + 1}/{self.max_retries} in {wait_time}s...")
+                time.sleep(wait_time)
+
+        return f"Failed after {self.max_retries} attempts: {last_error}"
+
+    def _handle_parse_error(self, content: str, messages: list) -> Optional[dict]:
+        """Attempt to recover from JSON parse errors."""
+        # Try to extract any JSON-like structure
+        json_pattern = r'\{[^{}]*\}'
+        matches = re.findall(json_pattern, content, re.DOTALL)
+
+        for match in matches:
+            try:
+                return json.loads(match)
+            except:
+                continue
+
+        # Ask LLM to fix its response
+        messages.append({
+            "role": "user",
+            "content": "Your response wasn't valid JSON. Please try again with proper JSON format."
+        })
+        return None
+```
+
+---
+
+## 4.7 Streaming Responses
+
+For better UX, stream the agent's thinking:
+
+```python
+def run_streaming(self, user_input: str):
+    """Run agent with streaming output."""
+    messages = [
+        {"role": "system", "content": self._build_system_prompt()},
+        {"role": "user", "content": user_input}
+    ]
+
+    for iteration in range(self.max_iterations):
+        print(f"\n--- Iteration {iteration + 1} ---")
+
+        # Stream the response
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.1,
+            stream=True
+        )
+
+        content = ""
+        print("🤖 ", end="", flush=True)
+
+        for chunk in stream:
+            if chunk.choices[0].delta.content:
+                token = chunk.choices[0].delta.content
+                content += token
+                print(token, end="", flush=True)
+
+        print()  # Newline after streaming
+
+        # Continue with normal processing...
+```
+
+---
+
+## 🧪 Lab Exercise: Build a File Analysis Agent
+
+### Task
+
+Extend the SimpleAgent to analyze a codebase and answer questions about it.
+
+### Requirements
+
+1. Add a `search_code` tool that uses grep/ripgrep
+2. Add a `count_lines` tool that counts lines in files
+3. Add a `find_functions` tool that extracts function definitions
+4. Handle errors gracefully (missing files, permission denied)
+
+### Starter Code
+
+```python
+def search_code(pattern: str, path: str = ".") -> str:
+    """Search for a pattern in code files."""
+    # Your implementation here
+    pass
+
+def count_lines(path: str) -> str:
+    """Count lines in a file or directory."""
+    # Your implementation here
+    pass
+
+def find_functions(path: str) -> str:
+    """Find all function definitions in a Python file."""
+    # Your implementation here
+    pass
+
+# Test your agent
+agent = SimpleAgent()
+agent.register_tool("search_code", search_code, "Search for pattern in code. Input: {pattern, path}")
+agent.register_tool("count_lines", count_lines, "Count lines. Input: {path}")
+agent.register_tool("find_functions", find_functions, "Find functions. Input: {path}")
+
+result = agent.run("How many lines of code are in this project and what are the main functions?")
+print(result)
+```
+
+---
+
+## 📚 Key Takeaways
+
+1. **Agent loops are simple**: Parse → Think → Act → Observe → Repeat
+2. **Tools are just functions** with descriptions for the LLM
+3. **JSON output** enables reliable parsing of agent decisions
+4. **Memory** enables multi-turn conversations and fact retention
+5. **Error handling** is critical for production reliability
+
+---
+
+## 🔗 Further Reading
+
+- [Building LLM Applications - OpenAI Cookbook](https://cookbook.openai.com)
+- [ReAct Paper](https://arxiv.org/abs/2210.03629)
+- [Tool Use Best Practices](https://platform.openai.com/docs/guides/function-calling)
+
+**Tomorrow**: Retrieval-Augmented Generation (RAG)—giving your agent a knowledge base.

@@ -1,0 +1,456 @@
+---
+title: "Day 16: Observability & Debugging"
+description: "Seeing inside the black box—tracing, logging, and visualizing agent behavior."
+week: 3
+---
+
+## The Debugging Nightmare
+
+Debugging agentic systems is uniquely challenging. Agents fail silently, loop endlessly, or produce subtly incorrect outputs. The only clue is often buried in massive, nested JSON logs.
+
+> **Key Insight**: Traditional logging is insufficient. You need specialized observability tools designed for multi-step, non-deterministic workflows.
+
+---
+
+## 16.1 The Observability Stack
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Agent Execution"
+        A[Agent] --> T1[Tool Call 1]
+        T1 --> T2[Tool Call 2]
+        T2 --> T3[LLM Call]
+        T3 --> T4[Tool Call 3]
+    end
+    
+    subgraph "Observability Layer"
+        Trace[Distributed Tracing]
+        Metrics[Metrics Collection]
+        Logs[Structured Logging]
+    end
+    
+    subgraph "Visualization"
+        Dashboard[Dashboards]
+        Alerts[Alerting]
+        Debug[Debug UI]
+    end
+    
+    A -.-> Trace
+    A -.-> Metrics
+    A -.-> Logs
+    
+    Trace --> Dashboard
+    Metrics --> Dashboard
+    Logs --> Debug
+    Metrics --> Alerts
+`}
+/>
+
+### Key Metrics for Agents
+
+| Metric                      | What It Measures                | Why It Matters                  |
+| :-------------------------- | :------------------------------ | :------------------------------ |
+| **Latency (p50, p95, p99)** | Response time distribution      | User experience, SLA compliance |
+| **Token Usage**             | Input/output tokens per request | Cost control                    |
+| **Tool Call Success Rate**  | % of tool calls that succeed    | Reliability                     |
+| **Loop Detection**          | Iterations before completion    | Infinite loop prevention        |
+| **Error Rate**              | % of requests that fail         | System health                   |
+
+---
+
+## 16.2 LangSmith: The LangChain Solution
+
+LangSmith provides deep observability for LangChain/LangGraph applications.
+
+### Setup
+
+```python
+import os
+
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = "ls_..."
+os.environ["LANGCHAIN_PROJECT"] = "my-agent-project"
+
+# All LangChain operations are now automatically traced!
+```
+
+### What LangSmith Shows
+
+```
+Trace: research_agent_invoke
+├── Agent Loop (iteration 1)
+│   ├── LLM Call (gpt-4o) - 1.2s, 450 tokens
+│   │   └── Output: "I need to search for information..."
+│   └── Tool Call (web_search) - 0.8s
+│       └── Output: [3 results]
+├── Agent Loop (iteration 2)
+│   ├── LLM Call (gpt-4o) - 0.9s, 380 tokens
+│   │   └── Output: "Based on the search results..."
+│   └── Tool Call (summarize) - 0.3s
+└── Final Output - 2.5s total
+```
+
+### Custom Tracing
+
+```python
+from langsmith import traceable
+
+@traceable(name="custom_processing")
+def process_data(data: dict) -> dict:
+    """This function will appear in LangSmith traces."""
+    # Your processing logic
+    return processed_data
+
+@traceable(run_type="tool")
+def my_custom_tool(query: str) -> str:
+    """Traced as a tool call."""
+    return f"Result for {query}"
+```
+
+---
+
+## 16.3 AgentPrism: Visual Debugging
+
+AgentPrism is an open-source library for visualizing agent traces.
+
+### Installation
+
+```bash
+npm install @evilmartians/agent-prism
+```
+
+### React Integration
+
+```tsx
+import {
+  AgentPrism,
+  TreeView,
+  TimelineView,
+  SequenceView,
+} from "@evilmartians/agent-prism";
+
+function AgentDebugger({ trace }) {
+  return (
+    <AgentPrism trace={trace}>
+      {/* Tree view shows hierarchical structure */}
+      <TreeView />
+
+      {/* Timeline shows duration of each step */}
+      <TimelineView />
+
+      {/* Sequence diagram shows message flow */}
+      <SequenceView />
+    </AgentPrism>
+  );
+}
+```
+
+### Key Views
+
+| View                 | Purpose                                 | Best For                |
+| :------------------- | :-------------------------------------- | :---------------------- |
+| **Tree View**        | Hierarchical parent-child relationships | Understanding structure |
+| **Timeline View**    | Gantt-style duration chart              | Finding bottlenecks     |
+| **Sequence Diagram** | Message flow between components         | Debugging loops         |
+| **Details Panel**    | Full input/output for each step         | Deep inspection         |
+
+---
+
+## 16.4 AgentTrace: Lightweight Local Tracing
+
+For simpler needs, AgentTrace provides local-first observability.
+
+### Setup
+
+```python
+from agenttrace import trace, get_tracer
+
+tracer = get_tracer("my-agent")
+
+@trace(tracer)
+def agent_step(state: dict) -> dict:
+    """Automatically traced."""
+    return {"result": "..."}
+
+# View traces in local dashboard
+# python -m agenttrace.dashboard
+```
+
+### Custom Spans
+
+```python
+from agenttrace import Span
+
+def complex_operation():
+    with Span("data_processing") as span:
+        span.set_attribute("input_size", len(data))
+
+        result = process(data)
+
+        span.set_attribute("output_size", len(result))
+        span.set_status("success")
+
+    return result
+```
+
+---
+
+## 16.5 Structured Logging
+
+### JSON Logging for Agents
+
+```python
+import structlog
+import json
+
+# Configure structured logging
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer()
+    ]
+)
+
+logger = structlog.get_logger()
+
+def agent_node(state: dict) -> dict:
+    logger.info(
+        "agent_step_started",
+        step="reasoning",
+        iteration=state.get("iteration", 0),
+        context_tokens=count_tokens(state["messages"])
+    )
+
+    try:
+        result = llm.invoke(state["messages"])
+
+        logger.info(
+            "agent_step_completed",
+            step="reasoning",
+            output_tokens=count_tokens(result),
+            tool_calls=len(result.tool_calls) if result.tool_calls else 0
+        )
+
+        return {"messages": [result]}
+
+    except Exception as e:
+        logger.error(
+            "agent_step_failed",
+            step="reasoning",
+            error=str(e),
+            error_type=type(e).__name__
+        )
+        raise
+```
+
+### Log Output
+
+```json
+{"event": "agent_step_started", "step": "reasoning", "iteration": 0, "context_tokens": 1250, "timestamp": "2026-01-07T10:30:00Z"}
+{"event": "agent_step_completed", "step": "reasoning", "output_tokens": 150, "tool_calls": 2, "timestamp": "2026-01-07T10:30:02Z"}
+```
+
+---
+
+## 16.6 Debugging Common Issues
+
+### Issue 1: Infinite Loops
+
+**Symptoms**: Agent never completes, token usage spikes
+
+**Detection**:
+
+```python
+def agent_with_loop_detection(state: dict) -> dict:
+    iteration = state.get("iteration", 0)
+
+    if iteration > 20:
+        logger.error("loop_detected", iteration=iteration)
+        return {"status": "error", "reason": "max_iterations_exceeded"}
+
+    # Check for repeated actions
+    recent_actions = state.get("action_history", [])[-5:]
+    if len(set(recent_actions)) == 1 and len(recent_actions) == 5:
+        logger.error("repetitive_action_detected", action=recent_actions[0])
+        return {"status": "error", "reason": "repetitive_action"}
+
+    return {"iteration": iteration + 1}
+```
+
+### Issue 2: Context Overflow
+
+**Symptoms**: Quality degrades, model ignores instructions
+
+**Detection**:
+
+```python
+def check_context_health(messages: list) -> dict:
+    total_tokens = count_tokens(messages)
+    system_tokens = count_tokens([m for m in messages if m["role"] == "system"])
+
+    metrics = {
+        "total_tokens": total_tokens,
+        "system_ratio": system_tokens / total_tokens,
+        "message_count": len(messages)
+    }
+
+    if total_tokens > 100000:
+        logger.warning("context_overflow_risk", **metrics)
+
+    if metrics["system_ratio"] < 0.05:
+        logger.warning("system_prompt_diluted", **metrics)
+
+    return metrics
+```
+
+### Issue 3: Tool Failures
+
+**Symptoms**: Agent retries same tool, gives up
+
+**Detection**:
+
+```python
+def tool_with_diagnostics(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        tool_name = func.__name__
+
+        try:
+            result = func(*args, **kwargs)
+
+            logger.info(
+                "tool_success",
+                tool=tool_name,
+                latency_ms=int((time.time() - start) * 1000),
+                result_size=len(str(result))
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(
+                "tool_failure",
+                tool=tool_name,
+                error=str(e),
+                args=str(args)[:200],
+                latency_ms=int((time.time() - start) * 1000)
+            )
+            raise
+
+    return wrapper
+```
+
+---
+
+## 16.7 Building a Debug Dashboard
+
+### Metrics to Display
+
+```python
+from prometheus_client import Counter, Histogram, Gauge
+
+# Counters
+agent_requests = Counter('agent_requests_total', 'Total agent requests', ['status'])
+tool_calls = Counter('tool_calls_total', 'Total tool calls', ['tool', 'status'])
+
+# Histograms
+request_latency = Histogram('agent_request_latency_seconds', 'Request latency')
+token_usage = Histogram('agent_token_usage', 'Tokens per request', ['type'])
+
+# Gauges
+active_sessions = Gauge('agent_active_sessions', 'Currently active sessions')
+
+# Usage
+@request_latency.time()
+def process_request(request):
+    agent_requests.labels(status='started').inc()
+
+    try:
+        result = agent.invoke(request)
+        agent_requests.labels(status='success').inc()
+        token_usage.labels(type='output').observe(result.token_count)
+        return result
+    except Exception:
+        agent_requests.labels(status='error').inc()
+        raise
+```
+
+---
+
+## 🧪 Lab Exercise: Instrument Your Agent
+
+**Objective**: Add comprehensive observability to an existing agent.
+
+### Requirements
+
+1. Structured JSON logging for all steps
+2. Metrics collection (latency, tokens, errors)
+3. Loop detection with automatic termination
+4. Context health monitoring
+5. Tool call diagnostics
+
+### Starter Code
+
+```python
+import structlog
+from prometheus_client import Counter, Histogram
+
+# TODO: Configure structured logging
+logger = structlog.get_logger()
+
+# TODO: Define metrics
+request_latency = Histogram(...)
+token_usage = Histogram(...)
+
+class ObservableAgent:
+    def __init__(self, agent):
+        self.agent = agent
+        self.max_iterations = 20
+
+    def invoke(self, input: dict) -> dict:
+        # TODO: Add request tracking
+        # TODO: Add loop detection
+        # TODO: Add context monitoring
+        # TODO: Add error handling with logging
+        pass
+
+    def _check_loop(self, state: dict) -> bool:
+        # TODO: Implement loop detection
+        pass
+
+    def _check_context_health(self, messages: list) -> dict:
+        # TODO: Implement context health check
+        pass
+```
+
+### Evaluation
+
+After instrumentation, you should be able to answer:
+
+1. What's the p95 latency of your agent?
+2. How many tokens does a typical request use?
+3. What's the tool call success rate?
+4. How often do loops occur?
+
+---
+
+## 📚 Key Takeaways
+
+1. **LangSmith** provides deep tracing for LangChain apps
+2. **AgentPrism** offers visual debugging with multiple views
+3. **Structured logging** enables searchable, parseable logs
+4. **Loop detection** prevents runaway agents
+5. **Context monitoring** catches quality degradation early
+
+---
+
+## 🔗 Further Reading
+
+- [LangSmith Documentation](https://docs.smith.langchain.com/)
+- [AgentPrism GitHub](https://github.com/evilmartians/agent-prism)
+- [OpenTelemetry for LLMs](https://opentelemetry.io/)
+- [Prometheus Best Practices](https://prometheus.io/docs/practices/)
+
+**Tomorrow**: We tackle deployment—containerization, Kubernetes, and scaling agents.

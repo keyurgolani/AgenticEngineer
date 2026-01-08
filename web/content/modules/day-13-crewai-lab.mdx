@@ -1,0 +1,543 @@
+---
+title: "Day 13: CrewAI Lab"
+description: "Hands-on workshop building a complete multi-agent content creation system."
+week: 2
+---
+
+## Week 2 Capstone: Content Creation Crew
+
+Today we put everything together—LangChain, multi-agent collaboration, and MCP—to build a production-ready content creation system.
+
+---
+
+## 13.1 The Mission
+
+Build a multi-agent system that:
+
+1. Researches a topic using web search
+2. Analyzes competitor content
+3. Writes an SEO-optimized article
+4. Generates social media posts
+5. Creates a distribution plan
+
+---
+
+## 13.2 Architecture
+
+<Mermaid
+  chart={`
+graph TD
+    User([Topic Input]) --> PM[Project Manager]
+    
+    PM --> Researcher[Research Agent]
+    PM --> Analyst[Competitor Analyst]
+    
+    Researcher -->|Research Brief| Writer[Content Writer]
+    Analyst -->|Gap Analysis| Writer
+    
+    Writer -->|Draft| Editor[Editor Agent]
+    Editor -->|Approved| Social[Social Media Agent]
+    Editor -->|Revisions| Writer
+    
+    Social --> Output([Final Package])
+    
+    style PM fill:#f9f,stroke:#333
+    style Writer fill:#bbf,stroke:#333
+    style Editor fill:#bfb,stroke:#333
+`}
+/>
+
+---
+
+## 13.3 Implementation
+
+### Agent Definitions
+
+```python
+from crewai import Agent, Task, Crew, Process
+from crewai_tools import SerperDevTool, WebsiteSearchTool
+from langchain_openai import ChatOpenAI
+
+# Tools
+search_tool = SerperDevTool()
+web_tool = WebsiteSearchTool()
+
+# LLM
+llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+
+# Agents
+project_manager = Agent(
+    role="Content Project Manager",
+    goal="Coordinate the team to produce high-quality, SEO-optimized content",
+    backstory="""You are an experienced content strategist who has managed
+    hundreds of successful content campaigns. You know how to break down
+    complex topics and coordinate specialists to produce engaging content.""",
+    llm=llm,
+    verbose=True,
+    allow_delegation=True
+)
+
+researcher = Agent(
+    role="Senior Research Analyst",
+    goal="Uncover comprehensive, accurate information on any topic",
+    backstory="""You are a meticulous researcher with a background in
+    journalism. You excel at finding authoritative sources and extracting
+    key insights. You always verify facts from multiple sources.""",
+    tools=[search_tool, web_tool],
+    llm=llm,
+    verbose=True
+)
+
+competitor_analyst = Agent(
+    role="Competitive Intelligence Analyst",
+    goal="Analyze competitor content to identify gaps and opportunities",
+    backstory="""You specialize in content gap analysis. You can quickly
+    identify what competitors are doing well and where opportunities exist
+    to create superior content.""",
+    tools=[search_tool, web_tool],
+    llm=llm,
+    verbose=True
+)
+
+writer = Agent(
+    role="Senior Content Writer",
+    goal="Create engaging, well-structured content that ranks and converts",
+    backstory="""You are an award-winning content writer with expertise in
+    technical topics. You write in a clear, engaging style that makes
+    complex topics accessible. You understand SEO best practices.""",
+    llm=llm,
+    verbose=True
+)
+
+editor = Agent(
+    role="Senior Editor",
+    goal="Ensure content is accurate, engaging, and publication-ready",
+    backstory="""You are a perfectionist editor with 15 years of experience.
+    You have an eye for detail and ensure every piece meets the highest
+    standards of quality, accuracy, and readability.""",
+    llm=llm,
+    verbose=True
+)
+
+social_media_agent = Agent(
+    role="Social Media Strategist",
+    goal="Create compelling social media content that drives engagement",
+    backstory="""You are a social media expert who understands each platform's
+    unique requirements. You create content that stops the scroll and
+    drives meaningful engagement.""",
+    llm=llm,
+    verbose=True
+)
+```
+
+### Task Definitions
+
+```python
+# Tasks
+research_task = Task(
+    description="""Research the topic: {topic}
+
+    Deliverables:
+    1. Key facts and statistics (with sources)
+    2. Expert opinions and quotes
+    3. Recent developments (last 6 months)
+    4. Common questions people ask about this topic
+    5. Related subtopics worth covering
+
+    Be thorough but focused. Quality over quantity.""",
+    expected_output="A comprehensive research brief with cited sources",
+    agent=researcher
+)
+
+competitor_task = Task(
+    description="""Analyze top-ranking content for: {topic}
+
+    Deliverables:
+    1. Top 5 competing articles (titles and URLs)
+    2. Common themes and angles
+    3. Content gaps (what they're missing)
+    4. Opportunities for differentiation
+    5. Recommended word count and structure
+
+    Focus on actionable insights.""",
+    expected_output="Competitive analysis report with recommendations",
+    agent=competitor_analyst
+)
+
+writing_task = Task(
+    description="""Write a comprehensive article on: {topic}
+
+    Use the research brief and competitive analysis to create content that:
+    1. Is more comprehensive than competitors
+    2. Fills identified content gaps
+    3. Includes original insights
+    4. Is optimized for SEO (headers, keywords, meta description)
+    5. Is engaging and readable
+
+    Target length: 2000-2500 words
+    Include a compelling introduction and actionable conclusion.""",
+    expected_output="Complete article in markdown format with meta description",
+    agent=writer,
+    context=[research_task, competitor_task]
+)
+
+editing_task = Task(
+    description="""Edit and polish the article for publication.
+
+    Check for:
+    1. Factual accuracy (verify claims against research)
+    2. Grammar and style consistency
+    3. Flow and readability
+    4. SEO optimization
+    5. Engaging headlines and subheadings
+
+    Make necessary corrections and improvements.
+    If major revisions are needed, provide specific feedback.""",
+    expected_output="Publication-ready article with editor notes",
+    agent=editor,
+    context=[writing_task, research_task]
+)
+
+social_task = Task(
+    description="""Create social media content to promote the article.
+
+    Create:
+    1. 3 Twitter/X posts (different angles, include hashtags)
+    2. 1 LinkedIn post (professional tone, longer format)
+    3. 1 Instagram caption (engaging, with emoji)
+    4. Key quotes/stats for sharing
+
+    Each post should drive traffic to the article.""",
+    expected_output="Social media content package ready for scheduling",
+    agent=social_media_agent,
+    context=[editing_task]
+)
+```
+
+### Crew Assembly
+
+```python
+content_crew = Crew(
+    agents=[
+        project_manager,
+        researcher,
+        competitor_analyst,
+        writer,
+        editor,
+        social_media_agent
+    ],
+    tasks=[
+        research_task,
+        competitor_task,
+        writing_task,
+        editing_task,
+        social_task
+    ],
+    process=Process.sequential,
+    verbose=True,
+    memory=True,  # Enable memory for context retention
+    embedder={
+        "provider": "openai",
+        "config": {"model": "text-embedding-3-small"}
+    }
+)
+
+# Run the crew
+result = content_crew.kickoff(inputs={
+    "topic": "Building AI Agents with LangGraph in 2026"
+})
+
+print(result)
+```
+
+---
+
+## 13.4 Running the Crew
+
+<Terminal 
+  command="python content_crew.py --topic 'Building AI Agents with LangGraph'"
+  output={`🚀 Starting Content Creation Crew...
+
+👤 Project Manager: Initiating content production workflow
+
+📚 Research Agent: Starting research on "Building AI Agents with LangGraph"
+Searching: "LangGraph tutorial 2026"...
+Searching: "LangGraph vs LangChain agents"...
+Searching: "LangGraph state management"...
+✓ Research brief complete (15 sources found)
+
+🔍 Competitor Analyst: Analyzing top-ranking content
+Found 5 competing articles
+Identified 3 content gaps
+✓ Competitive analysis complete
+
+✍️ Content Writer: Drafting article
+Outline created: 7 sections
+Writing introduction...
+Writing section 1: What is LangGraph?...
+Writing section 2: Core Concepts...
+...
+✓ Draft complete (2,347 words)
+
+📝 Editor: Reviewing and polishing
+Checking factual accuracy... ✓
+Improving flow in section 3...
+Strengthening conclusion...
+✓ Article approved for publication
+
+📱 Social Media Agent: Creating promotional content
+✓ 3 Twitter posts created
+✓ LinkedIn post created
+✓ Instagram caption created
+
+✅ Content Package Complete!
+
+- Article: output/langgraph-agents-2026.md
+- Social: output/social-media-pack.md
+- Research: output/research-brief.md`}
+  />
+
+---
+
+## 13.5 Output Examples
+
+### Generated Article (Excerpt)
+
+```markdown
+# Building AI Agents with LangGraph: The Complete 2026 Guide
+
+_Meta Description: Learn how to build production-ready AI agents
+using LangGraph. This comprehensive guide covers state management,
+tool integration, and deployment best practices._
+
+## Introduction
+
+The landscape of AI agent development has transformed dramatically.
+While early approaches relied on simple prompt chains, modern agents
+require sophisticated state management, error handling, and
+human-in-the-loop capabilities. LangGraph has emerged as the
+industry standard for building these complex, stateful workflows...
+
+## What is LangGraph?
+
+LangGraph extends LangChain to handle the complexity that real-world
+agents demand. At its core, LangGraph treats your agent as a **state
+machine** where:
+
+- **Nodes** are functions that process and transform state
+- **Edges** define the flow between nodes
+- **State** persists across the entire execution
+
+This architecture enables patterns impossible with linear chains...
+```
+
+### Generated Social Posts
+
+```markdown
+## Twitter/X Posts
+
+**Post 1 (Educational)**
+🧠 LangGraph is changing how we build AI agents in 2026.
+
+The key insight: Agents aren't chains—they're state machines.
+
+Here's why that matters for production systems:
+🧵👇
+
+#AIAgents #LangGraph #LLM
+
+**Post 2 (Stat-focused)**
+📊 68% of production AI agents now use graph-based orchestration.
+
+LangGraph leads the pack with:
+✅ Persistent state
+✅ Human-in-the-loop
+✅ Built-in checkpointing
+
+Full breakdown in our new guide ↓
+
+**Post 3 (Question)**
+Still building AI agents with simple chains?
+
+Here's what you're missing:
+
+- Error recovery
+- State persistence
+- Parallel execution
+- Human approval gates
+
+Time to upgrade. New guide just dropped 🔥
+
+## LinkedIn Post
+
+I've been building AI agents for 2 years now, and LangGraph
+has fundamentally changed my approach.
+
+The old way: Chain prompts together and hope for the best.
+
+The new way: Design agents as state machines with:
+→ Explicit control flow
+→ Persistent memory
+→ Human checkpoints
+→ Graceful error handling
+
+Our team just published a comprehensive guide covering
+everything from basic concepts to production deployment.
+
+Whether you're just starting with agents or looking to
+level up your architecture, this one's for you.
+
+Link in comments 👇
+
+#AIEngineering #LangGraph #AgenticAI #SoftwareArchitecture
+```
+
+---
+
+## 13.6 Lab Exercise: Customize the Crew
+
+### Challenge 1: Add a Fact-Checker Agent
+
+```python
+fact_checker = Agent(
+    role="Fact Checker",
+    goal="Verify all claims in the article are accurate and properly sourced",
+    backstory="...",
+    tools=[search_tool],
+    llm=llm
+)
+
+fact_check_task = Task(
+    description="""Verify all factual claims in the article.
+
+    For each claim:
+    1. Search for corroborating sources
+    2. Flag any unsupported claims
+    3. Suggest corrections if needed
+    """,
+    expected_output="Fact-check report with verification status for each claim",
+    agent=fact_checker,
+    context=[writing_task]
+)
+```
+
+### Challenge 2: Add SEO Optimization
+
+```python
+seo_specialist = Agent(
+    role="SEO Specialist",
+    goal="Optimize content for search engine visibility",
+    backstory="...",
+    tools=[search_tool],
+    llm=llm
+)
+
+seo_task = Task(
+    description="""Optimize the article for SEO.
+
+    Provide:
+    1. Primary and secondary keywords
+    2. Optimized title variations
+    3. Header optimization suggestions
+    4. Internal linking opportunities
+    5. Schema markup recommendations
+    """,
+    expected_output="SEO optimization report with actionable recommendations",
+    agent=seo_specialist,
+    context=[editing_task]
+)
+```
+
+### Challenge 3: Add Image Suggestions
+
+```python
+visual_strategist = Agent(
+    role="Visual Content Strategist",
+    goal="Recommend visuals that enhance the content",
+    backstory="...",
+    llm=llm
+)
+
+visual_task = Task(
+    description="""Suggest visuals for the article.
+
+    Provide:
+    1. Hero image concept
+    2. Diagram descriptions for complex concepts
+    3. Screenshot suggestions
+    4. Infographic ideas
+    5. Alt text for accessibility
+    """,
+    expected_output="Visual content brief with detailed descriptions",
+    agent=visual_strategist,
+    context=[editing_task]
+)
+```
+
+---
+
+## 13.7 Production Considerations
+
+### Error Handling
+
+```python
+from crewai import Crew
+from tenacity import retry, stop_after_attempt
+
+@retry(stop=stop_after_attempt(3))
+def run_crew_with_retry(topic: str):
+    try:
+        result = content_crew.kickoff(inputs={"topic": topic})
+        return result
+    except Exception as e:
+        logger.error(f"Crew failed: {e}")
+        raise
+
+# With timeout
+import asyncio
+
+async def run_crew_with_timeout(topic: str, timeout: int = 600):
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(content_crew.kickoff, inputs={"topic": topic}),
+            timeout=timeout
+        )
+        return result
+    except asyncio.TimeoutError:
+        logger.error("Crew execution timed out")
+        return None
+```
+
+### Cost Tracking
+
+```python
+from langchain_community.callbacks import get_openai_callback
+
+with get_openai_callback() as cb:
+    result = content_crew.kickoff(inputs={"topic": topic})
+
+    print(f"Total Tokens: {cb.total_tokens}")
+    print(f"Prompt Tokens: {cb.prompt_tokens}")
+    print(f"Completion Tokens: {cb.completion_tokens}")
+    print(f"Total Cost: ${cb.total_cost:.4f}")
+```
+
+---
+
+## 📚 Key Takeaways
+
+1. **CrewAI** simplifies multi-agent orchestration
+2. **Role-based agents** produce better specialized output
+3. **Task context** enables information flow between agents
+4. **Memory** helps agents build on previous work
+5. **Production** requires error handling and cost tracking
+
+---
+
+## 🔗 Further Reading
+
+- [CrewAI Documentation](https://docs.crewai.com/)
+- [CrewAI Examples](https://github.com/crewAIInc/crewAI-examples)
+- [Multi-Agent Best Practices](https://blog.langchain.dev/multi-agent/)
+
+**Tomorrow**: We start Week 3—Production Engineering with durable systems design.

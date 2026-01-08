@@ -1,0 +1,474 @@
+---
+title: "Day 18: Secure Code Execution"
+description: "Sandboxing, MicroVMs, and defense-in-depth for agents that run code."
+week: 3
+---
+
+## The Danger of Code Execution
+
+When your agent can execute code, it can do anything—including `rm -rf /`. Today we learn how to contain the blast radius.
+
+---
+
+## 18.1 The Threat Model
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph Threats
+        Malicious[Malicious Code]
+        Buggy[Buggy Code]
+        Hallucinated[Hallucinated Code]
+    end
+    
+    subgraph Impacts
+        DataLoss[Data Loss]
+        Exfiltration[Data Exfiltration]
+        Privilege[Privilege Escalation]
+        DoS[Denial of Service]
+    end
+    
+    Malicious --> DataLoss
+    Malicious --> Exfiltration
+    Buggy --> DoS
+    Hallucinated --> DataLoss
+    Hallucinated --> Privilege
+    
+    style Malicious fill:#f96,stroke:#333
+    style Exfiltration fill:#f96,stroke:#333
+`}
+/>
+
+### Real Attack Scenarios
+
+| Scenario                | Attack Vector                                             | Impact                 |
+| :---------------------- | :-------------------------------------------------------- | :--------------------- |
+| **Prompt Injection**    | User tricks agent into running malicious shell commands   | Full system compromise |
+| **Hallucinated Import** | Agent imports non-existent package, attacker registers it | Supply chain attack    |
+| **Resource Exhaustion** | Infinite loops or massive memory allocation               | System crash           |
+| **Data Exfiltration**   | Agent reads `.env` and sends to external URL              | Credential theft       |
+
+---
+
+## 18.2 Defense in Depth
+
+No single defense is sufficient. We layer multiple protections:
+
+No single defense is sufficient. We layer multiple protections:
+
+![Defense in Depth Security Layers](/images/defense_in_depth.png)
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph Layer1[Layer 1: Input Validation]
+        Sanitize[Sanitize Inputs]
+        Blocklist[Code Blocklist]
+    end
+    
+    subgraph Layer2[Layer 2: Process Isolation]
+        Container[Container]
+        Sandbox[Sandbox Runtime]
+    end
+    
+    subgraph Layer3[Layer 3: Kernel Isolation]
+        gVisor[gVisor]
+        MicroVM[MicroVM]
+    end
+    
+    subgraph Layer4[Layer 4: Network Isolation]
+        Firewall[Egress Firewall]
+        VPC[Private Network]
+    end
+    
+    Layer1 --> Layer2
+    Layer2 --> Layer3
+    Layer3 --> Layer4
+    
+    style Layer3 fill:#9f9,stroke:#333
+`}
+/>
+
+---
+
+## 18.3 Isolation Technologies Compared
+
+| Technology      | Isolation Level   | Startup Time | Overhead | Best For              |
+| :-------------- | :---------------- | :----------- | :------- | :-------------------- |
+| **subprocess**  | None              | Under 1ms    | None     | Trusted code only     |
+| **Docker**      | Process namespace | ~500ms       | Low      | Development           |
+| **gVisor**      | User-space kernel | ~100ms       | Medium   | Production containers |
+| **Firecracker** | Full VM           | ~125ms       | Medium   | Untrusted code        |
+| **E2B**         | Firecracker + SDK | ~200ms       | Medium   | AI agents             |
+
+### Why Containers Aren't Enough
+
+Containers share the host kernel. A kernel exploit = full host access.
+
+```
+┌─────────────────────────────────────────┐
+│              Host Kernel                │  ← Shared!
+├─────────────┬─────────────┬─────────────┤
+│ Container A │ Container B │ Container C │
+│  (Agent 1)  │  (Agent 2)  │  (Agent 3)  │
+└─────────────┴─────────────┴─────────────┘
+
+If Agent 1 exploits the kernel, it can access Agents 2 and 3!
+```
+
+### MicroVMs: True Isolation
+
+```
+┌─────────────────────────────────────────┐
+│              Host Kernel                │
+├─────────────┬─────────────┬─────────────┤
+│  MicroVM 1  │  MicroVM 2  │  MicroVM 3  │
+│ ┌─────────┐ │ ┌─────────┐ │ ┌─────────┐ │
+│ │Guest    │ │ │Guest    │ │ │Guest    │ │
+│ │Kernel   │ │ │Kernel   │ │ │Kernel   │ │
+│ ├─────────┤ │ ├─────────┤ │ ├─────────┤ │
+│ │Agent 1  │ │ │Agent 2  │ │ │Agent 3  │ │
+│ └─────────┘ │ └─────────┘ │ └─────────┘ │
+└─────────────┴─────────────┴─────────────┘
+
+Each agent has its own kernel. Kernel exploit = only that VM.
+```
+
+---
+
+## 18.4 E2B: Purpose-Built for AI Agents
+
+E2B provides Firecracker-based sandboxes with an AI-friendly SDK:
+
+```python
+from e2b_code_interpreter import Sandbox
+
+def execute_safely(code: str) -> dict:
+    """Execute code in a secure sandbox."""
+
+    with Sandbox() as sandbox:
+        # Sandbox starts in ~200ms
+
+        # Execute the code
+        execution = sandbox.run_code(code)
+
+        # Handle results
+        if execution.error:
+            return {
+                "success": False,
+                "error": f"{execution.error.name}: {execution.error.value}"
+            }
+
+        # Collect outputs
+        results = []
+        for result in execution.results:
+            if result.text:
+                results.append({"type": "text", "content": result.text})
+            if result.png:
+                results.append({"type": "image", "content": result.png})
+
+        return {
+            "success": True,
+            "results": results,
+            "stdout": execution.logs.stdout,
+            "stderr": execution.logs.stderr
+        }
+
+# Usage
+result = execute_safely("""
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.DataFrame({'x': [1,2,3], 'y': [4,5,6]})
+plt.plot(df['x'], df['y'])
+plt.savefig('plot.png')
+print("Plot created!")
+""")
+```
+
+### E2B Features
+
+| Feature                 | Description                             |
+| :---------------------- | :-------------------------------------- |
+| **Fast startup**        | ~200ms cold start                       |
+| **File system**         | Upload/download files                   |
+| **Persistent sessions** | Keep sandbox alive for multi-step tasks |
+| **Custom templates**    | Pre-install packages                    |
+| **Resource limits**     | CPU, memory, timeout controls           |
+
+---
+
+## 18.5 Building Your Own Sandbox
+
+For full control, build a Docker-based sandbox:
+
+```python
+import docker
+import tempfile
+import os
+from pathlib import Path
+
+class DockerSandbox:
+    """Docker-based code execution sandbox."""
+
+    def __init__(self, image: str = "python:3.11-slim"):
+        self.client = docker.from_env()
+        self.image = image
+
+        # Resource limits
+        self.mem_limit = "256m"
+        self.cpu_period = 100000
+        self.cpu_quota = 50000  # 50% of one CPU
+        self.timeout = 30
+
+    def execute(self, code: str, files: dict = None) -> dict:
+        """Execute code in isolated container."""
+
+        # Create temp directory for code and files
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Write code to file
+            code_path = Path(tmpdir) / "code.py"
+            code_path.write_text(code)
+
+            # Write any additional files
+            if files:
+                for name, content in files.items():
+                    (Path(tmpdir) / name).write_text(content)
+
+            try:
+                # Run container with strict limits
+                result = self.client.containers.run(
+                    self.image,
+                    command=["python", "/sandbox/code.py"],
+                    volumes={tmpdir: {"bind": "/sandbox", "mode": "ro"}},
+                    mem_limit=self.mem_limit,
+                    cpu_period=self.cpu_period,
+                    cpu_quota=self.cpu_quota,
+                    network_disabled=True,  # No network access!
+                    read_only=True,  # Read-only filesystem
+                    remove=True,
+                    timeout=self.timeout,
+                    user="nobody",  # Non-root user
+                    security_opt=["no-new-privileges"],
+                )
+
+                return {
+                    "success": True,
+                    "output": result.decode("utf-8")
+                }
+
+            except docker.errors.ContainerError as e:
+                return {
+                    "success": False,
+                    "error": e.stderr.decode("utf-8") if e.stderr else str(e)
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e)
+                }
+
+# Usage
+sandbox = DockerSandbox()
+result = sandbox.execute("""
+print("Hello from sandbox!")
+print(2 + 2)
+""")
+```
+
+### Adding gVisor for Extra Security
+
+```yaml
+# /etc/docker/daemon.json
+{ "runtimes": { "runsc": { "path": "/usr/local/bin/runsc" } } }
+```
+
+```python
+# Use gVisor runtime
+result = self.client.containers.run(
+    self.image,
+    runtime="runsc",  # gVisor runtime
+    # ... other options
+)
+```
+
+---
+
+## 18.6 Code Validation Before Execution
+
+Add a pre-execution validation layer:
+
+```python
+import ast
+import re
+
+class CodeValidator:
+    """Validate code before execution."""
+
+    # Dangerous patterns
+    BLOCKED_IMPORTS = {
+        'os', 'subprocess', 'sys', 'shutil',
+        'socket', 'requests', 'urllib', 'http'
+    }
+
+    BLOCKED_FUNCTIONS = {
+        'eval', 'exec', 'compile', '__import__',
+        'open', 'input', 'breakpoint'
+    }
+
+    BLOCKED_PATTERNS = [
+        r'__\w+__',  # Dunder methods
+        r'\.system\s*\(',  # os.system
+        r'\.popen\s*\(',  # os.popen
+        r'subprocess\.',  # subprocess module
+    ]
+
+    def validate(self, code: str) -> tuple[bool, str]:
+        """Validate code. Returns (is_valid, error_message)."""
+
+        # Check for blocked patterns
+        for pattern in self.BLOCKED_PATTERNS:
+            if re.search(pattern, code):
+                return False, f"Blocked pattern detected: {pattern}"
+
+        # Parse AST
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            return False, f"Syntax error: {e}"
+
+        # Check imports
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.split('.')[0] in self.BLOCKED_IMPORTS:
+                        return False, f"Blocked import: {alias.name}"
+
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and node.module.split('.')[0] in self.BLOCKED_IMPORTS:
+                    return False, f"Blocked import: {node.module}"
+
+            elif isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name):
+                    if node.func.id in self.BLOCKED_FUNCTIONS:
+                        return False, f"Blocked function: {node.func.id}"
+
+        return True, "Code validated successfully"
+
+# Usage
+validator = CodeValidator()
+is_valid, message = validator.validate("""
+import os
+os.system('rm -rf /')
+""")
+# Returns: (False, "Blocked import: os")
+```
+
+---
+
+## 18.7 Complete Secure Execution Pipeline
+
+```python
+class SecureCodeExecutor:
+    """Complete secure code execution pipeline."""
+
+    def __init__(self):
+        self.validator = CodeValidator()
+        self.sandbox = DockerSandbox()
+
+    def execute(self, code: str) -> dict:
+        """Validate and execute code securely."""
+
+        # Layer 1: Static validation
+        is_valid, message = self.validator.validate(code)
+        if not is_valid:
+            return {
+                "success": False,
+                "stage": "validation",
+                "error": message
+            }
+
+        # Layer 2: Sandbox execution
+        result = self.sandbox.execute(code)
+
+        # Layer 3: Output sanitization
+        if result["success"]:
+            result["output"] = self._sanitize_output(result["output"])
+
+        return result
+
+    def _sanitize_output(self, output: str) -> str:
+        """Remove sensitive information from output."""
+        # Remove potential secrets
+        patterns = [
+            (r'[A-Za-z0-9+/]{40,}', '[REDACTED_KEY]'),  # Base64 keys
+            (r'sk-[A-Za-z0-9]{48}', '[REDACTED_API_KEY]'),  # OpenAI keys
+            (r'ghp_[A-Za-z0-9]{36}', '[REDACTED_GITHUB_TOKEN]'),  # GitHub tokens
+        ]
+
+        for pattern, replacement in patterns:
+            output = re.sub(pattern, replacement, output)
+
+        return output
+
+# Usage
+executor = SecureCodeExecutor()
+result = executor.execute("""
+data = [1, 2, 3, 4, 5]
+print(f"Sum: {sum(data)}")
+print(f"Average: {sum(data)/len(data)}")
+""")
+```
+
+---
+
+## 🧪 Lab Exercise: Build a Secure Code Interpreter
+
+### Task
+
+Create a secure code execution tool for your agent.
+
+### Requirements
+
+1. Validate code before execution
+2. Execute in Docker sandbox
+3. Capture stdout, stderr, and return values
+4. Handle timeouts gracefully
+5. Support file uploads/downloads
+
+### Test Cases
+
+```python
+# Should succeed
+executor.execute("print(2 + 2)")
+
+# Should fail validation
+executor.execute("import os; os.system('ls')")
+
+# Should timeout
+executor.execute("while True: pass")
+
+# Should handle errors
+executor.execute("1/0")
+```
+
+---
+
+## 📚 Key Takeaways
+
+1. **Never trust LLM-generated code** - always sandbox
+2. **Containers aren't enough** - use MicroVMs for untrusted code
+3. **Defense in depth** - layer multiple protections
+4. **E2B** is the easiest path to secure AI code execution
+5. **Validate before execute** - catch obvious attacks early
+
+---
+
+## 🔗 Further Reading
+
+- [E2B Documentation](https://e2b.dev/docs)
+- [Firecracker MicroVMs](https://firecracker-microvm.github.io/)
+- [gVisor Security Model](https://gvisor.dev/docs/architecture_guide/security/)
+- [OWASP Code Injection](https://owasp.org/www-community/attacks/Code_Injection)
+
+**Tomorrow**: Shared memory poisoning and multi-agent security.

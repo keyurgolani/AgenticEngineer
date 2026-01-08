@@ -1,0 +1,339 @@
+---
+title: "The Anatomy of an Agent"
+description: "Understanding the difference between raw LLMs and Agentic Systems."
+week: 1
+day: 1
+---
+
+<ReadingTime minutes={15} />
+
+<SkillLevel level="beginner" description="Builds on Day 00 Foundations" />
+
+<Prerequisites
+  items={[
+    "Completed Day 00 Setup",
+    "Read Day 00 Foundations (recommended for beginners)",
+    "Understand basic API calls",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Distinguish between an LLM and an Agent",
+    "Explain why linear pipelines fail for complex tasks",
+    "Describe the Cognitive Loop (Perceive → Reason → Act → Observe)",
+    "Understand what MCP is and why it matters",
+    "Identify the components that make up an agent system",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "LLM",
+      definition:
+        "Large Language Model—the 'brain' that reasons and generates text",
+    },
+    {
+      term: "Agent",
+      definition:
+        "A system that wraps an LLM with tools, memory, and a control loop",
+    },
+    {
+      term: "Tool",
+      definition:
+        "A function the agent can call to interact with the world (search, code, APIs)",
+    },
+    {
+      term: "DAG",
+      definition: "Directed Acyclic Graph—a one-way pipeline with no loops",
+    },
+    {
+      term: "MCP",
+      definition:
+        "Model Context Protocol—a standard for connecting tools to AI",
+    },
+  ]}
+/>
+
+---
+
+## 1.1 The Brain vs. The Body
+
+The most common misconception is that an "LLM" is an "Agent". It is not.
+
+![Agent Brain vs Body](/images/brain_vs_body.png)
+
+<ConceptIntro
+  title="The Brain-Body Distinction"
+  analogy="Think of it like this: your brain can think, plan, and decide—but without your body, it can't pick up a cup of coffee, type on a keyboard, or walk to the store. An LLM is like a brain in a jar—incredibly smart, but unable to interact with the world. An Agent gives that brain a body: hands (tools), eyes (sensors), and memory."
+  technicalDef="An LLM is a neural network that processes text and generates responses. An Agent is a software system that uses an LLM as its reasoning engine while providing additional capabilities: tool use (APIs, code execution), memory (conversation history, knowledge bases), and control flow (loops, conditionals)."
+  whyItMatters="This distinction is crucial because building agents requires different skills than just prompting an LLM. You need to think about tool design, error handling, and system architecture."
+/>
+
+| Component                   | LLM (Brain)             | Agent (Body)            |
+| :-------------------------- | :---------------------- | :---------------------- |
+| **Can reason**              | ✅ Yes                  | ✅ Yes (uses LLM)       |
+| **Can remember**            | ❌ No (stateless)       | ✅ Yes (memory systems) |
+| **Can take actions**        | ❌ No                   | ✅ Yes (tools)          |
+| **Can learn from mistakes** | ❌ No                   | ✅ Yes (feedback loops) |
+| **Can access current data** | ❌ No (training cutoff) | ✅ Yes (RAG, APIs)      |
+
+<ThinkingLoop />
+
+---
+
+## 1.2 Why Pipelines Fail
+
+In traditional software, we build **Pipelines** (or DAGs - Directed Acyclic Graphs).
+
+```
+Input A → Function B → Output C
+```
+
+This is <Glossary term="Deterministic" def="Always producing the same output for the same input. No randomness or variation." />. If you run it 100 times, you get the same result 100 times.
+
+<ConceptIntro
+  title="The Problem with Linear Pipelines"
+  analogy="Imagine you're following a recipe that says 'bake for 30 minutes.' But what if your oven runs hot? A linear recipe can't adapt—it just follows the steps. A good chef, however, checks the food, adjusts the temperature, and maybe bakes for 25 minutes instead. Agents need to work like chefs, not recipes."
+  technicalDef="DAGs (Directed Acyclic Graphs) process data in one direction with no cycles. They cannot handle runtime uncertainty, retry failed operations, or adapt based on intermediate results. Agents require cyclical graphs that can loop back based on observations."
+  whyItMatters="Real-world tasks are messy. APIs fail, LLMs make mistakes, and requirements change mid-task. Agents must handle this uncertainty gracefully."
+/>
+
+Agents live in a <Glossary term="Probabilistic" def="Involving chance or variation; not deterministic. The same input might produce different outputs." /> world.
+
+If you ask an agent to "Fix the bug in main.py", it might:
+
+1. Read the file
+2. Try a fix
+3. Run the tests
+4. **Fail** ❌
+5. Read the error message
+6. Try a different fix
+7. **Succeed** ✅
+
+A linear pipeline cannot handle step 4. It would just crash. An **Agentic Loop** can perceive the failure, reason about it, and act again.
+
+<RealWorldExample
+  title="Debugging Code"
+  scenario="You ask an agent to fix a failing test in your codebase."
+  implementation="The agent: (1) Reads the test file and error message, (2) Hypothesizes the cause, (3) Makes a code change, (4) Runs the test, (5) If it fails, reads the new error and tries again, (6) Repeats until the test passes or it asks for help."
+  takeaway="This requires a loop, not a pipeline. The agent must be able to observe results and adjust its approach—something impossible in a linear DAG."
+/>
+
+---
+
+## 1.3 The Cognitive Loop
+
+The core transformation in this course is moving from **Chains** (Linear) to **Loops** (Cyclical).
+
+We call this the **OODA Loop** (Observe, Orient, Decide, Act), or in AI terms:
+
+<Mermaid
+  chart={`
+graph TD
+    Start([User Request]) --> Perception
+    Perception[1. Perceive] --> Reasoning{2. Reason}
+    Reasoning -->|"Need more info"| Action[3. Act]
+    Action --> Observation[4. Observe]
+    Observation --> Perception
+    Reasoning -->|"Task complete"| End([Final Answer])
+
+    style Reasoning fill:#f9f,stroke:#333,stroke-width:2px
+    style Action fill:#bbf,stroke:#333,stroke-width:2px
+    style Perception fill:#bfb,stroke:#333,stroke-width:2px
+    style Observation fill:#ff9,stroke:#333,stroke-width:2px
+
+`}
+/>
+
+### The Four Steps
+
+| Step            | What Happens                                | Example                                                                         |
+| :-------------- | :------------------------------------------ | :------------------------------------------------------------------------------ |
+| **1. Perceive** | Read input, tool outputs, environment state | "The user wants to book a flight. I have search results showing 3 options."     |
+| **2. Reason**   | Decide what to do next                      | "The cheapest option is $450. I should ask the user to confirm before booking." |
+| **3. Act**      | Execute a tool or generate a response       | Call `send_message("Found a flight for $450. Should I book it?")`               |
+| **4. Observe**  | See the result of the action                | User replied: "Yes, book it."                                                   |
+
+Then the loop continues: Perceive the new input → Reason about next steps → Act (book the flight) → Observe (confirmation received).
+
+<Callout type="tip">
+  **Mental Model:** Think of the agent as a junior employee who checks in with
+  you after each step. They perceive the situation, think about what to do, take
+  an action, see what happened, and then decide if they need to do more or if
+  they're done.
+</Callout>
+
+---
+
+## 1.4 Introduction to MCP
+
+How does the Brain talk to the Hands? We need a standard interface.
+
+<ConceptIntro
+  title="Model Context Protocol (MCP)"
+  analogy="Before USB, every device had its own connector—printers, cameras, phones all needed different cables. USB standardized this: one port, many devices. MCP does the same for AI tools. Instead of writing custom code to connect each tool to each AI, MCP provides one standard that works everywhere."
+  technicalDef="MCP (Model Context Protocol) is an open standard introduced by Anthropic that defines how AI systems connect to external tools and data sources. It specifies a client-server architecture where MCP Servers expose tools/resources and MCP Clients (agents) consume them."
+  whyItMatters="MCP means you can write a tool once and use it with Claude, GPT, or any MCP-compatible agent. It also means a growing ecosystem of pre-built tools you can use immediately."
+/>
+
+Instead of writing custom API wrappers for every tool, MCP provides a universal standard for:
+
+- **Tools**: Executable functions (e.g., `list_files`, `run_query`, `send_email`)
+- **Resources**: Data sources (e.g., logs, documents, database schemas)
+- **Prompts**: Reusable templates for common tasks
+
+<Mermaid
+  chart={`
+graph LR
+    Agent[🤖 Your Agent]
+    
+    Agent -->|MCP| Tool1[📁 File System]
+    Agent -->|MCP| Tool2[🔍 Web Search]
+    Agent -->|MCP| Tool3[🗄️ Database]
+    Agent -->|MCP| Tool4[📧 Email]
+    Agent -->|MCP| Tool5[📅 Calendar]
+    
+    style Agent fill:#f9f,stroke:#333
+`}
+/>
+
+We will dive deep into MCP in **Day 03**. For now, just understand that MCP is the "USB port" for connecting tools to your AI.
+
+<Callout type="info">
+  **Key Takeaway:** An Agent is a system that wraps an LLM in a loop, giving it
+  access to tools via a standard protocol (MCP) and memory to persist state.
+</Callout>
+
+---
+
+## 1.5 The Complete Agent Architecture
+
+Let's put it all together. A production agent has these components:
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Agent System"
+        User([👤 User]) --> Interface[Interface Layer]
+        Interface --> Orchestrator[🎯 Orchestrator]
+        
+        subgraph "The Brain"
+            Orchestrator --> LLM[🧠 LLM]
+        end
+        
+        subgraph "The Body"
+            Orchestrator --> Tools[🔧 Tools via MCP]
+            Orchestrator --> Memory[💾 Memory]
+            Orchestrator --> State[📊 State Management]
+        end
+        
+        Tools --> External[External World]
+        Memory --> VectorDB[(Vector DB)]
+        
+        External --> Orchestrator
+        VectorDB --> Orchestrator
+    end
+    
+    style LLM fill:#f9f,stroke:#333
+    style Orchestrator fill:#bbf,stroke:#333
+`}
+/>
+
+| Component        | Purpose              | Technologies                 |
+| :--------------- | :------------------- | :--------------------------- |
+| **Interface**    | How users interact   | Chat UI, API, CLI            |
+| **Orchestrator** | Controls the loop    | LangGraph, custom code       |
+| **LLM**          | Reasoning engine     | GPT-4, Claude, Llama         |
+| **Tools**        | Actions in the world | MCP servers, APIs            |
+| **Memory**       | Persistence          | Vector DBs, key-value stores |
+| **State**        | Current task context | Graph state, checkpoints     |
+
+---
+
+<ProgressCheckpoint
+  title="Module 1 Knowledge Check"
+  questions={[
+    {
+      question: "What's the key difference between an LLM and an Agent?",
+      answer:
+        "An LLM is just the reasoning engine (the 'brain'). An Agent wraps the LLM with tools (to take actions), memory (to persist information), and a control loop (to handle uncertainty and iterate).",
+    },
+    {
+      question: "Why can't a simple pipeline (DAG) handle agent tasks?",
+      answer:
+        "Pipelines flow in one direction and can't loop back. Agents need to try things, observe results, and retry if something fails—this requires cycles, not linear flow.",
+    },
+    {
+      question: "What are the four steps of the Cognitive Loop?",
+      answer:
+        "Perceive (read inputs), Reason (decide what to do), Act (execute a tool), Observe (see the result). Then repeat until done.",
+    },
+    {
+      question: "What is MCP and why does it matter?",
+      answer:
+        "Model Context Protocol—a standard for connecting tools to AI. It matters because it lets you write tools once and use them with any MCP-compatible agent, and gives you access to a growing ecosystem of pre-built tools.",
+    },
+  ]}
+/>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Thinking you just need a better prompt to build an agent",
+      fix: "Agents require architecture: tools, memory, state management, and error handling—not just prompts",
+    },
+    {
+      mistake: "Building everything as a linear chain",
+      fix: "Design for loops and retries from the start. Assume things will fail.",
+    },
+    {
+      mistake: "Giving the agent too many tools at once",
+      fix: "Start with 2-3 essential tools. Add more as needed. Too many tools confuse the LLM.",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "An LLM is the brain; an Agent is the brain + body (tools, memory, loops)",
+    "Linear pipelines fail because they can't handle uncertainty or retry",
+    "The Cognitive Loop: Perceive → Reason → Act → Observe → Repeat",
+    "MCP standardizes how agents connect to tools (like USB for AI)",
+    "Production agents need: orchestration, tools, memory, and state management",
+  ]}
+/>
+
+---
+
+<Exercise
+  title="Mental Model Check"
+  difficulty="beginner"
+  objectives={[
+    "Identify the difference between an LLM and an Agent",
+    "Explain why loops are necessary for error recovery",
+    "Define what MCP stands for",
+    "Draw the Cognitive Loop from memory"
+  ]}
+  hints={[
+    "Think about what happens when a tool call fails—how would a pipeline handle it vs. a loop?",
+    "Consider: what can an agent do that a chatbot cannot?"
+  ]}
+>
+
+**Try This:** Think of a task you do at work that requires multiple steps and might fail partway through. How would you design an agent to handle it? What tools would it need? What happens if step 3 fails?
+
+</Exercise>
+
+---
+
+### Coming Up Next
+
+In **Day 02**, we will learn about **Context Engineering**—how to manage the memory of our agent so it doesn't get confused or overwhelmed.
+
+In **Day 03**, we will write our first code using **LangGraph** and build a working agent loop.

@@ -1,0 +1,285 @@
+---
+title: "Day 31: Open Source Hall of Fame"
+description: "A curated guide to the best open-source agentic AI projects, tools, and resources."
+week: 5
+---
+
+## The Open Source Ecosystem
+
+The agentic AI revolution is being built in the open. This module catalogs the most important open-source projects you should know, use, and contribute to.
+
+---
+
+## 31.1 Agent Frameworks
+
+### Tier 1: Production-Ready
+
+| Project                                                | Stars | Description                         | Best For               |
+| :----------------------------------------------------- | :---- | :---------------------------------- | :--------------------- |
+| [LangChain](https://github.com/langchain-ai/langchain) | 95k+  | The standard framework for LLM apps | General-purpose agents |
+| [LangGraph](https://github.com/langchain-ai/langgraph) | 8k+   | Stateful, cyclic agent workflows    | Complex orchestration  |
+| [CrewAI](https://github.com/crewAIInc/crewAI)          | 25k+  | Role-based multi-agent systems      | Business workflows     |
+| [AutoGen](https://github.com/microsoft/autogen)        | 35k+  | Conversational multi-agent          | Research, coding       |
+| [Haystack](https://github.com/deepset-ai/haystack)     | 18k+  | Production RAG pipelines            | Enterprise search      |
+
+### Tier 2: Specialized
+
+| Project                                                         | Stars | Description                 | Best For            |
+| :-------------------------------------------------------------- | :---- | :-------------------------- | :------------------ |
+| [DSPy](https://github.com/stanfordnlp/dspy)                     | 20k+  | Declarative LLM programming | Prompt optimization |
+| [Semantic Kernel](https://github.com/microsoft/semantic-kernel) | 22k+  | Microsoft's enterprise SDK  | .NET/Azure shops    |
+| [LlamaIndex](https://github.com/run-llama/llama_index)          | 38k+  | Data framework for LLMs     | RAG applications    |
+| [Agno](https://github.com/agno-agi/agno)                        | 5k+   | Lightweight agent framework | Quick prototypes    |
+
+---
+
+## 31.2 Coding Agents
+
+### SWE-bench Competitors
+
+| Project                                                 | Description                   | SWE-bench Score |
+| :------------------------------------------------------ | :---------------------------- | :-------------- |
+| [SWE-Agent](https://github.com/princeton-nlp/SWE-agent) | Princeton's coding agent      | ~18%            |
+| [OpenDevin](https://github.com/OpenDevin/OpenDevin)     | Open-source Devin alternative | ~15%            |
+| [Aider](https://github.com/paul-gauthier/aider)         | AI pair programming           | N/A             |
+| [Continue](https://github.com/continuedev/continue)     | IDE-integrated assistant      | N/A             |
+| [Cursor](https://cursor.sh)                             | AI-first code editor          | N/A             |
+
+### Code Analysis
+
+| Project                                                   | Description                     |
+| :-------------------------------------------------------- | :------------------------------ |
+| [LibCST](https://github.com/Instagram/LibCST)             | Concrete syntax tree for Python |
+| [Tree-sitter](https://github.com/tree-sitter/tree-sitter) | Universal parser generator      |
+| [Semgrep](https://github.com/semgrep/semgrep)             | Static analysis for security    |
+
+---
+
+## 31.3 Memory & RAG
+
+### Vector Databases
+
+| Project                                           | Type           | Best For                 |
+| :------------------------------------------------ | :------------- | :----------------------- |
+| [ChromaDB](https://github.com/chroma-core/chroma) | Embedded       | Development, small scale |
+| [LanceDB](https://github.com/lancedb/lancedb)     | Embedded       | Local-first, multimodal  |
+| [Qdrant](https://github.com/qdrant/qdrant)        | Server         | Production, filtering    |
+| [Weaviate](https://github.com/weaviate/weaviate)  | Server         | Hybrid search            |
+| [Milvus](https://github.com/milvus-io/milvus)     | Distributed    | Large scale              |
+| [pgvector](https://github.com/pgvector/pgvector)  | PostgreSQL ext | Existing Postgres        |
+
+### Memory Systems
+
+| Project                                               | Description                  |
+| :---------------------------------------------------- | :--------------------------- |
+| [OpenMemory](https://github.com/CaviraOSS/OpenMemory) | Persistent memory for agents |
+| [Mem0](https://github.com/mem0ai/mem0)                | Memory layer for AI apps     |
+| [Memary](https://github.com/kingjulio8238/memary)     | Long-term memory graphs      |
+
+---
+
+## 31.4 Model Context Protocol
+
+### Official Servers
+
+| Server                                                                                     | Description        |
+| :----------------------------------------------------------------------------------------- | :----------------- |
+| [@modelcontextprotocol/server-filesystem](https://github.com/modelcontextprotocol/servers) | File system access |
+| [@modelcontextprotocol/server-postgres](https://github.com/modelcontextprotocol/servers)   | PostgreSQL queries |
+| [@modelcontextprotocol/server-slack](https://github.com/modelcontextprotocol/servers)      | Slack integration  |
+| [@modelcontextprotocol/server-github](https://github.com/modelcontextprotocol/servers)     | GitHub operations  |
+| [@modelcontextprotocol/server-gdrive](https://github.com/modelcontextprotocol/servers)     | Google Drive       |
+
+### Community Servers
+
+| Server                                                               | Description                 |
+| :------------------------------------------------------------------- | :-------------------------- |
+| [FastMCP](https://github.com/jlowin/fastmcp)                         | Python MCP server framework |
+| [mcp-server-sqlite](https://github.com/benborber/mcp-server-sqlite)  | SQLite database             |
+| [mcp-server-notion](https://github.com/modelcontextprotocol/servers) | Notion integration          |
+
+### MCP Tools
+
+| Tool                                                                             | Description           |
+| :------------------------------------------------------------------------------- | :-------------------- |
+| [MCP Inspector](https://github.com/modelcontextprotocol/inspector)               | Debug MCP servers     |
+| [langchain-mcp-adapters](https://github.com/langchain-ai/langchain-mcp-adapters) | LangChain integration |
+
+---
+
+## 31.5 Observability & Evaluation
+
+### Tracing
+
+| Project                                                   | Description                        |
+| :-------------------------------------------------------- | :--------------------------------- |
+| [LangSmith](https://smith.langchain.com)                  | LangChain's observability platform |
+| [AgentPrism](https://github.com/evilmartians/agent-prism) | Visual trace debugging             |
+| [AgentTrace](https://github.com/tensorstax/agenttrace)    | Lightweight local tracing          |
+| [Langfuse](https://github.com/langfuse/langfuse)          | Open-source LLM observability      |
+| [Phoenix](https://github.com/Arize-ai/phoenix)            | ML observability                   |
+
+### Evaluation
+
+| Project                                                 | Description              |
+| :------------------------------------------------------ | :----------------------- |
+| [SWE-bench](https://github.com/princeton-nlp/SWE-bench) | Code agent benchmark     |
+| [RAGAS](https://github.com/explodinggradients/ragas)    | RAG evaluation           |
+| [DeepEval](https://github.com/confident-ai/deepeval)    | LLM evaluation framework |
+| [Promptfoo](https://github.com/promptfoo/promptfoo)     | Prompt testing           |
+
+---
+
+## 31.6 Local LLMs
+
+### Inference Engines
+
+| Project                                                         | Description               | Best For             |
+| :-------------------------------------------------------------- | :------------------------ | :------------------- |
+| [Ollama](https://github.com/ollama/ollama)                      | Easy local LLM deployment | Getting started      |
+| [vLLM](https://github.com/vllm-project/vllm)                    | High-throughput serving   | Production           |
+| [llama.cpp](https://github.com/ggerganov/llama.cpp)             | CPU inference             | Resource-constrained |
+| [TGI](https://github.com/huggingface/text-generation-inference) | HuggingFace serving       | HF ecosystem         |
+| [LM Studio](https://lmstudio.ai)                                | GUI for local LLMs        | Non-technical users  |
+
+### Models
+
+| Model                                                            | Parameters | Strengths               |
+| :--------------------------------------------------------------- | :--------- | :---------------------- |
+| [Llama 3.1](https://github.com/meta-llama/llama3)                | 8B-405B    | General purpose         |
+| [Mistral](https://github.com/mistralai/mistral-src)              | 7B-8x22B   | Efficient, multilingual |
+| [Qwen 2.5](https://github.com/QwenLM/Qwen2.5)                    | 0.5B-72B   | Coding, math            |
+| [DeepSeek](https://github.com/deepseek-ai/DeepSeek-V2)           | 236B MoE   | Reasoning               |
+| [Phi-3](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct) | 3.8B-14B   | Small but capable       |
+| [CodeLlama](https://github.com/meta-llama/codellama)             | 7B-70B     | Code generation         |
+
+---
+
+## 31.7 Sandboxing & Security
+
+### Code Execution
+
+| Project                                                           | Description            |
+| :---------------------------------------------------------------- | :--------------------- |
+| [E2B](https://github.com/e2b-dev/e2b)                             | Cloud sandboxes for AI |
+| [Modal](https://modal.com)                                        | Serverless compute     |
+| [Firecracker](https://github.com/firecracker-microvm/firecracker) | MicroVMs               |
+| [gVisor](https://github.com/google/gvisor)                        | Container sandbox      |
+
+### Security Tools
+
+| Project                                                      | Description                |
+| :----------------------------------------------------------- | :------------------------- |
+| [Guardrails AI](https://github.com/guardrails-ai/guardrails) | LLM output validation      |
+| [NeMo Guardrails](https://github.com/NVIDIA/NeMo-Guardrails) | NVIDIA's safety toolkit    |
+| [Rebuff](https://github.com/protectai/rebuff)                | Prompt injection detection |
+
+---
+
+## 31.8 Infrastructure
+
+### Kubernetes
+
+| Project                                          | Description           |
+| :----------------------------------------------- | :-------------------- |
+| [kagent](https://github.com/kagent-ai/kagent)    | AI agent mesh for K8s |
+| [KubeAI](https://github.com/substratusai/kubeai) | LLM serving on K8s    |
+| [Kubeflow](https://github.com/kubeflow/kubeflow) | ML on Kubernetes      |
+
+### MLOps
+
+| Project                                    | Description             |
+| :----------------------------------------- | :---------------------- |
+| [MLflow](https://github.com/mlflow/mlflow) | ML lifecycle management |
+| [DVC](https://github.com/iterative/dvc)    | Data version control    |
+| [Weights & Biases](https://wandb.ai)       | Experiment tracking     |
+
+---
+
+## 31.9 Learning Resources
+
+### Courses
+
+| Resource                                                      | Description             |
+| :------------------------------------------------------------ | :---------------------- |
+| [DeepLearning.AI](https://www.deeplearning.ai/short-courses/) | Short courses on agents |
+| [Hugging Face Course](https://huggingface.co/learn)           | NLP and LLMs            |
+| [Fast.ai](https://www.fast.ai/)                               | Practical deep learning |
+
+### Books
+
+| Book                                          | Author                |
+| :-------------------------------------------- | :-------------------- |
+| Building LLM Apps                             | Valentino Gagliardi   |
+| Designing Machine Learning Systems            | Chip Huyen            |
+| Natural Language Processing with Transformers | Lewis Tunstall et al. |
+
+### Newsletters
+
+| Newsletter                                          | Focus              |
+| :-------------------------------------------------- | :----------------- |
+| [The Batch](https://www.deeplearning.ai/the-batch/) | AI news            |
+| [AI Weekly](https://aiweekly.co/)                   | Curated AI content |
+| [Last Week in AI](https://lastweekin.ai/)           | Weekly roundup     |
+
+---
+
+## 31.10 Contributing to Open Source
+
+### How to Start
+
+1. **Find a project** that aligns with your interests
+2. **Read the contributing guide** (CONTRIBUTING.md)
+3. **Start with documentation** or small bug fixes
+4. **Join the community** (Discord, Slack, GitHub Discussions)
+5. **Be patient and persistent**
+
+### High-Impact Contributions
+
+| Type          | Impact                         |
+| :------------ | :----------------------------- |
+| Documentation | High - helps everyone          |
+| Bug fixes     | Medium - improves stability    |
+| New features  | High - but requires discussion |
+| Tests         | Medium - improves reliability  |
+| Examples      | High - helps adoption          |
+
+### Projects Seeking Contributors
+
+- **LangChain**: Always needs documentation and examples
+- **CrewAI**: Growing fast, needs tools and integrations
+- **MCP Servers**: Many services need MCP servers
+- **Evaluation**: Benchmarks need more test cases
+
+---
+
+## 🔗 Quick Links
+
+### Essential Bookmarks
+
+```markdown
+## Frameworks
+
+- https://github.com/langchain-ai/langchain
+- https://github.com/langchain-ai/langgraph
+- https://github.com/crewAIInc/crewAI
+
+## MCP
+
+- https://spec.modelcontextprotocol.io/
+- https://github.com/modelcontextprotocol/servers
+
+## Local LLMs
+
+- https://ollama.com
+- https://lmstudio.ai
+
+## Evaluation
+
+- https://github.com/princeton-nlp/SWE-bench
+- https://smith.langchain.com
+```
+
+---
+
+**This is a living document. The ecosystem evolves rapidly—stay curious and keep exploring.**

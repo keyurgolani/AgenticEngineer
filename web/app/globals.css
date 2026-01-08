@@ -1,0 +1,494 @@
+@import "tailwindcss";
+
+/* Custom BlockNote Theme Overrides */
+.bn-block-outer {
+  @apply transition-colors duration-200;
+}
+
+.bn-side-menu[data-block-type] {
+  @apply opacity-0 transition-opacity duration-200;
+}
+
+.bn-block-outer:hover .bn-side-menu[data-block-type] {
+  @apply opacity-60 hover:opacity-100;
+}
+
+.bn-drag-handle {
+  @apply text-muted-foreground/50 hover:text-foreground transition-colors;
+}
+
+/* Ensure nice padding for the editor text */
+.bn-editor {
+  @apply px-4 sm:px-8;
+}
+
+@custom-variant dark (&:is(.dark *));
+@custom-variant black (&:is(.black *));
+@custom-variant bright (&:is(.bright *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-engine-sans);
+  --font-mono: var(--font-engine-mono);
+  /* Defaults if js doesn't load */
+  --font-engine-sans: var(--font-inter);
+  --font-engine-mono: var(--font-jetbrains);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+.black {
+  --background: oklch(0 0 0);
+  --foreground: oklch(1 0 0);
+  --card: oklch(0.1 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.1 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.2 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.2 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.2 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 20%);
+  --input: oklch(1 0 0 / 20%);
+  --ring: oklch(0.556 0 0);
+  --sidebar: oklch(0 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0 0 0);
+  --sidebar-accent: oklch(0.2 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 20%);
+}
+
+.bright {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.1 0 0); /* Dark text for contrast */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.1 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.1 0 0);
+  --primary: oklch(0.5 0.25 300);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0.05 300);
+  --secondary-foreground: oklch(0.5 0.25 300);
+  --muted: oklch(0.96 0.05 300);
+  --muted-foreground: oklch(0.4 0.1 300);
+  --accent: oklch(0.96 0.05 300);
+  --accent-foreground: oklch(0.5 0.25 300);
+  --destructive: oklch(0.6 0.25 25);
+  --border: oklch(0.9 0.05 300);
+  --input: oklch(0.9 0.05 300);
+  --ring: oklch(0.7 0.2 300);
+  --sidebar: oklch(0.98 0 0);
+  --sidebar-foreground: oklch(0.1 0 0);
+  --sidebar-primary: oklch(0.5 0.25 300);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.95 0.1 300);
+  --sidebar-accent-foreground: oklch(0.1 0 0);
+  --sidebar-border: oklch(0.9 0.05 300);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    overflow-x: hidden;
+    width: 100%;
+  }
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  /* Hide scrollbar for IE, Edge and Firefox */
+  html {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+    overflow-x: hidden; /* Ensure HTML also doesn't scroll */
+  }
+}
+
+@layer utilities {
+  .line--highlighted {
+    @apply bg-zinc-800/50 border-l-2 border-primary block w-full;
+  }
+  
+  .word--highlighted {
+    @apply bg-primary/20 rounded-md px-1 border border-primary/20;
+  }
+}
+
+
+/* Reading Progress Bar Animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.reading-progress-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Streak flame animation */
+@keyframes flame {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.1) rotate(-5deg);
+  }
+  75% {
+    transform: scale(1.1) rotate(5deg);
+  }
+}
+
+.animate-flame {
+  animation: flame 0.5s ease-in-out;
+}
+
+/* Celebration confetti */
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-100%) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+.confetti {
+  animation: confetti-fall 3s ease-out forwards;
+}
+
+/* Quiz option hover effect */
+.quiz-option {
+  @apply transition-all duration-200;
+}
+
+.quiz-option:hover:not(:disabled) {
+  @apply transform scale-[1.01];
+}
+
+/* Code block enhancements */
+.code-block-wrapper {
+  @apply relative;
+}
+
+.code-block-wrapper:hover .copy-button {
+  @apply opacity-100;
+}
+
+/* Shiki / Rehype Pretty Code Dual Theme Support */
+code[data-theme*=" "],
+code[data-theme*=" "] span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+
+.dark code[data-theme*=" "],
+.dark code[data-theme*=" "] span {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+}
+
+/* Ensure background transparency override if needed (handled by our wrapper, but good to be safe) */
+code[data-theme*=" "] {
+  background-color: transparent !important;
+}
+
+/* Smooth scroll for TOC */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus visible for accessibility */
+:focus-visible {
+  @apply outline-2 outline-offset-2 outline-primary;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-break-before {
+    break-before: page;
+  }
+  
+  .print-break-after {
+    break-after: page;
+  }
+}
+
+
+
+/* Glow effect for active elements */
+.shadow-glow {
+  box-shadow: 0 0 20px rgba(var(--primary), 0.3);
+}
+
+/* Activity heatmap cell hover */
+.heatmap-cell {
+  @apply transition-transform duration-100;
+}
+/* Code Block Line Numbers */
+.show-line-numbers code {
+  counter-reset: line;
+  /* Ensure standard layout */
+  display: block; 
+}
+
+.show-line-numbers code > [data-line]::before {
+  counter-increment: line;
+  content: counter(line);
+  
+  /* Absolute styling (Classic Hanging Indent) */
+  position: absolute;
+  left: 0;
+  top: 0;
+  
+  display: inline-block;
+  width: 3ch;               /* Fixed width */
+  text-align: right;
+  padding-right: 1ch;
+  
+  font-size: 0.75rem;
+  opacity: 0.5;
+  color: var(--muted-foreground);
+  
+  /* Reset stickiness causing overlaps */
+  background-color: transparent;
+  border: none;
+  height: auto;
+  z-index: 0;
+}
+
+.show-line-numbers code > [data-line] {
+  position: relative;
+  display: block; 
+  padding-left: 4ch; /* Space for the absolute number */
+  
+  /* Remove text-indent logic, rely on padding */
+  text-indent: 0;
+  
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Dark mode adjustment simply for color */
+.dark .show-line-numbers code > [data-line]::before {
+  color: var(--muted-foreground);
+  background-color: transparent;
+  border: none;
+}
+
+/* Code Block Whitespace Visualization */
+.show-whitespace code {
+  position: relative; 
+}
+
+/* 
+  Standard library whitespace rendering via @shikijs/transformers 
+  styles the generated .space and .tab spans.
+*/
+
+/* Base positioning for whitespace markers */
+.space, .tab {
+  position: relative;
+}
+
+/* Only show markers when toggle is active */
+.show-whitespace .space::before {
+  content: '·';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  pointer-events: none;
+  color: var(--muted-foreground);
+  opacity: 0.5;
+}
+
+.show-whitespace .tab::before {
+  content: '→';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%; /* Tabs might span multiple spaces visually but usually 1 tab char. If tab-size handles alignment, strict 100% width is safe if tab is 1 char in DOM. */
+  text-align: center; /* Or left? */
+  pointer-events: none;
+  color: var(--muted-foreground);
+  opacity: 0.5;
+}
+
+/* Adjust colors for visibility */
+.dark .show-whitespace .space::before,
+.dark .show-whitespace .tab::before {
+  color: rgba(150, 150, 150, 0.6);
+}
+
+.show-whitespace .space::before,
+.show-whitespace .tab::before {
+  color: rgba(100, 100, 100, 0.5);
+}
+
+/* Newline character at end of each line */
+.show-whitespace [data-line]::after {
+  content: '↵';
+  color: rgba(100, 100, 100, 0.5); /* Match light mode token color */
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
+  margin-left: 0.5ch;
+  display: inline-block;
+}
+
+.dark .show-whitespace [data-line]::after {
+  color: rgba(150, 150, 150, 0.6); /* Match dark mode token color */
+}
+
+/* Hide line numbers by default if wrapper doesn't have the class (which it won't if toggled off) */
+/* Actually, since we scope the counter generation to .show-line-numbers, they won't appear otherwise. */
+.heatmap-cell:hover {
+  @apply transform scale-150 z-10;
+}

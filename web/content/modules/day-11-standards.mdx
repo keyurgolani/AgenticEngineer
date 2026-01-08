@@ -1,0 +1,554 @@
+---
+title: "Day 11: The Model Context Protocol (MCP)"
+description: "The universal standard for connecting AI agents to tools—the USB-C of AI."
+week: 2
+---
+
+## The Integration Problem
+
+Before MCP, connecting an LLM to external tools was a nightmare. Every model provider had different formats:
+
+- OpenAI: Function calling with JSON schemas
+- Anthropic: Tool use with XML
+- Google: Function declarations
+- Local models: Custom implementations
+
+**MCP solves this** by providing a universal protocol that works across all models and tools.
+
+> **Key Insight**: MCP is to AI tools what USB-C is to devices—write once, connect everywhere.
+
+---
+
+## 11.1 What is MCP?
+
+![MCP Universal Connector](/images/mcp_connector.png)
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "MCP Clients"
+        Claude[Claude Desktop]
+        Cursor[Cursor IDE]
+        Custom[Your Agent]
+    end
+    
+    subgraph "MCP Servers"
+        FS[Filesystem Server]
+        DB[Database Server]
+        API[API Server]
+        Git[Git Server]
+    end
+    
+    Claude <-->|MCP| FS
+    Claude <-->|MCP| DB
+    Cursor <-->|MCP| API
+    Custom <-->|MCP| Git
+    Custom <-->|MCP| DB
+`}
+/>
+
+### Core Concepts
+
+| Concept       | Description                                | Example                    |
+| :------------ | :----------------------------------------- | :------------------------- |
+| **Client**    | The AI application requesting capabilities | Claude Desktop, your agent |
+| **Server**    | Provides tools/resources to clients        | Filesystem, database, API  |
+| **Resources** | Read-only data access                      | Files, database rows, logs |
+| **Tools**     | Executable functions                       | `query_db`, `send_email`   |
+| **Prompts**   | Reusable prompt templates                  | Code review template       |
+
+### Protocol Flow
+
+```
+1. Client connects to Server
+2. Client requests: "What tools do you have?"
+3. Server responds: [list of tools with schemas]
+4. Client (via LLM): "I need to query the database"
+5. Client calls: tools/call with arguments
+6. Server executes and returns result
+7. Client uses result in LLM context
+```
+
+---
+
+## 11.2 MCP Server Types
+
+### Transport Methods
+
+| Transport     | Use Case                | Example                  |
+| :------------ | :---------------------- | :----------------------- |
+| **stdio**     | Local processes         | CLI tools, local scripts |
+| **SSE**       | Remote servers          | Cloud APIs, web services |
+| **WebSocket** | Real-time bidirectional | Live data streams        |
+
+### Official MCP Servers
+
+```bash
+# Filesystem access
+npx -y @modelcontextprotocol/server-filesystem /path/to/directory
+
+# PostgreSQL database
+npx -y @modelcontextprotocol/server-postgres postgresql://user:pass@localhost/db
+
+# GitHub integration
+npx -y @modelcontextprotocol/server-github
+
+# Slack integration
+SLACK_BOT_TOKEN=xoxb-... npx -y @modelcontextprotocol/server-slack
+
+# Google Drive
+npx -y @modelcontextprotocol/server-gdrive
+```
+
+---
+
+## 11.3 Configuring MCP Clients
+
+### Claude Desktop Configuration
+
+```json
+// ~/Library/Application Support/Claude/claude_desktop_config.json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/me/projects"
+      ],
+      "env": {}
+    },
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://localhost/mydb"
+      ],
+      "env": {
+        "PGPASSWORD": "secret"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_TOKEN": "ghp_..."
+      }
+    }
+  }
+}
+```
+
+### Cursor IDE Configuration
+
+```json
+// .cursor/mcp.json (in project root)
+{
+  "mcpServers": {
+    "project-db": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://localhost/project"
+      ],
+      "disabled": false,
+      "autoApprove": ["query"]
+    }
+  }
+}
+```
+
+---
+
+## 11.4 Building Custom MCP Servers
+
+### Using FastMCP (Python)
+
+```python
+from fastmcp import FastMCP
+
+# Create server
+mcp = FastMCP("My Custom Server")
+
+# Define a tool
+@mcp.tool()
+def calculate_mortgage(
+    principal: float,
+    annual_rate: float,
+    years: int
+) -> dict:
+    """Calculate monthly mortgage payment.
+
+    Args:
+        principal: Loan amount in dollars
+        annual_rate: Annual interest rate (e.g., 0.065 for 6.5%)
+        years: Loan term in years
+
+    Returns:
+        Monthly payment and total interest
+    """
+    monthly_rate = annual_rate / 12
+    num_payments = years * 12
+
+    monthly_payment = principal * (
+        monthly_rate * (1 + monthly_rate)**num_payments
+    ) / ((1 + monthly_rate)**num_payments - 1)
+
+    total_paid = monthly_payment * num_payments
+    total_interest = total_paid - principal
+
+    return {
+        "monthly_payment": round(monthly_payment, 2),
+        "total_interest": round(total_interest, 2),
+        "total_paid": round(total_paid, 2)
+    }
+
+# Define a resource
+@mcp.resource("rates://current")
+def get_current_rates() -> str:
+    """Get current mortgage rates."""
+    return """
+    Current Mortgage Rates (as of today):
+    - 30-year fixed: 6.5%
+    - 15-year fixed: 5.8%
+    - 5/1 ARM: 6.0%
+    """
+
+# Run the server
+if __name__ == "__main__":
+    mcp.run()
+```
+
+### Using TypeScript SDK
+
+```typescript
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+const server = new Server(
+  { name: "my-server", version: "1.0.0" },
+  { capabilities: { tools: {} } }
+);
+
+// Define tools
+server.setRequestHandler("tools/list", async () => ({
+  tools: [
+    {
+      name: "get_weather",
+      description: "Get current weather for a city",
+      inputSchema: {
+        type: "object",
+        properties: {
+          city: { type: "string", description: "City name" },
+        },
+        required: ["city"],
+      },
+    },
+  ],
+}));
+
+// Handle tool calls
+server.setRequestHandler("tools/call", async (request) => {
+  if (request.params.name === "get_weather") {
+    const city = request.params.arguments.city;
+    // Fetch weather...
+    return {
+      content: [{ type: "text", text: `Weather in ${city}: 22°C, sunny` }],
+    };
+  }
+});
+
+// Start server
+const transport = new StdioServerTransport();
+await server.connect(transport);
+```
+
+---
+
+## 11.5 Using MCP in LangChain
+
+### LangChain MCP Adapters
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import create_react_agent
+
+async def create_mcp_agent():
+    # Connect to multiple MCP servers
+    client = MultiServerMCPClient({
+        "filesystem": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "./data"]
+        },
+        "postgres": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/db"]
+        }
+    })
+
+    # Get tools from all servers
+    tools = await client.get_tools()
+
+    # Create agent with MCP tools
+    llm = ChatOpenAI(model="gpt-4o")
+    agent = create_react_agent(llm, tools)
+
+    return agent
+
+# Usage
+agent = await create_mcp_agent()
+result = await agent.ainvoke({
+    "messages": [{"role": "user", "content": "List files in the data directory"}]
+})
+```
+
+---
+
+## 11.6 MCP Security Best Practices
+
+### Principle of Least Privilege
+
+```json
+{
+  "mcpServers": {
+    "readonly-fs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "--read-only", // Read-only access
+        "/specific/directory" // Limited scope
+      ]
+    }
+  }
+}
+```
+
+### Environment Variable Security
+
+```python
+import os
+from fastmcp import FastMCP
+
+mcp = FastMCP("Secure Server")
+
+# Never hardcode secrets
+API_KEY = os.environ.get("API_KEY")
+if not API_KEY:
+    raise ValueError("API_KEY environment variable required")
+
+@mcp.tool()
+def secure_api_call(endpoint: str) -> dict:
+    """Make authenticated API call."""
+    # Use environment variable, not hardcoded key
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+    # ...
+```
+
+### Input Validation
+
+```python
+from pydantic import BaseModel, validator
+from fastmcp import FastMCP
+
+mcp = FastMCP("Validated Server")
+
+class QueryInput(BaseModel):
+    table: str
+    limit: int = 100
+
+    @validator("table")
+    def validate_table(cls, v):
+        allowed_tables = ["users", "products", "orders"]
+        if v not in allowed_tables:
+            raise ValueError(f"Table must be one of: {allowed_tables}")
+        return v
+
+    @validator("limit")
+    def validate_limit(cls, v):
+        if v > 1000:
+            raise ValueError("Limit cannot exceed 1000")
+        return v
+
+@mcp.tool()
+def query_database(input: QueryInput) -> list:
+    """Query the database with validated input."""
+    # Safe to use input.table and input.limit
+    pass
+```
+
+---
+
+## 11.7 MCP Gateways
+
+For production deployments, MCP Gateways provide centralized management:
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Agents"
+        A1[Agent 1]
+        A2[Agent 2]
+        A3[Agent 3]
+    end
+    
+    subgraph "MCP Gateway"
+        Auth[Authentication]
+        Rate[Rate Limiting]
+        Log[Logging]
+        Route[Routing]
+    end
+    
+    subgraph "MCP Servers"
+        S1[Server 1]
+        S2[Server 2]
+        S3[Server 3]
+    end
+    
+    A1 --> Auth
+    A2 --> Auth
+    A3 --> Auth
+    Auth --> Rate
+    Rate --> Log
+    Log --> Route
+    Route --> S1
+    Route --> S2
+    Route --> S3
+`}
+/>
+
+### Gateway Benefits
+
+| Feature              | Description                            |
+| :------------------- | :------------------------------------- |
+| **Centralized Auth** | Single point for authentication        |
+| **Rate Limiting**    | Prevent abuse and control costs        |
+| **Logging**          | Audit trail for all tool calls         |
+| **Routing**          | Direct requests to appropriate servers |
+| **Caching**          | Reduce redundant calls                 |
+
+---
+
+## 🧪 Lab Exercise: Build an MCP Server
+
+**Objective**: Create a custom MCP server that provides tools for your specific use case.
+
+### Option 1: Code Analysis Server
+
+```python
+from fastmcp import FastMCP
+import ast
+import subprocess
+
+mcp = FastMCP("Code Analysis Server")
+
+@mcp.tool()
+def analyze_python_file(file_path: str) -> dict:
+    """Analyze a Python file for complexity and issues.
+
+    Args:
+        file_path: Path to the Python file
+
+    Returns:
+        Analysis results including complexity metrics
+    """
+    # TODO: Implement
+    # - Parse AST
+    # - Count functions, classes
+    # - Calculate cyclomatic complexity
+    # - Run linter
+    pass
+
+@mcp.tool()
+def run_tests(test_path: str) -> dict:
+    """Run pytest on specified path.
+
+    Args:
+        test_path: Path to test file or directory
+
+    Returns:
+        Test results summary
+    """
+    # TODO: Implement
+    pass
+
+@mcp.resource("project://structure")
+def get_project_structure() -> str:
+    """Get the project directory structure."""
+    # TODO: Implement
+    pass
+```
+
+### Option 2: API Integration Server
+
+```python
+from fastmcp import FastMCP
+import httpx
+
+mcp = FastMCP("API Integration Server")
+
+@mcp.tool()
+def fetch_github_issues(repo: str, state: str = "open") -> list:
+    """Fetch issues from a GitHub repository.
+
+    Args:
+        repo: Repository in format 'owner/repo'
+        state: Issue state ('open', 'closed', 'all')
+
+    Returns:
+        List of issues with title, number, and labels
+    """
+    # TODO: Implement
+    pass
+
+@mcp.tool()
+def create_github_issue(repo: str, title: str, body: str) -> dict:
+    """Create a new GitHub issue.
+
+    Args:
+        repo: Repository in format 'owner/repo'
+        title: Issue title
+        body: Issue description
+
+    Returns:
+        Created issue details
+    """
+    # TODO: Implement
+    pass
+```
+
+### Testing Your Server
+
+```bash
+# Run the server
+python my_mcp_server.py
+
+# Test with MCP Inspector
+npx @modelcontextprotocol/inspector python my_mcp_server.py
+```
+
+---
+
+## 📚 Key Takeaways
+
+1. **MCP standardizes** agent-tool communication
+2. **Servers provide** tools, resources, and prompts
+3. **Clients consume** capabilities from multiple servers
+4. **FastMCP** makes Python server development easy
+5. **Security** requires least privilege and input validation
+6. **Gateways** enable production-grade deployments
+
+---
+
+## 🔗 Further Reading
+
+- [MCP Specification](https://spec.modelcontextprotocol.io/)
+- [MCP Servers Repository](https://github.com/modelcontextprotocol/servers)
+- [FastMCP Documentation](https://github.com/jlowin/fastmcp)
+- [MCP Gateways Guide](https://composio.dev/blog/mcp-gateways/)
+
+**Tomorrow**: We explore the agents.md standard for documenting agent capabilities.

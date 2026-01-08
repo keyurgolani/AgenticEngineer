@@ -1,0 +1,622 @@
+---
+title: "Project 2: The Self-Healing Kubernetes Operator"
+description: "Building an autonomous SRE agent that monitors, diagnoses, and fixes infrastructure issues."
+week: 2
+day: 10
+---
+
+The core of any Kubernetes Operator is its control loop:
+
+The core of any Kubernetes Operator is its control loop:
+
+![Kubernetes Operator Reliability Loop](/images/k8s_reliability_loop.png)
+
+1.  **Monitor**: Watch for changes in KeyuraGroup resources.
+
+1.  **Monitor**: Watch for changes in KeyuraGroup resources.
+
+## Project Overview
+
+**Objective**: Create an autonomous Site Reliability Engineering (SRE) agent that monitors a Kubernetes cluster, diagnoses pod failures, plans remediation, and executes fixes after human approval.
+
+**Why This Matters**: This project demonstrates event-driven architecture, policy-as-code, and human-in-the-loop patterns essential for production AI systems.
+
+**Skills Showcased**:
+
+- Event-driven architecture
+- Kubernetes API integration
+- Policy enforcement
+- Human-in-the-loop (HITL) patterns
+- Reflection and self-correction
+
+---
+
+## Project Structure
+
+<FileTree
+  data={[
+    {
+      name: "k8s-operator",
+      type: "folder",
+      children: [
+        { name: "main.py", type: "file" },
+        { name: "utils.py", type: "file" },
+        { name: "Dockerfile", type: "file" },
+        { name: "requirements.txt", type: "file" },
+        {
+          name: "manifests",
+          type: "folder",
+          children: [
+            { name: "deployment.yaml", type: "file" },
+            { name: "service.yaml", type: "file" },
+          ],
+        },
+      ],
+    },
+  ]}
+/>
+
+---
+
+## 21.1 Architecture Overview
+
+<Mermaid
+  chart={`
+graph TD
+    K8s[(Kubernetes Cluster)] -->|Events| Watcher[Event Watcher]
+    Watcher -->|Pod Failure| Diagnostician[Diagnostician Agent]
+    Diagnostician -->|Root Cause| Planner[Remediation Planner]
+    Planner -->|Proposed Fix| Policy[Policy Checker]
+    Policy -->|Approved| Human{Human Approval}
+    Policy -->|Rejected| Planner
+    Human -->|Approved| Executor[Executor Agent]
+    Human -->|Rejected| End([End])
+    Executor -->|Apply| K8s
+
+    style Diagnostician fill:#f9f,stroke:#333
+    style Planner fill:#bbf,stroke:#333
+    style Policy fill:#fbb,stroke:#333
+    style Human fill:#bfb,stroke:#333
+
+`}
+/>
+
+### The Reliability Loop
+
+| Phase        | Agent          | Responsibility                          |
+| :----------- | :------------- | :-------------------------------------- |
+| **Detect**   | Watcher        | Monitor cluster events, filter failures |
+| **Diagnose** | Diagnostician  | Analyze logs, identify root cause       |
+| **Plan**     | Planner        | Generate remediation strategy           |
+| **Validate** | Policy Checker | Ensure compliance with rules            |
+| **Approve**  | Human          | Review and authorize changes            |
+| **Execute**  | Executor       | Apply the fix to the cluster            |
+
+---
+
+## 21.2 State Definition
+
+```python
+from typing import TypedDict, List, Optional, Annotated
+import operator
+from datetime import datetime
+
+class K8sOperatorState(TypedDict):
+    # Event data
+    pod_name: str
+    namespace: str
+    event_type: str
+    timestamp: datetime
+
+    # Diagnosis
+    logs: str
+    pod_yaml: str
+    events: List[dict]
+    root_cause: str
+    diagnosis_confidence: float
+
+    # Remediation
+    proposed_fix: str
+    fix_type: str  # "restart", "scale", "patch", "rollback"
+
+    # Policy
+    policy_violations: List[str]
+    policy_passed: bool
+
+    # Approval
+    human_approved: Optional[bool]
+    approval_notes: str
+
+    # Execution
+    execution_result: str
+    status: str
+```
+
+---
+
+## 21.3 The Event Watcher
+
+```python
+from kubernetes import client, config, watch
+import asyncio
+
+class K8sEventWatcher:
+    """Watches Kubernetes cluster for failure events."""
+
+    def __init__(self, agent_graph):
+        config.load_kube_config()  # or load_incluster_config() in production
+        self.v1 = client.CoreV1Api()
+        self.agent = agent_graph
+
+    async def watch_pods(self):
+        """Stream pod events and trigger agent on failures."""
+        w = watch.Watch()
+
+        print("👀 Watching for pod failures...")
+
+        for event in w.stream(self.v1.list_pod_for_all_namespaces):
+            pod = event['object']
+            event_type = event['type']
+
+            # Check for failure conditions
+            if self._is_failure(pod):
+                print(f"🚨 Detected failure: {pod.metadata.name}")
+
+                # Trigger the agent
+                initial_state = {
+                    "pod_name": pod.metadata.name,
+                    "namespace": pod.metadata.namespace,
+                    "event_type": event_type,
+                    "timestamp": datetime.now()
+                }
+
+                await self.agent.ainvoke(initial_state)
+
+    def _is_failure(self, pod) -> bool:
+        """Detect various failure conditions."""
+        # Check pod phase
+        if pod.status.phase in ["Failed", "Unknown"]:
+            return True
+
+        # Check container statuses
+        for status in pod.status.container_statuses or []:
+            # CrashLoopBackOff
+            if status.state.waiting:
+                reason = status.state.waiting.reason
+                if reason in ["CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull"]:
+                    return True
+
+            # OOMKilled
+            if status.last_state.terminated:
+                if status.last_state.terminated.reason == "OOMKilled":
+                    return True
+
+        return False
+```
+
+---
+
+## 21.4 The Diagnostician Agent
+
+```python
+from langchain_openai import ChatOpenAI
+from kubernetes import client
+
+def diagnostician_node(state: K8sOperatorState) -> dict:
+    """Analyze the failing pod and identify root cause."""
+    v1 = client.CoreV1Api()
+
+    # Gather diagnostic data
+    pod_name = state["pod_name"]
+    namespace = state["namespace"]
+
+    # Get pod logs
+    try:
+        logs = v1.read_namespaced_pod_log(
+            pod_name,
+            namespace,
+            tail_lines=100
+        )
+    except Exception as e:
+        logs = f"Could not retrieve logs: {e}"
+
+    # Get pod YAML
+    pod = v1.read_namespaced_pod(pod_name, namespace)
+    pod_yaml = client.ApiClient().sanitize_for_serialization(pod)
+
+    # Get events
+    events = v1.list_namespaced_event(
+        namespace,
+        field_selector=f"involvedObject.name={pod_name}"
+    )
+    event_list = [
+        {"reason": e.reason, "message": e.message, "time": str(e.last_timestamp)}
+        for e in events.items
+    ]
+
+    # Use LLM to diagnose
+    llm = ChatOpenAI(model="gpt-4o")
+
+    diagnosis = llm.invoke(f"""
+    You are a Kubernetes expert. Analyze this failing pod and identify the root cause.
+
+    Pod: {pod_name} in namespace {namespace}
+
+    Recent Logs:
+    {logs}
+
+    Pod Events:
+    {json.dumps(event_list, indent=2)}
+
+    Pod Spec (relevant parts):
+    - Image: {pod_yaml['spec']['containers'][0]['image']}
+    - Resources: {pod_yaml['spec']['containers'][0].get('resources', 'Not specified')}
+    - Restart Count: {pod_yaml['status']['containerStatuses'][0]['restartCount']}
+
+    Provide your diagnosis in JSON format:
+    {{
+        "root_cause": "Clear explanation of the problem",
+        "category": "one of: oom, crash, image, config, network, storage",
+        "confidence": 0.0-1.0,
+        "evidence": ["list of evidence supporting diagnosis"]
+    }}
+    """)
+
+    diagnosis_data = json.loads(diagnosis.content)
+
+    return {
+        "logs": logs,
+        "pod_yaml": json.dumps(pod_yaml),
+        "events": event_list,
+        "root_cause": diagnosis_data["root_cause"],
+        "diagnosis_confidence": diagnosis_data["confidence"]
+    }
+```
+
+---
+
+## 21.5 The Remediation Planner
+
+```python
+def planner_node(state: K8sOperatorState) -> dict:
+    """Generate a remediation plan based on the diagnosis."""
+    llm = ChatOpenAI(model="gpt-4o")
+
+    plan = llm.invoke(f"""
+    Based on this diagnosis, propose a remediation:
+
+    Root Cause: {state["root_cause"]}
+    Pod: {state["pod_name"]}
+    Namespace: {state["namespace"]}
+
+    Available remediation types:
+    1. restart - Delete pod to trigger restart
+    2. scale - Adjust replica count
+    3. patch - Modify deployment/pod spec
+    4. rollback - Rollback to previous version
+
+    Provide your plan in JSON format:
+    {{
+        "fix_type": "one of the above",
+        "description": "What this fix does",
+        "command": "The kubectl command or API call",
+        "risk_level": "low/medium/high",
+        "expected_outcome": "What should happen after the fix"
+    }}
+    """)
+
+    plan_data = json.loads(plan.content)
+
+    return {
+        "proposed_fix": plan_data["description"],
+        "fix_type": plan_data["fix_type"],
+        "fix_command": plan_data["command"]
+    }
+```
+
+---
+
+## 21.6 Policy Checker (Policy as Code)
+
+```python
+# policies.py
+POLICIES = {
+    "no_privileged": {
+        "description": "No privileged containers allowed",
+        "check": lambda fix: "privileged: true" not in fix
+    },
+    "no_host_network": {
+        "description": "No host network access",
+        "check": lambda fix: "hostNetwork: true" not in fix
+    },
+    "resource_limits_required": {
+        "description": "Resource limits must be specified",
+        "check": lambda fix: "limits:" in fix if "resources:" in fix else True
+    },
+    "no_latest_tag": {
+        "description": "No :latest image tags",
+        "check": lambda fix: ":latest" not in fix
+    }
+}
+
+def policy_checker_node(state: K8sOperatorState) -> dict:
+    """Validate the proposed fix against organizational policies."""
+    proposed_fix = state.get("fix_command", "")
+
+    violations = []
+
+    for policy_name, policy in POLICIES.items():
+        if not policy["check"](proposed_fix):
+            violations.append({
+                "policy": policy_name,
+                "description": policy["description"]
+            })
+
+    # Additional checks based on fix type
+    if state["fix_type"] == "patch":
+        # Ensure patch doesn't remove health checks
+        if "livenessProbe: null" in proposed_fix:
+            violations.append({
+                "policy": "health_checks_required",
+                "description": "Cannot remove liveness probes"
+            })
+
+    return {
+        "policy_violations": violations,
+        "policy_passed": len(violations) == 0
+    }
+```
+
+---
+
+## 21.7 Human-in-the-Loop Checkpoint
+
+```python
+from langgraph.checkpoint.memory import MemorySaver
+
+def build_k8s_operator():
+    workflow = StateGraph(K8sOperatorState)
+
+    workflow.add_node("diagnose", diagnostician_node)
+    workflow.add_node("plan", planner_node)
+    workflow.add_node("policy_check", policy_checker_node)
+    workflow.add_node("execute", executor_node)
+
+    workflow.set_entry_point("diagnose")
+
+    workflow.add_edge("diagnose", "plan")
+    workflow.add_edge("plan", "policy_check")
+
+    # Conditional: policy passed?
+    workflow.add_conditional_edges(
+        "policy_check",
+        lambda s: "execute" if s["policy_passed"] else "plan",
+        {"execute": "execute", "plan": "plan"}
+    )
+
+    workflow.add_edge("execute", END)
+
+    # Compile with HITL checkpoint
+    memory = MemorySaver()
+
+    return workflow.compile(
+        checkpointer=memory,
+        interrupt_before=["execute"]  # Pause for human approval
+    )
+
+# Usage
+operator = build_k8s_operator()
+
+# Run until approval checkpoint
+config = {"configurable": {"thread_id": "incident-123"}}
+result = operator.invoke(initial_state, config)
+
+# At this point, execution is paused
+print("Proposed fix:", result["proposed_fix"])
+print("Awaiting human approval...")
+
+# Human approves via API/Slack/etc
+# Resume execution
+final_result = operator.invoke(None, config)
+```
+
+---
+
+## 21.8 The Executor Agent
+
+```python
+from kubernetes import client
+
+def executor_node(state: K8sOperatorState) -> dict:
+    """Execute the approved remediation."""
+    v1 = client.CoreV1Api()
+    apps_v1 = client.AppsV1Api()
+
+    fix_type = state["fix_type"]
+    pod_name = state["pod_name"]
+    namespace = state["namespace"]
+
+    try:
+        if fix_type == "restart":
+            # Delete pod to trigger restart
+            v1.delete_namespaced_pod(pod_name, namespace)
+            result = f"Pod {pod_name} deleted, will be recreated by controller"
+
+        elif fix_type == "scale":
+            # Get deployment name from pod
+            pod = v1.read_namespaced_pod(pod_name, namespace)
+            deployment_name = pod.metadata.owner_references[0].name
+
+            # Scale up
+            apps_v1.patch_namespaced_deployment_scale(
+                deployment_name,
+                namespace,
+                {"spec": {"replicas": 3}}
+            )
+            result = f"Scaled deployment {deployment_name} to 3 replicas"
+
+        elif fix_type == "rollback":
+            # Get deployment
+            pod = v1.read_namespaced_pod(pod_name, namespace)
+            deployment_name = pod.metadata.owner_references[0].name
+
+            # Rollback to previous revision
+            apps_v1.patch_namespaced_deployment(
+                deployment_name,
+                namespace,
+                {"spec": {"template": {"metadata": {"annotations": {
+                    "kubectl.kubernetes.io/restartedAt": datetime.now().isoformat()
+                }}}}}
+            )
+            result = f"Triggered rollout restart for {deployment_name}"
+
+        elif fix_type == "patch":
+            # Apply the patch from the plan
+            # This would use the specific patch from state["fix_command"]
+            result = "Patch applied successfully"
+
+        return {
+            "execution_result": result,
+            "status": "success"
+        }
+
+    except Exception as e:
+        return {
+            "execution_result": f"Execution failed: {e}",
+            "status": "failed"
+        }
+```
+
+---
+
+## 21.9 Slack Integration for Approvals
+
+```python
+from slack_sdk import WebClient
+from slack_sdk.socket_mode import SocketModeClient
+from slack_sdk.socket_mode.request import SocketModeRequest
+from slack_sdk.socket_mode.response import SocketModeResponse
+
+class SlackApprovalHandler:
+    def __init__(self, operator, slack_token, app_token):
+        self.operator = operator
+        self.slack = WebClient(token=slack_token)
+        self.socket = SocketModeClient(app_token=app_token)
+
+    def send_approval_request(self, state: dict, thread_id: str):
+        """Send approval request to Slack."""
+        blocks = [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "🚨 K8s Incident Requires Approval"}
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Pod:* `{state['pod_name']}`\n*Namespace:* `{state['namespace']}`"}
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Root Cause:*\n{state['root_cause']}"}
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Proposed Fix:*\n{state['proposed_fix']}"}
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "✅ Approve"},
+                        "style": "primary",
+                        "action_id": f"approve_{thread_id}"
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "❌ Reject"},
+                        "style": "danger",
+                        "action_id": f"reject_{thread_id}"
+                    }
+                ]
+            }
+        ]
+
+        self.slack.chat_postMessage(
+            channel="#sre-alerts",
+            blocks=blocks
+        )
+
+    def handle_approval(self, action_id: str):
+        """Handle approval button click."""
+        thread_id = action_id.split("_")[1]
+        approved = action_id.startswith("approve")
+
+        config = {"configurable": {"thread_id": thread_id}}
+
+        if approved:
+            # Resume execution
+            self.operator.invoke(None, config)
+            return "Fix applied successfully! ✅"
+        else:
+            return "Fix rejected. Incident closed. ❌"
+```
+
+---
+
+## 21.10 Lab Exercise: Extend the Operator
+
+### Challenge 1: Add Prometheus Integration
+
+Query Prometheus for metrics before diagnosis:
+
+```python
+def get_pod_metrics(pod_name: str, namespace: str) -> dict:
+    """Query Prometheus for pod metrics."""
+    # TODO: Implement Prometheus query
+    # - CPU usage over last hour
+    # - Memory usage over last hour
+    # - Request latency
+    pass
+```
+
+### Challenge 2: Add Runbook Integration
+
+Look up runbooks for known issues:
+
+```python
+def lookup_runbook(root_cause: str) -> Optional[str]:
+    """Find relevant runbook for the issue."""
+    # TODO: Search runbook database
+    pass
+```
+
+### Challenge 3: Add Post-Mortem Generation
+
+Generate incident report after resolution:
+
+```python
+def generate_postmortem(state: K8sOperatorState) -> str:
+    """Generate incident post-mortem document."""
+    # TODO: Create structured post-mortem
+    pass
+```
+
+---
+
+## 📚 Key Takeaways
+
+1. **Event-driven** architecture enables reactive agents
+2. **Policy-as-code** ensures compliance
+3. **Human-in-the-loop** is essential for production safety
+4. **Kubernetes API** provides rich diagnostic data
+5. **Slack integration** enables practical approval workflows
+
+---
+
+## 🔗 Further Reading
+
+- [Kubernetes Python Client](https://github.com/kubernetes-client/python)
+- [Building Kubernetes Operators](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/)
+- [SRE Book - Google](https://sre.google/sre-book/table-of-contents/)
+
+**Tomorrow**: Project 3—The Local-First Secure Data Analyst.

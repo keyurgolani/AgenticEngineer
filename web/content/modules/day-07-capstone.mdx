@@ -1,0 +1,523 @@
+---
+title: "Day 07: Week 1 Capstone"
+description: "Building a complete research agent—synthesizing LLMs, prompts, RAG, and memory."
+week: 1
+---
+
+## Capstone: The Deep Research Agent
+
+This week you've learned the fundamentals: LLMs, prompting, control loops, RAG, and memory. Now we synthesize everything into a production-quality **Deep Research Agent** that can write comprehensive reports on any topic.
+
+---
+
+## 7.1 The Challenge
+
+**Goal**: Build an agent that produces a 2,000+ word research report with:
+
+- Multiple sources cited
+- Structured sections
+- No hallucinated facts
+- Coherent narrative flow
+
+**Why This Is Hard**:
+
+- Simple prompts produce shallow, generic content
+- Long-form generation causes context rot
+- Multiple sources require synthesis, not just concatenation
+- Quality requires iteration and self-critique
+
+---
+
+## 7.2 Architecture Overview
+
+We'll use a **Supervisor Pattern** with specialized workers:
+
+<Mermaid
+  chart={`
+graph TD
+    User([User: Research Topic]) --> Planner[Planner Agent]
+    
+    Planner -->|Outline| Supervisor[Supervisor Agent]
+    
+    Supervisor -->|Section 1| R1[Researcher 1]
+    Supervisor -->|Section 2| R2[Researcher 2]
+    Supervisor -->|Section 3| R3[Researcher 3]
+    
+    R1 -->|Notes| Supervisor
+    R2 -->|Notes| Supervisor
+    R3 -->|Notes| Supervisor
+    
+    Supervisor --> Writer[Writer Agent]
+    Writer --> Critic[Critic Agent]
+    
+    Critic -->|Feedback| Writer
+    Critic -->|Approved| Final([Final Report])
+    
+    style Planner fill:#f9f,stroke:#333
+    style Supervisor fill:#bbf,stroke:#333
+    style Writer fill:#bfb,stroke:#333
+    style Critic fill:#fbb,stroke:#333
+`}
+/>
+
+### Agent Roles
+
+| Agent          | Responsibility                     | Tools                  |
+| :------------- | :--------------------------------- | :--------------------- |
+| **Planner**    | Creates outline with 5-7 sections  | None (pure reasoning)  |
+| **Supervisor** | Coordinates workers, manages state | State management       |
+| **Researcher** | Searches and summarizes sources    | Web search, URL reader |
+| **Writer**     | Synthesizes notes into prose       | None (pure generation) |
+| **Critic**     | Reviews for quality and accuracy   | None (pure evaluation) |
+
+---
+
+## 7.3 Implementation
+
+### Step 1: Define the State
+
+```python
+from typing import TypedDict, List, Annotated, Optional
+import operator
+
+class ResearchState(TypedDict):
+    # Input
+    topic: str
+
+    # Planning
+    outline: List[str]
+
+    # Research (accumulates from parallel workers)
+    section_notes: Annotated[dict, operator.ior]
+    sources: Annotated[List[str], operator.add]
+
+    # Writing
+    draft: str
+
+    # Review
+    feedback: Optional[str]
+    revision_count: int
+
+    # Output
+    final_report: str
+    status: str
+```
+
+### Step 2: The Planner Agent
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.pydantic_v1 import BaseModel, Field
+
+class Outline(BaseModel):
+    """Structured outline for the research report."""
+    title: str = Field(description="Report title")
+    sections: List[str] = Field(description="List of section headers")
+    key_questions: List[str] = Field(description="Key questions to answer")
+
+planner_llm = ChatOpenAI(model="gpt-4o").with_structured_output(Outline)
+
+PLANNER_PROMPT = """
+You are a research planner. Create a comprehensive outline for a report on:
+
+Topic: {topic}
+
+Requirements:
+1. Create 5-7 distinct sections that cover the topic thoroughly
+2. Each section should have a clear, specific focus
+3. Include an introduction and conclusion
+4. Identify 3-5 key questions the report should answer
+
+Output a structured outline.
+"""
+
+def planner_node(state: ResearchState) -> dict:
+    """Generate the research outline."""
+    outline = planner_llm.invoke(
+        PLANNER_PROMPT.format(topic=state["topic"])
+    )
+
+    return {
+        "outline": outline.sections,
+        "status": "planning_complete"
+    }
+```
+
+### Step 3: The Researcher Agent (with Context Isolation)
+
+```python
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_community.document_loaders import WebBaseLoader
+
+search_tool = TavilySearchResults(max_results=5)
+
+RESEARCHER_PROMPT = """
+You are a research specialist. Your task is to gather information on ONE specific section.
+
+Section Topic: {section}
+
+Instructions:
+1. Search for relevant, authoritative sources
+2. Extract key facts, statistics, and quotes
+3. Note the source URL for each fact
+4. Summarize findings in bullet points
+
+Focus ONLY on this section. Do not cover other topics.
+"""
+
+def researcher_node(state: ResearchState, section: str) -> dict:
+    """Research a single section in isolation."""
+
+    # Search for information
+    search_results = search_tool.invoke(section)
+
+    # Summarize findings
+    summarizer = ChatOpenAI(model="gpt-4o-mini")
+
+    summary = summarizer.invoke(f"""
+    Summarize these search results for the section "{section}":
+
+    {search_results}
+
+    Format as bullet points with source citations.
+    """)
+
+    # Extract source URLs
+    sources = [r.get("url", "") for r in search_results if r.get("url")]
+
+    return {
+        "section_notes": {section: summary.content},
+        "sources": sources
+    }
+```
+
+### Step 4: Parallel Research Execution
+
+```python
+from langgraph.graph import StateGraph, END
+from langgraph.constants import Send
+
+def route_to_researchers(state: ResearchState) -> list:
+    """Fan out to parallel researcher nodes."""
+    return [
+        Send("researcher", {"section": section, **state})
+        for section in state["outline"]
+    ]
+
+# In the graph definition:
+workflow.add_conditional_edges(
+    "planner",
+    route_to_researchers,
+    ["researcher"]
+)
+```
+
+### Step 5: The Writer Agent
+
+```python
+WRITER_PROMPT = """
+You are an expert technical writer. Write a comprehensive report section.
+
+Topic: {topic}
+Section: {section}
+Research Notes:
+{notes}
+
+Requirements:
+1. Write 300-500 words for this section
+2. Use a professional, engaging tone
+3. Include specific facts and statistics from the notes
+4. Cite sources inline using [Source: URL] format
+5. Ensure smooth transitions and logical flow
+
+Write the section now:
+"""
+
+def writer_node(state: ResearchState) -> dict:
+    """Synthesize research into a cohesive report."""
+    writer = ChatOpenAI(model="gpt-4o")
+
+    sections = []
+
+    for section in state["outline"]:
+        notes = state["section_notes"].get(section, "No notes available")
+
+        section_text = writer.invoke(
+            WRITER_PROMPT.format(
+                topic=state["topic"],
+                section=section,
+                notes=notes
+            )
+        ).content
+
+        sections.append(f"## {section}\n\n{section_text}")
+
+    # Combine into full draft
+    draft = f"# {state['topic']}\n\n" + "\n\n".join(sections)
+
+    # Add sources section
+    unique_sources = list(set(state["sources"]))
+    sources_section = "\n\n## Sources\n\n" + "\n".join(
+        f"- {url}" for url in unique_sources
+    )
+
+    return {
+        "draft": draft + sources_section,
+        "status": "draft_complete"
+    }
+```
+
+### Step 6: The Critic Agent (Reflection Pattern)
+
+```python
+class CriticFeedback(BaseModel):
+    """Structured feedback from the critic."""
+    score: int = Field(description="Quality score 1-10")
+    issues: List[str] = Field(description="List of issues found")
+    suggestions: List[str] = Field(description="Improvement suggestions")
+    approved: bool = Field(description="Whether the draft is ready")
+
+critic_llm = ChatOpenAI(model="gpt-4o").with_structured_output(CriticFeedback)
+
+CRITIC_PROMPT = """
+You are a senior editor reviewing a research report.
+
+Report:
+{draft}
+
+Evaluate the report on:
+1. Accuracy: Are claims supported by cited sources?
+2. Completeness: Does it cover the topic thoroughly?
+3. Clarity: Is it well-organized and easy to follow?
+4. Quality: Is the writing professional and engaging?
+
+Provide a score (1-10), list any issues, and suggest improvements.
+Approve only if score >= 8.
+"""
+
+def critic_node(state: ResearchState) -> dict:
+    """Review and provide feedback on the draft."""
+    feedback = critic_llm.invoke(
+        CRITIC_PROMPT.format(draft=state["draft"])
+    )
+
+    if feedback.approved:
+        return {
+            "final_report": state["draft"],
+            "status": "approved",
+            "feedback": None
+        }
+    else:
+        return {
+            "feedback": "\n".join(feedback.issues + feedback.suggestions),
+            "revision_count": state.get("revision_count", 0) + 1,
+            "status": "needs_revision"
+        }
+
+def should_revise(state: ResearchState) -> str:
+    """Decide whether to revise or finalize."""
+    if state["status"] == "approved":
+        return END
+    if state.get("revision_count", 0) >= 3:
+        # Max revisions reached, accept current draft
+        return "finalize"
+    return "revise"
+```
+
+### Step 7: Complete Graph Assembly
+
+```python
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+
+def build_research_agent():
+    workflow = StateGraph(ResearchState)
+
+    # Add nodes
+    workflow.add_node("planner", planner_node)
+    workflow.add_node("researcher", researcher_node)
+    workflow.add_node("writer", writer_node)
+    workflow.add_node("critic", critic_node)
+    workflow.add_node("revise", revision_node)
+    workflow.add_node("finalize", finalize_node)
+
+    # Set entry point
+    workflow.set_entry_point("planner")
+
+    # Add edges
+    workflow.add_conditional_edges("planner", route_to_researchers)
+    workflow.add_edge("researcher", "writer")
+    workflow.add_edge("writer", "critic")
+    workflow.add_conditional_edges(
+        "critic",
+        should_revise,
+        {
+            "revise": "revise",
+            "finalize": "finalize",
+            END: END
+        }
+    )
+    workflow.add_edge("revise", "writer")
+    workflow.add_edge("finalize", END)
+
+    # Compile with memory
+    memory = MemorySaver()
+    return workflow.compile(checkpointer=memory)
+
+# Usage
+agent = build_research_agent()
+
+result = agent.invoke({
+    "topic": "The Impact of Agentic AI on Software Engineering in 2026",
+    "outline": [],
+    "section_notes": {},
+    "sources": [],
+    "draft": "",
+    "feedback": None,
+    "revision_count": 0,
+    "final_report": "",
+    "status": "started"
+})
+
+print(result["final_report"])
+```
+
+---
+
+## 7.4 Running the Agent
+
+<Terminal 
+  command="python research_agent.py 'The Future of Quantum Computing'"
+  output={`🔬 Starting Deep Research Agent...
+
+📋 Planning Phase
+Generated outline with 6 sections:
+
+1.  Introduction to Quantum Computing
+2.  Current State of Quantum Hardware
+3.  Key Algorithms and Applications
+4.  Industry Leaders and Investments
+5.  Challenges and Limitations
+6.  Future Outlook and Timeline
+
+🔍 Research Phase
+Researching: Introduction to Quantum Computing... ✓
+Researching: Current State of Quantum Hardware... ✓
+Researching: Key Algorithms and Applications... ✓
+Researching: Industry Leaders and Investments... ✓
+Researching: Challenges and Limitations... ✓
+Researching: Future Outlook and Timeline... ✓
+
+Found 23 sources across all sections.
+
+✍️ Writing Phase
+Synthesizing research into report...
+Draft complete: 2,847 words
+
+📝 Review Phase
+Critic Score: 7/10
+Issues: Missing recent 2025 developments, some sections lack depth
+
+Revision 1...
+Critic Score: 9/10
+Status: APPROVED ✓
+
+📄 Final Report saved to: quantum_computing_report.md
+Word count: 3,124
+Sources cited: 18`}
+/>
+
+---
+
+## 7.5 Lab Exercise: Extend the Agent
+
+### Challenge 1: Add Source Verification
+
+Implement a node that verifies sources are accessible and credible:
+
+```python
+def verify_sources_node(state: ResearchState) -> dict:
+    """Verify that cited sources are valid and accessible."""
+    verified = []
+    failed = []
+
+    for url in state["sources"]:
+        # TODO: Check if URL is accessible
+        # TODO: Check domain credibility
+        pass
+
+    return {"verified_sources": verified, "failed_sources": failed}
+```
+
+### Challenge 2: Add Fact-Checking
+
+Implement cross-reference checking:
+
+```python
+def fact_check_node(state: ResearchState) -> dict:
+    """Cross-reference claims against multiple sources."""
+    # TODO: Extract claims from draft
+    # TODO: Search for corroborating sources
+    # TODO: Flag unsupported claims
+    pass
+```
+
+### Challenge 3: Add Export Formats
+
+Support multiple output formats:
+
+```python
+def export_node(state: ResearchState) -> dict:
+    """Export report in multiple formats."""
+    # TODO: Generate Markdown
+    # TODO: Generate PDF
+    # TODO: Generate HTML
+    pass
+```
+
+---
+
+## 7.6 Evaluation Criteria
+
+Test your agent with these topics and evaluate:
+
+| Metric         | Target            | How to Measure                 |
+| :------------- | :---------------- | :----------------------------- |
+| **Word Count** | 2,000+            | `len(report.split())`          |
+| **Sources**    | 10+ unique        | Count unique URLs              |
+| **Accuracy**   | No hallucinations | Manual spot-check              |
+| **Structure**  | Clear sections    | Has headers, intro, conclusion |
+| **Coherence**  | Logical flow      | Read-through test              |
+| **Time**       | < 5 minutes       | Wall clock time                |
+
+### Test Topics
+
+1. "The Rise of Rust in Systems Programming"
+2. "Comparing Vector Databases for RAG Applications"
+3. "The Economics of AI Inference at Scale"
+
+---
+
+## 📚 Week 1 Summary
+
+You've now mastered the foundations:
+
+| Day | Topic              | Key Skill                        |
+| :-- | :----------------- | :------------------------------- |
+| 1   | Agentic Mindset    | Understanding autonomous systems |
+| 2   | LLM Landscape      | Choosing and deploying models    |
+| 3   | Prompt Engineering | Reliable instruction design      |
+| 4   | Control Loops      | ReAct and LangGraph              |
+| 5   | RAG                | Grounding in external knowledge  |
+| 6   | Memory             | Context management               |
+| 7   | Capstone           | Synthesis into production agent  |
+
+---
+
+## 🔗 Further Reading
+
+- [LangGraph Multi-Agent Tutorial](https://langchain-ai.github.io/langgraph/tutorials/multi_agent/)
+- [Deep Research with AI - Anthropic](https://www.anthropic.com/research)
+- [Building Research Agents - LangChain Blog](https://blog.langchain.dev/)
+
+**Next Week**: We dive into the agentic toolkit—LangChain, CrewAI, AutoGen, and the Model Context Protocol (MCP).

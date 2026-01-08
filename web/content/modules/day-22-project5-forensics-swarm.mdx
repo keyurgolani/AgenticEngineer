@@ -1,0 +1,545 @@
+---
+title: "Project 5: The Financial Forensics Swarm"
+description: "Building a multi-tool investigation agent using MCP for fraud detection."
+week: 4
+day: 22
+---
+
+## Project Overview
+
+## Project Overview
+
+**Objective**: Build a "Sherlock Holmes" investigation agent that connects to multiple data sources (Stripe, Slack, PostgreSQL) simultaneously to investigate suspicious transactions.
+
+**Why This Matters**: Real-world investigations require "swivel-chair integration"—jumping between payment dashboards, chat logs, and databases. This project demonstrates how MCP eliminates integration hell.
+
+**Skills Showcased**:
+
+- Model Context Protocol (MCP) integration
+- Multi-server swarm architecture
+- Cross-system data correlation
+- Investigative reasoning chains
+
+---
+
+## 25.1 Architecture: Hub-and-Spoke Swarm
+
+![Forensics Swarm Architecture](/images/forensics_swarm.png)
+
+<Mermaid
+  chart={`
+graph TB
+    User([Analyst]) --> Hub[Investigation Agent]
+    
+    Hub -->|MCP| Stripe[Stripe MCP Server]
+    Hub -->|MCP| Postgres[PostgreSQL MCP Server]
+    Hub -->|MCP| Slack[Slack MCP Server]
+    Hub -->|MCP| Files[Filesystem MCP Server]
+    
+    Stripe --> Transactions[(Transaction Data)]
+    Postgres --> Users[(User Database)]
+    Slack --> Messages[(Chat History)]
+    Files --> Logs[(Audit Logs)]
+    
+    style Hub fill:#f9f,stroke:#333,stroke-width:3px
+    style Stripe fill:#bbf,stroke:#333
+    style Postgres fill:#bbf,stroke:#333
+    style Slack fill:#bbf,stroke:#333
+`}
+/>
+
+### Why MCP for This Project?
+
+| Traditional Approach     | MCP Approach                                |
+| :----------------------- | :------------------------------------------ |
+| Write Stripe API wrapper | Use `@stripe/mcp-server`                    |
+| Write Postgres connector | Use `@modelcontextprotocol/server-postgres` |
+| Write Slack integration  | Use `@modelcontextprotocol/server-slack`    |
+| Maintain 3 codebases     | Configure 3 servers in JSON                 |
+
+---
+
+## 25.2 Setting Up MCP Servers
+
+### Server Configuration
+
+```json
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://analyst:readonly@localhost:5432/company_db"
+      ]
+    },
+    "slack": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "env": {
+        "SLACK_BOT_TOKEN": "xoxb-your-token",
+        "SLACK_TEAM_ID": "T12345678"
+      }
+    },
+    "stripe": {
+      "command": "npx",
+      "args": ["-y", "@stripe/mcp-server"],
+      "env": {
+        "STRIPE_SECRET_KEY": "sk_test_..."
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/var/log/audit"
+      ]
+    }
+  }
+}
+```
+
+### Custom Stripe MCP Server (if official doesn't exist)
+
+```python
+from mcp.server.fastmcp import FastMCP
+import stripe
+
+mcp = FastMCP("stripe-forensics")
+stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+
+@mcp.tool()
+async def get_transaction(transaction_id: str) -> str:
+    """Get details of a Stripe transaction.
+
+    Args:
+        transaction_id: The Stripe transaction ID (e.g., pi_xxx or ch_xxx)
+    """
+    try:
+        if transaction_id.startswith("pi_"):
+            obj = stripe.PaymentIntent.retrieve(transaction_id)
+        elif transaction_id.startswith("ch_"):
+            obj = stripe.Charge.retrieve(transaction_id)
+        else:
+            return f"Unknown transaction type: {transaction_id}"
+
+        return json.dumps({
+            "id": obj.id,
+            "amount": obj.amount / 100,
+            "currency": obj.currency,
+            "status": obj.status,
+            "customer": obj.customer,
+            "created": obj.created,
+            "metadata": dict(obj.metadata)
+        }, indent=2)
+    except stripe.error.StripeError as e:
+        return f"Stripe error: {str(e)}"
+
+@mcp.tool()
+async def search_transactions(
+    customer_id: str = None,
+    min_amount: float = None,
+    max_amount: float = None,
+    status: str = None,
+    limit: int = 10
+) -> str:
+    """Search Stripe transactions with filters.
+
+    Args:
+        customer_id: Filter by customer ID
+        min_amount: Minimum amount in dollars
+        max_amount: Maximum amount in dollars
+        status: Filter by status (succeeded, pending, failed)
+        limit: Maximum results to return
+    """
+    params = {"limit": limit}
+
+    if customer_id:
+        params["customer"] = customer_id
+
+    charges = stripe.Charge.list(**params)
+
+    results = []
+    for charge in charges.data:
+        amount = charge.amount / 100
+
+        if min_amount and amount < min_amount:
+            continue
+        if max_amount and amount > max_amount:
+            continue
+        if status and charge.status != status:
+            continue
+
+        results.append({
+            "id": charge.id,
+            "amount": amount,
+            "status": charge.status,
+            "customer": charge.customer,
+            "created": charge.created
+        })
+
+    return json.dumps(results, indent=2)
+
+@mcp.tool()
+async def get_customer(customer_id: str) -> str:
+    """Get Stripe customer details."""
+    try:
+        customer = stripe.Customer.retrieve(customer_id)
+        return json.dumps({
+            "id": customer.id,
+            "email": customer.email,
+            "name": customer.name,
+            "created": customer.created,
+            "metadata": dict(customer.metadata)
+        }, indent=2)
+    except stripe.error.StripeError as e:
+        return f"Error: {str(e)}"
+
+if __name__ == "__main__":
+    mcp.run()
+```
+
+---
+
+## 25.3 The Investigation Agent
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+INVESTIGATION_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", """You are a financial forensics investigator. Your job is to investigate
+suspicious transactions by correlating data across multiple systems.
+
+Investigation Protocol:
+1. Start with the transaction in question
+2. Identify the customer/user involved
+3. Check their account history and creation date
+4. Search for related communications (Slack, email)
+5. Look for patterns (velocity, amount anomalies, geographic inconsistencies)
+6. Compile findings into a structured report
+
+Red Flags to Watch For:
+- Account created very recently before large transaction
+- Multiple failed attempts before success
+- Unusual transaction amounts (round numbers, just under limits)
+- Mismatched billing/shipping information
+- No communication history for the user
+- Transactions at unusual hours
+
+Always cite your sources and explain your reasoning."""),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}")
+])
+
+async def create_investigation_agent():
+    """Create the multi-source investigation agent."""
+
+    # Connect to all MCP servers
+    client = MultiServerMCPClient({
+        "postgres": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-postgres",
+                     "postgresql://analyst:readonly@localhost/company"]
+        },
+        "slack": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-slack"],
+            "env": {"SLACK_BOT_TOKEN": os.environ["SLACK_BOT_TOKEN"]}
+        },
+        "stripe": {
+            "command": "python",
+            "args": ["stripe_mcp_server.py"]
+        }
+    })
+
+    # Get all tools from all servers
+    tools = await client.get_tools()
+
+    print(f"Loaded {len(tools)} tools from MCP servers:")
+    for tool in tools:
+        print(f"  - {tool.name}: {tool.description[:50]}...")
+
+    # Create the agent
+    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    agent = create_tool_calling_agent(llm, tools, INVESTIGATION_PROMPT)
+
+    return AgentExecutor(
+        agent=agent,
+        tools=tools,
+        verbose=True,
+        max_iterations=15,
+        handle_parsing_errors=True
+    )
+```
+
+---
+
+## 25.4 Investigation Workflow
+
+```python
+from typing import TypedDict, List
+from langgraph.graph import StateGraph, START, END
+
+class InvestigationState(TypedDict):
+    case_id: str
+    transaction_id: str
+    findings: List[dict]
+    risk_score: float
+    recommendation: str
+    evidence: List[str]
+
+async def gather_transaction_data(state: InvestigationState) -> dict:
+    """Gather initial transaction data."""
+    agent = await create_investigation_agent()
+
+    result = await agent.ainvoke({
+        "input": f"""Investigate transaction {state['transaction_id']}.
+
+        Step 1: Get the transaction details from Stripe.
+        Step 2: Identify the customer ID.
+        Step 3: Get customer details.
+
+        Return the findings as structured data."""
+    })
+
+    return {
+        "findings": [{"stage": "transaction_data", "data": result["output"]}]
+    }
+
+async def check_user_history(state: InvestigationState) -> dict:
+    """Check user's history across systems."""
+    agent = await create_investigation_agent()
+
+    result = await agent.ainvoke({
+        "input": f"""Based on the previous findings, investigate the user's history.
+
+        Previous findings: {state['findings']}
+
+        Step 1: Query the users table in PostgreSQL for this customer.
+        Step 2: Check when the account was created.
+        Step 3: Look for any previous transactions.
+        Step 4: Search Slack for any mentions of this user or their email.
+
+        Note any red flags."""
+    })
+
+    return {
+        "findings": state["findings"] + [{"stage": "user_history", "data": result["output"]}]
+    }
+
+async def analyze_patterns(state: InvestigationState) -> dict:
+    """Analyze patterns and anomalies."""
+    agent = await create_investigation_agent()
+
+    result = await agent.ainvoke({
+        "input": f"""Analyze patterns in the collected data.
+
+        All findings so far: {state['findings']}
+
+        Look for:
+        1. Velocity anomalies (too many transactions too fast)
+        2. Amount anomalies (round numbers, just under limits)
+        3. Timing anomalies (unusual hours)
+        4. Geographic inconsistencies
+        5. Missing expected data (no email verification, no address)
+
+        Calculate a risk score from 0-100."""
+    })
+
+    # Extract risk score from response
+    import re
+    risk_match = re.search(r'risk.*?(\d+)', result["output"].lower())
+    risk_score = int(risk_match.group(1)) if risk_match else 50
+
+    return {
+        "findings": state["findings"] + [{"stage": "pattern_analysis", "data": result["output"]}],
+        "risk_score": risk_score
+    }
+
+async def generate_report(state: InvestigationState) -> dict:
+    """Generate final investigation report."""
+
+    # Determine recommendation based on risk score
+    if state["risk_score"] >= 80:
+        recommendation = "BLOCK - High fraud probability"
+    elif state["risk_score"] >= 50:
+        recommendation = "REVIEW - Manual review required"
+    else:
+        recommendation = "APPROVE - Low risk"
+
+    report = f"""
+# Investigation Report: {state['case_id']}
+
+## Transaction: {state['transaction_id']}
+
+## Risk Score: {state['risk_score']}/100
+
+## Recommendation: {recommendation}
+
+## Findings Summary:
+"""
+
+    for finding in state["findings"]:
+        report += f"\n### {finding['stage'].replace('_', ' ').title()}\n"
+        report += finding["data"][:500] + "...\n"
+
+    return {
+        "recommendation": recommendation,
+        "evidence": [f["data"] for f in state["findings"]]
+    }
+
+# Build the investigation graph
+def build_investigation_workflow():
+    workflow = StateGraph(InvestigationState)
+
+    workflow.add_node("gather_transaction", gather_transaction_data)
+    workflow.add_node("check_history", check_user_history)
+    workflow.add_node("analyze_patterns", analyze_patterns)
+    workflow.add_node("generate_report", generate_report)
+
+    workflow.add_edge(START, "gather_transaction")
+    workflow.add_edge("gather_transaction", "check_history")
+    workflow.add_edge("check_history", "analyze_patterns")
+    workflow.add_edge("analyze_patterns", "generate_report")
+    workflow.add_edge("generate_report", END)
+
+    return workflow.compile()
+```
+
+---
+
+## 25.5 Running an Investigation
+
+<Terminal 
+  command="python investigate.py --transaction pi_3ABC123XYZ"
+  output={`🔍 Starting investigation for transaction: pi_3ABC123XYZ
+📋 Case ID: CASE-2026-0142
+
+━━━ Stage 1: Gathering Transaction Data ━━━
+🔧 Tool: stripe.get_transaction
+Input: {"transaction_id": "pi_3ABC123XYZ"}
+Result: {
+"amount": 4999.00,
+"status": "succeeded",
+"customer": "cus_ABC123",
+"created": "2026-01-07T03:42:00Z"
+}
+
+🔧 Tool: stripe.get_customer
+Input: {"customer_id": "cus_ABC123"}
+Result: {
+"email": "john.smith.12345@tempmail.com",
+"created": "2026-01-07T03:40:00Z" ⚠️ 2 minutes before transaction!
+}
+
+━━━ Stage 2: Checking User History ━━━
+🔧 Tool: postgres.query
+Input: {"sql": "SELECT \* FROM users WHERE email LIKE '%tempmail%'"}
+Result: 1 row - account created 2 minutes before purchase
+
+🔧 Tool: slack.search_messages
+Input: {"query": "john.smith.12345@tempmail.com"}
+Result: No messages found ⚠️
+
+━━━ Stage 3: Analyzing Patterns ━━━
+Red Flags Detected:
+⚠️ Account created 2 minutes before $4,999 transaction
+⚠️ Amount just under $5,000 reporting threshold
+⚠️ Disposable email domain (tempmail.com)
+⚠️ Transaction at 3:42 AM local time
+⚠️ No prior communication history
+
+━━━ Final Report ━━━
+📊 Risk Score: 92/100
+🚨 Recommendation: BLOCK - High fraud probability
+
+Evidence compiled. Report saved to: reports/CASE-2026-0142.md`}
+/>
+
+---
+
+## 25.6 Adding Human-in-the-Loop
+
+For high-risk cases, require human approval:
+
+```python
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+def build_investigation_with_approval():
+    workflow = StateGraph(InvestigationState)
+
+    # ... add nodes ...
+
+    # Add approval node
+    workflow.add_node("human_review", lambda s: s)  # Pass-through
+
+    # Route high-risk cases to human review
+    def needs_review(state: InvestigationState) -> str:
+        if state["risk_score"] >= 70:
+            return "human_review"
+        return "generate_report"
+
+    workflow.add_conditional_edges(
+        "analyze_patterns",
+        needs_review,
+        {
+            "human_review": "human_review",
+            "generate_report": "generate_report"
+        }
+    )
+
+    workflow.add_edge("human_review", "generate_report")
+
+    # Compile with interrupt
+    checkpointer = SqliteSaver.from_conn_string("investigations.db")
+
+    return workflow.compile(
+        checkpointer=checkpointer,
+        interrupt_before=["human_review"]
+    )
+```
+
+---
+
+## 25.7 Lab Exercise: Extend the Investigation Agent
+
+### Challenge 1: Add Email Integration
+
+Add an email MCP server to search for customer communications.
+
+### Challenge 2: Geographic Analysis
+
+Cross-reference IP addresses with billing addresses using a GeoIP service.
+
+### Challenge 3: Velocity Checks
+
+Implement a tool that checks transaction velocity (transactions per hour/day).
+
+### Challenge 4: Report Generation
+
+Generate a PDF report with charts showing transaction patterns.
+
+---
+
+## 📚 Key Takeaways
+
+1. **MCP enables composable integrations** - connect any data source
+2. **Multi-server swarms** correlate data across systems
+3. **Investigation workflows** follow structured reasoning
+4. **Human-in-the-loop** for high-stakes decisions
+5. **Evidence trails** are critical for compliance
+
+---
+
+## 🔗 Further Reading
+
+- [MCP Server Registry](https://github.com/modelcontextprotocol/servers)
+- [LangChain MCP Adapters](https://github.com/langchain-ai/langchain-mcp-adapters)
+- [Fraud Detection Patterns](https://stripe.com/docs/radar)
+
+**Tomorrow**: The future of agentic AI and your career roadmap.

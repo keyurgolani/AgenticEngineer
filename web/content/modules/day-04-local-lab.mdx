@@ -1,0 +1,41 @@
+---
+title: "Day 04: Lab - Local LLM Setup"
+description: "Running a 7B model on your own machine."
+week: 1
+---
+
+### 4.1 Objective
+
+Run `Llama-3-8b` locally and make an API call to it.
+
+### 4.2 Setup (Ollama or OpenAI Agents SDK)
+
+We will use **Ollama** for simplicity, but for rapid prototyping, the **OpenAI Agents SDK** is also a strong choice.
+The SDK provides built-in `Runner` loops and `Handoffs` (delegation) out of the box.
+For this lab, we stick to raw Ollama to understand the metal.
+
+1.  Install Ollama (`brew install ollama`).
+2.  Pull model: `ollama pull llama3`.
+
+### 4.3 The Code
+
+Agents usually communicate via OpenAI-compatible APIs. Ollama provides this!
+
+```python
+import openai
+
+client = openai.OpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama" # required but unused
+)
+
+response = client.chat.completions.create(
+    model="llama3",
+    messages=[
+        {"role": "system", "content": "You are a local agent."},
+        {"role": "user", "content": "Why is local inference better for privacy?"}
+    ]
+)
+
+print(response.choices[0].message.content)
+```

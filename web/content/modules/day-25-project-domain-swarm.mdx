@@ -1,0 +1,703 @@
+---
+title: "Day 25: Project - Domain Intelligence Swarm"
+description: "Build an autonomous multi-agent system that monitors, evaluates, and acquires expiring domain names."
+week: 4
+---
+
+<ReadingTime minutes={45} />
+
+<SkillLevel level="expert" description="Capstone project" />
+
+<Prerequisites
+  items={[
+    "Completed multi-agent orchestration (Day 09)",
+    "Understanding of autonomous loops (Day 20)",
+    "Familiarity with external API integration",
+    "Basic knowledge of domain registration systems",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Design a multi-agent system with clear agent responsibilities",
+    "Implement event-driven agent communication",
+    "Build scheduled and triggered agent execution",
+    "Handle real-world API integrations with error recovery",
+    "Create a production-ready autonomous monitoring system",
+  ]}
+/>
+
+---
+
+## Project Overview
+
+Build **Domain Watchdog**: an autonomous multi-agent system that monitors expiring domains, evaluates their value, and executes purchases—all without human intervention.
+
+<Callout type="info">
+  **Why This Project?** Domain acquisition combines multiple agentic patterns:
+  scheduled monitoring, event-driven triggers, multi-agent collaboration, and
+  autonomous decision-making with real financial consequences.
+</Callout>
+
+---
+
+## Architecture
+
+![Domain Watchdog Swarm Dashboard](/images/domain_watchdog.png)
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Domain Watchdog Swarm"
+        Scheduler[⏰ Scheduler] --> Monitor
+        
+        Monitor[🔍 Monitor Agent] -->|Domain Released| Evaluator
+        Evaluator[📊 Evaluator Agent] -->|Approved| Purchaser
+        Purchaser[💳 Purchaser Agent] --> Notifier
+        
+        Evaluator -->|Rejected| Archive[(Archive)]
+        Purchaser --> Archive
+        Notifier[📧 Notifier] --> User([👤 User])
+    end
+    
+    subgraph "External Services"
+        RDAP[RDAP API]
+        Blacklist[Blacklist APIs]
+        Registrar[Domain Registrar]
+    end
+    
+    Monitor --> RDAP
+    Evaluator --> Blacklist
+    Purchaser --> Registrar
+    
+    style Monitor fill:#f9f,stroke:#333
+    style Evaluator fill:#bbf,stroke:#333
+    style Purchaser fill:#bfb,stroke:#333
+`}
+/>
+
+---
+
+## Agent Specifications
+
+<OrchestratorPattern
+  orchestratorName="Watchdog Coordinator"
+  orchestratorModel="Event-Driven Scheduler"
+  specialists={[
+    {
+      name: "Monitor",
+      role: "Track domain status via RDAP",
+      model: "Scheduled",
+      icon: "brain",
+    },
+    {
+      name: "Evaluator",
+      role: "Assess domain value & risk",
+      model: "Claude Sonnet",
+      icon: "cpu",
+    },
+    {
+      name: "Purchaser",
+      role: "Execute domain acquisition",
+      model: "Deterministic",
+      icon: "palette",
+    },
+    {
+      name: "Notifier",
+      role: "Alert user of actions",
+      model: "Template",
+      icon: "bug",
+    },
+  ]}
+  workflow={[
+    "Schedule Trigger",
+    "Monitor Check",
+    "Evaluator Analysis",
+    "Purchase Decision",
+    "Notification",
+  ]}
+  parallelExecution={false}
+/>
+
+---
+
+## Part 1: The Monitor Agent
+
+The Monitor Agent tracks domain status using RDAP (Registration Data Access Protocol).
+
+```python
+import httpx
+from datetime import datetime, timedelta
+from typing import Optional
+from pydantic import BaseModel
+from enum import Enum
+
+class DomainStatus(Enum):
+    REGISTERED = "registered"
+    PENDING_DELETE = "pending_delete"
+    REDEMPTION = "redemption"
+    AVAILABLE = "available"
+    UNKNOWN = "unknown"
+
+class DomainInfo(BaseModel):
+    domain: str
+    status: DomainStatus
+    expiry_date: Optional[datetime]
+    registrar: Optional[str]
+    last_checked: datetime
+    days_until_available: Optional[int]
+
+class MonitorAgent:
+    """Agent 1: Monitor domain status via RDAP."""
+
+    RDAP_SERVERS = {
+        "com": "https://rdap.verisign.com/com/v1/domain/",
+        "net": "https://rdap.verisign.com/net/v1/domain/",
+        "org": "https://rdap.publicinterestregistry.org/rdap/domain/",
+    }
+
+    def __init__(self, watch_list: list[str]):
+        self.watch_list = watch_list
+        self.client = httpx.AsyncClient(timeout=10.0)
+        self.status_cache: dict[str, DomainInfo] = {}
+
+    async def check_domain(self, domain: str) -> DomainInfo:
+        """Query RDAP for domain status."""
+        tld = domain.split(".")[-1]
+        rdap_url = self.RDAP_SERVERS.get(tld)
+
+        if not rdap_url:
+            return DomainInfo(
+                domain=domain,
+                status=DomainStatus.UNKNOWN,
+                expiry_date=None,
+                registrar=None,
+                last_checked=datetime.now(),
+                days_until_available=None
+            )
+
+        try:
+            response = await self.client.get(f"{rdap_url}{domain}")
+
+            if response.status_code == 404:
+                # Domain not found = available
+                return DomainInfo(
+                    domain=domain,
+                    status=DomainStatus.AVAILABLE,
+                    expiry_date=None,
+                    registrar=None,
+                    last_checked=datetime.now(),
+                    days_until_available=0
+                )
+
+            data = response.json()
+            return self._parse_rdap_response(domain, data)
+
+        except Exception as e:
+            print(f"Error checking {domain}: {e}")
+            return self.status_cache.get(domain, DomainInfo(
+                domain=domain,
+                status=DomainStatus.UNKNOWN,
+                expiry_date=None,
+                registrar=None,
+                last_checked=datetime.now(),
+                days_until_available=None
+            ))
+
+    def _parse_rdap_response(self, domain: str, data: dict) -> DomainInfo:
+        """Parse RDAP response into DomainInfo."""
+        status_list = data.get("status", [])
+
+        # Determine status from RDAP status codes
+        if "pendingDelete" in status_list:
+            status = DomainStatus.PENDING_DELETE
+        elif "redemptionPeriod" in status_list:
+            status = DomainStatus.REDEMPTION
+        else:
+            status = DomainStatus.REGISTERED
+
+        # Extract expiry date
+        expiry_date = None
+        for event in data.get("events", []):
+            if event.get("eventAction") == "expiration":
+                expiry_date = datetime.fromisoformat(
+                    event["eventDate"].replace("Z", "+00:00")
+                )
+                break
+
+        # Calculate days until potentially available
+        days_until = None
+        if expiry_date:
+            # Domains typically available ~75 days after expiry
+            available_date = expiry_date + timedelta(days=75)
+            days_until = (available_date - datetime.now()).days
+
+        return DomainInfo(
+            domain=domain,
+            status=status,
+            expiry_date=expiry_date,
+            registrar=data.get("entities", [{}])[0].get("handle"),
+            last_checked=datetime.now(),
+            days_until_available=days_until
+        )
+
+    async def run_check_cycle(self) -> list[DomainInfo]:
+        """Check all domains in watch list."""
+        results = []
+
+        for domain in self.watch_list:
+            info = await self.check_domain(domain)
+            self.status_cache[domain] = info
+            results.append(info)
+
+            # Emit event if domain status changed to actionable
+            if info.status in [DomainStatus.AVAILABLE, DomainStatus.PENDING_DELETE]:
+                await self.emit_event("domain_actionable", info)
+
+        return results
+
+    async def emit_event(self, event_type: str, data: DomainInfo):
+        """Emit event to trigger downstream agents."""
+        print(f"📡 Event: {event_type} for {data.domain}")
+        # In production, this would publish to a message queue
+```
+
+---
+
+## Part 2: The Evaluator Agent
+
+The Evaluator Agent assesses domain value and risk before purchase.
+
+```python
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+
+class DomainEvaluation(BaseModel):
+    domain: str
+    approved: bool
+    confidence: float = Field(ge=0, le=1)
+    estimated_value: float
+    risk_factors: list[str]
+    recommendation: str
+
+class EvaluatorAgent:
+    """Agent 2: Evaluate domain value and risk."""
+
+    BLACKLIST_APIS = [
+        "https://api.spamhaus.org/check/",
+        "https://api.surbl.org/check/",
+    ]
+
+    def __init__(self, max_price: float = 100.0, min_confidence: float = 0.7):
+        self.max_price = max_price
+        self.min_confidence = min_confidence
+        self.llm = ChatOpenAI(model="gpt-4o-mini")
+        self.client = httpx.AsyncClient(timeout=5.0)
+
+    async def evaluate(self, domain_info: DomainInfo) -> DomainEvaluation:
+        """Comprehensive domain evaluation."""
+
+        # Check blacklists
+        blacklist_results = await self._check_blacklists(domain_info.domain)
+
+        # Get historical data (Wayback Machine, etc.)
+        history = await self._get_domain_history(domain_info.domain)
+
+        # LLM-based value assessment
+        value_assessment = await self._assess_value(
+            domain_info, blacklist_results, history
+        )
+
+        # Make final decision
+        approved = (
+            value_assessment["confidence"] >= self.min_confidence and
+            value_assessment["estimated_value"] <= self.max_price and
+            len(blacklist_results["hits"]) == 0
+        )
+
+        return DomainEvaluation(
+            domain=domain_info.domain,
+            approved=approved,
+            confidence=value_assessment["confidence"],
+            estimated_value=value_assessment["estimated_value"],
+            risk_factors=blacklist_results["hits"] + value_assessment["risks"],
+            recommendation=value_assessment["recommendation"]
+        )
+
+    async def _check_blacklists(self, domain: str) -> dict:
+        """Check domain against spam/malware blacklists."""
+        hits = []
+
+        # Simplified blacklist check (production would use real APIs)
+        # Check if domain was previously used for spam/malware
+        suspicious_patterns = ["free", "cheap", "casino", "pharma"]
+        for pattern in suspicious_patterns:
+            if pattern in domain.lower():
+                hits.append(f"Suspicious keyword: {pattern}")
+
+        return {"hits": hits, "checked": len(self.BLACKLIST_APIS)}
+
+    async def _get_domain_history(self, domain: str) -> dict:
+        """Fetch domain history from Wayback Machine."""
+        try:
+            response = await self.client.get(
+                f"https://archive.org/wayback/available?url={domain}"
+            )
+            data = response.json()
+
+            if data.get("archived_snapshots", {}).get("closest"):
+                return {
+                    "has_history": True,
+                    "oldest_snapshot": data["archived_snapshots"]["closest"]["timestamp"],
+                    "url": data["archived_snapshots"]["closest"]["url"]
+                }
+        except Exception:
+            pass
+
+        return {"has_history": False}
+
+    async def _assess_value(
+        self,
+        domain_info: DomainInfo,
+        blacklist: dict,
+        history: dict
+    ) -> dict:
+        """LLM-based domain value assessment."""
+
+        prompt = f"""Evaluate this domain for acquisition:
+
+Domain: {domain_info.domain}
+Status: {domain_info.status.value}
+Previous Registrar: {domain_info.registrar}
+Has Web History: {history.get('has_history', False)}
+Blacklist Hits: {len(blacklist['hits'])}
+
+Assess:
+1. Estimated market value (USD)
+2. Confidence in assessment (0-1)
+3. Risk factors
+4. Recommendation (buy/pass)
+
+Respond in JSON format:
+{{"estimated_value": float, "confidence": float, "risks": [str], "recommendation": str}}
+"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        # Parse JSON response (with fallback)
+        try:
+            import json
+            return json.loads(response.content)
+        except:
+            return {
+                "estimated_value": 50.0,
+                "confidence": 0.5,
+                "risks": ["Could not parse LLM response"],
+                "recommendation": "Manual review required"
+            }
+```
+
+---
+
+## Part 3: The Purchaser Agent
+
+The Purchaser Agent executes domain acquisition via registrar API.
+
+```python
+class PurchaseResult(BaseModel):
+    domain: str
+    success: bool
+    transaction_id: Optional[str]
+    price_paid: Optional[float]
+    error: Optional[str]
+
+class PurchaserAgent:
+    """Agent 3: Execute domain purchase."""
+
+    def __init__(self, registrar_api_key: str, max_price: float = 100.0):
+        self.api_key = registrar_api_key
+        self.max_price = max_price
+        self.client = httpx.AsyncClient(timeout=30.0)
+
+    async def purchase(self, evaluation: DomainEvaluation) -> PurchaseResult:
+        """Execute domain purchase if approved."""
+
+        if not evaluation.approved:
+            return PurchaseResult(
+                domain=evaluation.domain,
+                success=False,
+                transaction_id=None,
+                price_paid=None,
+                error="Domain not approved by evaluator"
+            )
+
+        # Double-check price
+        if evaluation.estimated_value > self.max_price:
+            return PurchaseResult(
+                domain=evaluation.domain,
+                success=False,
+                transaction_id=None,
+                price_paid=None,
+                error=f"Price ${evaluation.estimated_value} exceeds max ${self.max_price}"
+            )
+
+        # Execute purchase (example with Namecheap-style API)
+        try:
+            result = await self._execute_purchase(evaluation.domain)
+            return result
+        except Exception as e:
+            return PurchaseResult(
+                domain=evaluation.domain,
+                success=False,
+                transaction_id=None,
+                price_paid=None,
+                error=str(e)
+            )
+
+    async def _execute_purchase(self, domain: str) -> PurchaseResult:
+        """Call registrar API to purchase domain."""
+
+        # This is a mock implementation
+        # Production would use real registrar API (Namecheap, GoDaddy, etc.)
+
+        print(f"🛒 Attempting to purchase: {domain}")
+
+        # Simulate API call
+        # response = await self.client.post(
+        #     "https://api.registrar.com/v1/domains/register",
+        #     headers={"Authorization": f"Bearer {self.api_key}"},
+        #     json={"domain": domain, "years": 1}
+        # )
+
+        # Mock success
+        return PurchaseResult(
+            domain=domain,
+            success=True,
+            transaction_id=f"TXN-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            price_paid=12.99,
+            error=None
+        )
+```
+
+---
+
+## Part 4: Orchestration with LangGraph
+
+```python
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Literal
+
+class WatchdogState(TypedDict):
+    watch_list: list[str]
+    current_domain: Optional[str]
+    domain_info: Optional[dict]
+    evaluation: Optional[dict]
+    purchase_result: Optional[dict]
+    notifications: list[str]
+    status: Literal["monitoring", "evaluating", "purchasing", "complete", "error"]
+
+async def monitor_node(state: WatchdogState) -> dict:
+    """Monitor agent checks domain status."""
+    monitor = MonitorAgent(state["watch_list"])
+    results = await monitor.run_check_cycle()
+
+    # Find actionable domains
+    actionable = [r for r in results if r.status == DomainStatus.AVAILABLE]
+
+    if actionable:
+        return {
+            "current_domain": actionable[0].domain,
+            "domain_info": actionable[0].model_dump(),
+            "status": "evaluating"
+        }
+
+    return {"status": "complete", "notifications": ["No actionable domains found"]}
+
+async def evaluate_node(state: WatchdogState) -> dict:
+    """Evaluator agent assesses domain."""
+    evaluator = EvaluatorAgent(max_price=100.0)
+    domain_info = DomainInfo(**state["domain_info"])
+
+    evaluation = await evaluator.evaluate(domain_info)
+
+    if evaluation.approved:
+        return {
+            "evaluation": evaluation.model_dump(),
+            "status": "purchasing"
+        }
+
+    return {
+        "evaluation": evaluation.model_dump(),
+        "status": "complete",
+        "notifications": [f"Domain {domain_info.domain} rejected: {evaluation.recommendation}"]
+    }
+
+async def purchase_node(state: WatchdogState) -> dict:
+    """Purchaser agent executes acquisition."""
+    purchaser = PurchaserAgent(
+        registrar_api_key="your-api-key",
+        max_price=100.0
+    )
+
+    evaluation = DomainEvaluation(**state["evaluation"])
+    result = await purchaser.purchase(evaluation)
+
+    notification = (
+        f"✅ Purchased {result.domain} for ${result.price_paid}"
+        if result.success
+        else f"❌ Failed to purchase {result.domain}: {result.error}"
+    )
+
+    return {
+        "purchase_result": result.model_dump(),
+        "status": "complete",
+        "notifications": state["notifications"] + [notification]
+    }
+
+def route_after_monitor(state: WatchdogState) -> str:
+    if state["status"] == "evaluating":
+        return "evaluate"
+    return "end"
+
+def route_after_evaluate(state: WatchdogState) -> str:
+    if state["status"] == "purchasing":
+        return "purchase"
+    return "end"
+
+# Build the graph
+workflow = StateGraph(WatchdogState)
+
+workflow.add_node("monitor", monitor_node)
+workflow.add_node("evaluate", evaluate_node)
+workflow.add_node("purchase", purchase_node)
+
+workflow.add_edge(START, "monitor")
+workflow.add_conditional_edges("monitor", route_after_monitor, {
+    "evaluate": "evaluate",
+    "end": END
+})
+workflow.add_conditional_edges("evaluate", route_after_evaluate, {
+    "purchase": "purchase",
+    "end": END
+})
+workflow.add_edge("purchase", END)
+
+app = workflow.compile()
+
+# Run the swarm
+async def run_watchdog():
+    result = await app.ainvoke({
+        "watch_list": [
+            "coolstartup.com",
+            "aiagents.io",
+            "techbrand.net"
+        ],
+        "notifications": [],
+        "status": "monitoring"
+    })
+
+    print("Notifications:")
+    for n in result["notifications"]:
+        print(f"  {n}")
+```
+
+---
+
+## Part 5: Scheduled Execution
+
+```python
+import asyncio
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+class DomainWatchdogService:
+    """Production service with scheduled execution."""
+
+    def __init__(self, watch_list: list[str], check_interval_hours: int = 6):
+        self.watch_list = watch_list
+        self.check_interval = check_interval_hours
+        self.scheduler = AsyncIOScheduler()
+        self.app = self._build_workflow()
+
+    def _build_workflow(self):
+        # ... (workflow from above)
+        return app
+
+    async def run_check(self):
+        """Execute one check cycle."""
+        print(f"🔍 Running domain check at {datetime.now()}")
+
+        result = await self.app.ainvoke({
+            "watch_list": self.watch_list,
+            "notifications": [],
+            "status": "monitoring"
+        })
+
+        # Send notifications
+        for notification in result["notifications"]:
+            await self.send_notification(notification)
+
+    async def send_notification(self, message: str):
+        """Send notification via email/Slack/etc."""
+        print(f"📧 Notification: {message}")
+        # Production: integrate with email/Slack API
+
+    def start(self):
+        """Start the scheduled service."""
+        self.scheduler.add_job(
+            self.run_check,
+            'interval',
+            hours=self.check_interval,
+            id='domain_check'
+        )
+        self.scheduler.start()
+        print(f"🚀 Domain Watchdog started (checking every {self.check_interval}h)")
+
+# Run service
+if __name__ == "__main__":
+    service = DomainWatchdogService(
+        watch_list=["example.com", "startup.io"],
+        check_interval_hours=6
+    )
+    service.start()
+
+    # Keep running
+    asyncio.get_event_loop().run_forever()
+```
+
+---
+
+<Exercise
+  title="Extend the Domain Swarm"
+  difficulty="expert"
+  objectives={[
+    "Add a fourth agent for domain valuation using comparable sales",
+    "Implement a bidding strategy for auction domains",
+    "Add persistence to track domain history over time",
+    "Create a dashboard to visualize swarm activity"
+  ]}
+  hints={[
+    "Use a vector database to store and search comparable domain sales",
+    "Implement exponential backoff for auction bidding",
+    "Consider using SQLite for local persistence of domain tracking"
+  ]}
+>
+
+**Challenge:** Extend the Domain Watchdog with:
+
+1. A **Valuation Agent** that compares against recent domain sales
+2. An **Auction Agent** that can participate in domain auctions
+3. A **Dashboard** showing all monitored domains and their status
+
+</Exercise>
+
+---
+
+<ModuleSummary
+  points={[
+    "Multi-agent swarms divide complex tasks into specialized responsibilities",
+    "Event-driven architecture enables reactive agent coordination",
+    "RDAP provides standardized domain status information",
+    "LLM-based evaluation adds intelligence to automated decisions",
+    "Scheduled execution enables truly autonomous operation",
+  ]}
+/>

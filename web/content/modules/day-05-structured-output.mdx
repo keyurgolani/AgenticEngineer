@@ -1,0 +1,34 @@
+---
+title: "Day 05: Structured Output"
+description: "Taming the LLM: How to force JSON responses."
+week: 1
+---
+
+### 5.1 The Parsing Problem
+
+LLMs speak English. Computers speak JSON.
+Regex parsing is fragile.
+**Solution**: OpenAI Function Calling / Tool Use.
+
+### 5.2 Pydantic
+
+We use Pydantic to define the _Schema_ of what we want.
+
+```python
+from pydantic import BaseModel, Field
+
+class UserProfile(BaseModel):
+    name: str = Field(description="The user's full name")
+    age: int = Field(description="The user's age")
+    interests: list[str]
+
+# LangChain makes this easy
+structured_llm = llm.with_structured_output(UserProfile)
+print(structured_llm.invoke("My name is John and I'm 25. I like coding."))
+# Output: UserProfile(name='John', age=25, interests=['coding'])
+```
+
+### 5.3 Why is this "Agentic"?
+
+Agents need to call tools. To call a tool `weather(city: str)`, the LLM _must_ output exactly `{"city": "Paris"}`.
+Structured output is the bridge between the Brain and the Hands.

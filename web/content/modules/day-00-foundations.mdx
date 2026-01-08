@@ -1,0 +1,388 @@
+---
+title: "AI Foundations: The Building Blocks"
+description: "A gentle introduction to AI, Machine Learning, and LLMs for complete beginners. No prior AI knowledge required."
+week: 1
+day: 0
+---
+
+<ReadingTime minutes={25} />
+
+<SkillLevel level="beginner" description="No prior AI knowledge required" />
+
+<LearningObjectives
+  objectives={[
+    "Understand what AI, Machine Learning, and Deep Learning actually mean",
+    "Explain how Large Language Models (LLMs) work at a high level",
+    "Define key terms like tokens, embeddings, and context windows",
+    "Understand why agents are different from simple chatbots",
+    "Feel confident reading the rest of this course",
+  ]}
+/>
+
+# AI Foundations: Understanding the Building Blocks
+
+Before we build agents, we need to understand what powers them. This module is designed for complete beginners—if you've never studied AI or machine learning, start here.
+
+---
+
+## Part 1: The AI Family Tree
+
+<ConceptIntro
+  title="Artificial Intelligence (AI)"
+  analogy="Think of AI as an umbrella term for any computer system that can do things we'd normally need human intelligence for—like recognizing faces, understanding speech, or playing chess. It's the big family that includes everything else we'll discuss."
+  technicalDef="AI refers to computer systems designed to perform tasks that typically require human intelligence, including visual perception, speech recognition, decision-making, and language translation."
+  whyItMatters="When someone says 'AI', they might mean anything from a simple spam filter to ChatGPT. Understanding this helps you cut through the hype."
+/>
+
+<ConceptIntro
+  title="Machine Learning (ML)"
+  analogy="Imagine teaching a child to recognize dogs. You don't give them a rulebook ('dogs have four legs, fur, and bark'). Instead, you show them thousands of pictures of dogs until they 'get it'. Machine Learning works the same way—instead of programming explicit rules, we show the computer examples until it learns the patterns."
+  technicalDef="Machine Learning is a subset of AI where algorithms learn patterns from data rather than being explicitly programmed with rules. The system improves its performance on a task through experience."
+  whyItMatters="ML is how modern AI actually works. Understanding this shift from 'programming rules' to 'learning from data' is fundamental."
+/>
+
+<ConceptIntro
+  title="Deep Learning"
+  analogy="Deep Learning is like ML with a supercharged brain. Instead of learning simple patterns, it uses 'neural networks'—layers upon layers of mathematical functions inspired by how our brains work. Each layer learns increasingly complex features. The first layer might learn to detect edges, the next learns shapes, then faces, then emotions."
+  technicalDef="Deep Learning uses artificial neural networks with multiple layers (hence 'deep') to progressively extract higher-level features from raw input. A face recognition system might learn edges → shapes → facial features → identities."
+  whyItMatters="Deep Learning is what made modern AI possible. ChatGPT, image generators, and voice assistants all use deep learning."
+/>
+
+<Mermaid
+  chart={`
+graph TB
+    AI[🤖 Artificial Intelligence]
+    ML[📊 Machine Learning]
+    DL[🧠 Deep Learning]
+    LLM[💬 Large Language Models]
+    
+    AI --> ML
+    ML --> DL
+    DL --> LLM
+    
+    AI -.-> |"Rule-based systems, Expert systems"| Traditional
+    ML -.-> |"Decision trees, Random forests"| Classical
+    DL -.-> |"CNNs for images, RNNs for sequences"| Neural
+    LLM -.-> |"GPT, Claude, Llama"| Transformers
+    
+    style AI fill:#e1f5fe
+    style ML fill:#b3e5fc
+    style DL fill:#81d4fa
+    style LLM fill:#4fc3f7
+`}
+/>
+
+---
+
+## Part 2: How LLMs Actually Work
+
+<KeyTerms
+  terms={[
+    {
+      term: "LLM",
+      definition:
+        "Large Language Model—an AI trained on massive amounts of text to understand and generate human language",
+    },
+    {
+      term: "Token",
+      definition:
+        "A chunk of text (roughly 4 characters or 3/4 of a word) that the model processes",
+    },
+    {
+      term: "Context Window",
+      definition:
+        "The amount of text an LLM can 'see' at once (like its working memory)",
+    },
+    {
+      term: "Embedding",
+      definition:
+        "A way to represent words/text as numbers that capture meaning",
+    },
+    {
+      term: "Inference",
+      definition:
+        "When the model generates a response (as opposed to training)",
+    },
+  ]}
+/>
+
+### What is a Large Language Model?
+
+<ConceptIntro
+  title="Large Language Model (LLM)"
+  analogy="Imagine you read every book, article, and website ever written. After all that reading, you'd be pretty good at predicting what word comes next in a sentence, right? An LLM is essentially a very sophisticated 'next word predictor' that has 'read' most of the internet. When you ask it a question, it's predicting the most likely helpful response, word by word."
+  technicalDef="An LLM is a neural network trained on vast amounts of text data to predict the probability distribution of the next token given the previous tokens. Modern LLMs use the Transformer architecture and contain billions of parameters."
+  whyItMatters="Understanding that LLMs are 'prediction machines' helps explain both their capabilities (fluent text generation) and limitations (they can confidently predict wrong answers)."
+/>
+
+### Tokens: How LLMs Read Text
+
+<ConceptIntro
+  title="Tokenization"
+  analogy="When you read, you don't process letter by letter—you chunk words together. LLMs do something similar but different. They break text into 'tokens'—pieces that might be whole words, parts of words, or even single characters. 'Understanding' might become ['Under', 'stand', 'ing']. This lets the model handle any text, even made-up words."
+  technicalDef="Tokenization converts text into a sequence of integers that the model can process. Common tokenizers (like BPE or SentencePiece) create a vocabulary of subword units, typically 30,000-100,000 tokens."
+  whyItMatters="Tokens directly affect cost (you pay per token) and capability (context windows are measured in tokens). A 128K context window means ~96,000 words."
+/>
+
+```
+Example Tokenization:
+"Hello, how are you?" → ["Hello", ",", " how", " are", " you", "?"]
+                      → [15496, 11, 703, 527, 499, 30]
+                         (Each token maps to a number)
+```
+
+### Embeddings: Meaning as Numbers
+
+<ConceptIntro
+  title="Embeddings"
+  analogy="Imagine a map where similar cities are close together. Paris and Rome would be near each other (European capitals), while Tokyo would be further away. Embeddings do this for words and concepts—they place similar meanings close together in a mathematical space. 'King' and 'Queen' would be close, as would 'Paris' and 'France'."
+  technicalDef="Embeddings are dense vector representations (lists of numbers) that capture semantic meaning. Words with similar meanings have similar vectors. The famous example: vector('King') - vector('Man') + vector('Woman') ≈ vector('Queen')."
+  whyItMatters="Embeddings are how AI 'understands' meaning. They power semantic search, RAG systems, and how LLMs process your questions."
+/>
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Embedding Space (Simplified)"
+        King["👑 King"]
+        Queen["👸 Queen"]
+        Man["👨 Man"]
+        Woman["👩 Woman"]
+        Paris["🗼 Paris"]
+        France["🇫🇷 France"]
+    end
+    
+    King -.->|"similar"| Queen
+    Man -.->|"similar"| Woman
+    Paris -.->|"similar"| France
+    King -.->|"royalty"| Queen
+`}
+/>
+
+### The Context Window: The Model's Memory
+
+<ConceptIntro
+  title="Context Window"
+  analogy="Imagine you can only remember the last 10 pages of a book while reading. That's the context window—it's how much text the model can 'see' at once. GPT-4 can see about 128,000 tokens (~300 pages), while some models see only 4,000 tokens (~10 pages). Everything outside this window is forgotten."
+  technicalDef="The context window is the maximum number of tokens an LLM can process in a single forward pass. It includes both the input (your prompt) and the output (the response). Larger windows enable longer conversations and more context but require more computation."
+  whyItMatters="Context window limits affect what agents can do. A coding agent needs to 'see' enough code to understand it. This is why 'context engineering' is so important."
+/>
+
+| Model      | Context Window   | Approximate Words |
+| :--------- | :--------------- | :---------------- |
+| GPT-3.5    | 4,096 tokens     | ~3,000 words      |
+| GPT-4      | 128,000 tokens   | ~96,000 words     |
+| Claude 3   | 200,000 tokens   | ~150,000 words    |
+| Gemini 1.5 | 1,000,000 tokens | ~750,000 words    |
+
+---
+
+## Part 3: From Chatbots to Agents
+
+<ConceptIntro
+  title="AI Agent"
+  analogy="A chatbot is like a customer service rep who can only talk—they can answer questions but can't actually do anything. An agent is like a personal assistant who can talk AND take action—they can book your flights, send emails, and check your calendar. The key difference is that agents can use tools and take actions in the real world."
+  technicalDef="An AI agent is a system that uses an LLM as its 'brain' but extends it with tools (APIs, code execution, web browsing), memory (conversation history, knowledge bases), and planning capabilities (breaking down complex tasks into steps)."
+  whyItMatters="This course is about building agents, not chatbots. Understanding this distinction is crucial—we're building systems that can act, not just respond."
+/>
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph Chatbot["💬 Chatbot"]
+        C_Input[User Message] --> C_LLM[LLM]
+        C_LLM --> C_Output[Text Response]
+    end
+    
+    subgraph Agent["🤖 Agent"]
+        A_Input[User Request] --> A_LLM[LLM Brain]
+        A_LLM --> A_Think{Think}
+        A_Think -->|"Need info"| A_Tool1[🔍 Search Tool]
+        A_Think -->|"Need to code"| A_Tool2[💻 Code Tool]
+        A_Think -->|"Need data"| A_Tool3[📊 Database Tool]
+        A_Tool1 --> A_Observe[Observe Result]
+        A_Tool2 --> A_Observe
+        A_Tool3 --> A_Observe
+        A_Observe --> A_LLM
+        A_Think -->|"Done"| A_Output[Action + Response]
+    end
+    
+    style A_LLM fill:#f9f,stroke:#333
+    style A_Think fill:#bbf,stroke:#333
+`}
+/>
+
+### The Agent Loop
+
+Unlike a chatbot that responds once, an agent works in a loop:
+
+1. **Perceive**: Read the user's request and any tool outputs
+2. **Think**: Decide what to do next (use a tool? ask for clarification? respond?)
+3. **Act**: Execute the chosen action (call an API, run code, etc.)
+4. **Observe**: See the result of the action
+5. **Repeat**: Go back to step 1 until the task is complete
+
+<RealWorldExample
+  title="Booking a Flight"
+  scenario="You ask an agent: 'Book me the cheapest flight to Tokyo next month'"
+  implementation="The agent: (1) Searches flight APIs for options, (2) Compares prices, (3) Asks you to confirm the best option, (4) Books the flight, (5) Adds it to your calendar, (6) Sends you a confirmation email."
+  takeaway="A chatbot would just tell you about flights. An agent actually books them. This requires tools, planning, and the ability to take real actions."
+/>
+
+---
+
+## Part 4: Key Concepts for This Course
+
+<KeyTerms
+  terms={[
+    {
+      term: "Prompt",
+      definition:
+        "The text you send to an LLM—your question, instruction, or context",
+    },
+    {
+      term: "System Prompt",
+      definition: "Hidden instructions that define how the AI should behave",
+    },
+    {
+      term: "RAG",
+      definition:
+        "Retrieval-Augmented Generation—giving the LLM access to external knowledge",
+    },
+    {
+      term: "Hallucination",
+      definition: "When an LLM confidently generates false information",
+    },
+    {
+      term: "Fine-tuning",
+      definition: "Training a model further on specific data to specialize it",
+    },
+    {
+      term: "MCP",
+      definition:
+        "Model Context Protocol—a standard for connecting tools to AI",
+    },
+  ]}
+/>
+
+### Prompts and System Prompts
+
+<ConceptIntro
+  title="Prompting"
+  analogy="Prompting is like giving instructions to a very capable but literal-minded assistant. The clearer and more specific your instructions, the better the result. 'Write something about dogs' gives worse results than 'Write a 200-word blog post about the health benefits of walking your dog daily, aimed at busy professionals.'"
+  technicalDef="A prompt is the input text sent to an LLM. It can include instructions, context, examples, and constraints. System prompts are special instructions that define the AI's persona and behavior, typically hidden from the user."
+  whyItMatters="Good prompting is the foundation of good agents. We'll spend significant time on 'context engineering'—the art of crafting effective prompts."
+/>
+
+### RAG: Giving AI Knowledge
+
+<ConceptIntro
+  title="Retrieval-Augmented Generation (RAG)"
+  analogy="Imagine taking an exam where you're allowed to bring notes. You don't need to memorize everything—you just need to know how to find the right information quickly. RAG works the same way: instead of relying only on what the LLM 'memorized' during training, we give it access to a searchable knowledge base."
+  technicalDef="RAG combines a retrieval system (usually vector search) with an LLM. When you ask a question, the system first searches for relevant documents, then includes those documents in the prompt so the LLM can generate an informed answer."
+  whyItMatters="RAG is how you make AI work with YOUR data—your company docs, your codebase, your knowledge. It's essential for practical agents."
+/>
+
+### Hallucinations: When AI Gets It Wrong
+
+<ConceptIntro
+  title="Hallucination"
+  analogy="Remember how LLMs are 'next word predictors'? Sometimes the most likely next word leads to confident-sounding nonsense. It's like a student who doesn't know the answer but writes something that sounds plausible. The AI isn't lying—it's just predicting what a correct answer would look like."
+  technicalDef="Hallucination occurs when an LLM generates content that is factually incorrect, nonsensical, or not grounded in the provided context. This happens because LLMs optimize for plausibility, not truth."
+  whyItMatters="Hallucinations are why we need RAG, fact-checking, and human oversight. Building reliable agents means designing systems that minimize and catch hallucinations."
+/>
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Trusting LLM outputs without verification",
+      fix: "Always verify critical information, especially numbers, dates, and facts",
+    },
+    {
+      mistake: "Thinking bigger context windows solve everything",
+      fix: "More context can actually confuse models—quality over quantity",
+    },
+    {
+      mistake: "Treating LLMs as databases of facts",
+      fix: "Use RAG to ground responses in actual data sources",
+    },
+  ]}
+/>
+
+---
+
+## Part 5: The Technology Stack
+
+Here's what we'll use in this course:
+
+| Technology           | Purpose          | Why We Use It                           |
+| :------------------- | :--------------- | :-------------------------------------- |
+| **Python**           | Primary language | Industry standard for AI/ML             |
+| **LangGraph**        | Agent framework  | Production-grade, explicit control flow |
+| **OpenAI/Anthropic** | LLM providers    | Best-in-class models                    |
+| **ChromaDB/LanceDB** | Vector databases | Store and search embeddings             |
+| **MCP**              | Tool protocol    | Standard way to connect tools           |
+
+<Callout type="info">
+  Don't worry if these names are unfamiliar. We'll introduce each tool when we
+  need it, with hands-on examples.
+</Callout>
+
+---
+
+<ProgressCheckpoint
+  title="Foundation Knowledge Check"
+  questions={[
+    {
+      question:
+        "What's the main difference between Machine Learning and traditional programming?",
+      answer:
+        "Traditional programming uses explicit rules written by humans. Machine Learning learns patterns from data—you show it examples instead of writing rules.",
+    },
+    {
+      question: "What is a token in the context of LLMs?",
+      answer:
+        "A token is a chunk of text (roughly 4 characters or 3/4 of a word) that the model processes. Text is broken into tokens before the model can work with it.",
+    },
+    {
+      question: "Why do LLMs sometimes 'hallucinate' false information?",
+      answer:
+        "LLMs are trained to predict plausible-sounding text, not to verify truth. They generate what 'sounds right' based on patterns, which can lead to confident but incorrect outputs.",
+    },
+    {
+      question: "What's the key difference between a chatbot and an agent?",
+      answer:
+        "A chatbot can only generate text responses. An agent can use tools and take actions—like searching the web, running code, or calling APIs.",
+    },
+    {
+      question: "What does RAG stand for and why is it useful?",
+      answer:
+        "Retrieval-Augmented Generation. It lets you give an LLM access to external knowledge (your documents, databases) so it can answer questions about information it wasn't trained on.",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "AI → Machine Learning → Deep Learning → LLMs is a hierarchy of increasingly specialized techniques",
+    "LLMs are sophisticated 'next word predictors' trained on massive text datasets",
+    "Tokens are how LLMs process text; context windows limit how much they can 'see'",
+    "Embeddings represent meaning as numbers, enabling semantic search",
+    "Agents extend LLMs with tools, memory, and the ability to take actions",
+    "RAG grounds AI responses in your actual data",
+    "Hallucinations are a fundamental limitation we must design around",
+  ]}
+/>
+
+---
+
+## What's Next?
+
+Now that you understand the building blocks, you're ready to start building. In **Day 01**, we'll dive into the anatomy of an agent—understanding the difference between the LLM "brain" and the agent "body."
+
+<Callout type="tip">
+  **Bookmark this page!** As you progress through the course, you may want to
+  return here to refresh your understanding of foundational concepts.
+</Callout>

@@ -1,0 +1,440 @@
+---
+title: "Advanced Context Engineering"
+description: "Context is your RAM. Learn to manage it with hierarchies and isolation."
+week: 1
+day: 2
+---
+
+<ReadingTime minutes={18} />
+
+<SkillLevel level="intermediate" description="Conceptual, minimal code" />
+
+<Prerequisites
+  items={[
+    "Completed Day 01: The Anatomy of an Agent",
+    "Understand what tokens and context windows are (Day 00 Foundations)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Explain why context management is critical for agent performance",
+    "Describe the Memory Hierarchy (L1/L2/L3) for agents",
+    "Apply the Context Isolation pattern to prevent 'context poisoning'",
+    "Use Recursive Summarization to compress long conversations",
+    "Identify when context is 'rotting' and how to fix it",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Context Window",
+      definition: "The maximum amount of text an LLM can process at once",
+    },
+    {
+      term: "Context Rot",
+      definition:
+        "When irrelevant information fills the context, degrading model performance",
+    },
+    {
+      term: "Context Isolation",
+      definition: "Giving each agent only the minimum information it needs",
+    },
+    {
+      term: "Working Memory",
+      definition: "Immediate task context—fast but expensive (tokens)",
+    },
+    {
+      term: "Episodic Memory",
+      definition: "Past experiences stored in a vector database for retrieval",
+    },
+  ]}
+/>
+
+---
+
+## Why Context Engineering Matters
+
+<ConceptIntro
+  title="Context Engineering"
+  analogy="Imagine trying to solve a math problem while someone reads you random Wikipedia articles. The noise makes it harder to think. LLMs work the same way—if you fill their context window with irrelevant information, their 'IQ' drops. Context Engineering is the art of giving the model exactly what it needs, nothing more."
+  technicalDef="Context Engineering is the strategic process of selecting, formatting, and managing information provided to an LLM. It involves deciding what to include, what to exclude, how to structure information, and when to compress or summarize."
+  whyItMatters="Context is expensive (you pay per token) and limited (even 128K tokens fill up fast). Poor context management is the #1 cause of agent failures in production."
+/>
+
+<TokenFlowAnimation
+  inputTokens={["User", ":", "Calculate", "fibonacci", "sequence"]}
+  outputTokens={[
+    "Thinking",
+    "...",
+    "Running",
+    "code",
+    "...",
+    "Result",
+    ":",
+    "[0, 1, 1, 2, 3]",
+  ]}
+/>
+
+Context is your RAM. It is expensive and finite. **"Context Rot"** occurs when you fill the window with garbage, causing the model's IQ to drop.
+
+<RealWorldExample
+  title="The Overloaded Agent"
+  scenario="You build a coding agent and include the entire codebase (50,000 lines) in every prompt."
+  implementation="The agent becomes slow, expensive, and confused. It starts mixing up function names, forgetting the original task, and generating code that doesn't fit the project style."
+  takeaway="More context isn't always better. The agent needed 50 relevant lines, not 50,000 irrelevant ones. Quality beats quantity."
+/>
+
+---
+
+## 2.1 The Memory Hierarchy
+
+Just like a CPU has L1/L2/L3 cache, an agent needs a memory hierarchy.
+
+![Memory Hierarchy Pyramid](/images/memory_pyramid.png)
+
+<MemoryHierarchy />
+
+<ConceptIntro
+  title="The Memory Hierarchy"
+  analogy="Think about how you remember things. Your working memory holds what you're thinking about right now (like a phone number you're about to dial). Your short-term memory holds recent events (what you had for breakfast). Your long-term memory holds facts and experiences (your childhood). Agents need all three types too."
+  technicalDef="Agent memory is typically organized in tiers: L1 (Working Memory) is the current context window—fast but limited. L2 (Episodic Memory) stores past interactions in a vector database for retrieval. L3 (Archival Memory) holds compressed summaries and long-term facts."
+  whyItMatters="You can't fit everything in the context window. A good memory hierarchy lets agents 'remember' relevant information without overwhelming the LLM."
+/>
+
+| Tier   | Type            | Technology      | Purpose                   | Speed     | Cost         |
+| :----- | :-------------- | :-------------- | :------------------------ | :-------- | :----------- |
+| **L1** | Working Memory  | Message List    | Immediate task context    | ⚡ Fast   | 💰 Expensive |
+| **L2** | Episodic Memory | Vector Database | Relevant past experiences | 🔄 Medium | 💵 Moderate  |
+| **L3** | Archival Memory | Summaries       | Long-term facts and goals | 🐢 Slow   | 💲 Cheap     |
+
+### How It Works in Practice
+
+```
+User: "What was that bug we fixed last month?"
+
+1. L1 (Working Memory): Check current conversation → Not there
+2. L2 (Episodic Memory): Search vector DB for "bug fix" → Found 3 relevant conversations
+3. L3 (Archival Memory): Check summaries → "March: Fixed authentication timeout bug"
+
+→ Agent retrieves the relevant context and responds accurately
+```
+
+---
+
+## 2.2 Pattern: Context Isolation (The "Sandboxing" Pattern)
+
+<ConceptIntro
+  title="Context Isolation"
+  analogy="Imagine a company where every employee CC's everyone on every email. Soon, no one can find anything important—it's all buried in noise. Smart companies use 'need to know' principles: you only see information relevant to your job. Context Isolation applies the same principle to agents."
+  technicalDef="Context Isolation means passing only the minimum viable context to each agent or sub-agent. In multi-agent systems, worker agents receive only their specific task and relevant results—not the entire conversation history or other agents' work."
+  whyItMatters="Without isolation, agents get 'context poisoned'—confused by irrelevant information from other tasks. Isolation keeps each agent focused and effective."
+/>
+
+**Problem:** In a multi-agent system, if every agent sees the entire conversation history, they get confused ("Context Poisoning").
+
+**Solution:** Pass only the _minimum viable context_ to a worker agent.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Supervisor
+    participant Coder
+    participant Researcher
+
+    User->>Supervisor: "Build a stock app using value investing"
+    Note over Supervisor: Breaks down the task
+
+    Supervisor->>Researcher: [ISOLATED] "Find value investing formulas"
+    Note over Researcher: Only sees this specific task
+    Researcher-->>Supervisor: Returns: Formulas X, Y, Z
+
+    Supervisor->>Coder: [ISOLATED] "Write Python func for Formula X"
+    Note over Coder: Only sees formula, not research logs
+    Coder-->>Supervisor: Returns: code.py
+
+    Note over Supervisor: Combines results for user
+    Supervisor-->>User: "Here's your stock app!"
+
+`}
+/>
+
+### The Isolation Principle
+
+| ❌ Without Isolation                                                        | ✅ With Isolation                                                   |
+| :-------------------------------------------------------------------------- | :------------------------------------------------------------------ |
+| Coder sees: User request + Research logs + All formulas + Previous attempts | Coder sees: "Write a Python function for Formula X: P/E ratio < 15" |
+| 2,000 tokens of context                                                     | 50 tokens of context                                                |
+| Confused, slow, expensive                                                   | Focused, fast, cheap                                                |
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Passing the entire conversation to every sub-agent",
+      fix: "Extract only the relevant result or instruction for each agent",
+    },
+    {
+      mistake: "Including debug logs and intermediate steps in context",
+      fix: "Store logs separately; only include final results",
+    },
+    {
+      mistake: "Letting agents see each other's 'thinking' process",
+      fix: "Pass outputs, not reasoning chains, between agents",
+    },
+  ]}
+/>
+
+---
+
+## 2.3 Technique: Recursive Summarization
+
+Don't just delete old messages. Compress them.
+
+<ConceptIntro
+  title="Recursive Summarization"
+  analogy="Imagine reading a 500-page book and writing a 1-page summary. Then reading 10 such summaries and writing a 1-page summary of those. You've compressed 5,000 pages into 1 page while keeping the key information. Recursive Summarization does this for conversations."
+  technicalDef="Recursive Summarization periodically compresses older messages into summaries. When the conversation exceeds a threshold (e.g., 20 turns), the oldest messages are summarized by an LLM and replaced with a single summary message. This can be applied recursively for very long conversations."
+  whyItMatters="Long conversations fill up the context window. Without summarization, you either lose old context entirely or pay for tokens you don't need. Summarization preserves important information efficiently."
+/>
+
+<Callout type="tip">
+  **Rule of Thumb:** When conversations exceed 20 turns, take the first 10 turns
+  and ask an LLM to "Summarize the key decisions and facts from this
+  conversation." Replace those 10 messages with 1 summary message.
+</Callout>
+
+### How It Works
+
+```
+Before Summarization (20 messages, ~4000 tokens):
+├── Message 1: User asks about project setup
+├── Message 2: Agent explains options
+├── Message 3: User chooses React
+├── ... (messages 4-18)
+├── Message 19: User asks about deployment
+└── Message 20: Current question
+
+After Summarization (11 messages, ~2000 tokens):
+├── [SUMMARY]: "User is building a React app. Chose Tailwind for styling,
+│              PostgreSQL for database. Completed: auth, dashboard.
+│              Current focus: deployment to AWS."
+├── Message 12-18: Recent context
+├── Message 19: User asks about deployment
+└── Message 20: Current question
+```
+
+### Implementation Pattern
+
+```python
+def maybe_summarize(messages: list, threshold: int = 20) -> list:
+    """Summarize old messages if conversation is too long."""
+    if len(messages) <= threshold:
+        return messages
+
+    # Take oldest messages to summarize
+    to_summarize = messages[:threshold // 2]
+    to_keep = messages[threshold // 2:]
+
+    # Ask LLM to summarize
+    summary = llm.invoke(
+        f"Summarize the key decisions, facts, and context from this conversation:\n"
+        f"{format_messages(to_summarize)}"
+    )
+
+    # Replace old messages with summary
+    summary_message = {"role": "system", "content": f"[Previous conversation summary]: {summary}"}
+    return [summary_message] + to_keep
+```
+
+---
+
+## 2.4 The Four Pillars of Context Engineering
+
+Based on industry best practices, here's a framework for managing context:
+
+<Mermaid
+  chart={`
+graph LR
+    Write[📝 Write] --> Select[🎯 Select]
+    Select --> Compress[🗜️ Compress]
+    Compress --> Isolate[🔒 Isolate]
+    Isolate --> Output[✨ Smart Output]
+    
+    Write -.-> |"Store externally"| DB[(Memory)]
+    Select -.-> |"Retrieve relevant"| DB
+    Compress -.-> |"Summarize"| DB
+    Isolate -.-> |"Filter per agent"| DB
+`}
+/>
+
+### 1. Write (Persist Outside the Prompt)
+
+Store information externally so you can retrieve it later:
+
+- **Scratchpad**: Intermediate results during a task
+- **Artifacts**: Large outputs (code files, reports)
+- **Memory**: Facts learned across sessions
+
+### 2. Select (Retrieve Only What Matters)
+
+Don't include everything—retrieve based on relevance:
+
+- Recent conversation (last 3-5 turns)
+- Semantically similar past experiences (vector search)
+- Relevant tools (not all 50, just the 5 most likely needed)
+
+### 3. Compress (Fight Token Bloat)
+
+Reduce token usage without losing information:
+
+- **Prune**: Remove irrelevant sentences
+- **Compact**: Replace large outputs with pointers ("See artifact #123")
+- **Summarize**: Distill to key points
+
+### 4. Isolate (Prevent Collisions)
+
+Keep contexts separate:
+
+- Each sub-agent gets only its task
+- User-specific context stays with that user
+- Debug info stays out of production prompts
+
+---
+
+## 2.5 Detecting Context Rot
+
+How do you know when your context is "rotting"?
+
+<Callout type="warning">
+  **Signs of Context Rot:** - Agent starts forgetting earlier instructions -
+  Responses become generic or off-topic - Agent confuses different users or
+  tasks - Quality degrades as conversations get longer - Agent repeats itself or
+  contradicts earlier statements
+</Callout>
+
+### Debugging Context Issues
+
+```python
+def debug_context(messages: list):
+    """Analyze context for potential issues."""
+    total_tokens = count_tokens(messages)
+
+    print(f"Total tokens: {total_tokens}")
+    print(f"Messages: {len(messages)}")
+    print(f"Avg tokens/message: {total_tokens // len(messages)}")
+
+    # Check for bloat
+    if total_tokens > 50000:
+        print("⚠️ WARNING: Context is very large. Consider summarization.")
+
+    # Check for repetition
+    contents = [m['content'] for m in messages]
+    unique_ratio = len(set(contents)) / len(contents)
+    if unique_ratio < 0.8:
+        print("⚠️ WARNING: High repetition detected. Prune duplicates.")
+
+    # Check age distribution
+    system_msgs = [m for m in messages if m['role'] == 'system']
+    if len(system_msgs) > 3:
+        print("⚠️ WARNING: Multiple system messages. Consider consolidating.")
+```
+
+---
+
+<ProgressCheckpoint
+  title="Context Engineering Check"
+  questions={[
+    {
+      question: "What is 'Context Rot' and what causes it?",
+      answer:
+        "Context Rot is when irrelevant or excessive information fills the context window, degrading model performance. It's caused by including too much history, not summarizing, or failing to filter relevant information.",
+    },
+    {
+      question: "Explain the Memory Hierarchy (L1/L2/L3) for agents.",
+      answer:
+        "L1 (Working Memory) is the current context—fast but expensive. L2 (Episodic Memory) stores past experiences in a vector DB for retrieval. L3 (Archival Memory) holds compressed summaries and long-term facts.",
+    },
+    {
+      question: "Why is Context Isolation important in multi-agent systems?",
+      answer:
+        "Without isolation, agents get 'context poisoned'—confused by irrelevant information from other agents' tasks. Isolation ensures each agent sees only what it needs, improving focus and reducing errors.",
+    },
+    {
+      question: "When should you apply Recursive Summarization?",
+      answer:
+        "When conversations exceed ~20 turns. Summarize the oldest half of messages into a single summary, preserving key decisions and facts while reducing token count.",
+    },
+  ]}
+/>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Including the entire codebase in every prompt",
+      fix: "Use RAG to retrieve only relevant files/functions",
+    },
+    {
+      mistake: "Never clearing or summarizing conversation history",
+      fix: "Implement automatic summarization at thresholds",
+    },
+    {
+      mistake: "Treating all information as equally important",
+      fix: "Prioritize: recent > relevant > comprehensive",
+    },
+    {
+      mistake: "Debugging by adding more context",
+      fix: "Debug by removing context and isolating the issue",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Context is expensive and limited—manage it like a precious resource",
+    "Use a Memory Hierarchy: Working (L1) → Episodic (L2) → Archival (L3)",
+    "Context Isolation prevents 'poisoning' in multi-agent systems",
+    "Recursive Summarization compresses old conversations without losing key info",
+    "The Four Pillars: Write → Select → Compress → Isolate",
+    "Watch for Context Rot: forgetting, repetition, quality degradation",
+  ]}
+/>
+
+---
+
+<Exercise
+  title="Context Audit"
+  difficulty="intermediate"
+  objectives={[
+    "Analyze a sample conversation for context issues",
+    "Identify what should be summarized vs. kept",
+    "Design an isolation strategy for a multi-agent task"
+  ]}
+  hints={[
+    "Look for repetitive information that could be deduplicated",
+    "Consider: what would a sub-agent actually need to know?",
+    "Think about what information is 'nice to have' vs. 'need to have'"
+  ]}
+>
+
+**Scenario:** You're building a customer support agent that handles billing questions. It has access to: user account info, billing history (100 transactions), support ticket history (50 tickets), and product documentation (200 pages).
+
+**Questions to consider:**
+
+1. What should be in L1 (always in context)?
+2. What should be in L2 (retrieved when relevant)?
+3. What should be in L3 (summarized/archived)?
+4. How would you isolate context if you add a "refund specialist" sub-agent?
+
+</Exercise>
+
+---
+
+### Coming Up Next
+
+In **Day 03**, we'll put these concepts into practice by building our first agent loop with **LangGraph**. You'll see how state management and context flow work in real code.

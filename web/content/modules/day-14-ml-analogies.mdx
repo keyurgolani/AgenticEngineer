@@ -1,0 +1,345 @@
+---
+title: "Day 14: ML Analogies for Agentic Design"
+description: "Bridging classical machine learning concepts to agentic system architecture for senior engineers."
+week: 3
+---
+
+<ReadingTime minutes={25} />
+
+<SkillLevel level="advanced" description="Requires ML fundamentals" />
+
+<Prerequisites
+  items={[
+    "Understanding of basic ML concepts (classification, regression)",
+    "Familiarity with neural network architecture",
+    "Completed Days 1-13 of the course",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Map classical ML concepts to agentic system design patterns",
+    "Understand agents as implicit feature engineers",
+    "Design multi-agent systems using ensemble thinking",
+    "Apply dimensionality reduction principles to context compression",
+    "Build intuition for emergent agent behaviors",
+  ]}
+/>
+
+---
+
+## Why ML Analogies Matter
+
+As senior engineers, you already have deep intuition about machine learning systems. This module leverages that knowledge to demystify agentic AI—transforming it from "magic" into a rigorous engineering discipline.
+
+<Callout type="tip">
+  **The Goal:** By the end of this module, you'll see agents not as mysterious
+  black boxes, but as natural extensions of ML principles you already
+  understand.
+</Callout>
+
+---
+
+## 14.1 The Kernel Trick: Agents as Feature Engineers
+
+<TransformerArchitecture />
+
+<MLAnalogy
+  type="svm"
+  title="Agentic Reasoning as Implicit Feature Engineering"
+  mlConcept="Support Vector Machines use the 'kernel trick' to implicitly map data into higher-dimensional spaces, finding complex decision boundaries without explicitly computing new features. A polynomial kernel transforms (x₁, x₂) into (x₁², x₂², √2·x₁·x₂) automatically."
+  agenticParallel="LLM agents automatically create higher-level concepts from raw input. When analyzing code, an agent implicitly extracts features like 'security risk level', 'code complexity', and 'maintainability score'—without you explicitly programming these transformations."
+  keyInsight="This reframes the 'magic' of LLMs as a scalable extension of feature engineering. Just as kernels let SVMs find patterns in transformed spaces, agents find patterns in semantic spaces. The difference is scale and flexibility, not fundamental approach."
+  codeExample={`# Traditional ML: Explicit feature engineering
+def extract_features(code: str) -> dict:
+    return {
+        "line_count": len(code.split("\\n")),
+        "has_try_catch": "try:" in code,
+        "cyclomatic_complexity": calculate_complexity(code),
+    }
+
+# Agentic: Implicit feature engineering
+
+response = agent.analyze(
+"Assess this code for security risks and maintainability",
+code=code_snippet
+)
+
+# Agent implicitly extracts: security_score, maintainability_index,
+
+# code_smell_patterns, dependency_risks, etc.`}
+
+/>
+
+### Practical Application
+
+When designing agent prompts, think about what "features" you want the agent to extract:
+
+```python
+# Bad: Vague prompt (poor feature specification)
+prompt = "Review this code"
+
+# Good: Explicit feature guidance (like choosing a kernel)
+prompt = """
+Analyze this code and extract:
+1. Security vulnerabilities (SQL injection, XSS, auth bypass)
+2. Performance bottlenecks (N+1 queries, memory leaks)
+3. Maintainability issues (code duplication, tight coupling)
+4. Test coverage gaps
+
+For each issue, provide severity (1-5) and remediation steps.
+"""
+```
+
+---
+
+## 14.2 Ensemble Methods: Multi-Agent as Random Forest
+
+<MLAnalogy
+  type="ensemble"
+  title="Multi-Agent Systems as Ensemble Architectures"
+  mlConcept="A Random Forest combines many simple decision trees, each trained on a random subset of data and features. The ensemble achieves robust predictions through majority voting—no single tree needs to be perfect because errors cancel out across the ensemble."
+  agenticParallel="A multi-agent system delegates complex problems to specialized agents, then aggregates their outputs. A 'Code Review Swarm' might have security, performance, and style agents—each an expert in their domain. The orchestrator synthesizes their findings into a comprehensive review."
+  keyInsight="This demonstrates how to build resilient systems from less complex components. Each agent can be simpler and more focused because the ensemble handles edge cases. This is the same principle that makes Random Forests more robust than single decision trees."
+/>
+
+### Implementing Ensemble Agents
+
+![Agent Swarm Ensemble](/images/agent_swarm_ensemble.png)
+
+<OrchestratorPattern
+  orchestratorName="Review Orchestrator"
+  orchestratorModel="Claude Opus"
+  specialists={[
+    {
+      name: "SecurityBot",
+      role: "Vulnerability scanning",
+      model: "GPT-4",
+      icon: "brain",
+    },
+    {
+      name: "PerfBot",
+      role: "Performance analysis",
+      model: "Claude Sonnet",
+      icon: "cpu",
+    },
+    {
+      name: "StyleBot",
+      role: "Code style review",
+      model: "GPT-4-mini",
+      icon: "palette",
+    },
+    {
+      name: "TestBot",
+      role: "Test coverage gaps",
+      model: "Claude Haiku",
+      icon: "bug",
+    },
+  ]}
+  workflow={[
+    "Orchestrator",
+    "Fan-out to Specialists",
+    "Parallel Analysis",
+    "Aggregate Results",
+    "Final Report",
+  ]}
+  parallelExecution={true}
+/>
+
+```python
+from langgraph.constants import Send
+
+class CodeReviewState(TypedDict):
+    code: str
+    security_findings: list
+    performance_findings: list
+    style_findings: list
+    final_report: str
+
+def fan_out_review(state: CodeReviewState) -> list[Send]:
+    """Ensemble: Fan out to specialist agents."""
+    return [
+        Send("security_agent", {"code": state["code"]}),
+        Send("performance_agent", {"code": state["code"]}),
+        Send("style_agent", {"code": state["code"]}),
+    ]
+
+def aggregate_findings(state: CodeReviewState) -> dict:
+    """Ensemble: Aggregate specialist outputs (like voting)."""
+    all_findings = (
+        state["security_findings"] +
+        state["performance_findings"] +
+        state["style_findings"]
+    )
+
+    # Weight by severity (like weighted voting)
+    critical = [f for f in all_findings if f["severity"] >= 4]
+
+    return {
+        "final_report": synthesize_report(all_findings, critical)
+    }
+```
+
+---
+
+## 14.3 Hidden Layers: Emergent Agent Behaviors
+
+<MLAnalogy
+  type="neural"
+  title="Intermediate Agent Steps as Hidden Layers"
+  mlConcept="In deep neural networks, hidden layers automatically learn hierarchical feature representations. Early layers detect edges, middle layers detect shapes, and deep layers detect objects. The exact meaning of each neuron is often unknown, yet the network produces valuable results."
+  agenticParallel="In complex agentic workflows, intermediate steps or sub-agents transform data in ways that may not be human-interpretable. A research agent might generate internal summaries, hypotheses, and search queries that don't make sense in isolation but lead to excellent final outputs."
+  keyInsight="This teaches you to trust and design for emergent, 'hidden' agentic steps. Just as you don't inspect every neuron in a CNN, you don't need to understand every intermediate agent thought. Focus on input/output contracts and end-to-end evaluation."
+/>
+
+### Designing for Emergence
+
+```python
+class ResearchState(TypedDict):
+    query: str
+    # Hidden layers - intermediate representations
+    hypotheses: list[str]  # May not be human-readable
+    search_queries: list[str]  # Auto-generated
+    raw_findings: list[dict]  # Unprocessed
+    # Output layer
+    final_report: str  # Human-readable
+
+def hypothesis_generator(state: ResearchState) -> dict:
+    """Hidden layer 1: Generate hypotheses (may be abstract)."""
+    # These hypotheses are internal representations
+    # They don't need to be perfect or even sensible to humans
+    response = llm.invoke(
+        f"Generate 5 research hypotheses for: {state['query']}"
+    )
+    return {"hypotheses": parse_hypotheses(response)}
+
+def query_expander(state: ResearchState) -> dict:
+    """Hidden layer 2: Expand to search queries."""
+    # Transform hypotheses into actionable queries
+    queries = []
+    for hypothesis in state["hypotheses"]:
+        expanded = llm.invoke(f"Generate search queries to test: {hypothesis}")
+        queries.extend(parse_queries(expanded))
+    return {"search_queries": queries}
+```
+
+<Callout type="warning">
+  **Don't Over-Inspect:** Resist the urge to debug every intermediate step. Like
+  neural networks, agent workflows should be evaluated end-to-end. If the final
+  output is good, the hidden steps are working.
+</Callout>
+
+---
+
+## 14.4 Dimensionality Reduction: Context Compression
+
+<MLAnalogy
+  type="pca"
+  title="Agent Context as Dimensionality Reduction"
+  mlConcept="Principal Component Analysis (PCA) distills high-dimensional data into lower dimensions by identifying directions of greatest variance. A dataset with 1000 features might be compressed to 50 principal components that capture 95% of the information."
+  agenticParallel="Agents must compress vast information streams (thousands of log lines, entire codebases, long conversations) into concise, actionable context. This is dimensionality reduction: extracting the 'principal components' of information that matter for the current task."
+  keyInsight="This illustrates the critical agentic skill of distilling signal from noise. When designing agent memory and context systems, think about what 'variance' (important information) you want to preserve and what can be discarded."
+/>
+
+### Context Compression Strategies
+
+![Context Compression Prism](/images/context_prism.png)
+
+```python
+class ContextCompressor:
+    """Apply PCA-like thinking to agent context."""
+
+    def compress_logs(self, logs: list[str], max_tokens: int = 2000) -> str:
+        """Reduce log dimensionality while preserving signal."""
+        # Strategy 1: Error-focused (high variance events)
+        errors = [l for l in logs if "ERROR" in l or "CRITICAL" in l]
+
+        # Strategy 2: Temporal sampling (recent = higher weight)
+        recent = logs[-100:]
+
+        # Strategy 3: Deduplication (remove redundant dimensions)
+        unique_patterns = self.deduplicate_similar(logs)
+
+        # Combine like PCA components
+        compressed = self.synthesize([errors, recent, unique_patterns])
+        return self.truncate_to_tokens(compressed, max_tokens)
+
+    def compress_codebase(self, files: list[str], query: str) -> str:
+        """Extract relevant code dimensions for a query."""
+        # Like choosing which principal components to keep
+        # based on the downstream task
+        relevant_files = self.semantic_search(files, query, top_k=10)
+        summaries = [self.summarize_file(f) for f in relevant_files]
+        return "\n".join(summaries)
+```
+
+---
+
+## 14.5 Putting It All Together
+
+<RealWorldExample
+  title="ML-Informed Agent Architecture"
+  scenario="You're building an agent to analyze production incidents. It needs to process logs, metrics, code changes, and alerts to identify root causes."
+  implementation="Apply all four ML analogies: (1) Kernel Trick - Let the agent implicitly extract features like 'deployment correlation', 'error pattern similarity'. (2) Ensemble - Use specialist agents for logs, metrics, and code analysis. (3) Hidden Layers - Allow intermediate hypotheses that may not be human-readable. (4) PCA - Compress 10,000 log lines into the 50 most relevant entries."
+  takeaway="By thinking in ML terms, you design more robust, interpretable, and efficient agent systems. The 'magic' becomes engineering."
+/>
+
+---
+
+<ProgressCheckpoint
+  title="ML Analogies Check"
+  questions={[
+    {
+      question: "How does the kernel trick relate to agent reasoning?",
+      answer:
+        "Both perform implicit feature engineering—transforming raw inputs into higher-level representations without explicit programming. Agents extract semantic features like 'intent' and 'risk' just as kernels extract polynomial features.",
+    },
+    {
+      question: "Why design multi-agent systems like ensembles?",
+      answer:
+        "Ensembles achieve robustness through aggregation. Each specialist agent can be simpler because errors cancel out. This mirrors how Random Forests outperform single decision trees.",
+    },
+    {
+      question: "When should you NOT inspect intermediate agent steps?",
+      answer:
+        "When the final output meets quality standards. Like hidden layers in neural networks, intermediate steps may not be human-interpretable but still produce valuable results. Focus on end-to-end evaluation.",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Agents perform implicit feature engineering (kernel trick analogy)",
+    "Multi-agent systems are ensembles—aggregate specialists for robustness",
+    "Intermediate agent steps are like hidden layers—trust emergence",
+    "Context management is dimensionality reduction—preserve signal, discard noise",
+    "ML intuition transfers directly to agentic system design",
+  ]}
+/>
+
+---
+
+<Exercise
+  title="Design an ML-Informed Agent"
+  difficulty="advanced"
+  objectives={[
+    "Apply kernel trick thinking to prompt design",
+    "Design an ensemble of specialist agents",
+    "Implement context compression for a real use case"
+  ]}
+  hints={[
+    "Start with the features you want extracted, then design prompts to elicit them",
+    "Consider what 'variance' in your data is most important to preserve"
+  ]}
+>
+
+**Challenge:** Design an agent system for code review that applies all four ML analogies. Document:
+
+1. What implicit features should the agent extract? (Kernel)
+2. What specialist agents would you use? (Ensemble)
+3. What intermediate steps might be non-interpretable? (Hidden layers)
+4. How would you compress a 10,000-line PR? (PCA)
+
+</Exercise>

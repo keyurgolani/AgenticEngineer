@@ -1,0 +1,609 @@
+---
+title: "Day 05: Retrieval-Augmented Generation"
+description: "Building knowledge bases and semantic search for your agents."
+week: 1
+day: 5
+---
+
+<ReadingTime minutes={25} />
+
+<SkillLevel level="intermediate" description="Hands-on coding required" />
+
+<Prerequisites
+  items={[
+    "Completed Days 01-04",
+    "Python environment set up",
+    "Understanding of embeddings (Day 00 Foundations)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Explain what RAG is and why it's essential for production agents",
+    "Implement document chunking strategies (fixed, semantic, code-aware)",
+    "Use embedding models to convert text to vectors",
+    "Build a complete RAG pipeline with ChromaDB",
+    "Apply hybrid search combining keyword and semantic approaches",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "RAG",
+      definition:
+        "Retrieval-Augmented Generation—fetching relevant documents before generating a response",
+    },
+    {
+      term: "Chunking",
+      definition:
+        "Splitting documents into smaller pieces for indexing and retrieval",
+    },
+    {
+      term: "Embedding",
+      definition:
+        "Converting text into numerical vectors that capture semantic meaning",
+    },
+    {
+      term: "Vector Database",
+      definition:
+        "A database optimized for storing and searching embedding vectors",
+    },
+    {
+      term: "Semantic Search",
+      definition: "Finding documents by meaning, not just keyword matching",
+    },
+  ]}
+/>
+
+---
+
+## Giving Your Agent a Brain
+
+<ConceptIntro
+  title="Retrieval-Augmented Generation (RAG)"
+  analogy="Imagine taking an open-book exam. You don't need to memorize everything—you just need to know how to quickly find the right information in your notes. RAG works the same way: instead of relying only on what the LLM 'memorized' during training, we give it access to a searchable knowledge base. When you ask a question, it first finds relevant documents, then uses those to generate an informed answer."
+  technicalDef="RAG is a technique that combines information retrieval with text generation. Before generating a response, the system searches a knowledge base for relevant documents, then includes those documents in the prompt so the LLM can generate answers grounded in actual data."
+  whyItMatters="LLMs have knowledge cutoffs and can't access your private data. RAG solves both problems: it lets you use current information and your own documents while reducing hallucinations by grounding responses in real sources."
+/>
+
+<RealWorldExample
+  title="Company Documentation Bot"
+  scenario="You want an AI assistant that can answer questions about your company's internal policies, product documentation, and engineering guides."
+  implementation="You build a RAG system that: (1) Indexes all your docs into a vector database, (2) When someone asks a question, searches for the 5 most relevant document chunks, (3) Includes those chunks in the prompt, (4) Generates an answer citing the specific documents."
+  takeaway="Without RAG, the LLM would hallucinate policies or say 'I don't have access to that information.' With RAG, it gives accurate answers with citations."
+/>
+
+---
+
+## 5.1 The RAG Architecture
+
+![RAG Data Flow](/images/rag_pipeline.png)
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph Indexing Pipeline
+        Docs[Documents] --> Chunk[Chunking]
+        Chunk --> Embed[Embedding]
+        Embed --> Store[(Vector DB)]
+    end
+    
+    subgraph Query Pipeline
+        Query[User Query] --> QEmbed[Query Embedding]
+        QEmbed --> Search[Similarity Search]
+        Store --> Search
+        Search --> Context[Retrieved Context]
+        Context --> LLM[LLM Generation]
+        LLM --> Answer[Answer]
+    end
+    
+    style Store fill:#f9f,stroke:#333
+    style LLM fill:#bbf,stroke:#333
+`}
+/>
+
+### The Five Steps of RAG
+
+| Step         | Description                   | Key Decisions                      |
+| :----------- | :---------------------------- | :--------------------------------- |
+| **Load**     | Ingest documents from sources | PDF, Markdown, Code, APIs          |
+| **Chunk**    | Split into manageable pieces  | Size, overlap, semantic boundaries |
+| **Embed**    | Convert to vectors            | Model choice, dimensions           |
+| **Store**    | Index in vector database      | ChromaDB, LanceDB, Pinecone        |
+| **Retrieve** | Find relevant chunks          | Top-k, similarity threshold        |
+
+---
+
+## 5.2 Chunking Strategies
+
+Chunking is the most underrated part of RAG. Bad chunking = bad retrieval.
+
+### Fixed-Size Chunking
+
+```python
+def fixed_chunk(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+    """Simple fixed-size chunking with overlap."""
+    chunks = []
+    start = 0
+
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk)
+        start = end - overlap  # Overlap for context continuity
+
+    return chunks
+```
+
+### Semantic Chunking
+
+Better: Split on natural boundaries (paragraphs, sections, functions):
+
+```python
+import re
+
+def semantic_chunk(text: str, max_size: int = 1000) -> list[str]:
+    """Split on semantic boundaries."""
+    # Split on double newlines (paragraphs)
+    paragraphs = re.split(r'\n\n+', text)
+
+    chunks = []
+    current_chunk = ""
+
+    for para in paragraphs:
+        if len(current_chunk) + len(para) < max_size:
+            current_chunk += para + "\n\n"
+        else:
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            current_chunk = para + "\n\n"
+
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+
+    return chunks
+```
+
+### Code-Aware Chunking
+
+For code, respect function/class boundaries:
+
+```python
+import ast
+
+def chunk_python_code(code: str) -> list[dict]:
+    """Chunk Python code by function/class."""
+    tree = ast.parse(code)
+    chunks = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            chunk = {
+                "type": type(node).__name__,
+                "name": node.name,
+                "code": ast.get_source_segment(code, node),
+                "line_start": node.lineno,
+                "line_end": node.end_lineno
+            }
+            chunks.append(chunk)
+
+    return chunks
+```
+
+---
+
+## 5.3 Embedding Models
+
+Embeddings convert text to vectors that capture semantic meaning.
+
+### Popular Embedding Models
+
+| Model                      | Dimensions | Speed     | Quality   | Cost            |
+| :------------------------- | :--------- | :-------- | :-------- | :-------------- |
+| **text-embedding-3-small** | 1536       | Fast      | Good      | $0.02/1M tokens |
+| **text-embedding-3-large** | 3072       | Medium    | Best      | $0.13/1M tokens |
+| **all-MiniLM-L6-v2**       | 384        | Very Fast | Good      | Free (local)    |
+| **nomic-embed-text**       | 768        | Fast      | Great     | Free (local)    |
+| **mxbai-embed-large**      | 1024       | Medium    | Excellent | Free (local)    |
+
+### Using OpenAI Embeddings
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+def get_embedding(text: str, model: str = "text-embedding-3-small") -> list[float]:
+    """Get embedding vector for text."""
+    response = client.embeddings.create(
+        input=text,
+        model=model
+    )
+    return response.data[0].embedding
+```
+
+### Using Local Embeddings (Sentence Transformers)
+
+```python
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+def get_local_embedding(text: str) -> list[float]:
+    """Get embedding using local model."""
+    return model.encode(text).tolist()
+```
+
+---
+
+## 5.4 Vector Databases
+
+### ChromaDB (Recommended for Learning)
+
+Simple, embedded, Python-native:
+
+```python
+import chromadb
+from chromadb.utils import embedding_functions
+
+# Initialize
+client = chromadb.Client()
+
+# Use OpenAI embeddings
+openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+    api_key="your-key",
+    model_name="text-embedding-3-small"
+)
+
+# Create collection
+collection = client.create_collection(
+    name="my_docs",
+    embedding_function=openai_ef
+)
+
+# Add documents
+collection.add(
+    documents=["Document 1 content", "Document 2 content"],
+    metadatas=[{"source": "file1.md"}, {"source": "file2.md"}],
+    ids=["doc1", "doc2"]
+)
+
+# Query
+results = collection.query(
+    query_texts=["What is RAG?"],
+    n_results=3
+)
+```
+
+### LanceDB (Recommended for Production)
+
+Embedded, columnar, zero-copy with Pandas:
+
+```python
+import lancedb
+import pandas as pd
+
+# Connect
+db = lancedb.connect("./lancedb")
+
+# Create table from DataFrame
+data = pd.DataFrame({
+    "text": ["Document 1", "Document 2"],
+    "source": ["file1.md", "file2.md"],
+    "vector": [get_embedding("Document 1"), get_embedding("Document 2")]
+})
+
+table = db.create_table("docs", data)
+
+# Query
+results = table.search(get_embedding("What is RAG?")).limit(3).to_pandas()
+```
+
+---
+
+## 5.5 Building a Complete RAG Pipeline
+
+```python
+import os
+from pathlib import Path
+import chromadb
+from openai import OpenAI
+
+class RAGPipeline:
+    def __init__(self, collection_name: str = "knowledge_base"):
+        self.client = OpenAI()
+        self.chroma = chromadb.Client()
+        self.collection = self.chroma.get_or_create_collection(
+            name=collection_name,
+            metadata={"hnsw:space": "cosine"}
+        )
+
+    def ingest_directory(self, path: str, extensions: list[str] = [".md", ".txt", ".py"]):
+        """Ingest all matching files from a directory."""
+        documents = []
+        metadatas = []
+        ids = []
+
+        for file_path in Path(path).rglob("*"):
+            if file_path.suffix in extensions:
+                content = file_path.read_text()
+                chunks = self._chunk_document(content, str(file_path))
+
+                for i, chunk in enumerate(chunks):
+                    documents.append(chunk["text"])
+                    metadatas.append({
+                        "source": str(file_path),
+                        "chunk_index": i
+                    })
+                    ids.append(f"{file_path.stem}_{i}")
+
+        # Batch add to collection
+        if documents:
+            self.collection.add(
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids
+            )
+            print(f"Ingested {len(documents)} chunks from {path}")
+
+    def _chunk_document(self, content: str, source: str) -> list[dict]:
+        """Chunk a document with metadata."""
+        chunks = []
+        # Simple paragraph-based chunking
+        paragraphs = content.split("\n\n")
+
+        current_chunk = ""
+        for para in paragraphs:
+            if len(current_chunk) + len(para) < 1000:
+                current_chunk += para + "\n\n"
+            else:
+                if current_chunk.strip():
+                    chunks.append({"text": current_chunk.strip(), "source": source})
+                current_chunk = para + "\n\n"
+
+        if current_chunk.strip():
+            chunks.append({"text": current_chunk.strip(), "source": source})
+
+        return chunks
+
+    def query(self, question: str, n_results: int = 5) -> str:
+        """Query the knowledge base and generate an answer."""
+        # Retrieve relevant chunks
+        results = self.collection.query(
+            query_texts=[question],
+            n_results=n_results
+        )
+
+        # Build context from results
+        context_parts = []
+        for doc, metadata in zip(results["documents"][0], results["metadatas"][0]):
+            context_parts.append(f"[Source: {metadata['source']}]\n{doc}")
+
+        context = "\n\n---\n\n".join(context_parts)
+
+        # Generate answer
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are a helpful assistant. Answer questions based on the provided context.
+                    If the context doesn't contain relevant information, say so.
+                    Always cite your sources."""
+                },
+                {
+                    "role": "user",
+                    "content": f"Context:\n{context}\n\nQuestion: {question}"
+                }
+            ],
+            temperature=0.1
+        )
+
+        return response.choices[0].message.content
+
+# Usage
+rag = RAGPipeline()
+rag.ingest_directory("./docs")
+answer = rag.query("How do I configure the database connection?")
+print(answer)
+```
+
+---
+
+## 5.6 Advanced RAG Patterns
+
+### Hybrid Search (BM25 + Vector)
+
+Combine keyword and semantic search:
+
+```python
+from rank_bm25 import BM25Okapi
+
+class HybridRAG(RAGPipeline):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bm25 = None
+        self.documents = []
+
+    def _build_bm25_index(self):
+        """Build BM25 index for keyword search."""
+        # Get all documents from collection
+        all_docs = self.collection.get()
+        self.documents = all_docs["documents"]
+
+        # Tokenize for BM25
+        tokenized = [doc.lower().split() for doc in self.documents]
+        self.bm25 = BM25Okapi(tokenized)
+
+    def hybrid_query(self, question: str, n_results: int = 5, alpha: float = 0.5):
+        """Combine BM25 and vector search results."""
+        # Vector search
+        vector_results = self.collection.query(
+            query_texts=[question],
+            n_results=n_results * 2
+        )
+
+        # BM25 search
+        if self.bm25 is None:
+            self._build_bm25_index()
+
+        tokenized_query = question.lower().split()
+        bm25_scores = self.bm25.get_scores(tokenized_query)
+
+        # Combine scores (simplified)
+        # In production, use reciprocal rank fusion
+        combined = {}
+        for i, doc in enumerate(vector_results["documents"][0]):
+            combined[doc] = alpha * (1 / (i + 1))  # Vector rank score
+
+        top_bm25_indices = sorted(range(len(bm25_scores)),
+                                   key=lambda i: bm25_scores[i],
+                                   reverse=True)[:n_results * 2]
+
+        for rank, idx in enumerate(top_bm25_indices):
+            doc = self.documents[idx]
+            if doc in combined:
+                combined[doc] += (1 - alpha) * (1 / (rank + 1))
+            else:
+                combined[doc] = (1 - alpha) * (1 / (rank + 1))
+
+        # Return top results
+        sorted_docs = sorted(combined.items(), key=lambda x: x[1], reverse=True)
+        return [doc for doc, score in sorted_docs[:n_results]]
+```
+
+### Agentic RAG
+
+Let the agent decide when and what to retrieve:
+
+```python
+def agentic_rag_tool(query: str, collection_name: str = "knowledge_base") -> str:
+    """Tool for agent to search knowledge base."""
+    rag = RAGPipeline(collection_name)
+    results = rag.collection.query(
+        query_texts=[query],
+        n_results=3
+    )
+
+    if not results["documents"][0]:
+        return "No relevant documents found."
+
+    return "\n\n".join([
+        f"[{meta['source']}]: {doc[:500]}..."
+        for doc, meta in zip(results["documents"][0], results["metadatas"][0])
+    ])
+
+# Register with agent
+agent.register_tool(
+    "search_knowledge_base",
+    agentic_rag_tool,
+    "Search the knowledge base for information. Input: {query: string}"
+)
+```
+
+---
+
+## 🧪 Lab Exercise: Build a Documentation Assistant
+
+<Exercise
+  title="Build a Documentation Assistant"
+  difficulty="intermediate"
+  objectives={[
+    "Ingest all .md and .py files from a project",
+    "Implement semantic chunking that respects code boundaries",
+    "Add metadata (file path, line numbers, type)",
+    "Build a query interface that cites sources"
+  ]}
+  hints={[
+    "Start with a small directory (5-10 files) to test your pipeline",
+    "Use AST parsing for Python files to chunk by function/class",
+    "Store the source file path in metadata so you can cite it later",
+    "Test with questions that require information from multiple chunks"
+  ]}
+>
+
+### Test Questions to Try
+
+- "How do I install this project?"
+- "What does the `process_data` function do?"
+- "Where is authentication handled?"
+
+</Exercise>
+
+---
+
+<ProgressCheckpoint
+  title="RAG Knowledge Check"
+  questions={[
+    {
+      question: "What problem does RAG solve that fine-tuning doesn't?",
+      answer:
+        "RAG allows you to use current, dynamic data without retraining the model. Fine-tuning bakes knowledge into the model weights, which is expensive and static. RAG retrieves from an updateable knowledge base.",
+    },
+    {
+      question: "Why is chunking strategy important for RAG quality?",
+      answer:
+        "Bad chunking leads to bad retrieval. If you split a paragraph in the middle of a sentence, or separate a function from its docstring, the chunks lose context and meaning. Semantic chunking preserves meaningful units.",
+    },
+    {
+      question:
+        "What's the difference between keyword search and semantic search?",
+      answer:
+        "Keyword search (BM25) matches exact words—'car' won't find 'automobile'. Semantic search uses embeddings to match by meaning—'car' will find 'automobile' because they're close in vector space.",
+    },
+    {
+      question:
+        "When would you use hybrid search instead of pure vector search?",
+      answer:
+        "When you need both exact matches (product codes, names, technical terms) AND semantic understanding. Hybrid combines BM25 keyword matching with vector similarity for the best of both worlds.",
+    },
+  ]}
+/>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Using chunks that are too large (>2000 tokens)",
+      fix: "Keep chunks 200-500 tokens. Smaller chunks = more precise retrieval",
+    },
+    {
+      mistake: "Not including overlap between chunks",
+      fix: "Use 10-20% overlap so context isn't lost at boundaries",
+    },
+    {
+      mistake: "Ignoring metadata when chunking",
+      fix: "Store source file, section headers, and line numbers for better citations",
+    },
+    {
+      mistake: "Retrieving too many chunks (k=20+)",
+      fix: "Start with k=3-5. More chunks = more noise and higher cost",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "RAG = Retrieve relevant documents + Generate grounded responses",
+    "The pipeline: Load → Chunk → Embed → Store → Retrieve",
+    "Chunking strategy matters more than embedding model choice",
+    "Vector databases (ChromaDB, LanceDB) enable fast similarity search",
+    "Hybrid search combines keyword (BM25) and semantic (vector) approaches",
+    "Agentic RAG lets the agent decide when and what to retrieve",
+  ]}
+/>
+
+---
+
+## 🔗 Further Reading
+
+- [ChromaDB Documentation](https://docs.trychroma.com/)
+- [LanceDB Documentation](https://lancedb.github.io/lancedb/)
+- [Sentence Transformers](https://www.sbert.net/)
+- [RAG Best Practices - LangChain](https://python.langchain.com/docs/tutorials/rag/)
+
+**Tomorrow**: Memory systems—giving your agent short-term and long-term recall.

@@ -1,0 +1,747 @@
+---
+title: "Day 36: Production Engineering for Agents"
+description: "Secrets management, feature flags, billing systems, and performance optimization for production agentic systems."
+week: 5
+---
+
+<ReadingTime minutes={35} />
+
+<SkillLevel level="advanced" description="Production deployment" />
+
+<Prerequisites
+  items={[
+    "Completed core agent development modules",
+    "Understanding of cloud deployment basics",
+    "Familiarity with API design and billing concepts",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Implement secure secrets management for AI agents",
+    "Use feature flags to safely roll out agent capabilities",
+    "Design usage-based billing for agentic SaaS products",
+    "Optimize agent performance for production workloads",
+    "Build observable, maintainable agent systems",
+  ]}
+/>
+
+---
+
+## The Production Gap
+
+Building agents that work in demos is easy. Building agents that work in production—securely, reliably, and profitably—is hard.
+
+<Callout type="warning">
+  **Reality Check:** Most agent tutorials skip production concerns entirely.
+  This module covers what happens after "it works on my machine."
+</Callout>
+
+---
+
+## 36.1 Secure Secrets Management
+
+<ProductionPattern
+  type="secrets"
+  title="Zero-Knowledge Secrets for AI Agents"
+  problem="AI agents need API keys, database credentials, and service tokens. Hardcoding them in prompts or code exposes them to logs, version control, and potential LLM leakage."
+  solution="Implement zero-knowledge secrets management where secrets are encrypted client-side, never exposed to servers or logs, and injected at runtime through secure environment variables."
+  implementation={`1. Use a secrets manager (AWS Secrets Manager, HashiCorp Vault, Doppler)
+2. Encrypt secrets at rest and in transit
+3. Inject secrets as environment variables at runtime
+4. Never pass secrets through LLM context
+5. Rotate secrets automatically on a schedule
+6. Audit all secret access`}
+  antiPatterns={[
+    "Hardcoding API keys in source code",
+    "Passing secrets in LLM prompts or tool descriptions",
+    "Storing secrets in .env files committed to git",
+    "Using the same API key across all environments",
+    "Never rotating secrets",
+  ]}
+  bestPractices={[
+    "Use separate secrets per environment (dev/staging/prod)",
+    "Implement automatic secret rotation",
+    "Audit and log all secret access",
+    "Use short-lived tokens where possible",
+    "Encrypt secrets client-side before storage",
+  ]}
+/>
+
+### Implementation Pattern
+
+```python
+import os
+from functools import lru_cache
+from typing import Optional
+import boto3
+from botocore.exceptions import ClientError
+
+class SecretsManager:
+    """Secure secrets management for AI agents."""
+
+    def __init__(self, environment: str = "development"):
+        self.environment = environment
+        self._client = None
+        self._cache = {}
+
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = boto3.client('secretsmanager')
+        return self._client
+
+    def get_secret(self, secret_name: str) -> Optional[str]:
+        """Retrieve a secret securely."""
+
+        # Check cache first (with TTL in production)
+        cache_key = f"{self.environment}/{secret_name}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        try:
+            response = self.client.get_secret_value(
+                SecretId=f"{self.environment}/{secret_name}"
+            )
+            secret = response['SecretString']
+            self._cache[cache_key] = secret
+            return secret
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                raise ValueError(f"Secret not found: {secret_name}")
+            raise
+
+    def inject_to_environment(self, secret_names: list[str]):
+        """Inject secrets as environment variables."""
+        for name in secret_names:
+            value = self.get_secret(name)
+            if value:
+                # Use uppercase with underscores for env vars
+                env_key = name.upper().replace("-", "_")
+                os.environ[env_key] = value
+
+class AgentToolExecutor:
+    """Execute agent tools with secure secret injection."""
+
+    def __init__(self, secrets_manager: SecretsManager):
+        self.secrets = secrets_manager
+
+    def execute_tool(self, tool_name: str, params: dict) -> dict:
+        """Execute a tool with secrets injected at runtime."""
+
+        # Map tools to required secrets
+        tool_secrets = {
+            "web_search": ["SERP_API_KEY"],
+            "send_email": ["SMTP_PASSWORD", "SMTP_USER"],
+            "database_query": ["DATABASE_URL"],
+            "github_api": ["GITHUB_TOKEN"],
+        }
+
+        required_secrets = tool_secrets.get(tool_name, [])
+
+        # Inject secrets just before execution
+        self.secrets.inject_to_environment(required_secrets)
+
+        try:
+            # Execute the tool (secrets available via os.environ)
+            result = self._run_tool(tool_name, params)
+            return result
+        finally:
+            # Clear secrets from environment after execution
+            for secret_name in required_secrets:
+                env_key = secret_name.upper().replace("-", "_")
+                os.environ.pop(env_key, None)
+```
+
+<Callout type="danger">
+  **Never Do This:** Don't include secrets in LLM prompts, tool descriptions, or
+  anywhere the model can see them. LLMs can leak secrets in their outputs.
+</Callout>
+
+---
+
+## 36.2 Feature Flags for Agent Capabilities
+
+## 36.2 Feature Flags for Agent Capabilities
+
+![Feature Flag Control Panel](/images/feature_flags.png)
+
+<ProductionPattern
+  type="feature-flags"
+  title="Dynamic Agent Capability Control"
+  problem="Deploying new agent capabilities is risky. A bug in a new tool could affect all users. Rolling back requires a full deployment."
+  solution="Use feature flags to control agent capabilities at runtime. Enable new features for specific users, A/B test different agent behaviors, and instantly disable problematic features without deployment."
+  implementation={`1. Define feature flags for each agent capability
+2. Check flags before enabling tools or behaviors
+3. Use percentage rollouts for gradual releases
+4. Implement user/tenant targeting for beta features
+5. Add kill switches for instant capability disable
+6. Log flag evaluations for debugging`}
+  antiPatterns={[
+    "Deploying new agent features to all users at once",
+    "Using code branches instead of runtime flags",
+    "No way to disable features without deployment",
+    "Not tracking which users have which features",
+  ]}
+  bestPractices={[
+    "Start with 1% rollout, increase gradually",
+    "Use feature flags for all new agent tools",
+    "Implement automatic rollback on error spikes",
+    "A/B test different agent prompts and behaviors",
+    "Keep flag evaluation fast (<10ms)",
+  ]}
+/>
+
+### Implementation Pattern
+
+```python
+from typing import Optional, Any
+from dataclasses import dataclass
+from enum import Enum
+import random
+import hashlib
+
+class RolloutStrategy(Enum):
+    ALL = "all"
+    NONE = "none"
+    PERCENTAGE = "percentage"
+    USER_LIST = "user_list"
+    TENANT_LIST = "tenant_list"
+
+@dataclass
+class FeatureFlag:
+    name: str
+    enabled: bool
+    strategy: RolloutStrategy
+    percentage: float = 0.0
+    allowed_users: list[str] = None
+    allowed_tenants: list[str] = None
+
+    def is_enabled_for(self, user_id: str, tenant_id: Optional[str] = None) -> bool:
+        if not self.enabled:
+            return False
+
+        if self.strategy == RolloutStrategy.ALL:
+            return True
+
+        if self.strategy == RolloutStrategy.NONE:
+            return False
+
+        if self.strategy == RolloutStrategy.USER_LIST:
+            return user_id in (self.allowed_users or [])
+
+        if self.strategy == RolloutStrategy.TENANT_LIST:
+            return tenant_id in (self.allowed_tenants or [])
+
+        if self.strategy == RolloutStrategy.PERCENTAGE:
+            # Consistent hashing for stable assignment
+            hash_input = f"{self.name}:{user_id}"
+            hash_value = int(hashlib.md5(hash_input.encode()).hexdigest(), 16)
+            return (hash_value % 100) < self.percentage
+
+        return False
+
+class AgentFeatureFlags:
+    """Feature flag management for agent capabilities."""
+
+    def __init__(self):
+        self.flags: dict[str, FeatureFlag] = {}
+        self._load_flags()
+
+    def _load_flags(self):
+        """Load flags from configuration (in production, use a service)."""
+        self.flags = {
+            "agent_v2_reasoning": FeatureFlag(
+                name="agent_v2_reasoning",
+                enabled=True,
+                strategy=RolloutStrategy.PERCENTAGE,
+                percentage=10.0  # 10% of users
+            ),
+            "web_search_tool": FeatureFlag(
+                name="web_search_tool",
+                enabled=True,
+                strategy=RolloutStrategy.ALL
+            ),
+            "code_execution_tool": FeatureFlag(
+                name="code_execution_tool",
+                enabled=True,
+                strategy=RolloutStrategy.TENANT_LIST,
+                allowed_tenants=["enterprise-tier"]
+            ),
+            "experimental_memory": FeatureFlag(
+                name="experimental_memory",
+                enabled=True,
+                strategy=RolloutStrategy.USER_LIST,
+                allowed_users=["beta-tester-1", "beta-tester-2"]
+            ),
+        }
+
+    def is_enabled(
+        self,
+        flag_name: str,
+        user_id: str,
+        tenant_id: Optional[str] = None
+    ) -> bool:
+        """Check if a feature is enabled for a user."""
+        flag = self.flags.get(flag_name)
+        if not flag:
+            return False
+        return flag.is_enabled_for(user_id, tenant_id)
+
+    def get_enabled_tools(
+        self,
+        user_id: str,
+        tenant_id: Optional[str] = None
+    ) -> list[str]:
+        """Get list of enabled tools for a user."""
+        tool_flags = {
+            "web_search": "web_search_tool",
+            "code_execution": "code_execution_tool",
+            "file_operations": "file_operations_tool",
+        }
+
+        enabled = []
+        for tool_name, flag_name in tool_flags.items():
+            if self.is_enabled(flag_name, user_id, tenant_id):
+                enabled.append(tool_name)
+
+        return enabled
+
+# Usage in agent
+class FeatureFlaggedAgent:
+    def __init__(self, user_id: str, tenant_id: str):
+        self.user_id = user_id
+        self.tenant_id = tenant_id
+        self.flags = AgentFeatureFlags()
+
+    def get_available_tools(self) -> list:
+        """Get tools available for this user based on feature flags."""
+        enabled_tools = self.flags.get_enabled_tools(
+            self.user_id,
+            self.tenant_id
+        )
+
+        all_tools = {
+            "web_search": WebSearchTool(),
+            "code_execution": CodeExecutionTool(),
+            "file_operations": FileOperationsTool(),
+        }
+
+        return [all_tools[name] for name in enabled_tools if name in all_tools]
+```
+
+---
+
+## 36.3 Usage-Based Billing
+
+<ProductionPattern
+  type="billing"
+  title="Metered Billing for Agentic SaaS"
+  problem="AI agents have variable costs (LLM tokens, tool executions, compute time). Flat-rate pricing either loses money on heavy users or prices out light users."
+  solution="Implement usage-based billing that accurately tracks consumption, applies custom pricing models, and generates precise invoices. Charge for what users actually use."
+  implementation={`1. Track all billable events (tokens, tool calls, compute)
+2. Store usage data with timestamps and metadata
+3. Apply pricing tiers and volume discounts
+4. Generate itemized invoices
+5. Implement usage alerts and limits
+6. Support prepaid credits and overages`}
+  antiPatterns={[
+    "Flat-rate pricing for variable-cost services",
+    "Not tracking usage at granular level",
+    "No spending alerts or limits",
+    "Billing surprises at end of month",
+  ]}
+  bestPractices={[
+    "Track usage in real-time, bill monthly",
+    "Provide usage dashboards to users",
+    "Send alerts at 50%, 80%, 100% of limits",
+    "Offer prepaid credits with discounts",
+    "Itemize bills by feature/tool",
+  ]}
+/>
+
+### Implementation Pattern
+
+```python
+from datetime import datetime, timedelta
+from decimal import Decimal
+from typing import Optional
+from dataclasses import dataclass, field
+from enum import Enum
+import uuid
+
+class BillableEvent(Enum):
+    LLM_INPUT_TOKENS = "llm_input_tokens"
+    LLM_OUTPUT_TOKENS = "llm_output_tokens"
+    TOOL_EXECUTION = "tool_execution"
+    EMBEDDING_TOKENS = "embedding_tokens"
+    STORAGE_GB_HOURS = "storage_gb_hours"
+
+@dataclass
+class UsageRecord:
+    id: str
+    tenant_id: str
+    user_id: str
+    event_type: BillableEvent
+    quantity: Decimal
+    metadata: dict
+    timestamp: datetime
+
+    @classmethod
+    def create(cls, tenant_id: str, user_id: str, event_type: BillableEvent,
+               quantity: float, metadata: dict = None):
+        return cls(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant_id,
+            user_id=user_id,
+            event_type=event_type,
+            quantity=Decimal(str(quantity)),
+            metadata=metadata or {},
+            timestamp=datetime.utcnow()
+        )
+
+@dataclass
+class PricingTier:
+    event_type: BillableEvent
+    unit_price: Decimal  # Price per unit
+    included_units: int = 0  # Free tier
+    volume_discounts: dict = field(default_factory=dict)  # {threshold: discount_pct}
+
+class UsageTracker:
+    """Track and bill for agent usage."""
+
+    PRICING = {
+        BillableEvent.LLM_INPUT_TOKENS: PricingTier(
+            event_type=BillableEvent.LLM_INPUT_TOKENS,
+            unit_price=Decimal("0.000003"),  # $3 per 1M tokens
+            included_units=100000,  # 100K free
+            volume_discounts={1000000: 10, 10000000: 20}  # 10% off at 1M, 20% at 10M
+        ),
+        BillableEvent.LLM_OUTPUT_TOKENS: PricingTier(
+            event_type=BillableEvent.LLM_OUTPUT_TOKENS,
+            unit_price=Decimal("0.000015"),  # $15 per 1M tokens
+            included_units=50000,
+            volume_discounts={1000000: 10, 10000000: 20}
+        ),
+        BillableEvent.TOOL_EXECUTION: PricingTier(
+            event_type=BillableEvent.TOOL_EXECUTION,
+            unit_price=Decimal("0.01"),  # $0.01 per tool call
+            included_units=100,
+            volume_discounts={10000: 15, 100000: 25}
+        ),
+    }
+
+    def __init__(self):
+        self.records: list[UsageRecord] = []
+
+    def track(self, tenant_id: str, user_id: str, event_type: BillableEvent,
+              quantity: float, metadata: dict = None):
+        """Track a billable event."""
+        record = UsageRecord.create(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            event_type=event_type,
+            quantity=quantity,
+            metadata=metadata
+        )
+        self.records.append(record)
+
+        # Check if approaching limits
+        self._check_alerts(tenant_id)
+
+        return record
+
+    def get_usage_summary(
+        self,
+        tenant_id: str,
+        start_date: datetime,
+        end_date: datetime
+    ) -> dict:
+        """Get usage summary for billing period."""
+
+        relevant_records = [
+            r for r in self.records
+            if r.tenant_id == tenant_id
+            and start_date <= r.timestamp <= end_date
+        ]
+
+        summary = {}
+        for event_type in BillableEvent:
+            type_records = [r for r in relevant_records if r.event_type == event_type]
+            total_quantity = sum(r.quantity for r in type_records)
+            summary[event_type.value] = {
+                "quantity": float(total_quantity),
+                "record_count": len(type_records)
+            }
+
+        return summary
+
+    def calculate_invoice(
+        self,
+        tenant_id: str,
+        billing_period_start: datetime,
+        billing_period_end: datetime
+    ) -> dict:
+        """Calculate invoice for a billing period."""
+
+        usage = self.get_usage_summary(tenant_id, billing_period_start, billing_period_end)
+
+        line_items = []
+        total = Decimal("0")
+
+        for event_type, pricing in self.PRICING.items():
+            event_usage = usage.get(event_type.value, {"quantity": 0})
+            quantity = Decimal(str(event_usage["quantity"]))
+
+            # Subtract free tier
+            billable_quantity = max(Decimal("0"), quantity - pricing.included_units)
+
+            if billable_quantity > 0:
+                # Apply volume discounts
+                discount_pct = 0
+                for threshold, discount in sorted(pricing.volume_discounts.items()):
+                    if quantity >= threshold:
+                        discount_pct = discount
+
+                unit_price = pricing.unit_price * (1 - Decimal(str(discount_pct)) / 100)
+                line_total = billable_quantity * unit_price
+
+                line_items.append({
+                    "description": event_type.value,
+                    "quantity": float(billable_quantity),
+                    "unit_price": float(unit_price),
+                    "discount_pct": discount_pct,
+                    "total": float(line_total)
+                })
+
+                total += line_total
+
+        return {
+            "tenant_id": tenant_id,
+            "period_start": billing_period_start.isoformat(),
+            "period_end": billing_period_end.isoformat(),
+            "line_items": line_items,
+            "subtotal": float(total),
+            "tax": float(total * Decimal("0.0")),  # Add tax logic
+            "total": float(total)
+        }
+
+    def _check_alerts(self, tenant_id: str):
+        """Check if usage is approaching limits."""
+        # Implementation: send alerts at 50%, 80%, 100% of limits
+        pass
+
+# Usage in agent execution
+class BilledAgentExecutor:
+    def __init__(self, tracker: UsageTracker, tenant_id: str, user_id: str):
+        self.tracker = tracker
+        self.tenant_id = tenant_id
+        self.user_id = user_id
+
+    async def execute(self, prompt: str) -> str:
+        # Track input tokens
+        input_tokens = len(prompt.split()) * 1.3  # Rough estimate
+        self.tracker.track(
+            self.tenant_id, self.user_id,
+            BillableEvent.LLM_INPUT_TOKENS,
+            input_tokens,
+            {"model": "gpt-4o"}
+        )
+
+        # Execute LLM call
+        response = await self.llm.ainvoke(prompt)
+
+        # Track output tokens
+        output_tokens = len(response.content.split()) * 1.3
+        self.tracker.track(
+            self.tenant_id, self.user_id,
+            BillableEvent.LLM_OUTPUT_TOKENS,
+            output_tokens,
+            {"model": "gpt-4o"}
+        )
+
+        return response.content
+```
+
+---
+
+## 36.4 Performance Optimization
+
+<ProductionPattern
+  type="performance"
+  title="High-Performance Agent Architecture"
+  problem="Agents can be slow and resource-intensive. Cold starts take seconds, memory usage grows unbounded, and response times vary wildly."
+  solution="Optimize for production: minimize cold starts, control memory usage, cache aggressively, and use streaming for perceived performance."
+  implementation={`Target metrics:
+- Cold start: <1 second
+- Memory: <128 MB baseline
+- P95 latency: <3 seconds for simple queries
+- Binary size: <20 MB (for serverless)
+
+Techniques:
+
+1. Lazy load heavy dependencies
+2. Connection pooling for databases/APIs
+3. Response streaming for long operations
+4. Aggressive caching with TTL
+5. Model quantization for local inference`}
+   antiPatterns={[
+   "Loading all models at startup",
+   "Creating new connections per request",
+   "Waiting for full response before returning",
+   "No caching of embeddings or search results",
+   "Unbounded conversation history"
+   ]}
+   bestPractices={[
+   "Stream responses as they're generated",
+   "Cache embeddings and frequent queries",
+   "Use connection pools for all external services",
+   "Implement request timeouts at every layer",
+   "Monitor and alert on P95 latency"
+   ]}
+   />
+
+### Implementation Pattern
+
+```python
+import asyncio
+from functools import lru_cache
+from typing import AsyncGenerator
+import time
+
+class PerformanceOptimizedAgent:
+    """Agent optimized for production performance."""
+
+    def __init__(self):
+        self._llm = None  # Lazy load
+        self._embeddings = None
+        self._connection_pool = None
+        self.cache = {}
+        self.cache_ttl = 300  # 5 minutes
+
+    @property
+    def llm(self):
+        """Lazy load LLM to reduce cold start."""
+        if self._llm is None:
+            from langchain_openai import ChatOpenAI
+            self._llm = ChatOpenAI(
+                model="gpt-4o-mini",
+                streaming=True,
+                request_timeout=30
+            )
+        return self._llm
+
+    def get_cached(self, key: str):
+        """Get from cache with TTL check."""
+        if key in self.cache:
+            value, timestamp = self.cache[key]
+            if time.time() - timestamp < self.cache_ttl:
+                return value
+            del self.cache[key]
+        return None
+
+    def set_cached(self, key: str, value):
+        """Set cache with timestamp."""
+        self.cache[key] = (value, time.time())
+
+    async def stream_response(
+        self,
+        prompt: str
+    ) -> AsyncGenerator[str, None]:
+        """Stream response for better perceived performance."""
+
+        # Check cache first
+        cache_key = f"response:{hash(prompt)}"
+        cached = self.get_cached(cache_key)
+        if cached:
+            yield cached
+            return
+
+        full_response = ""
+
+        async for chunk in self.llm.astream(prompt):
+            content = chunk.content
+            full_response += content
+            yield content
+
+        # Cache the full response
+        self.set_cached(cache_key, full_response)
+
+    async def execute_with_timeout(
+        self,
+        prompt: str,
+        timeout: float = 30.0
+    ) -> str:
+        """Execute with timeout protection."""
+        try:
+            return await asyncio.wait_for(
+                self._execute(prompt),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            return "Request timed out. Please try a simpler query."
+
+    def trim_conversation_history(
+        self,
+        messages: list,
+        max_tokens: int = 4000
+    ) -> list:
+        """Prevent unbounded memory growth."""
+
+        # Always keep system message
+        system_msgs = [m for m in messages if m.get("role") == "system"]
+        other_msgs = [m for m in messages if m.get("role") != "system"]
+
+        # Estimate tokens (rough)
+        def estimate_tokens(msg):
+            return len(str(msg.get("content", "")).split()) * 1.3
+
+        # Keep recent messages within budget
+        total_tokens = sum(estimate_tokens(m) for m in system_msgs)
+        kept_msgs = []
+
+        for msg in reversed(other_msgs):
+            msg_tokens = estimate_tokens(msg)
+            if total_tokens + msg_tokens > max_tokens:
+                break
+            kept_msgs.insert(0, msg)
+            total_tokens += msg_tokens
+
+        return system_msgs + kept_msgs
+```
+
+---
+
+<ProgressCheckpoint
+  title="Production Engineering Check"
+  questions={[
+    {
+      question: "Why should secrets never be passed through LLM context?",
+      answer:
+        "LLMs can leak secrets in their outputs. Secrets should be injected as environment variables at runtime and cleared after use, never visible to the model.",
+    },
+    {
+      question: "What's the benefit of percentage-based feature flag rollouts?",
+      answer:
+        "Gradual rollouts (1% → 10% → 50% → 100%) let you catch bugs early with limited blast radius. If issues arise, only a small percentage of users are affected.",
+    },
+    {
+      question:
+        "Why use usage-based billing instead of flat-rate for AI agents?",
+      answer:
+        "AI agents have variable costs (tokens, compute). Flat-rate either loses money on heavy users or prices out light users. Usage-based aligns costs with value delivered.",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Secrets must be encrypted, injected at runtime, and never exposed to LLMs",
+    "Feature flags enable safe rollouts, A/B testing, and instant kill switches",
+    "Usage-based billing aligns costs with value and prevents billing surprises",
+    "Performance optimization: lazy loading, streaming, caching, and timeouts",
+    "Production agents need observability, limits, and graceful degradation",
+  ]}
+/>

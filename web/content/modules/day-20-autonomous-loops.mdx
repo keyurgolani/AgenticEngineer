@@ -1,0 +1,453 @@
+---
+title: "Day 20: Autonomous Execution Loops"
+description: "Master the art of eventual consistency and self-correcting agent loops for long-running autonomous operations."
+week: 3
+---
+
+<ReadingTime minutes={30} />
+
+<SkillLevel level="advanced" description="Production patterns" />
+
+<Prerequisites
+  items={[
+    "Completed LangGraph Deep Dive (Day 09)",
+    "Understanding of agent loops and state management",
+    "Familiarity with cost management for LLM APIs",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Implement autonomous execution loops that run without supervision",
+    "Use the file system as external agent memory",
+    "Define clear end conditions for eventual consistency",
+    "Identify dangerous use cases where autonomy is inappropriate",
+    "Implement cost controls and iteration limits",
+  ]}
+/>
+
+---
+
+## The Philosophy of Eventual Consistency
+
+Traditional agent development involves micromanaging every step. You watch the agent, correct it, and guide it through each decision. This doesn't scale.
+
+<ConceptIntro
+  title="Eventual Consistency for Agents"
+  analogy="Think of a self-driving car. You don't control the steering wheel every millisecond—you set a destination and trust the system to get there, handling obstacles along the way. Autonomous agent loops work the same way: define the end state, let the agent iterate until it arrives."
+  technicalDef="Eventual consistency in agentic systems means defining a measurable end condition and allowing the agent to iteratively converge on a solution through repeated perception-action cycles, using failures as debugging signals rather than errors."
+  whyItMatters="This pattern enables truly autonomous operations—agents that can work overnight, handle edge cases, and self-correct without human intervention. It's the difference between a tool and a teammate."
+/>
+
+![Autonomous Loop Cycle](/images/autonomous_loop.png)
+
+---
+
+## 20.1 The Core Pattern
+
+<AutonomousLoop
+  title="Test Coverage Loop"
+  description="An autonomous loop that writes tests until coverage reaches 80%. The agent reads the codebase, identifies untested code, writes tests, runs them, and iterates until the goal is met."
+  endCondition="coverage >= 80% AND all tests passing"
+  maxIterations={20}
+  estimatedCostPerIteration="$0.15"
+  dangerZones={[
+    "Security-critical code (authentication, payments, encryption)",
+    "Major architectural decisions (microservices vs monolith)",
+    "Open-ended exploratory tasks with no clear end condition",
+    "Code that interacts with production databases",
+    "Anything involving user PII or sensitive data",
+  ]}
+  safeUseCases={[
+    "Writing unit tests until coverage threshold met",
+    "Fixing linting errors across a codebase",
+    "Generating documentation for undocumented functions",
+    "Refactoring code to match a style guide",
+    "Migrating imports after a library upgrade",
+  ]}
+/>
+
+### The Basic Loop Structure
+
+```bash
+#!/bin/bash
+# The "Ralph Wiggum" technique - simple but powerful
+
+MAX_ITERATIONS=20
+ITERATION=0
+
+while [ $ITERATION -lt $MAX_ITERATIONS ]; do
+    echo "=== Iteration $ITERATION ==="
+
+    # Feed the prompt to the agent
+    # The agent reads project files to understand current state
+    claude --prompt "
+        Read the project files to understand current state.
+        Your goal: Achieve 80% test coverage.
+
+        Current coverage: $(npm run coverage --silent | grep 'All files')
+
+        If coverage >= 80%, respond with 'DONE'.
+        Otherwise, identify untested code and write tests.
+    " --allowedTools "read,write,bash"
+
+    # Check if done
+    if grep -q "DONE" /tmp/agent_output.txt; then
+        echo "Goal achieved!"
+        exit 0
+    fi
+
+    ITERATION=$((ITERATION + 1))
+done
+
+echo "Max iterations reached"
+exit 1
+```
+
+---
+
+## 20.2 File System as Memory
+
+The key insight: **the file system is the agent's external memory**.
+
+<Callout type="tip">
+  **Why This Works:** By reading project files at the start of each loop
+  iteration, the agent sees its own previous work. This bypasses the limitation
+  of finite conversation history—the agent's "memory" is the actual state of the
+  codebase.
+</Callout>
+
+```python
+# agent_loop.py
+import subprocess
+import json
+from pathlib import Path
+
+class AutonomousLoop:
+    def __init__(self, goal: str, max_iterations: int = 20):
+        self.goal = goal
+        self.max_iterations = max_iterations
+        self.state_file = Path(".agent_state.json")
+
+    def load_state(self) -> dict:
+        """File system as memory - load previous state."""
+        if self.state_file.exists():
+            return json.loads(self.state_file.read_text())
+        return {"iteration": 0, "history": []}
+
+    def save_state(self, state: dict):
+        """Persist state to file system."""
+        self.state_file.write_text(json.dumps(state, indent=2))
+
+    def check_end_condition(self) -> bool:
+        """Define what 'done' looks like."""
+        # Example: Check test coverage
+        result = subprocess.run(
+            ["npm", "run", "coverage", "--", "--json"],
+            capture_output=True, text=True
+        )
+        coverage = self.parse_coverage(result.stdout)
+        return coverage >= 80
+
+    def run(self):
+        state = self.load_state()
+
+        while state["iteration"] < self.max_iterations:
+            print(f"Iteration {state['iteration']}")
+
+            # Check if we're done
+            if self.check_end_condition():
+                print("✅ Goal achieved!")
+                return True
+
+            # Run agent with current project state as context
+            result = self.run_agent_iteration(state)
+
+            # Update state
+            state["iteration"] += 1
+            state["history"].append(result)
+            self.save_state(state)
+
+        print("❌ Max iterations reached")
+        return False
+```
+
+---
+
+## 20.3 Failure as a Debugging Signal
+
+<ConceptIntro
+  title="Failures Debug Your Specification"
+  analogy="When a junior developer makes a mistake, you don't blame them—you realize your instructions weren't clear enough. Agent failures work the same way. Every failure reveals a missing edge case or faulty assumption in your prompt specification."
+  technicalDef="In autonomous loops, failures are treated as feedback signals that refine the prompt specification. Instead of fixing the agent, you fix the prompt by adding constraints, examples, or clarifications that address the failure mode."
+  whyItMatters="This mindset shift is crucial. Stop controlling every step and start defining what 'done' looks like. Let failures teach you what your specification is missing."
+/>
+
+### The Refinement Cycle
+
+```python
+# Version 1: Vague specification (will fail)
+prompt_v1 = "Write tests for the user module"
+
+# Failure: Agent wrote tests but they don't run
+# Learning: Need to specify test framework
+
+# Version 2: Add framework constraint
+prompt_v2 = """
+Write tests for the user module using pytest.
+Tests must be in tests/test_user.py.
+"""
+
+# Failure: Tests run but don't cover edge cases
+# Learning: Need to specify coverage requirements
+
+# Version 3: Add coverage and edge cases
+prompt_v3 = """
+Write tests for the user module using pytest.
+Tests must be in tests/test_user.py.
+
+Requirements:
+- Cover all public methods
+- Include edge cases: empty input, None values, invalid types
+- Each test must have a docstring explaining what it tests
+- Target: 80% line coverage for user.py
+"""
+
+# Failure: Tests pass but are brittle (mock everything)
+# Learning: Need to specify testing philosophy
+
+# Version 4: Add testing philosophy
+prompt_v4 = """
+Write tests for the user module using pytest.
+Tests must be in tests/test_user.py.
+
+Requirements:
+- Cover all public methods
+- Include edge cases: empty input, None values, invalid types
+- Each test must have a docstring explaining what it tests
+- Target: 80% line coverage for user.py
+
+Testing Philosophy:
+- Prefer integration tests over unit tests where possible
+- Only mock external services (database, APIs), not internal modules
+- Tests should be deterministic - no random data
+- Use fixtures for common setup
+"""
+```
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Blaming the agent when it produces wrong output",
+      fix: "Treat failures as specification bugs. Ask: 'What did I fail to specify?'",
+    },
+    {
+      mistake: "Adding more and more instructions to fix edge cases",
+      fix: "Provide examples instead. Show the agent what good output looks like.",
+    },
+    {
+      mistake: "Running loops without iteration limits",
+      fix: "ALWAYS set max_iterations. Unattended loops can cost hundreds of dollars.",
+    },
+  ]}
+/>
+
+---
+
+## 20.4 Cost Management
+
+<ProductionPattern
+  type="billing"
+  title="Cost Controls for Autonomous Loops"
+  problem="Autonomous loops can run indefinitely, generating massive API bills. A loop running overnight without limits could cost $500+ in API calls."
+  solution="Implement multiple layers of cost control: iteration limits, token budgets, and cost tracking with alerts."
+  implementation={`1. Hard iteration limit (e.g., max 20 iterations)
+2. Token budget per iteration (e.g., max 4000 tokens/call)
+3. Total cost budget (e.g., max $10 per loop run)
+4. Alerting when 50% of budget consumed
+5. Automatic shutdown on budget exhaustion`}
+  antiPatterns={[
+    "Running loops without any iteration limit",
+    "Using expensive models (GPT-4) for simple tasks",
+    "Not tracking costs per iteration",
+    "Letting loops run overnight without monitoring",
+  ]}
+  bestPractices={[
+    "Start with low limits, increase as you gain confidence",
+    "Use cheaper models for iteration, expensive for final review",
+    "Log every API call with cost estimate",
+    "Set up billing alerts in your cloud provider",
+  ]}
+/>
+
+```python
+class CostControlledLoop:
+    def __init__(
+        self,
+        max_iterations: int = 20,
+        max_cost_usd: float = 10.0,
+        cost_per_iteration: float = 0.15
+    ):
+        self.max_iterations = max_iterations
+        self.max_cost_usd = max_cost_usd
+        self.cost_per_iteration = cost_per_iteration
+        self.total_cost = 0.0
+
+    def can_continue(self, iteration: int) -> tuple[bool, str]:
+        """Check all cost controls."""
+        if iteration >= self.max_iterations:
+            return False, f"Max iterations ({self.max_iterations}) reached"
+
+        projected_cost = self.total_cost + self.cost_per_iteration
+        if projected_cost > self.max_cost_usd:
+            return False, f"Cost budget (${self.max_cost_usd}) would be exceeded"
+
+        # Alert at 50% budget
+        if self.total_cost > self.max_cost_usd * 0.5:
+            print(f"⚠️ Warning: 50% of cost budget consumed (${self.total_cost:.2f})")
+
+        return True, "OK"
+
+    def record_iteration(self, tokens_used: int, model: str):
+        """Track actual costs."""
+        cost = self.calculate_cost(tokens_used, model)
+        self.total_cost += cost
+        print(f"💰 Iteration cost: ${cost:.4f} | Total: ${self.total_cost:.2f}")
+```
+
+---
+
+## 20.5 When NOT to Use Autonomous Loops
+
+<Callout type="danger">
+  **Critical Warning:** Autonomous loops are powerful but dangerous. Never use
+  them for security-critical code, architectural decisions, or anything
+  involving production data.
+</Callout>
+
+### Danger Zone Checklist
+
+| Use Case               | Safe?  | Reason                                   |
+| :--------------------- | :----- | :--------------------------------------- |
+| Writing unit tests     | ✅ Yes | Bounded, verifiable, reversible          |
+| Fixing lint errors     | ✅ Yes | Deterministic rules, easy to verify      |
+| Generating docs        | ✅ Yes | Low risk, human review before publish    |
+| Auth/payment code      | ❌ No  | Security-critical, needs human review    |
+| Database migrations    | ❌ No  | Irreversible, production impact          |
+| Architecture decisions | ❌ No  | High-level decisions need human judgment |
+| Exploratory research   | ❌ No  | No clear end condition                   |
+
+---
+
+## 20.6 Production Implementation
+
+```python
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.sqlite import SqliteSaver
+from typing import TypedDict, Literal
+import subprocess
+
+class LoopState(TypedDict):
+    goal: str
+    iteration: int
+    max_iterations: int
+    status: Literal["running", "success", "failed", "budget_exceeded"]
+    findings: list[str]
+    total_cost: float
+
+def check_goal(state: LoopState) -> dict:
+    """Check if the goal has been achieved."""
+    # Run coverage check
+    result = subprocess.run(
+        ["npm", "run", "coverage", "--", "--json"],
+        capture_output=True, text=True, cwd="./project"
+    )
+
+    coverage = parse_coverage(result.stdout)
+
+    if coverage >= 80:
+        return {"status": "success"}
+
+    if state["iteration"] >= state["max_iterations"]:
+        return {"status": "failed"}
+
+    return {"status": "running", "findings": [f"Coverage: {coverage}%"]}
+
+def execute_improvement(state: LoopState) -> dict:
+    """Let the agent make improvements."""
+    # Agent reads current state from file system
+    # and makes targeted improvements
+    response = agent.invoke({
+        "goal": state["goal"],
+        "current_findings": state["findings"],
+        "iteration": state["iteration"]
+    })
+
+    cost = calculate_cost(response)
+
+    return {
+        "iteration": state["iteration"] + 1,
+        "total_cost": state["total_cost"] + cost,
+        "findings": state["findings"] + [response["action_taken"]]
+    }
+
+def should_continue(state: LoopState) -> str:
+    if state["status"] == "success":
+        return "end_success"
+    if state["status"] in ["failed", "budget_exceeded"]:
+        return "end_failed"
+    return "continue"
+
+# Build the graph
+workflow = StateGraph(LoopState)
+workflow.add_node("check", check_goal)
+workflow.add_node("improve", execute_improvement)
+
+workflow.add_edge(START, "check")
+workflow.add_conditional_edges("check", should_continue, {
+    "continue": "improve",
+    "end_success": END,
+    "end_failed": END
+})
+workflow.add_edge("improve", "check")
+
+# Compile with checkpointing for resume capability
+checkpointer = SqliteSaver.from_conn_string("loops.db")
+app = workflow.compile(checkpointer=checkpointer)
+```
+
+---
+
+<ProgressCheckpoint
+  title="Autonomous Loops Check"
+  questions={[
+    {
+      question: "Why is the file system used as agent memory?",
+      answer:
+        "The file system persists state across loop iterations, allowing the agent to see its own previous work. This bypasses conversation history limits and provides durable memory.",
+    },
+    {
+      question: "How should you respond to agent failures in autonomous loops?",
+      answer:
+        "Treat failures as specification bugs, not agent errors. Each failure reveals missing constraints or unclear instructions in your prompt. Refine the specification, don't blame the agent.",
+    },
+    {
+      question:
+        "What are the three essential cost controls for autonomous loops?",
+      answer:
+        "1) Hard iteration limit, 2) Token/cost budget per iteration, 3) Total cost budget with alerts. Never run loops without all three.",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Autonomous loops define end conditions and let agents iterate to convergence",
+    "The file system serves as durable external memory across iterations",
+    "Failures are debugging signals for your specification, not agent errors",
+    "Always implement cost controls: iteration limits, budgets, and alerts",
+    "Never use autonomous loops for security-critical or architectural decisions",
+  ]}
+/>

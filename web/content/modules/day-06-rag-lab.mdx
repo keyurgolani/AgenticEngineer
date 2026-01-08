@@ -1,0 +1,70 @@
+---
+title: "Day 06: Lab - Basic RAG Pipeline"
+description: "Building an ingestion system with ChromaDB."
+week: 1
+---
+
+### 6.1 Objective
+
+Build a system that answers questions about a "Company Policy" text file.
+
+### 6.2 Implementation
+
+We will use `chromadb`.
+
+```python
+import chromadb
+from sentence_transformers import SentenceTransformer
+
+# 1. Setup
+client = chromadb.Client()
+collection = client.create_collection("policies")
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+docs = [
+    "Remote work is allowed on Fridays.",
+    "Expense reports must be submitted by the 25th.",
+    "Office hours are 9am to 5pm."
+]
+
+# 2. Embed & Store
+embeddings = model.encode(docs)
+collection.add(
+    documents=docs,
+    embeddings=embeddings.tolist(),
+    ids=["id1", "id2", "id3"]
+)
+
+# 3. Retrieve
+query = "When can I work from home?"
+query_vec = model.encode([query]).tolist()
+results = collection.query(query_embeddings=query_vec, n_results=1)
+
+print("Retrieved Context:", results['documents'][0])
+```
+
+### 6.3 Next Level: OpenMemory
+
+ChromaDB is "Short Term" knowledge.
+**OpenMemory** is a specialized engine for **Long Term** memory.
+It manages a "Temporal Knowledge Graph", allowing agents to remember "Episodic" events ("User X liked this 3 days ago") and "Semantic" facts ("User X is a Python dev").
+
+### 6.4 Recursive Context Compression
+
+Instead of just sliding windows, we can recursively summarize history.
+
+```python
+def compress_history(history, threshold=4000):
+    if token_count(history) < threshold:
+        return history
+
+    # Split into older and recent blocks
+    older_block = history[:len(history)//2]
+    recent_block = history[len(history)//2:]
+
+    # LLM summarizes the older block
+    summary = llm.invoke(f"Summarize key state changes: {older_block}")
+
+    # Return hybrid context
+    return summary + recent_block
+```

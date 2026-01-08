@@ -1,0 +1,501 @@
+---
+title: "Day 09: LangGraph Deep Dive"
+description: "Building production-grade agent workflows with state machines and checkpointing."
+week: 2
+---
+
+## From Loops to Graphs
+
+Our hand-built agent loops work, but they lack the robustness needed for production: no state persistence, no human-in-the-loop, no parallel execution. **LangGraph** solves all of this.
+
+---
+
+## 9.1 Why LangGraph?
+
+LangGraph treats agent workflows as **state machines**, not linear chains:
+
+![Agentic Architecture Abstract](/images/agentic_architecture.png)
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph Traditional Chain
+        A1[Step 1] --> A2[Step 2] --> A3[Step 3] --> A4[Done]
+    end
+    
+    subgraph LangGraph State Machine
+        B1[Node A] --> B2{Conditional}
+        B2 -->|Path 1| B3[Node B]
+        B2 -->|Path 2| B4[Node C]
+        B3 --> B5[Node D]
+        B4 --> B5
+        B5 -->|Loop| B1
+        B5 -->|Done| B6[END]
+    end
+    
+    style B2 fill:#f9f,stroke:#333
+    style B5 fill:#bbf,stroke:#333
+`}
+/>
+
+### Key Advantages
+
+| Feature                | Traditional           | LangGraph              |
+| :--------------------- | :-------------------- | :--------------------- |
+| **Cycles**             | Manual implementation | Native support         |
+| **State**              | In-memory only        | Persistent checkpoints |
+| **Human-in-the-Loop**  | Custom code           | Built-in interrupts    |
+| **Parallel Execution** | Complex threading     | Native `Send` API      |
+| **Debugging**          | Print statements      | LangSmith integration  |
+
+---
+
+## 9.2 Core Concepts
+
+### State
+
+State is a TypedDict that flows through the graph:
+
+```python
+from typing import TypedDict, Annotated, List
+import operator
+
+class AgentState(TypedDict):
+    # Messages accumulate (using operator.add)
+    messages: Annotated[List[dict], operator.add]
+
+    # Current step in the workflow
+    current_step: str
+
+    # Results from tools
+    tool_results: Annotated[dict, operator.ior]  # Merge dicts
+
+    # Final output
+    final_answer: str
+```
+
+### Nodes
+
+Nodes are functions that transform state:
+
+```python
+def researcher_node(state: AgentState) -> dict:
+    """Research node - searches for information."""
+    query = state["messages"][-1]["content"]
+
+    # Do research...
+    results = search_web(query)
+
+    # Return state updates (partial)
+    return {
+        "tool_results": {"research": results},
+        "current_step": "analyze"
+    }
+```
+
+### Edges
+
+Edges define control flow:
+
+```python
+from langgraph.graph import StateGraph, END
+
+workflow = StateGraph(AgentState)
+
+# Add nodes
+workflow.add_node("research", researcher_node)
+workflow.add_node("analyze", analyzer_node)
+workflow.add_node("write", writer_node)
+
+# Add edges
+workflow.add_edge("research", "analyze")  # Always go research -> analyze
+
+# Conditional edge
+def should_continue(state: AgentState) -> str:
+    if state.get("needs_more_research"):
+        return "research"  # Loop back
+    return "write"  # Move forward
+
+workflow.add_conditional_edges(
+    "analyze",
+    should_continue,
+    {
+        "research": "research",
+        "write": "write"
+    }
+)
+
+workflow.add_edge("write", END)
+```
+
+---
+
+## 9.3 Building a Complete Agent
+
+Let's build a research agent with LangGraph:
+
+```python
+from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, AIMessage
+from typing import TypedDict, Annotated, List
+import operator
+
+# 1. Define State
+class ResearchState(TypedDict):
+    messages: Annotated[List, operator.add]
+    research_results: str
+    draft: str
+    feedback: str
+    iteration: int
+
+# 2. Define Nodes
+def planner_node(state: ResearchState) -> dict:
+    """Plan the research approach."""
+    llm = ChatOpenAI(model="gpt-4o-mini")
+
+    response = llm.invoke([
+        {"role": "system", "content": "You are a research planner. Create a research plan."},
+        {"role": "user", "content": state["messages"][-1].content}
+    ])
+
+    return {
+        "messages": [AIMessage(content=f"Plan: {response.content}")],
+        "iteration": 0
+    }
+
+def researcher_node(state: ResearchState) -> dict:
+    """Execute research based on the plan."""
+    # Simulate research (in production, use Tavily/SerpAPI)
+    topic = state["messages"][0].content
+
+    results = f"Research findings for '{topic}':\n"
+    results += "- Finding 1: Important fact\n"
+    results += "- Finding 2: Key statistic\n"
+    results += "- Finding 3: Expert opinion\n"
+
+    return {
+        "research_results": results,
+        "messages": [AIMessage(content=f"Research complete: {results[:100]}...")]
+    }
+
+def writer_node(state: ResearchState) -> dict:
+    """Write a draft based on research."""
+    llm = ChatOpenAI(model="gpt-4o-mini")
+
+    response = llm.invoke([
+        {"role": "system", "content": "Write a concise summary based on the research."},
+        {"role": "user", "content": state["research_results"]}
+    ])
+
+    return {
+        "draft": response.content,
+        "messages": [AIMessage(content="Draft written.")]
+    }
+
+def reviewer_node(state: ResearchState) -> dict:
+    """Review the draft and provide feedback."""
+    llm = ChatOpenAI(model="gpt-4o-mini")
+
+    response = llm.invoke([
+        {"role": "system", "content": "Review this draft. If it's good, say 'APPROVED'. Otherwise, provide specific feedback."},
+        {"role": "user", "content": state["draft"]}
+    ])
+
+    return {
+        "feedback": response.content,
+        "iteration": state["iteration"] + 1,
+        "messages": [AIMessage(content=f"Review: {response.content[:50]}...")]
+    }
+
+# 3. Define Routing Logic
+def should_revise(state: ResearchState) -> str:
+    """Decide whether to revise or finish."""
+    if "APPROVED" in state["feedback"]:
+        return "end"
+    if state["iteration"] >= 3:
+        return "end"  # Max iterations
+    return "revise"
+
+# 4. Build the Graph
+workflow = StateGraph(ResearchState)
+
+workflow.add_node("planner", planner_node)
+workflow.add_node("researcher", researcher_node)
+workflow.add_node("writer", writer_node)
+workflow.add_node("reviewer", reviewer_node)
+
+workflow.add_edge(START, "planner")
+workflow.add_edge("planner", "researcher")
+workflow.add_edge("researcher", "writer")
+workflow.add_edge("writer", "reviewer")
+
+workflow.add_conditional_edges(
+    "reviewer",
+    should_revise,
+    {
+        "revise": "writer",  # Loop back to writer
+        "end": END
+    }
+)
+
+# 5. Compile
+app = workflow.compile()
+
+# 6. Run
+result = app.invoke({
+    "messages": [HumanMessage(content="Research the impact of AI on software engineering")]
+})
+
+print(result["draft"])
+```
+
+---
+
+## 9.4 Checkpointing and Persistence
+
+For production, you need state persistence:
+
+```python
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.postgres import PostgresSaver
+
+# SQLite (development)
+checkpointer = SqliteSaver.from_conn_string(":memory:")
+
+# PostgreSQL (production)
+# checkpointer = PostgresSaver.from_conn_string("postgresql://...")
+
+# Compile with checkpointer
+app = workflow.compile(checkpointer=checkpointer)
+
+# Run with thread_id for persistence
+config = {"configurable": {"thread_id": "user-123-session-1"}}
+
+# First invocation
+result1 = app.invoke(
+    {"messages": [HumanMessage(content="Research AI")]},
+    config
+)
+
+# Later: Resume the same conversation
+result2 = app.invoke(
+    {"messages": [HumanMessage(content="Now focus on coding agents")]},
+    config  # Same thread_id continues the conversation
+)
+```
+
+### Time-Travel Debugging
+
+```python
+# Get all states for a thread
+states = list(app.get_state_history(config))
+
+# Inspect a previous state
+for state in states:
+    print(f"Step: {state.metadata.get('step')}")
+    print(f"State: {state.values}")
+
+# Replay from a specific checkpoint
+checkpoint_id = states[2].config["configurable"]["checkpoint_id"]
+replay_config = {
+    "configurable": {
+        "thread_id": "user-123-session-1",
+        "checkpoint_id": checkpoint_id
+    }
+}
+result = app.invoke({"messages": [HumanMessage(content="Try again")]}, replay_config)
+```
+
+---
+
+## 9.5 Human-in-the-Loop
+
+Add approval checkpoints for sensitive operations:
+
+```python
+from langgraph.graph import StateGraph, END
+
+workflow = StateGraph(AgentState)
+
+workflow.add_node("analyze", analyze_node)
+workflow.add_node("propose_action", propose_node)
+workflow.add_node("execute_action", execute_node)
+
+workflow.add_edge("analyze", "propose_action")
+workflow.add_edge("propose_action", "execute_action")
+workflow.add_edge("execute_action", END)
+
+# Compile with interrupt BEFORE execute
+app = workflow.compile(
+    checkpointer=checkpointer,
+    interrupt_before=["execute_action"]  # Pause here!
+)
+
+# Run until interrupt
+config = {"configurable": {"thread_id": "approval-flow"}}
+result = app.invoke({"messages": [HumanMessage(content="Delete old files")]}, config)
+
+# At this point, execution is paused
+print("Proposed action:", result["proposed_action"])
+print("Waiting for human approval...")
+
+# Human reviews and approves
+user_input = input("Approve? (yes/no): ")
+
+if user_input == "yes":
+    # Resume execution
+    final_result = app.invoke(None, config)  # None continues from checkpoint
+    print("Action executed:", final_result)
+else:
+    print("Action cancelled by user")
+```
+
+---
+
+## 9.6 Parallel Execution with Send
+
+Execute multiple nodes in parallel:
+
+```python
+from langgraph.constants import Send
+
+class ParallelState(TypedDict):
+    topics: List[str]
+    research_results: Annotated[dict, operator.ior]
+
+def fan_out(state: ParallelState) -> List[Send]:
+    """Fan out to multiple researcher nodes."""
+    return [
+        Send("researcher", {"topic": topic})
+        for topic in state["topics"]
+    ]
+
+def researcher_node(state: dict) -> dict:
+    """Research a single topic."""
+    topic = state["topic"]
+    result = search_web(topic)
+    return {"research_results": {topic: result}}
+
+workflow = StateGraph(ParallelState)
+workflow.add_node("researcher", researcher_node)
+workflow.add_node("synthesizer", synthesizer_node)
+
+# Fan-out edge
+workflow.add_conditional_edges(
+    START,
+    fan_out  # Returns list of Send objects
+)
+
+# All researchers converge to synthesizer
+workflow.add_edge("researcher", "synthesizer")
+workflow.add_edge("synthesizer", END)
+
+app = workflow.compile()
+
+# Run with multiple topics
+result = app.invoke({
+    "topics": ["AI agents", "LangGraph", "MCP protocol"]
+})
+# All three topics researched in parallel!
+```
+
+---
+
+## 9.7 Subgraphs for Modularity
+
+Compose complex workflows from reusable subgraphs:
+
+```python
+# Define a reusable research subgraph
+def create_research_subgraph():
+    subgraph = StateGraph(ResearchState)
+    subgraph.add_node("search", search_node)
+    subgraph.add_node("summarize", summarize_node)
+    subgraph.add_edge(START, "search")
+    subgraph.add_edge("search", "summarize")
+    subgraph.add_edge("summarize", END)
+    return subgraph.compile()
+
+# Use in main graph
+main_workflow = StateGraph(MainState)
+main_workflow.add_node("plan", planner_node)
+main_workflow.add_node("research", create_research_subgraph())  # Subgraph as node!
+main_workflow.add_node("write", writer_node)
+
+main_workflow.add_edge(START, "plan")
+main_workflow.add_edge("plan", "research")
+main_workflow.add_edge("research", "write")
+main_workflow.add_edge("write", END)
+```
+
+---
+
+## 🧪 Lab Exercise: Build a Code Review Agent
+
+### Task
+
+Create a LangGraph workflow that reviews pull requests.
+
+### Requirements
+
+1. **Fetch PR** - Get PR diff from GitHub
+2. **Analyze** - Check for issues (parallel: security, style, logic)
+3. **Synthesize** - Combine findings
+4. **Human Review** - Pause for approval before posting comment
+5. **Post Comment** - Post review to GitHub
+
+### Graph Structure
+
+```
+START → fetch_pr → [security_check, style_check, logic_check] → synthesize → (interrupt) → post_comment → END
+```
+
+### Starter Code
+
+```python
+from langgraph.graph import StateGraph, START, END
+from langgraph.constants import Send
+
+class PRReviewState(TypedDict):
+    pr_url: str
+    diff: str
+    security_issues: List[str]
+    style_issues: List[str]
+    logic_issues: List[str]
+    final_review: str
+
+def fetch_pr_node(state: PRReviewState) -> dict:
+    # Fetch PR diff from GitHub
+    pass
+
+def fan_out_checks(state: PRReviewState) -> List[Send]:
+    return [
+        Send("security_check", state),
+        Send("style_check", state),
+        Send("logic_check", state)
+    ]
+
+# Build your graph here...
+```
+
+---
+
+## 📚 Key Takeaways
+
+1. **LangGraph = State Machines** for agent workflows
+2. **Checkpointing** enables persistence and time-travel debugging
+3. **Human-in-the-Loop** with `interrupt_before`
+4. **Parallel execution** with `Send` API
+5. **Subgraphs** for modular, reusable workflows
+
+---
+
+## 🔗 Further Reading
+
+- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
+- [LangGraph Examples](https://github.com/langchain-ai/langgraph/tree/main/examples)
+- [LangSmith for Debugging](https://smith.langchain.com/)
+
+**Tomorrow**: Multi-agent collaboration with CrewAI and AutoGen.
