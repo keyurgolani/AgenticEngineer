@@ -9,7 +9,21 @@ COPY web/package.json web/package-lock.json* ./
 # Install dependencies
 RUN npm ci --prefer-offline || npm install
 
-# Stage 2: Build the application
+# Stage 2: Run tests
+FROM node:22-alpine AS test
+
+WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy source code
+COPY web ./
+
+# Run tests
+RUN npm run test
+
+# Stage 3: Build the application
 FROM node:22-alpine AS builder
 
 WORKDIR /app
