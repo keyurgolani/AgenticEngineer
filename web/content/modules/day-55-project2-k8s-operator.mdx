@@ -1,0 +1,2795 @@
+---
+title: "Project 2: The Self-Healing Kubernetes Operator"
+description: "Building an autonomous SRE agent that monitors, diagnoses, and fixes infrastructure issues using AI-powered analysis and GitOps-backed remediation."
+week: 8
+day: 55
+---
+
+<ReadingTime minutes={60} />
+
+<SkillLevel level="advanced" description="Production infrastructure project" />
+
+<Prerequisites
+  items={[
+    "Completed Days 1-9 (LangGraph, state management, orchestration)",
+    "Basic Kubernetes knowledge (pods, deployments, namespaces)",
+    "Access to a K8s cluster (minikube, kind, or cloud)",
+    "kubectl configured and working",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Build event-driven agents that react to infrastructure events",
+    "Implement policy-as-code for safe automated remediation with OPA and Kyverno",
+    "Design human-in-the-loop approval workflows for production safety",
+    "Integrate with Slack for real-time incident management",
+    "Apply the Kubernetes operator pattern with AI-powered diagnosis",
+    "Implement GitOps-backed remediation for audit trails and rollback",
+    "Build observability into your autonomous operator",
+    "Understand security considerations for AI-powered infrastructure agents",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Operator Pattern",
+      definition:
+        "A Kubernetes pattern where a controller watches for events and takes action to reconcile desired vs actual state",
+    },
+    {
+      term: "Control Loop",
+      definition:
+        "The continuous observe-analyze-act cycle that operators use to maintain system health",
+    },
+    {
+      term: "Policy-as-Code",
+      definition:
+        "Defining operational policies in code/config that can be version-controlled and automatically enforced",
+    },
+    {
+      term: "HITL (Human-in-the-Loop)",
+      definition:
+        "A pattern where automated systems pause for human approval before taking high-risk actions",
+    },
+    {
+      term: "AIOps",
+      definition:
+        "AI for IT Operations - using machine learning and AI to automate and enhance IT operations including incident detection, diagnosis, and remediation",
+    },
+    {
+      term: "GitOps",
+      definition:
+        "An operational framework where Git repositories serve as the single source of truth for declarative infrastructure and application configuration",
+    },
+  ]}
+/>
+
+---
+
+The core of any Kubernetes Operator is its control loop:
+
+{/* IMAGE_PLACEHOLDER: Create a circular diagram showing the Kubernetes Operator Control Loop with 4 stages: 1) OBSERVE (watching K8s events, collecting metrics), 2) ANALYZE (AI diagnosis, root cause analysis), 3) DECIDE (remediation planning, policy checking), 4) ACT (human approval, GitOps execution). Use arrows connecting each stage in a continuous loop. Include icons for each stage: eye for observe, brain for analyze, checklist for decide, robot hand for act. Color scheme: blue for observe, purple for analyze, orange for decide, green for act. Place this at /images/k8s_reliability_loop.png */}
+
+![Kubernetes Operator Reliability Loop](/images/k8s_reliability_loop.png)
+
+{/* IMAGE_PLACEHOLDER: Create an architectural overview diagram showing the complete K8s SRE Agent system. Show: Kubernetes cluster (left) with pods, Event Watcher monitoring the cluster, AI Agent pipeline (Diagnostician → Planner → Policy Checker), Human approval via Slack (center), GitOps PR creation, and ArgoCD reconciliation back to cluster (right). Use a left-to-right flow with clear separation between detection, analysis, approval, and execution phases. Include Prometheus feeding metrics to the Diagnostician. Color-code by risk level: green for safe operations, yellow for approval required, red for policy violations. Place this at /images/k8s_sre_agent_architecture.png */}
+
+## Project Overview
+
+**Objective**: Create an autonomous Site Reliability Engineering (SRE) agent that monitors a Kubernetes cluster, diagnoses pod failures, plans remediation, and executes fixes after human approval—with full audit trails via GitOps.
+
+**Why This Matters**: This project demonstrates event-driven architecture, policy-as-code, and human-in-the-loop patterns essential for production AI systems. In 2025, AI-powered SRE tools are transforming how teams handle incidents, with leading platforms automating up to 80% of incident response workflows.
+
+**Real-World Analogy**: Think of this operator as an experienced SRE engineer who never sleeps. Just as a human SRE would: (1) monitor dashboards for anomalies, (2) investigate logs and metrics when issues arise, (3) consult runbooks for remediation steps, (4) get approval from a senior engineer before making changes, and (5) document everything for future reference—our AI agent does the same, but at machine speed and scale. The key difference? It never gets tired, never misses a pattern, and always follows the approval process.
+
+**Skills Showcased**:
+
+- Event-driven architecture
+- Kubernetes API integration
+- Policy enforcement (OPA/Kyverno)
+- Human-in-the-loop (HITL) patterns
+- GitOps integration (ArgoCD/Flux)
+- Observability and metrics
+- AI agent security
+
+---
+
+## The AIOps Landscape in 2025
+
+<Callout type="info">
+  **Industry Context**: The AIOps market has matured significantly. Tools like
+  K8sGPT (a CNCF sandbox project), incident.io's AI SRE, and Causely's causal AI
+  platform are now production-ready. The pattern we're building here reflects
+  real-world architectures used by platform teams at scale.
+</Callout>
+
+Modern AI-powered SRE tools have evolved beyond simple chatbots. They now function as **agentic systems** that can:
+
+1. **Detect** anomalies using ML-based pattern recognition
+2. **Diagnose** root causes by correlating logs, metrics, and traces
+3. **Plan** remediation using LLM reasoning over runbooks
+4. **Execute** fixes through GitOps pipelines with policy guardrails
+5. **Learn** from incident outcomes to improve future responses
+
+The key insight driving this evolution: **most SRE pain comes from missing context, not missing data**. AI agents excel at stitching together context from disparate sources—logs, metrics, traces, deployment history, and documentation—to surface actionable insights.
+
+### The Five-Stage AI SRE Maturity Model
+
+Organizations typically progress through these stages:
+
+{/* IMAGE_PLACEHOLDER: Create a progressive maturity ladder diagram showing 5 stages from bottom to top. Each stage should be a horizontal bar with increasing automation level (shown as a gradient from blue to green). Stage 1 (bottom): "Detection" with icon of magnifying glass, Stage 2: "Diagnosis" with brain icon, Stage 3: "Recommendation" with lightbulb icon, Stage 4: "Supervised Automation" with robot + human icon (highlighted as "You are here"), Stage 5 (top): "Autonomous Remediation" with full robot icon. Show human involvement decreasing from left to right using human silhouettes that fade out. Add percentage labels: 10%, 30%, 50%, 80%, 95% automation. Place this at /images/sre_maturity_model.png */}
+
+| Stage                     | Capability                      | Human Role                  |
+| :------------------------ | :------------------------------ | :-------------------------- |
+| 1. Detection              | AI identifies anomalies         | Human investigates          |
+| 2. Diagnosis              | AI provides root cause analysis | Human validates and acts    |
+| 3. Recommendation         | AI suggests remediation         | Human approves and executes |
+| 4. Supervised Automation  | AI executes with approval       | Human supervises            |
+| 5. Autonomous Remediation | AI handles routine incidents    | Human handles edge cases    |
+
+Our operator targets **Stage 4**: supervised automation with human-in-the-loop approval for all changes.
+
+**Analogy**: Think of this like learning to drive. Stage 1 is having a dashboard warning light (detection). Stage 2 is a mechanic telling you what's wrong (diagnosis). Stage 3 is the mechanic suggesting a fix (recommendation). Stage 4 is having an autonomous car that asks "Should I change lanes now?" (supervised automation—where we are). Stage 5 is a fully self-driving car that handles routine driving but calls you for unusual situations (autonomous remediation).
+
+---
+
+## Project Requirements Document
+
+### User Stories
+
+| ID    | User Story                                                                                                                                           | Priority |
+| :---- | :--------------------------------------------------------------------------------------------------------------------------------------------------- | :------- |
+| US-01 | As an **SRE engineer**, I want the system to automatically detect pod failures in my cluster, so that I'm notified immediately when issues occur.    | P0       |
+| US-02 | As an **SRE engineer**, I want AI-powered diagnosis of pod failures, so that I can understand root causes without manual log analysis.               | P0       |
+| US-03 | As an **SRE engineer**, I want automated remediation plans generated for common failure modes, so that I can quickly resolve incidents.              | P0       |
+| US-04 | As a **platform team lead**, I want all automated actions to require human approval, so that we maintain control over production changes.            | P0       |
+| US-05 | As a **compliance officer**, I want policy-as-code enforcement on all remediation actions, so that automated fixes comply with organizational rules. | P1       |
+| US-06 | As an **SRE engineer**, I want Slack notifications with approve/reject buttons, so that I can respond to incidents from my phone.                    | P1       |
+| US-07 | As a **platform team lead**, I want namespace-based restrictions on automated remediation, so that critical namespaces are protected.                | P0       |
+| US-08 | As an **SRE engineer**, I want incident history and audit trails, so that I can review past incidents and improve runbooks.                          | P2       |
+| US-09 | As a **platform engineer**, I want GitOps-backed remediation, so that all changes are auditable and reversible through Git history.                  | P1       |
+| US-10 | As an **SRE engineer**, I want Prometheus metrics for the operator itself, so that I can monitor its health and effectiveness.                       | P1       |
+| US-11 | As a **security engineer**, I want all AI-generated fixes validated against OPA/Kyverno policies before execution.                                   | P0       |
+
+### System Architecture
+
+{/* IMAGE_PLACEHOLDER: Create a detailed system architecture diagram showing the complete K8s SRE Agent with all layers. Use a layered approach from top to bottom: 1) Event Detection Layer (K8s Event Watcher + Prometheus Alertmanager) with cloud icons, 2) Analysis Pipeline (Diagnostician Agent with K8sGPT integration, Planner Agent, Policy Checker with OPA/Kyverno) shown as connected boxes with AI brain icons, 3) Approval Layer (Slack Handler with button UI mockup + Approval State with checkpoint icon) in yellow/warning color, 4) Execution Layer (Executor Agent + GitOps PR with GitHub icon) in green, 5) Bottom bar showing Observability (Prometheus, Grafana, Loki) and External integrations. Use arrows to show data flow. Include small icons for each component. Color code by function: blue for detection, purple for analysis, yellow for approval, green for execution. Place this at /images/k8s_operator_architecture_detailed.png */}
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Self-Healing Kubernetes Operator                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Event Detection Layer                           │ │
+│  │  ┌─────────────────┐  ┌─────────────────┐                             │ │
+│  │  │  K8s Event      │  │  Prometheus     │                             │ │
+│  │  │  Watcher        │  │  Alertmanager   │                             │ │
+│  │  └────────┬────────┘  └────────┬────────┘                             │ │
+│  │           └────────┬───────────┘                                       │ │
+│  │                    ▼                                                   │ │
+│  │           Pod Failure Events                                           │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Analysis Pipeline                               │ │
+│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                │ │
+│  │  │Diagnostician│───▶│   Planner   │───▶│   Policy    │                │ │
+│  │  │   Agent     │    │   Agent     │    │   Checker   │                │ │
+│  │  │  (+ K8sGPT) │    │             │    │(OPA/Kyverno)│                │ │
+│  │  └─────────────┘    └─────────────┘    └─────────────┘                │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Approval Layer                                  │ │
+│  │  ┌─────────────────┐         ┌─────────────────┐                      │ │
+│  │  │  Slack Handler  │◀───────▶│  Approval State │                      │ │
+│  │  │  (Buttons/DMs)  │         │  (Checkpointed) │                      │ │
+│  │  └─────────────────┘         └─────────────────┘                      │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼ (Only if approved)                      │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Execution Layer                                 │ │
+│  │  ┌─────────────────┐         ┌─────────────────┐                      │ │
+│  │  │    Executor     │────────▶│  GitOps PR      │                      │ │
+│  │  │    Agent        │         │  (ArgoCD/Flux)  │                      │ │
+│  │  └─────────────────┘         └─────────────────┘                      │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Observability: Prometheus Metrics │ Grafana Dashboards │ Loki Logs         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  External: Kubernetes API │ Slack │ OpenAI/Anthropic │ GitHub │ OPA        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### State Machine Design
+
+{/* IMAGE_PLACEHOLDER: Create an interactive state machine visualization showing all states and transitions for the K8s operator workflow. States should be rounded rectangles with different colors: gray for Watching (idle), blue for Detected/Diagnosing/Planning, yellow for PolicyCheck/AwaitingApproval, green for CreatingPR/AwaitingMerge/Executing/Completed, red for Failed/Rejected/Escalated. Show transitions as arrows with labels (e.g., "pod_failure_event", "diagnosis_ready", "human_approved"). Highlight the critical decision points (PolicyCheck and AwaitingApproval) with thicker borders. Add small icons for each state: eye for Watching, magnifying glass for Diagnosing, clipboard for Planning, shield for PolicyCheck, hand for AwaitingApproval, git branch for CreatingPR, checkmark for Completed, warning for Escalated. This could be an interactive component where users can click through the states to see example data at each stage. Place static version at /images/k8s_operator_state_machine.png */}
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Watching
+    
+    Watching --> Detected: pod_failure_event
+    Watching --> Watching: healthy_event
+    
+    Detected --> Diagnosing: auto_transition
+    
+    Diagnosing --> DiagnosisComplete: diagnosis_ready
+    Diagnosing --> Escalated: diagnosis_failed
+    
+    DiagnosisComplete --> Planning: auto_transition
+    
+    Planning --> PlanReady: plan_generated
+    Planning --> Escalated: no_automated_fix
+    
+    PlanReady --> PolicyCheck: auto_transition
+    
+    PolicyCheck --> AwaitingApproval: policy_passed
+    PolicyCheck --> Escalated: critical_violation
+    
+    AwaitingApproval --> CreatingPR: human_approved
+    AwaitingApproval --> Rejected: human_rejected
+    AwaitingApproval --> AwaitingApproval: timeout_reminder
+    
+    CreatingPR --> AwaitingMerge: pr_created
+    
+    AwaitingMerge --> Executing: pr_merged
+    
+    Executing --> Completed: execution_success
+    Executing --> Failed: execution_error
+    
+    Failed --> Escalated: auto_escalate
+    
+    Completed --> Watching: reset
+    Rejected --> Watching: reset
+    Escalated --> Watching: reset
+`}
+/>
+
+### Security Requirements
+
+<Callout type="error">
+  **Critical**: AI-powered infrastructure agents introduce unique security
+  risks. Prompt injection attacks can manipulate LLMs into generating malicious
+  remediations. Always validate AI outputs against policy guardrails before
+  execution.
+</Callout>
+
+| Requirement                     | Implementation                                         | Priority |
+| :------------------------------ | :----------------------------------------------------- | :------- |
+| **RBAC Least Privilege**        | ServiceAccount with minimal permissions per namespace  | P0       |
+| **No cluster-admin**            | Never run with cluster-admin role                      | P0       |
+| **Namespace Isolation**         | Configurable allowed/forbidden namespace lists         | P0       |
+| **Command Validation**          | Whitelist allowed kubectl operations                   | P0       |
+| **Dangerous Pattern Detection** | Block `--all`, `--force`, `rm -rf` patterns            | P0       |
+| **Slack Token Security**        | Store tokens in K8s Secrets, not ConfigMaps            | P0       |
+| **Audit Logging**               | Log all remediation actions with approver identity     | P0       |
+| **API Key Rotation**            | Support for rotating OpenAI/Slack keys without restart | P1       |
+| **Network Policy**              | Restrict operator pod egress to required endpoints     | P1       |
+| **Secret Masking**              | Never log secrets, tokens, or sensitive pod env vars   | P0       |
+| **Prompt Injection Defense**    | Sanitize all external inputs before LLM processing     | P0       |
+| **Output Validation**           | Validate all LLM outputs against schema before use     | P0       |
+
+#### AI-Specific Security Considerations
+
+Infrastructure agents face unique security challenges that traditional operators don't:
+
+{/* IMAGE_PLACEHOLDER: Create a security threat model diagram showing three main attack vectors for AI-powered K8s operators: 1) Prompt Injection via Logs (show malicious log entry → LLM → dangerous command), 2) Command Injection via LLM Output (show LLM generating kubectl delete --all), 3) Data Exfiltration (show secrets in logs → LLM API → external server). For each threat, show the mitigation: sanitization layer, validation layer, redaction layer. Use red for threats, green for mitigations. Include code snippets in small boxes showing bad vs good patterns. Place this at /images/k8s_operator_security_threats.png */}
+
+**1. Prompt Injection via Logs**
+Malicious actors can embed instructions in application logs that get passed to the LLM:
+
+```python
+# BAD: Directly passing logs to LLM
+diagnosis = llm.invoke(f"Analyze these logs: {pod_logs}")
+
+# GOOD: Sanitize and truncate logs, use structured prompts
+sanitized_logs = sanitize_logs(pod_logs, max_chars=5000)
+diagnosis = llm.invoke({
+    "system": "You are a K8s diagnostician. Only output valid JSON.",
+    "user": f"Analyze: {sanitized_logs}",
+    "response_format": {"type": "json_object"}
+})
+```
+
+**2. Command Injection via LLM Output**
+Never execute LLM-generated commands directly:
+
+```python
+# BAD: Executing LLM output directly
+commands = llm.invoke("Generate kubectl commands to fix this")
+subprocess.run(commands, shell=True)  # DANGEROUS!
+
+# GOOD: Validate against allowlist, use K8s Python client
+plan = llm.invoke(...)
+validated_plan = validate_against_allowlist(plan)
+if validated_plan.fix_type == "restart":
+    k8s_client.delete_namespaced_pod(name, namespace)  # Type-safe
+```
+
+**3. Data Exfiltration Prevention**
+Redact sensitive data before sending to LLMs:
+
+```python
+def redact_sensitive_data(logs: str) -> str:
+    """Remove secrets, tokens, and PII before LLM processing."""
+    patterns = [
+        (r'password[=:]\s*\S+', 'password=***REDACTED***'),
+        (r'token[=:]\s*\S+', 'token=***REDACTED***'),
+        (r'api[_-]?key[=:]\s*\S+', 'api_key=***REDACTED***'),
+        (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '***EMAIL***'),
+    ]
+    for pattern, replacement in patterns:
+        logs = re.sub(pattern, replacement, logs, flags=re.IGNORECASE)
+    return logs
+```
+
+#### Required RBAC Permissions
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sre-agent-role
+  namespace: default # Repeat for each allowed namespace
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    verbs: ["patch"]
+```
+
+### Performance Requirements
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "K8s Operator Performance Simulator" interactive component. Users can adjust sliders for: event rate (events/sec), diagnosis complexity (simple/medium/complex), number of concurrent incidents. The component calculates and displays: expected latency at each stage, memory usage, CPU usage, and whether the operator can handle the load. Show visual indicators (green/yellow/red) for each metric. Include a "Stress Test" button that animates the flow of incidents through the pipeline. This helps learners understand performance characteristics and bottlenecks. */}
+
+| Metric                                         | Target            | Measurement                                  |
+| :--------------------------------------------- | :---------------- | :------------------------------------------- |
+| **Event detection latency**                    | < 5 seconds       | Time from K8s event to incident creation     |
+| **Diagnosis completion**                       | < 60 seconds      | Time from detection to diagnosis ready       |
+| **End-to-end (detection to approval request)** | < 90 seconds      | Full pipeline excluding human wait           |
+| **Slack message delivery**                     | < 3 seconds       | Time from approval request to Slack delivery |
+| **Execution time (restart)**                   | < 30 seconds      | Time to delete and verify pod recreation     |
+| **Execution time (scale)**                     | < 60 seconds      | Time to scale and verify new replicas        |
+| **Memory usage**                               | < 256MB           | Operator pod memory limit                    |
+| **CPU usage**                                  | < 100m average    | Operator pod CPU during idle                 |
+| **Concurrent incidents**                       | 10+               | Simultaneous incidents handled               |
+| **Event throughput**                           | 100 events/second | Peak event processing rate                   |
+
+**Performance Analogy**: Think of the operator like an emergency room triage system. Event detection is like the intake nurse (must be fast, < 5s). Diagnosis is like the doctor's examination (thorough but time-boxed, < 60s). The approval request is like getting consent for treatment (variable time, depends on human). Execution is like administering treatment (quick, < 30s). The system must handle multiple patients (incidents) simultaneously without degrading care quality.
+
+---
+
+## Step-by-Step Implementation Guide
+
+### Phase 1: Environment Setup (45 minutes)
+
+<Callout type="warning">
+  **Prerequisites:** You need access to a Kubernetes cluster. For local
+  development, use minikube, kind, or Docker Desktop with Kubernetes enabled.
+</Callout>
+
+#### Step 1.1: Create Project Structure
+
+```bash
+mkdir k8s-sre-agent
+cd k8s-sre-agent
+python -m venv venv
+source venv/bin/activate
+```
+
+#### Step 1.2: Install Dependencies
+
+```bash
+pip install langgraph langchain langchain-openai kubernetes slack-sdk \
+    python-dotenv pydantic prometheus-client pyyaml httpx
+```
+
+#### Step 1.3: Project Structure
+
+```
+k8s-sre-agent/
+├── .env
+├── main.py
+├── config/
+│   ├── policies.yaml
+│   ├── runbooks.yaml
+│   └── opa/
+│       └── remediation.rego
+├── agents/
+│   ├── __init__.py
+│   ├── watcher.py
+│   ├── diagnostician.py
+│   ├── planner.py
+│   ├── executor.py
+│   └── policy_checker.py
+├── models/
+│   ├── __init__.py
+│   └── state.py
+├── integrations/
+│   ├── __init__.py
+│   ├── slack.py
+│   ├── prometheus.py
+│   ├── gitops.py
+│   └── opa.py
+├── observability/
+│   ├── __init__.py
+│   └── metrics.py
+└── tests/
+    ├── test_pods/
+    │   ├── crashloop.yaml
+    │   └── oom.yaml
+    └── test_integration.py
+```
+
+#### Step 1.4: Configure Environment
+
+```bash
+# .env
+OPENAI_API_KEY=sk-your-key-here
+SLACK_BOT_TOKEN=xoxb-your-slack-token
+SLACK_APP_TOKEN=xapp-your-app-token
+KUBECONFIG=~/.kube/config
+PROMETHEUS_URL=http://prometheus:9090
+GITHUB_TOKEN=ghp-your-github-token
+GITHUB_REPO=your-org/k8s-manifests
+OPA_URL=http://opa:8181
+```
+
+#### Step 1.5: Set Up Test Kubernetes Cluster
+
+```bash
+# Using kind (Kubernetes in Docker)
+kind create cluster --name sre-agent-test
+
+# Verify connection
+kubectl cluster-info
+kubectl get nodes
+
+# Install Prometheus stack (optional but recommended)
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install kube-prometheus prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace
+```
+
+---
+
+### Phase 2: Define State and Models (30 minutes)
+
+#### Step 2.1: Create the Operator State
+
+```python
+# models/state.py
+from typing import TypedDict, List, Optional, Literal
+from datetime import datetime
+from pydantic import BaseModel, Field
+
+class PodEvent(BaseModel):
+    """Kubernetes pod event data."""
+    pod_name: str
+    namespace: str
+    event_type: str
+    reason: str
+    message: str
+    timestamp: datetime
+    container_statuses: List[dict]
+
+class Diagnosis(BaseModel):
+    """Diagnostic analysis result."""
+    root_cause: str
+    category: Literal["oom", "crash", "image", "config", "network", "storage", "unknown"]
+    confidence: float = Field(ge=0, le=1)
+    evidence: List[str]
+    affected_components: List[str]
+    metrics_summary: Optional[dict] = None
+
+class RemediationPlan(BaseModel):
+    """Proposed fix for the issue."""
+    fix_type: Literal["restart", "scale", "patch", "rollback", "escalate"]
+    description: str
+    commands: List[str]
+    manifest_changes: Optional[dict] = None
+    risk_level: Literal["low", "medium", "high"]
+    expected_outcome: str
+    rollback_plan: str
+
+class PolicyViolation(BaseModel):
+    """Policy check result."""
+    policy_name: str
+    description: str
+    severity: Literal["warning", "error", "critical"]
+    source: Literal["opa", "kyverno", "internal"]
+
+class K8sOperatorState(TypedDict):
+    """Main state for the K8s operator workflow."""
+    # Event data
+    pod_name: str
+    namespace: str
+    event_type: str
+    timestamp: str
+
+    # Diagnostic data
+    logs: str
+    pod_yaml: str
+    events: List[dict]
+    metrics: Optional[dict]
+
+    # Analysis
+    diagnosis: Optional[dict]
+    diagnosis_confidence: float
+
+    # Remediation
+    proposed_fix: Optional[dict]
+    fix_type: str
+
+    # Policy
+    policy_violations: List[dict]
+    policy_passed: bool
+
+    # GitOps
+    pr_url: Optional[str]
+    pr_branch: Optional[str]
+    pr_merged: bool
+
+    # Approval
+    human_approved: Optional[bool]
+    approval_notes: str
+    approver: str
+
+    # Execution
+    execution_result: str
+    status: Literal["detected", "diagnosing", "planning", "awaiting_approval",
+                    "creating_pr", "awaiting_merge", "executing",
+                    "completed", "failed", "escalated"]
+
+    # Metadata
+    incident_id: str
+    iteration_count: int
+    errors: List[str]
+```
+
+#### Step 2.2: Create Policy Configuration
+
+```yaml
+# config/policies.yaml
+policies:
+  namespace_restrictions:
+    description: "Namespace-based remediation restrictions"
+    forbidden_namespaces:
+      - kube-system
+      - kube-public
+      - istio-system
+      - monitoring
+    allowed_namespaces:
+      - default
+      - staging
+      - development
+
+  remediation_limits:
+    max_restarts_per_hour: 3
+    max_scale_factor: 2
+    max_memory_increase_percent: 50
+    require_approval_for:
+      - patch
+      - rollback
+      - scale
+
+  dangerous_patterns:
+    description: "Patterns that should never appear in remediation commands"
+    blocked_patterns:
+      - "--all-namespaces.*delete"
+      - "delete.*--all"
+      - "--force.*--grace-period=0"
+      - "rm -rf"
+      - "kubectl exec"
+
+  resource_policies:
+    max_cpu_limit: "4"
+    max_memory_limit: "8Gi"
+    require_resource_limits: true
+    require_health_checks: true
+```
+
+---
+
+### Phase 3: Build the Event Watcher (30 minutes)
+
+#### Step 3.1: Create the Kubernetes Watcher
+
+```python
+# agents/watcher.py
+from kubernetes import client, config, watch
+from kubernetes.client.rest import ApiException
+from datetime import datetime
+from typing import Optional, Callable
+import asyncio
+from models.state import PodEvent
+
+class K8sEventWatcher:
+    """Watches Kubernetes cluster for failure events."""
+
+    FAILURE_REASONS = [
+        "CrashLoopBackOff",
+        "ImagePullBackOff",
+        "ErrImagePull",
+        "OOMKilled",
+        "Error",
+        "Failed",
+        "Evicted"
+    ]
+
+    def __init__(self, on_failure: Callable[[PodEvent], None]):
+        """Initialize the watcher."""
+        try:
+            config.load_incluster_config()
+        except config.ConfigException:
+            config.load_kube_config()
+
+        self.v1 = client.CoreV1Api()
+        self.on_failure = on_failure
+        self.seen_events = set()  # Deduplicate events
+        self._reconnect_delay = 1  # Exponential backoff
+
+    def _extract_container_statuses(self, pod) -> list:
+        """Extract container status information."""
+        statuses = []
+        for status in pod.status.container_statuses or []:
+            info = {
+                "name": status.name,
+                "ready": status.ready,
+                "restart_count": status.restart_count,
+                "state": None,
+                "last_state": None
+            }
+            if status.state.waiting:
+                info["state"] = {
+                    "type": "waiting",
+                    "reason": status.state.waiting.reason,
+                    "message": status.state.waiting.message
+                }
+            elif status.state.running:
+                info["state"] = {"type": "running"}
+            elif status.state.terminated:
+                info["state"] = {
+                    "type": "terminated",
+                    "reason": status.state.terminated.reason,
+                    "exit_code": status.state.terminated.exit_code
+                }
+            if status.last_state.terminated:
+                info["last_state"] = {
+                    "reason": status.last_state.terminated.reason,
+                    "exit_code": status.last_state.terminated.exit_code,
+                    "finished_at": str(status.last_state.terminated.finished_at)
+                }
+            statuses.append(info)
+        return statuses
+
+    def _is_failure(self, pod) -> tuple[bool, str, str]:
+        """Detect various failure conditions."""
+        if pod.status.phase in ["Failed", "Unknown"]:
+            return True, pod.status.phase, f"Pod in {pod.status.phase} phase"
+
+        for status in pod.status.container_statuses or []:
+            if status.state.waiting:
+                reason = status.state.waiting.reason
+                if reason in self.FAILURE_REASONS:
+                    return True, reason, status.state.waiting.message or ""
+            if status.last_state.terminated:
+                if status.last_state.terminated.reason == "OOMKilled":
+                    return True, "OOMKilled", "Container was killed due to OOM"
+            if status.restart_count > 5:
+                return True, "HighRestartCount", f"Container restarted {status.restart_count} times"
+
+        return False, "", ""
+
+    async def watch_pods(self, namespaces: Optional[list] = None):
+        """Stream pod events and trigger agent on failures."""
+        w = watch.Watch()
+        print("👀 Starting Kubernetes pod watcher...")
+
+        while True:
+            try:
+                if namespaces:
+                    for ns in namespaces:
+                        await self._watch_namespace(w, ns)
+                else:
+                    await self._watch_all_namespaces(w)
+                self._reconnect_delay = 1  # Reset on success
+            except ApiException as e:
+                print(f"API error: {e}")
+                await asyncio.sleep(self._reconnect_delay)
+                self._reconnect_delay = min(self._reconnect_delay * 2, 60)
+            except Exception as e:
+                print(f"Watcher error: {e}")
+                await asyncio.sleep(self._reconnect_delay)
+                self._reconnect_delay = min(self._reconnect_delay * 2, 60)
+
+    async def _watch_all_namespaces(self, w):
+        """Watch all namespaces for pod events."""
+        for event in w.stream(self.v1.list_pod_for_all_namespaces, timeout_seconds=60):
+            await self._process_event(event)
+
+    async def _watch_namespace(self, w, namespace: str):
+        """Watch a specific namespace."""
+        for event in w.stream(
+            self.v1.list_namespaced_pod,
+            namespace=namespace,
+            timeout_seconds=60
+        ):
+            await self._process_event(event)
+
+    async def _process_event(self, event):
+        """Process a single pod event."""
+        pod = event['object']
+        event_type = event['type']
+        event_id = f"{pod.metadata.namespace}/{pod.metadata.name}/{event_type}"
+
+        if event_id in self.seen_events:
+            return
+
+        is_failure, reason, message = self._is_failure(pod)
+
+        if is_failure:
+            self.seen_events.add(event_id)
+            pod_event = PodEvent(
+                pod_name=pod.metadata.name,
+                namespace=pod.metadata.namespace,
+                event_type=event_type,
+                reason=reason,
+                message=message,
+                timestamp=datetime.now(),
+                container_statuses=self._extract_container_statuses(pod)
+            )
+            print(f"🚨 Failure detected: {pod_event.pod_name} - {reason}")
+            await self.on_failure(pod_event)
+```
+
+---
+
+### Phase 4: Build the Diagnostician Agent with Prometheus Integration (45 minutes)
+
+#### Step 4.1: Create the Prometheus Integration
+
+```python
+# integrations/prometheus.py
+import httpx
+from datetime import datetime, timedelta
+from typing import Optional
+import os
+
+class PrometheusClient:
+    """Query Prometheus for pod metrics."""
+
+    def __init__(self, url: Optional[str] = None):
+        self.url = url or os.getenv("PROMETHEUS_URL", "http://prometheus:9090")
+
+    async def query_pod_metrics(
+        self,
+        pod_name: str,
+        namespace: str,
+        duration: str = "1h"
+    ) -> dict:
+        """Get comprehensive metrics for a pod."""
+        metrics = {}
+
+        queries = {
+            "cpu_usage": f'sum(rate(container_cpu_usage_seconds_total{{pod="{pod_name}",namespace="{namespace}"}}[5m]))',
+            "memory_usage": f'sum(container_memory_usage_bytes{{pod="{pod_name}",namespace="{namespace}"}})',
+            "memory_limit": f'sum(container_spec_memory_limit_bytes{{pod="{pod_name}",namespace="{namespace}"}})',
+            "restart_count": f'sum(kube_pod_container_status_restarts_total{{pod="{pod_name}",namespace="{namespace}"}})',
+            "oom_kills": f'sum(increase(container_oom_events_total{{pod="{pod_name}",namespace="{namespace}"}}[{duration}]))',
+        }
+
+        async with httpx.AsyncClient() as client:
+            for metric_name, query in queries.items():
+                try:
+                    response = await client.get(
+                        f"{self.url}/api/v1/query",
+                        params={"query": query}
+                    )
+                    data = response.json()
+                    if data["status"] == "success" and data["data"]["result"]:
+                        metrics[metric_name] = float(data["data"]["result"][0]["value"][1])
+                except Exception as e:
+                    metrics[metric_name] = None
+                    print(f"Warning: Could not fetch {metric_name}: {e}")
+
+        # Calculate memory utilization percentage
+        if metrics.get("memory_usage") and metrics.get("memory_limit"):
+            metrics["memory_utilization_pct"] = (
+                metrics["memory_usage"] / metrics["memory_limit"] * 100
+            )
+
+        return metrics
+```
+
+#### Step 4.2: Create the Diagnostician Agent
+
+```python
+# agents/diagnostician.py
+from kubernetes import client
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from models.state import K8sOperatorState, Diagnosis
+from integrations.prometheus import PrometheusClient
+import json
+import re
+
+DIAGNOSTICIAN_PROMPT = """You are a Kubernetes expert and SRE specialist.
+Analyze this failing pod and identify the root cause.
+
+Pod: {pod_name} in namespace {namespace}
+
+Recent Logs (sanitized):
+{logs}
+
+Pod Events:
+{events}
+
+Container Statuses:
+{container_statuses}
+
+Pod Spec Summary:
+- Image: {image}
+- Resources: {resources}
+- Restart Count: {restart_count}
+
+Prometheus Metrics (if available):
+{metrics}
+
+Provide your diagnosis in JSON format:
+{{
+    "root_cause": "Clear explanation of the problem",
+    "category": "one of: oom, crash, image, config, network, storage, unknown",
+    "confidence": 0.0-1.0,
+    "evidence": ["list of evidence supporting diagnosis"],
+    "affected_components": ["list of affected k8s resources"],
+    "metrics_summary": {{"key_metric": "value"}}
+}}
+
+IMPORTANT: Only output valid JSON. Do not include any other text."""
+
+def sanitize_logs(logs: str, max_chars: int = 5000) -> str:
+    """Remove sensitive data and truncate logs."""
+    patterns = [
+        (r'password[=:]\s*\S+', 'password=***REDACTED***'),
+        (r'token[=:]\s*\S+', 'token=***REDACTED***'),
+        (r'api[_-]?key[=:]\s*\S+', 'api_key=***REDACTED***'),
+        (r'secret[=:]\s*\S+', 'secret=***REDACTED***'),
+        (r'bearer\s+\S+', 'bearer ***REDACTED***'),
+        (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '***EMAIL***'),
+    ]
+    for pattern, replacement in patterns:
+        logs = re.sub(pattern, replacement, logs, flags=re.IGNORECASE)
+
+    if len(logs) > max_chars:
+        logs = logs[:max_chars] + "\n... [TRUNCATED]"
+    return logs
+
+class DiagnosticianAgent:
+    """Analyzes pod failures and identifies root causes."""
+
+    def __init__(self, model: str = "gpt-4o"):
+        self.llm = ChatOpenAI(model=model, temperature=0.1)
+        self.v1 = client.CoreV1Api()
+        self.prometheus = PrometheusClient()
+        self.prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are an expert Kubernetes diagnostician. Output only valid JSON."),
+            ("human", DIAGNOSTICIAN_PROMPT)
+        ])
+
+    def _get_pod_logs(self, pod_name: str, namespace: str, lines: int = 100) -> str:
+        """Retrieve pod logs with fallback to previous container."""
+        try:
+            logs = self.v1.read_namespaced_pod_log(
+                name=pod_name, namespace=namespace,
+                tail_lines=lines, previous=False
+            )
+            return sanitize_logs(logs)
+        except Exception as e:
+            try:
+                logs = self.v1.read_namespaced_pod_log(
+                    name=pod_name, namespace=namespace,
+                    tail_lines=lines, previous=True
+                )
+                return sanitize_logs(f"[Previous container logs]\n{logs}")
+            except:
+                return f"Could not retrieve logs: {e}"
+
+    def _get_pod_events(self, pod_name: str, namespace: str) -> list:
+        """Get events related to the pod."""
+        events = self.v1.list_namespaced_event(
+            namespace=namespace,
+            field_selector=f"involvedObject.name={pod_name}"
+        )
+        return [
+            {
+                "reason": e.reason,
+                "message": e.message,
+                "count": e.count,
+                "last_seen": str(e.last_timestamp),
+                "type": e.type
+            }
+            for e in sorted(events.items,
+                          key=lambda x: x.last_timestamp or x.first_timestamp,
+                          reverse=True)[:10]
+        ]
+
+    def _get_pod_spec(self, pod_name: str, namespace: str) -> dict:
+        """Get pod specification details."""
+        pod = self.v1.read_namespaced_pod(pod_name, namespace)
+        container = pod.spec.containers[0]
+        status = pod.status.container_statuses[0] if pod.status.container_statuses else None
+        return {
+            "image": container.image,
+            "resources": container.resources.to_dict() if container.resources else "Not specified",
+            "restart_count": status.restart_count if status else 0,
+            "pod_yaml": client.ApiClient().sanitize_for_serialization(pod)
+        }
+
+    async def diagnose(self, state: K8sOperatorState) -> dict:
+        """Perform diagnosis on the failing pod."""
+        pod_name = state["pod_name"]
+        namespace = state["namespace"]
+        print(f"🔍 Diagnosing: {namespace}/{pod_name}")
+
+        # Gather diagnostic data
+        logs = self._get_pod_logs(pod_name, namespace)
+        events = self._get_pod_events(pod_name, namespace)
+        spec = self._get_pod_spec(pod_name, namespace)
+
+        # Get Prometheus metrics
+        metrics = await self.prometheus.query_pod_metrics(pod_name, namespace)
+        container_statuses = state.get("container_statuses", [])
+
+        # Run LLM diagnosis
+        chain = self.prompt | self.llm
+        response = chain.invoke({
+            "pod_name": pod_name,
+            "namespace": namespace,
+            "logs": logs,
+            "events": json.dumps(events, indent=2),
+            "container_statuses": json.dumps(container_statuses, indent=2),
+            "image": spec["image"],
+            "resources": json.dumps(spec["resources"]),
+            "restart_count": spec["restart_count"],
+            "metrics": json.dumps(metrics, indent=2) if metrics else "Not available"
+        })
+
+        # Parse diagnosis with validation
+        try:
+            diagnosis = json.loads(response.content)
+            # Validate required fields
+            required = ["root_cause", "category", "confidence", "evidence"]
+            for field in required:
+                if field not in diagnosis:
+                    raise ValueError(f"Missing required field: {field}")
+        except (json.JSONDecodeError, ValueError) as e:
+            diagnosis = {
+                "root_cause": response.content[:500],
+                "category": "unknown",
+                "confidence": 0.3,
+                "evidence": [f"LLM output parsing failed: {e}"],
+                "affected_components": [pod_name]
+            }
+
+        print(f"   Root Cause: {diagnosis['root_cause'][:100]}...")
+        print(f"   Category: {diagnosis['category']}, Confidence: {diagnosis['confidence']}")
+
+        return {
+            "logs": logs,
+            "pod_yaml": json.dumps(spec["pod_yaml"]),
+            "events": events,
+            "metrics": metrics,
+            "diagnosis": diagnosis,
+            "diagnosis_confidence": diagnosis["confidence"],
+            "status": "diagnosing_complete"
+        }
+
+async def diagnostician_node(state: K8sOperatorState) -> dict:
+    """LangGraph node for diagnosis."""
+    agent = DiagnosticianAgent()
+    return await agent.diagnose(state)
+```
+
+---
+
+### Phase 5: Build the Remediation Planner (30 minutes)
+
+#### Step 5.1: Create the Planner Agent
+
+```python
+# agents/planner.py
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from models.state import K8sOperatorState, RemediationPlan
+import json
+import yaml
+from pathlib import Path
+
+PLANNER_PROMPT = """Based on this diagnosis, propose a remediation plan.
+
+Root Cause: {root_cause}
+Category: {category}
+Confidence: {confidence}
+Pod: {pod_name}
+Namespace: {namespace}
+Current Restart Count: {restart_count}
+Metrics Summary: {metrics}
+
+Available remediation types:
+1. restart - Delete pod to trigger restart (low risk)
+2. scale - Adjust replica count (low-medium risk)
+3. patch - Modify deployment/pod spec (medium risk)
+4. rollback - Rollback to previous version (medium risk)
+5. escalate - Requires human intervention (no automated fix)
+
+Runbook guidance:
+{runbook}
+
+Provide your plan in JSON format:
+{{
+    "fix_type": "one of the above",
+    "description": "What this fix does",
+    "commands": ["kubectl command 1", "kubectl command 2"],
+    "manifest_changes": {{"path": "spec.containers[0].resources.limits.memory", "value": "512Mi"}},
+    "risk_level": "low/medium/high",
+    "expected_outcome": "What should happen after the fix",
+    "rollback_plan": "How to undo if it fails"
+}}
+
+IMPORTANT:
+- Only output valid JSON
+- Commands must be valid kubectl syntax
+- Never include dangerous patterns like --all, --force, or rm -rf
+- For OOM issues, suggest increasing memory limits by 50% max"""
+
+class PlannerAgent:
+    """Plans remediation based on diagnosis."""
+
+    def __init__(self, model: str = "gpt-4o", runbooks_path: str = "config/runbooks.yaml"):
+        self.llm = ChatOpenAI(model=model, temperature=0.2)
+        self.runbooks = self._load_runbooks(runbooks_path)
+        self.prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are an SRE expert planning incident remediation. Output only valid JSON."),
+            ("human", PLANNER_PROMPT)
+        ])
+
+    def _load_runbooks(self, path: str) -> dict:
+        """Load runbooks from YAML file."""
+        runbooks_file = Path(path)
+        if runbooks_file.exists():
+            with open(runbooks_file) as f:
+                return yaml.safe_load(f)
+        return {}
+
+    def _get_runbook(self, category: str) -> str:
+        """Get relevant runbook for the issue category."""
+        runbook = self.runbooks.get("runbooks", {}).get(category, {})
+        if runbook:
+            return f"""
+Category: {category}
+Steps: {json.dumps(runbook.get('steps', []), indent=2)}
+Automation: {runbook.get('automation', 'None specified')}
+Escalation: {runbook.get('escalation', 'Contact on-call')}
+"""
+        return "No specific runbook available. Use best judgment."
+
+    def plan(self, state: K8sOperatorState) -> dict:
+        """Generate remediation plan."""
+        diagnosis = state.get("diagnosis", {})
+        metrics = state.get("metrics", {})
+        print(f"📋 Planning remediation for: {diagnosis.get('category', 'unknown')}")
+
+        runbook = self._get_runbook(diagnosis.get("category", "unknown"))
+        chain = self.prompt | self.llm
+
+        response = chain.invoke({
+            "root_cause": diagnosis.get("root_cause", "Unknown"),
+            "category": diagnosis.get("category", "unknown"),
+            "confidence": diagnosis.get("confidence", 0),
+            "pod_name": state["pod_name"],
+            "namespace": state["namespace"],
+            "restart_count": state.get("restart_count", 0),
+            "metrics": json.dumps(metrics) if metrics else "Not available",
+            "runbook": runbook
+        })
+
+        try:
+            plan = json.loads(response.content)
+            # Validate the plan
+            plan = self._validate_plan(plan, state)
+        except json.JSONDecodeError:
+            plan = {
+                "fix_type": "escalate",
+                "description": "Could not generate automated plan",
+                "commands": [],
+                "risk_level": "high",
+                "expected_outcome": "Requires manual intervention",
+                "rollback_plan": "N/A"
+            }
+
+        print(f"   Fix Type: {plan['fix_type']}, Risk Level: {plan['risk_level']}")
+
+        return {
+            "proposed_fix": plan,
+            "fix_type": plan["fix_type"],
+            "status": "planning_complete"
+        }
+
+    def _validate_plan(self, plan: dict, state: K8sOperatorState) -> dict:
+        """Validate and sanitize the remediation plan."""
+        dangerous_patterns = [
+            "--all-namespaces", "--all", "--force", "rm -rf",
+            "kubectl exec", "kubectl cp", "--grace-period=0"
+        ]
+
+        # Check commands for dangerous patterns
+        safe_commands = []
+        for cmd in plan.get("commands", []):
+            is_safe = True
+            for pattern in dangerous_patterns:
+                if pattern in cmd.lower():
+                    is_safe = False
+                    print(f"   ⚠️ Blocked dangerous command: {cmd[:50]}...")
+                    break
+            if is_safe:
+                safe_commands.append(cmd)
+
+        plan["commands"] = safe_commands
+
+        # If all commands were blocked, escalate
+        if not safe_commands and plan["fix_type"] != "escalate":
+            plan["fix_type"] = "escalate"
+            plan["description"] = "All proposed commands were blocked by safety checks"
+            plan["risk_level"] = "high"
+
+        return plan
+
+def planner_node(state: K8sOperatorState) -> dict:
+    """LangGraph node for planning."""
+    agent = PlannerAgent()
+    return agent.plan(state)
+```
+
+#### Step 5.2: Create Runbooks Configuration
+
+```yaml
+# config/runbooks.yaml
+runbooks:
+  oom:
+    description: "Out of Memory issues"
+    steps:
+      - "Check current memory limits vs actual usage"
+      - "Review application memory patterns in Prometheus"
+      - "Consider increasing limits or optimizing app"
+    automation: "patch"
+    default_action:
+      type: "patch"
+      patch: |
+        spec:
+          containers:
+          - name: "{container}"
+            resources:
+              limits:
+                memory: "{current_limit * 1.5}"
+    max_memory_increase: "50%"
+    escalation: "If OOM persists after 3 patches, escalate to dev team"
+
+  crash:
+    description: "Application crash/CrashLoopBackOff"
+    steps:
+      - "Check application logs for errors"
+      - "Verify configuration and secrets"
+      - "Check for recent deployments"
+      - "Review resource constraints"
+    automation: "rollback"
+    default_action:
+      type: "rollback"
+    escalation: "If crash persists after rollback, escalate to dev team"
+
+  image:
+    description: "Image pull failures"
+    steps:
+      - "Verify image exists in registry"
+      - "Check image pull secrets"
+      - "Verify network connectivity to registry"
+      - "Check for registry rate limits"
+    automation: "escalate"
+    escalation: "Contact platform team for registry issues"
+
+  config:
+    description: "Configuration errors"
+    steps:
+      - "Check ConfigMaps and Secrets exist"
+      - "Verify environment variables"
+      - "Check volume mounts"
+      - "Validate configuration syntax"
+    automation: "escalate"
+    escalation: "Contact application team for config fixes"
+
+  network:
+    description: "Network connectivity issues"
+    steps:
+      - "Check Service and Endpoints"
+      - "Verify NetworkPolicy rules"
+      - "Check DNS resolution"
+      - "Test connectivity to dependencies"
+    automation: "escalate"
+    escalation: "Contact platform team for network issues"
+
+  storage:
+    description: "Storage/volume issues"
+    steps:
+      - "Check PVC status and binding"
+      - "Verify StorageClass availability"
+      - "Check node storage capacity"
+      - "Review volume mount permissions"
+    automation: "escalate"
+    escalation: "Contact platform team for storage issues"
+```
+
+---
+
+### Phase 6: Build the Policy Checker with OPA Integration (45 minutes)
+
+<Callout type="info">
+  **Policy-as-Code in 2025**: OPA (Open Policy Agent) and Kyverno are the two
+  dominant policy engines for Kubernetes. OPA uses Rego language and works
+  across your entire stack, while Kyverno is Kubernetes-native and uses YAML.
+  Many teams use both: Kyverno for admission control and OPA for broader policy
+  enforcement.
+</Callout>
+
+#### Step 6.1: Create OPA Integration
+
+```python
+# integrations/opa.py
+import httpx
+import os
+from typing import Optional
+
+class OPAClient:
+    """Client for Open Policy Agent."""
+
+    def __init__(self, url: Optional[str] = None):
+        self.url = url or os.getenv("OPA_URL", "http://opa:8181")
+
+    async def check_policy(
+        self,
+        policy_path: str,
+        input_data: dict
+    ) -> dict:
+        """Evaluate a policy against input data."""
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(
+                    f"{self.url}/v1/data/{policy_path}",
+                    json={"input": input_data}
+                )
+                result = response.json()
+                return {
+                    "allowed": result.get("result", {}).get("allow", False),
+                    "violations": result.get("result", {}).get("violations", []),
+                    "warnings": result.get("result", {}).get("warnings", [])
+                }
+            except Exception as e:
+                # Fail closed - if OPA is unavailable, block the action
+                return {
+                    "allowed": False,
+                    "violations": [f"OPA unavailable: {e}"],
+                    "warnings": []
+                }
+```
+
+#### Step 6.2: Create OPA Policy for Remediation
+
+```rego
+# config/opa/remediation.rego
+package kubernetes.remediation
+
+import future.keywords.in
+import future.keywords.if
+
+default allow := false
+
+# Allow if no critical violations
+allow if {
+    count(violations) == 0
+}
+
+# Collect all violations
+violations[msg] if {
+    input.namespace in forbidden_namespaces
+    msg := sprintf("Remediation not allowed in namespace: %s", [input.namespace])
+}
+
+violations[msg] if {
+    input.fix_type == "patch"
+    not input.manifest_changes
+    msg := "Patch operations require manifest_changes specification"
+}
+
+violations[msg] if {
+    some cmd in input.commands
+    contains_dangerous_pattern(cmd)
+    msg := sprintf("Dangerous command pattern detected: %s", [cmd])
+}
+
+violations[msg] if {
+    input.fix_type == "scale"
+    input.scale_factor > 2
+    msg := sprintf("Scale factor %d exceeds maximum of 2", [input.scale_factor])
+}
+
+violations[msg] if {
+    input.fix_type == "patch"
+    input.manifest_changes.path == "spec.containers[0].resources.limits.memory"
+    memory_increase_pct > 50
+    msg := sprintf("Memory increase of %d%% exceeds maximum of 50%%", [memory_increase_pct])
+}
+
+# Warnings (non-blocking)
+warnings[msg] if {
+    input.risk_level == "high"
+    msg := "High-risk remediation requires careful review"
+}
+
+warnings[msg] if {
+    input.diagnosis_confidence < 0.7
+    msg := sprintf("Low diagnosis confidence: %.0f%%", [input.diagnosis_confidence * 100])
+}
+
+# Helper functions
+forbidden_namespaces := {"kube-system", "kube-public", "istio-system", "monitoring"}
+
+contains_dangerous_pattern(cmd) if {
+    patterns := ["--all", "--force", "rm -rf", "kubectl exec", "--grace-period=0"]
+    some pattern in patterns
+    contains(lower(cmd), pattern)
+}
+
+memory_increase_pct := pct if {
+    input.current_memory_limit
+    input.new_memory_limit
+    pct := ((input.new_memory_limit - input.current_memory_limit) / input.current_memory_limit) * 100
+}
+```
+
+#### Step 6.3: Create Policy Checker Agent
+
+```python
+# agents/policy_checker.py
+from models.state import K8sOperatorState, PolicyViolation
+from integrations.opa import OPAClient
+import yaml
+import re
+from pathlib import Path
+from typing import List
+
+class PolicyChecker:
+    """Validates remediation plans against organizational policies."""
+
+    def __init__(self, policies_path: str = "config/policies.yaml"):
+        self.policies = self._load_policies(policies_path)
+        self.opa = OPAClient()
+
+    def _load_policies(self, path: str) -> dict:
+        """Load policies from YAML file."""
+        policies_file = Path(path)
+        if policies_file.exists():
+            with open(policies_file) as f:
+                return yaml.safe_load(f)
+        return {"policies": {}, "remediation_limits": {}}
+
+    async def check_fix(self, state: K8sOperatorState) -> dict:
+        """Check proposed fix against all policies."""
+        proposed_fix = state.get("proposed_fix", {})
+        violations = []
+        print("🔒 Checking policies...")
+
+        # 1. Check internal policies
+        internal_violations = self._check_internal_policies(state, proposed_fix)
+        violations.extend(internal_violations)
+
+        # 2. Check OPA policies
+        opa_result = await self._check_opa_policies(state, proposed_fix)
+        for v in opa_result.get("violations", []):
+            violations.append({
+                "policy_name": "opa_policy",
+                "description": v,
+                "severity": "critical",
+                "source": "opa"
+            })
+        for w in opa_result.get("warnings", []):
+            violations.append({
+                "policy_name": "opa_warning",
+                "description": w,
+                "severity": "warning",
+                "source": "opa"
+            })
+
+        # Determine if policy check passed
+        critical_violations = [v for v in violations if v["severity"] == "critical"]
+        policy_passed = len(critical_violations) == 0
+
+        print(f"   Total violations: {len(violations)} ({len(critical_violations)} critical)")
+        print(f"   Policy Passed: {policy_passed}")
+
+        return {
+            "policy_violations": violations,
+            "policy_passed": policy_passed,
+            "status": "policy_check_complete"
+        }
+
+    def _check_internal_policies(self, state: K8sOperatorState, fix: dict) -> List[dict]:
+        """Check against internal policy configuration."""
+        violations = []
+        namespace = state["namespace"]
+
+        # Namespace restrictions
+        ns_policy = self.policies.get("policies", {}).get("namespace_restrictions", {})
+        forbidden_ns = ns_policy.get("forbidden_namespaces", [])
+        allowed_ns = ns_policy.get("allowed_namespaces", [])
+
+        if namespace in forbidden_ns:
+            violations.append({
+                "policy_name": "namespace_restriction",
+                "description": f"Automated remediation not allowed in {namespace}",
+                "severity": "critical",
+                "source": "internal"
+            })
+
+        if allowed_ns and namespace not in allowed_ns:
+            violations.append({
+                "policy_name": "namespace_allowlist",
+                "description": f"Namespace {namespace} not in allowed list",
+                "severity": "error",
+                "source": "internal"
+            })
+
+        # Check for dangerous patterns
+        dangerous = self.policies.get("policies", {}).get("dangerous_patterns", {})
+        for cmd in fix.get("commands", []):
+            for pattern in dangerous.get("blocked_patterns", []):
+                if re.search(pattern, cmd, re.IGNORECASE):
+                    violations.append({
+                        "policy_name": "dangerous_command",
+                        "description": f"Command matches blocked pattern: {pattern}",
+                        "severity": "critical",
+                        "source": "internal"
+                    })
+
+        return violations
+
+    async def _check_opa_policies(self, state: K8sOperatorState, fix: dict) -> dict:
+        """Check against OPA policies."""
+        input_data = {
+            "namespace": state["namespace"],
+            "pod_name": state["pod_name"],
+            "fix_type": fix.get("fix_type"),
+            "commands": fix.get("commands", []),
+            "manifest_changes": fix.get("manifest_changes"),
+            "risk_level": fix.get("risk_level"),
+            "diagnosis_confidence": state.get("diagnosis_confidence", 0)
+        }
+        return await self.opa.check_policy("kubernetes/remediation", input_data)
+
+async def policy_checker_node(state: K8sOperatorState) -> dict:
+    """LangGraph node for policy checking."""
+    checker = PolicyChecker()
+    return await checker.check_fix(state)
+```
+
+---
+
+### Phase 7: Build GitOps Integration (30 minutes)
+
+<Callout type="tip">
+  **GitOps-Backed Remediation**: Instead of applying fixes directly to the
+  cluster, we create a Pull Request with the changes. This provides an audit
+  trail, enables CI validation, and allows ArgoCD/Flux to reconcile the changes.
+  This pattern is increasingly popular in production environments.
+</Callout>
+
+#### Step 7.1: Create GitOps Integration
+
+```python
+# integrations/gitops.py
+import httpx
+import os
+import base64
+from datetime import datetime
+from typing import Optional
+import yaml
+
+class GitOpsClient:
+    """Create PRs for GitOps-backed remediation."""
+
+    def __init__(self):
+        self.token = os.getenv("GITHUB_TOKEN")
+        self.repo = os.getenv("GITHUB_REPO")  # e.g., "org/k8s-manifests"
+        self.base_url = "https://api.github.com"
+        self.headers = {
+            "Authorization": f"token {self.token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+    async def create_remediation_pr(
+        self,
+        incident_id: str,
+        namespace: str,
+        pod_name: str,
+        fix: dict,
+        diagnosis: dict
+    ) -> dict:
+        """Create a PR with the remediation changes."""
+        branch_name = f"remediation/{incident_id}"
+
+        async with httpx.AsyncClient() as client:
+            # 1. Get the default branch SHA
+            repo_info = await client.get(
+                f"{self.base_url}/repos/{self.repo}",
+                headers=self.headers
+            )
+            default_branch = repo_info.json()["default_branch"]
+
+            ref_info = await client.get(
+                f"{self.base_url}/repos/{self.repo}/git/ref/heads/{default_branch}",
+                headers=self.headers
+            )
+            base_sha = ref_info.json()["object"]["sha"]
+
+            # 2. Create a new branch
+            await client.post(
+                f"{self.base_url}/repos/{self.repo}/git/refs",
+                headers=self.headers,
+                json={
+                    "ref": f"refs/heads/{branch_name}",
+                    "sha": base_sha
+                }
+            )
+
+            # 3. Create/update the manifest file
+            manifest_path = f"namespaces/{namespace}/{pod_name.rsplit('-', 2)[0]}/deployment.yaml"
+            manifest_content = self._generate_manifest_patch(fix)
+
+            await client.put(
+                f"{self.base_url}/repos/{self.repo}/contents/{manifest_path}",
+                headers=self.headers,
+                json={
+                    "message": f"fix({incident_id}): {fix['description'][:50]}",
+                    "content": base64.b64encode(manifest_content.encode()).decode(),
+                    "branch": branch_name
+                }
+            )
+
+            # 4. Create the PR
+            pr_body = self._generate_pr_body(incident_id, diagnosis, fix)
+            pr_response = await client.post(
+                f"{self.base_url}/repos/{self.repo}/pulls",
+                headers=self.headers,
+                json={
+                    "title": f"🤖 Auto-remediation: {incident_id}",
+                    "body": pr_body,
+                    "head": branch_name,
+                    "base": default_branch,
+                    "labels": ["auto-remediation", fix["risk_level"]]
+                }
+            )
+
+            pr_data = pr_response.json()
+            return {
+                "pr_url": pr_data["html_url"],
+                "pr_number": pr_data["number"],
+                "branch": branch_name
+            }
+
+    def _generate_manifest_patch(self, fix: dict) -> str:
+        """Generate the manifest changes as YAML."""
+        if fix.get("manifest_changes"):
+            return yaml.dump(fix["manifest_changes"], default_flow_style=False)
+        return f"# Remediation: {fix['description']}\n# Commands: {fix['commands']}"
+
+    def _generate_pr_body(self, incident_id: str, diagnosis: dict, fix: dict) -> str:
+        """Generate a detailed PR description."""
+        return f"""## 🤖 Automated Remediation
+
+**Incident ID:** `{incident_id}`
+**Generated:** {datetime.now().isoformat()}
+
+### Diagnosis
+- **Root Cause:** {diagnosis.get('root_cause', 'Unknown')}
+- **Category:** {diagnosis.get('category', 'unknown')}
+- **Confidence:** {diagnosis.get('confidence', 0):.0%}
+
+### Evidence
+{chr(10).join(f'- {e}' for e in diagnosis.get('evidence', []))}
+
+### Proposed Fix
+- **Type:** `{fix['fix_type']}`
+- **Risk Level:** `{fix['risk_level']}`
+- **Description:** {fix['description']}
+
+### Expected Outcome
+{fix.get('expected_outcome', 'N/A')}
+
+### Rollback Plan
+{fix.get('rollback_plan', 'N/A')}
+
+---
+⚠️ **This PR was generated automatically by the SRE Agent.**
+Please review carefully before merging.
+"""
+```
+
+---
+
+### Phase 8: Build the Executor Agent (30 minutes)
+
+#### Step 8.1: Create the Executor
+
+```python
+# agents/executor.py
+from kubernetes import client
+from kubernetes.client.rest import ApiException
+from models.state import K8sOperatorState
+from integrations.gitops import GitOpsClient
+from datetime import datetime
+import os
+
+class ExecutorAgent:
+    """Executes approved remediation plans."""
+
+    def __init__(self):
+        self.v1 = client.CoreV1Api()
+        self.apps_v1 = client.AppsV1Api()
+        self.gitops = GitOpsClient()
+        self.use_gitops = os.getenv("USE_GITOPS", "true").lower() == "true"
+
+    async def execute(self, state: K8sOperatorState) -> dict:
+        """Execute the approved remediation."""
+        if not state.get("human_approved"):
+            return {
+                "execution_result": "Execution blocked: Not approved",
+                "status": "awaiting_approval"
+            }
+
+        fix = state.get("proposed_fix", {})
+        fix_type = fix.get("fix_type", "")
+        pod_name = state["pod_name"]
+        namespace = state["namespace"]
+
+        print(f"⚡ Executing {fix_type} for {namespace}/{pod_name}")
+
+        try:
+            # For GitOps mode, create PR instead of direct execution
+            if self.use_gitops and fix_type in ["patch", "scale"]:
+                result = await self._execute_via_gitops(state, fix)
+            else:
+                result = await self._execute_direct(state, fix)
+
+            print(f"   Result: {result}")
+            return {
+                "execution_result": result,
+                "status": "completed"
+            }
+
+        except Exception as e:
+            error_msg = f"Execution failed: {str(e)}"
+            print(f"   ❌ {error_msg}")
+            return {
+                "execution_result": error_msg,
+                "status": "failed",
+                "errors": state.get("errors", []) + [error_msg]
+            }
+
+    async def _execute_via_gitops(self, state: K8sOperatorState, fix: dict) -> str:
+        """Create a PR for GitOps reconciliation."""
+        pr_result = await self.gitops.create_remediation_pr(
+            incident_id=state["incident_id"],
+            namespace=state["namespace"],
+            pod_name=state["pod_name"],
+            fix=fix,
+            diagnosis=state.get("diagnosis", {})
+        )
+        return f"Created PR: {pr_result['pr_url']}"
+
+    async def _execute_direct(self, state: K8sOperatorState, fix: dict) -> str:
+        """Execute remediation directly on the cluster."""
+        fix_type = fix.get("fix_type", "")
+        pod_name = state["pod_name"]
+        namespace = state["namespace"]
+
+        if fix_type == "restart":
+            return self._restart_pod(pod_name, namespace)
+        elif fix_type == "scale":
+            return self._scale_deployment(pod_name, namespace)
+        elif fix_type == "rollback":
+            return self._rollback_deployment(pod_name, namespace)
+        elif fix_type == "escalate":
+            return "Escalated to human operator"
+        else:
+            return f"Unknown fix type: {fix_type}"
+
+    def _restart_pod(self, pod_name: str, namespace: str) -> str:
+        """Delete pod to trigger restart by controller."""
+        self.v1.delete_namespaced_pod(
+            name=pod_name,
+            namespace=namespace,
+            grace_period_seconds=30
+        )
+        return f"Pod {pod_name} deleted, will be recreated by controller"
+
+    def _scale_deployment(self, pod_name: str, namespace: str) -> str:
+        """Scale deployment up."""
+        deployment_name = self._get_deployment_name(pod_name, namespace)
+        if not deployment_name:
+            return "Could not find parent deployment"
+
+        deployment = self.apps_v1.read_namespaced_deployment(deployment_name, namespace)
+        current_replicas = deployment.spec.replicas or 1
+        new_replicas = min(current_replicas + 1, 5)
+
+        self.apps_v1.patch_namespaced_deployment_scale(
+            deployment_name, namespace,
+            {"spec": {"replicas": new_replicas}}
+        )
+        return f"Scaled {deployment_name} from {current_replicas} to {new_replicas} replicas"
+
+    def _rollback_deployment(self, pod_name: str, namespace: str) -> str:
+        """Rollback deployment to previous revision."""
+        deployment_name = self._get_deployment_name(pod_name, namespace)
+        if not deployment_name:
+            return "Could not find parent deployment"
+
+        patch = {
+            "spec": {
+                "template": {
+                    "metadata": {
+                        "annotations": {
+                            "kubectl.kubernetes.io/restartedAt": datetime.now().isoformat()
+                        }
+                    }
+                }
+            }
+        }
+        self.apps_v1.patch_namespaced_deployment(deployment_name, namespace, patch)
+        return f"Triggered rollout restart for {deployment_name}"
+
+    def _get_deployment_name(self, pod_name: str, namespace: str) -> str | None:
+        """Get the deployment name from a pod."""
+        try:
+            pod = self.v1.read_namespaced_pod(pod_name, namespace)
+            for ref in pod.metadata.owner_references or []:
+                if ref.kind == "ReplicaSet":
+                    rs = self.apps_v1.read_namespaced_replica_set(ref.name, namespace)
+                    for rs_ref in rs.metadata.owner_references or []:
+                        if rs_ref.kind == "Deployment":
+                            return rs_ref.name
+            return None
+        except ApiException:
+            return None
+
+async def executor_node(state: K8sOperatorState) -> dict:
+    """LangGraph node for execution."""
+    executor = ExecutorAgent()
+    return await executor.execute(state)
+```
+
+---
+
+### Phase 9: Build Slack Integration (30 minutes)
+
+#### Step 9.1: Create Slack Approval Handler
+
+````python
+# integrations/slack.py
+from slack_sdk import WebClient
+from slack_sdk.socket_mode import SocketModeClient
+from slack_sdk.socket_mode.request import SocketModeRequest
+from slack_sdk.socket_mode.response import SocketModeResponse
+from models.state import K8sOperatorState
+import os
+import json
+
+class SlackApprovalHandler:
+    """Handles Slack-based approval workflow."""
+
+    def __init__(self, channel: str = "#sre-alerts"):
+        self.slack = WebClient(token=os.environ["SLACK_BOT_TOKEN"])
+        self.channel = channel
+        self.pending_approvals = {}
+
+    def send_approval_request(self, state: K8sOperatorState) -> str:
+        """Send approval request to Slack."""
+        incident_id = state["incident_id"]
+        diagnosis = state.get("diagnosis", {})
+        fix = state.get("proposed_fix", {})
+        violations = state.get("policy_violations", [])
+
+        blocks = [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": f"🚨 K8s Incident: {incident_id}"}
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*Pod:*\n`{state['pod_name']}`"},
+                    {"type": "mrkdwn", "text": f"*Namespace:*\n`{state['namespace']}`"}
+                ]
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Root Cause:*\n{diagnosis.get('root_cause', 'Unknown')[:500]}"}
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Category:* `{diagnosis.get('category', 'unknown')}` | *Confidence:* {diagnosis.get('confidence', 0):.0%}"}
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Proposed Fix:* `{fix.get('fix_type', 'none')}`\n{fix.get('description', 'No description')[:300]}"}
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Risk Level:* `{fix.get('risk_level', 'unknown')}`"}
+            }
+        ]
+
+        # Add policy violations/warnings
+        if violations:
+            critical = [v for v in violations if v['severity'] == 'critical']
+            warnings = [v for v in violations if v['severity'] != 'critical']
+
+            if critical:
+                blocks.append({
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"*🚫 Critical Violations:*\n" + "\n".join(f"• {v['description']}" for v in critical)}
+                })
+            if warnings:
+                blocks.append({
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"*⚠️ Warnings:*\n" + "\n".join(f"• {v['description']}" for v in warnings)}
+                })
+
+        # Add approval buttons
+        blocks.append({
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "✅ Approve"},
+                    "style": "primary",
+                    "action_id": f"approve_{incident_id}",
+                    "value": incident_id
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "❌ Reject"},
+                    "style": "danger",
+                    "action_id": f"reject_{incident_id}",
+                    "value": incident_id
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "📋 Details"},
+                    "action_id": f"details_{incident_id}",
+                    "value": incident_id
+                }
+            ]
+        })
+
+        response = self.slack.chat_postMessage(
+            channel=self.channel,
+            blocks=blocks,
+            text=f"K8s Incident {incident_id} requires approval"
+        )
+
+        self.pending_approvals[incident_id] = {
+            "state": state,
+            "message_ts": response["ts"]
+        }
+        return response["ts"]
+
+    def handle_interaction(self, action_id: str, user: str) -> dict:
+        """Handle button click from Slack."""
+        parts = action_id.split("_")
+        action = parts[0]
+        incident_id = "_".join(parts[1:])
+
+        if incident_id not in self.pending_approvals:
+            return {"error": "Incident not found or already processed"}
+
+        pending = self.pending_approvals[incident_id]
+
+        if action == "approve":
+            self._update_message(pending["message_ts"], f"✅ Approved by <@{user}>")
+            del self.pending_approvals[incident_id]
+            return {
+                "human_approved": True,
+                "approver": user,
+                "approval_notes": "Approved via Slack"
+            }
+        elif action == "reject":
+            self._update_message(pending["message_ts"], f"❌ Rejected by <@{user}>")
+            del self.pending_approvals[incident_id]
+            return {
+                "human_approved": False,
+                "approver": user,
+                "approval_notes": "Rejected via Slack",
+                "status": "rejected"
+            }
+        elif action == "details":
+            state = pending["state"]
+            self.slack.chat_postMessage(
+                channel=self.channel,
+                thread_ts=pending["message_ts"],
+                text=f"```\n{json.dumps(state, indent=2, default=str)[:3000]}\n```"
+            )
+            return {}
+
+        return {"error": f"Unknown action: {action}"}
+
+    def _update_message(self, ts: str, status: str):
+        """Update the approval message with result."""
+        self.slack.chat_update(
+            channel=self.channel,
+            ts=ts,
+            text=status,
+            blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": status}}]
+        )
+````
+
+---
+
+### Phase 10: Build Observability for the Operator (30 minutes)
+
+<Callout type="info">
+  **Observing the Observer**: Your autonomous operator needs its own
+  observability. Track metrics like incidents detected, diagnosis accuracy,
+  approval rates, and MTTR to understand how well your AI SRE is performing.
+</Callout>
+
+#### Step 10.1: Create Prometheus Metrics
+
+```python
+# observability/metrics.py
+from prometheus_client import Counter, Histogram, Gauge, start_http_server
+import time
+
+# Counters
+INCIDENTS_DETECTED = Counter(
+    'sre_agent_incidents_detected_total',
+    'Total number of incidents detected',
+    ['namespace', 'category']
+)
+
+INCIDENTS_RESOLVED = Counter(
+    'sre_agent_incidents_resolved_total',
+    'Total number of incidents resolved',
+    ['namespace', 'category', 'fix_type']
+)
+
+INCIDENTS_ESCALATED = Counter(
+    'sre_agent_incidents_escalated_total',
+    'Total number of incidents escalated',
+    ['namespace', 'category', 'reason']
+)
+
+APPROVALS = Counter(
+    'sre_agent_approvals_total',
+    'Total number of approval decisions',
+    ['decision']  # approved, rejected
+)
+
+POLICY_VIOLATIONS = Counter(
+    'sre_agent_policy_violations_total',
+    'Total number of policy violations',
+    ['policy_name', 'severity']
+)
+
+# Histograms
+DIAGNOSIS_DURATION = Histogram(
+    'sre_agent_diagnosis_duration_seconds',
+    'Time taken to diagnose an incident',
+    buckets=[1, 5, 10, 30, 60, 120]
+)
+
+REMEDIATION_DURATION = Histogram(
+    'sre_agent_remediation_duration_seconds',
+    'Time taken to remediate an incident (excluding approval wait)',
+    buckets=[5, 10, 30, 60, 120, 300]
+)
+
+APPROVAL_WAIT_DURATION = Histogram(
+    'sre_agent_approval_wait_duration_seconds',
+    'Time waiting for human approval',
+    buckets=[60, 300, 600, 1800, 3600]
+)
+
+# Gauges
+DIAGNOSIS_CONFIDENCE = Gauge(
+    'sre_agent_diagnosis_confidence',
+    'Confidence of the last diagnosis',
+    ['namespace', 'pod']
+)
+
+PENDING_APPROVALS = Gauge(
+    'sre_agent_pending_approvals',
+    'Number of incidents awaiting approval'
+)
+
+ACTIVE_INCIDENTS = Gauge(
+    'sre_agent_active_incidents',
+    'Number of active incidents being processed'
+)
+
+class MetricsCollector:
+    """Collect and expose metrics for the SRE agent."""
+
+    def __init__(self, port: int = 8080):
+        self.port = port
+        self._start_times = {}
+
+    def start_server(self):
+        """Start the Prometheus metrics server."""
+        start_http_server(self.port)
+        print(f"📊 Metrics server started on port {self.port}")
+
+    def record_incident_detected(self, namespace: str, category: str):
+        """Record a new incident detection."""
+        INCIDENTS_DETECTED.labels(namespace=namespace, category=category).inc()
+        ACTIVE_INCIDENTS.inc()
+
+    def record_diagnosis_start(self, incident_id: str):
+        """Record the start of diagnosis."""
+        self._start_times[f"diagnosis_{incident_id}"] = time.time()
+
+    def record_diagnosis_complete(self, incident_id: str, confidence: float, namespace: str, pod: str):
+        """Record diagnosis completion."""
+        start_key = f"diagnosis_{incident_id}"
+        if start_key in self._start_times:
+            duration = time.time() - self._start_times.pop(start_key)
+            DIAGNOSIS_DURATION.observe(duration)
+        DIAGNOSIS_CONFIDENCE.labels(namespace=namespace, pod=pod).set(confidence)
+
+    def record_policy_violation(self, policy_name: str, severity: str):
+        """Record a policy violation."""
+        POLICY_VIOLATIONS.labels(policy_name=policy_name, severity=severity).inc()
+
+    def record_approval_request(self):
+        """Record that an approval was requested."""
+        PENDING_APPROVALS.inc()
+
+    def record_approval_decision(self, decision: str, wait_duration: float):
+        """Record an approval decision."""
+        APPROVALS.labels(decision=decision).inc()
+        APPROVAL_WAIT_DURATION.observe(wait_duration)
+        PENDING_APPROVALS.dec()
+
+    def record_incident_resolved(self, namespace: str, category: str, fix_type: str):
+        """Record a resolved incident."""
+        INCIDENTS_RESOLVED.labels(
+            namespace=namespace, category=category, fix_type=fix_type
+        ).inc()
+        ACTIVE_INCIDENTS.dec()
+
+    def record_incident_escalated(self, namespace: str, category: str, reason: str):
+        """Record an escalated incident."""
+        INCIDENTS_ESCALATED.labels(
+            namespace=namespace, category=category, reason=reason
+        ).inc()
+        ACTIVE_INCIDENTS.dec()
+
+# Global metrics collector
+metrics = MetricsCollector()
+```
+
+#### Step 10.2: Grafana Dashboard Configuration
+
+{/* IMAGE_PLACEHOLDER: Create a mockup of a Grafana dashboard for the K8s SRE Agent showing 6 panels: 1) Top-left: Big number stats for Total Incidents (Detected/Resolved/Escalated) with trend arrows, 2) Top-right: Pie chart of incidents by category (OOM, Crash, Image, Config, Network, Storage), 3) Middle-left: Gauge showing p95 diagnosis duration with green/yellow/red zones, 4) Middle-right: Stat panel showing approval rate percentage with thumbs up/down icons, 5) Bottom-left: Line graph of diagnosis confidence over time, 6) Bottom-right: Stacked area chart of policy violations by severity. Use Grafana's dark theme. Include time range selector showing "Last 24 hours". Place this at /images/grafana_sre_agent_dashboard.png */}
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "Live Metrics Dashboard" interactive component that simulates real-time operator metrics. Show animated counters for incidents detected/resolved, a live updating line chart for diagnosis duration, and a gauge for current system load. Users can click "Simulate Incident" to see metrics update in real-time. This helps learners understand what good vs bad metrics look like and how to interpret the dashboard. */}
+
+```json
+{
+  "dashboard": {
+    "title": "SRE Agent Dashboard",
+    "panels": [
+      {
+        "title": "Incidents Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(sre_agent_incidents_detected_total)",
+            "legendFormat": "Detected"
+          },
+          {
+            "expr": "sum(sre_agent_incidents_resolved_total)",
+            "legendFormat": "Resolved"
+          },
+          {
+            "expr": "sum(sre_agent_incidents_escalated_total)",
+            "legendFormat": "Escalated"
+          }
+        ]
+      },
+      {
+        "title": "Incidents by Category",
+        "type": "piechart",
+        "targets": [
+          { "expr": "sum by (category) (sre_agent_incidents_detected_total)" }
+        ]
+      },
+      {
+        "title": "Diagnosis Duration (p95)",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(sre_agent_diagnosis_duration_seconds_bucket[1h]))"
+          }
+        ]
+      },
+      {
+        "title": "Approval Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(sre_agent_approvals_total{decision='approved'}) / sum(sre_agent_approvals_total) * 100"
+          }
+        ]
+      },
+      {
+        "title": "Average Diagnosis Confidence",
+        "type": "gauge",
+        "targets": [{ "expr": "avg(sre_agent_diagnosis_confidence)" }]
+      },
+      {
+        "title": "Policy Violations by Severity",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum by (severity) (rate(sre_agent_policy_violations_total[5m]))"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+---
+
+### Phase 11: Wire the Complete Graph (30 minutes)
+
+#### Step 11.1: Create the Main Workflow
+
+```python
+# main.py
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+from models.state import K8sOperatorState
+from agents.diagnostician import diagnostician_node
+from agents.planner import planner_node
+from agents.policy_checker import policy_checker_node
+from agents.executor import executor_node
+from agents.watcher import K8sEventWatcher
+from integrations.slack import SlackApprovalHandler
+from observability.metrics import metrics
+from datetime import datetime
+import asyncio
+import uuid
+
+# Initialize components
+slack_handler = SlackApprovalHandler()
+
+def route_after_diagnosis(state: K8sOperatorState) -> str:
+    """Route based on diagnosis confidence."""
+    confidence = state.get("diagnosis_confidence", 0)
+    if confidence < 0.3:
+        return "escalate"
+    return "plan"
+
+def route_after_policy(state: K8sOperatorState) -> str:
+    """Route based on policy check results."""
+    if not state.get("policy_passed"):
+        critical = any(
+            v.get("severity") == "critical"
+            for v in state.get("policy_violations", [])
+        )
+        if critical:
+            return "escalate"
+    return "request_approval"
+
+def route_after_approval(state: K8sOperatorState) -> str:
+    """Route based on approval status."""
+    if state.get("human_approved"):
+        return "execute"
+    if state.get("status") == "rejected":
+        return "end"
+    return "wait_approval"
+
+def request_approval_node(state: K8sOperatorState) -> dict:
+    """Send approval request to Slack."""
+    print("📨 Requesting human approval...")
+    metrics.record_approval_request()
+    slack_handler.send_approval_request(state)
+    return {"status": "awaiting_approval"}
+
+def escalate_node(state: K8sOperatorState) -> dict:
+    """Escalate to human operator."""
+    print("🚨 Escalating to human operator...")
+    diagnosis = state.get("diagnosis", {})
+    reason = "low_confidence" if state.get("diagnosis_confidence", 0) < 0.3 else "policy_violation"
+
+    metrics.record_incident_escalated(
+        namespace=state["namespace"],
+        category=diagnosis.get("category", "unknown"),
+        reason=reason
+    )
+
+    slack_handler.slack.chat_postMessage(
+        channel="#sre-escalations",
+        text=f"🚨 *ESCALATION*: Incident {state['incident_id']} requires manual intervention.\n"
+             f"Pod: `{state['namespace']}/{state['pod_name']}`\n"
+             f"Reason: {reason}"
+    )
+    return {"status": "escalated"}
+
+def build_operator_graph():
+    """Build the K8s operator workflow."""
+    workflow = StateGraph(K8sOperatorState)
+
+    # Add nodes
+    workflow.add_node("diagnose", diagnostician_node)
+    workflow.add_node("plan", planner_node)
+    workflow.add_node("policy_check", policy_checker_node)
+    workflow.add_node("request_approval", request_approval_node)
+    workflow.add_node("execute", executor_node)
+    workflow.add_node("escalate", escalate_node)
+
+    # Set entry point
+    workflow.set_entry_point("diagnose")
+
+    # Add edges
+    workflow.add_conditional_edges(
+        "diagnose",
+        route_after_diagnosis,
+        {"plan": "plan", "escalate": "escalate"}
+    )
+    workflow.add_edge("plan", "policy_check")
+    workflow.add_conditional_edges(
+        "policy_check",
+        route_after_policy,
+        {"request_approval": "request_approval", "escalate": "escalate"}
+    )
+    workflow.add_edge("request_approval", END)  # Pauses for approval
+    workflow.add_edge("execute", END)
+    workflow.add_edge("escalate", END)
+
+    # Compile with checkpointing for HITL
+    memory = MemorySaver()
+    return workflow.compile(
+        checkpointer=memory,
+        interrupt_before=["execute"]
+    )
+
+async def handle_pod_failure(event):
+    """Callback when pod failure is detected."""
+    incident_id = f"INC-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
+
+    # Record metrics
+    metrics.record_incident_detected(event.namespace, "unknown")
+    metrics.record_diagnosis_start(incident_id)
+
+    initial_state = {
+        "pod_name": event.pod_name,
+        "namespace": event.namespace,
+        "event_type": event.event_type,
+        "timestamp": event.timestamp.isoformat(),
+        "container_statuses": [s.dict() for s in event.container_statuses] if hasattr(event, 'container_statuses') else [],
+        "incident_id": incident_id,
+        "iteration_count": 0,
+        "errors": [],
+        "status": "detected"
+    }
+
+    graph = build_operator_graph()
+    config = {"configurable": {"thread_id": incident_id}}
+
+    # Run until approval checkpoint
+    result = await graph.ainvoke(initial_state, config)
+    print(f"Incident {incident_id} awaiting approval...")
+    return incident_id, config
+
+async def main():
+    """Main entry point."""
+    print("=" * 60)
+    print("🤖 K8s SRE Agent Starting...")
+    print("=" * 60)
+
+    # Start metrics server
+    metrics.start_server()
+
+    # Start the watcher
+    watcher = K8sEventWatcher(on_failure=handle_pod_failure)
+    await watcher.watch_pods(namespaces=["default", "staging"])
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+---
+
+## Advanced Topics
+
+### Multi-Cluster Support
+
+{/* IMAGE_PLACEHOLDER: Create a multi-cluster architecture diagram showing three K8s clusters (Prod US-East, Prod EU-West, Staging) each with their own operator instance. Show all operators connecting to: 1) Centralized Slack workspace (single #sre-alerts channel), 2) Shared incident tracking database, 3) Common GitOps repository, 4) Centralized Grafana for metrics aggregation. Use different colors for each cluster (blue, green, orange). Show data flow with arrows. Include a comparison table showing "Operator Per Cluster" vs "Centralized Operator" patterns with pros/cons. Place this at /images/multi_cluster_architecture.png */}
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "Multi-Cluster Incident Simulator" where users can see how incidents in different clusters are handled. Show a map with 3 regions, click a region to simulate an incident, watch it flow through the operator pipeline with cluster-specific policies. Display metrics aggregated across all clusters. This helps learners understand scaling patterns for enterprise deployments. */}
+
+<Callout type="tip">
+  **Scaling to Multiple Clusters**: In production, you'll often need to manage
+  multiple Kubernetes clusters. The operator pattern scales well—deploy one
+  operator per cluster, or use a centralized operator with multi-cluster access.
+</Callout>
+
+For multi-cluster deployments, consider these patterns:
+
+#### Pattern 1: Operator Per Cluster
+
+Deploy the SRE agent to each cluster independently. Use a shared Slack channel and incident tracking system.
+
+```python
+# Multi-cluster configuration
+CLUSTERS = {
+    "prod-us-east": {
+        "kubeconfig": "/etc/kubeconfig/prod-us-east",
+        "namespaces": ["default", "app-*"],
+        "slack_channel": "#sre-alerts-prod"
+    },
+    "prod-eu-west": {
+        "kubeconfig": "/etc/kubeconfig/prod-eu-west",
+        "namespaces": ["default", "app-*"],
+        "slack_channel": "#sre-alerts-prod"
+    },
+    "staging": {
+        "kubeconfig": "/etc/kubeconfig/staging",
+        "namespaces": ["*"],
+        "slack_channel": "#sre-alerts-staging"
+    }
+}
+```
+
+#### Pattern 2: Centralized Operator with KubeFed
+
+Use Kubernetes Federation (KubeFed) to manage multiple clusters from a single control plane:
+
+```python
+# integrations/multi_cluster.py
+from kubernetes import client, config
+from typing import Dict, List
+
+class MultiClusterClient:
+    """Manage multiple Kubernetes clusters."""
+
+    def __init__(self, cluster_configs: Dict[str, str]):
+        self.clients: Dict[str, client.CoreV1Api] = {}
+        for name, kubeconfig in cluster_configs.items():
+            config.load_kube_config(config_file=kubeconfig)
+            self.clients[name] = client.CoreV1Api()
+
+    async def watch_all_clusters(self, on_failure):
+        """Watch all clusters for failures."""
+        tasks = [
+            self._watch_cluster(name, api, on_failure)
+            for name, api in self.clients.items()
+        ]
+        await asyncio.gather(*tasks)
+
+    async def _watch_cluster(self, cluster_name: str, api: client.CoreV1Api, on_failure):
+        """Watch a single cluster."""
+        w = watch.Watch()
+        for event in w.stream(api.list_pod_for_all_namespaces):
+            event["cluster"] = cluster_name
+            await self._process_event(event, on_failure)
+```
+
+### Integration with K8sGPT
+
+[K8sGPT](https://k8sgpt.ai/) is a CNCF sandbox project that provides AI-powered Kubernetes troubleshooting. You can integrate it with your operator for enhanced diagnosis:
+
+```python
+# integrations/k8sgpt.py
+import subprocess
+import json
+
+class K8sGPTClient:
+    """Integration with K8sGPT for enhanced diagnosis."""
+
+    def analyze(self, namespace: str = None) -> List[dict]:
+        """Run K8sGPT analysis."""
+        cmd = ["k8sgpt", "analyze", "--output", "json"]
+        if namespace:
+            cmd.extend(["--namespace", namespace])
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            return json.loads(result.stdout)
+        return []
+
+    def get_pod_analysis(self, pod_name: str, namespace: str) -> dict:
+        """Get K8sGPT analysis for a specific pod."""
+        analyses = self.analyze(namespace)
+        for analysis in analyses:
+            if analysis.get("name") == pod_name:
+                return {
+                    "error": analysis.get("error"),
+                    "details": analysis.get("details"),
+                    "solution": analysis.get("solution")
+                }
+        return {}
+```
+
+---
+
+### Phase 12: Testing (30 minutes)
+
+{/* IMAGE_PLACEHOLDER: Create a testing workflow diagram showing the three test scenarios: 1) CrashLoop test (busybox container exiting with code 1), 2) OOM test (stress container exceeding memory limit), 3) ImagePullError test (non-existent image). For each, show: the test pod YAML → expected failure mode → agent detection → diagnosis output → proposed remediation. Use a 3-column layout with icons for each test type. Include expected timeline (how long each test takes). Color code: red for failure, yellow for detection, blue for diagnosis, green for remediation. Place this at /images/k8s_operator_testing_scenarios.png */}
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "K8s Failure Mode Explorer" interactive component. Users can select a failure type (CrashLoop, OOM, ImagePull, ConfigError, NetworkIssue) and see: 1) Example pod YAML that would cause this failure, 2) What the failure looks like in kubectl output, 3) Sample logs the agent would analyze, 4) Expected diagnosis from the AI, 5) Typical remediation plan. Include a "Try It" button that shows the complete flow with animated transitions. This helps learners understand different failure patterns before building the operator. */}
+
+#### Step 12.1: Create Test Pods
+
+```yaml
+# tests/test_pods/crashloop.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-crashloop
+  namespace: default
+  labels:
+    app: test-crashloop
+spec:
+  containers:
+    - name: crasher
+      image: busybox
+      command: ["sh", "-c", "echo 'Starting...'; sleep 2; exit 1"]
+  restartPolicy: Always
+```
+
+```yaml
+# tests/test_pods/oom.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-oom
+  namespace: default
+  labels:
+    app: test-oom
+spec:
+  containers:
+    - name: memory-hog
+      image: polinux/stress
+      resources:
+        limits:
+          memory: "50Mi"
+        requests:
+          memory: "50Mi"
+      command: ["stress"]
+      args: ["--vm", "1", "--vm-bytes", "100M", "--vm-hang", "1"]
+```
+
+```yaml
+# tests/test_pods/image-pull-error.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-image-pull
+  namespace: default
+spec:
+  containers:
+    - name: bad-image
+      image: nonexistent-registry.io/fake-image:v1.0.0
+```
+
+#### Step 12.2: Run Tests
+
+```bash
+# Deploy test pods
+kubectl apply -f tests/test_pods/crashloop.yaml
+kubectl apply -f tests/test_pods/oom.yaml
+
+# Watch the agent respond
+python main.py
+
+# In another terminal, watch pod status
+kubectl get pods -w
+
+# Clean up
+kubectl delete -f tests/test_pods/
+```
+
+#### Step 12.3: Integration Tests
+
+```python
+# tests/test_integration.py
+import pytest
+import asyncio
+from unittest.mock import Mock, patch
+from agents.diagnostician import DiagnosticianAgent
+from agents.policy_checker import PolicyChecker
+from models.state import K8sOperatorState
+
+@pytest.fixture
+def sample_state():
+    return {
+        "pod_name": "test-pod",
+        "namespace": "default",
+        "event_type": "MODIFIED",
+        "timestamp": "2025-01-15T10:00:00",
+        "incident_id": "INC-TEST-001",
+        "status": "detected"
+    }
+
+@pytest.mark.asyncio
+async def test_policy_checker_blocks_kube_system():
+    """Test that kube-system namespace is blocked."""
+    state = {
+        "pod_name": "test-pod",
+        "namespace": "kube-system",
+        "proposed_fix": {"fix_type": "restart", "commands": []}
+    }
+
+    checker = PolicyChecker()
+    result = await checker.check_fix(state)
+
+    assert result["policy_passed"] == False
+    assert any("kube-system" in v["description"] for v in result["policy_violations"])
+
+@pytest.mark.asyncio
+async def test_policy_checker_blocks_dangerous_commands():
+    """Test that dangerous commands are blocked."""
+    state = {
+        "pod_name": "test-pod",
+        "namespace": "default",
+        "proposed_fix": {
+            "fix_type": "patch",
+            "commands": ["kubectl delete pods --all"]
+        }
+    }
+
+    checker = PolicyChecker()
+    result = await checker.check_fix(state)
+
+    assert result["policy_passed"] == False
+
+def test_log_sanitization():
+    """Test that sensitive data is redacted from logs."""
+    from agents.diagnostician import sanitize_logs
+
+    logs = """
+    Starting application...
+    Connecting with password=secret123
+    API_KEY=sk-abc123xyz
+    User email: user@example.com
+    """
+
+    sanitized = sanitize_logs(logs)
+
+    assert "secret123" not in sanitized
+    assert "sk-abc123xyz" not in sanitized
+    assert "user@example.com" not in sanitized
+    assert "***REDACTED***" in sanitized
+```
+
+---
+
+## Architecture Summary
+
+{/* IMAGE_PLACEHOLDER: Create a simplified end-to-end flow diagram showing the complete incident lifecycle from detection to resolution. Use a horizontal timeline with 6 major phases: 1) DETECT (K8s cluster with failing pod icon), 2) DIAGNOSE (AI brain analyzing logs/metrics), 3) PLAN (robot creating remediation plan), 4) APPROVE (human at computer with Slack notification), 5) EXECUTE (GitOps PR → ArgoCD → cluster), 6) OBSERVE (Grafana dashboard showing metrics). Connect with arrows and show approximate time for each phase (5s, 60s, 30s, variable, 60s, continuous). Use icons and minimal text. Color gradient from red (problem) to green (resolved). Place this at /images/k8s_operator_incident_flow.png */}
+
+<Mermaid
+  chart={`
+graph TD
+    K8s[(Kubernetes Cluster)] -->|Events| Watcher[Event Watcher]
+    Prom[(Prometheus)] -->|Metrics| Diagnostician
+    Watcher -->|Pod Failure| Diagnostician[Diagnostician Agent]
+    Diagnostician -->|Root Cause| Planner[Remediation Planner]
+    Planner -->|Proposed Fix| Policy[Policy Checker]
+    Policy -->|OPA/Kyverno| OPA[(Policy Engine)]
+    Policy -->|Approved| Human{Human Approval}
+    Policy -->|Rejected| Escalate[Escalate]
+    Human -->|Approved| GitOps[GitOps PR]
+    Human -->|Rejected| End([End])
+    GitOps -->|Merge| ArgoCD[ArgoCD/Flux]
+    ArgoCD -->|Reconcile| K8s
+    
+    Metrics[Metrics Exporter] -->|Expose| Grafana[(Grafana)]
+
+    style Diagnostician fill:#f9f,stroke:#333
+    style Planner fill:#bbf,stroke:#333
+    style Policy fill:#fbb,stroke:#333
+    style Human fill:#bfb,stroke:#333
+    style GitOps fill:#fbf,stroke:#333
+
+`}
+/>
+
+---
+
+## Key Takeaways
+
+{/* IMAGE_PLACEHOLDER: Create an infographic summarizing the 7 key takeaways as a visual checklist. Use icons for each: 1) Event-driven (lightning bolt + circular arrows), 2) Policy-as-code (shield with code brackets), 3) Human-in-the-loop (robot hand + human hand shaking), 4) GitOps (git branch icon), 5) Observability (dashboard with graphs), 6) Security-first (lock with AI brain), 7) Prometheus metrics (chart trending up). Arrange in a circular or grid layout with brief text for each. Use the course color scheme. Place this at /images/k8s_operator_key_takeaways.png */}
+
+1. **Event-driven** architecture enables reactive agents that respond to infrastructure changes in real-time
+2. **Policy-as-code** with OPA/Kyverno ensures automated actions comply with organizational rules
+3. **Human-in-the-loop** approval is essential for production safety—never skip this for infrastructure changes
+4. **GitOps integration** provides audit trails, enables rollback, and fits into existing CI/CD workflows
+5. **Observability** for the operator itself is crucial—monitor your AI SRE's effectiveness
+6. **Security-first design** protects against prompt injection and ensures least-privilege access
+7. **Prometheus metrics** enable data-driven improvements to your remediation strategies
+
+**Final Analogy**: Building this K8s operator is like training an apprentice SRE engineer. You teach them (via prompts and runbooks) how to diagnose issues, you give them guidelines (policies) they must follow, you supervise their work (human approval), and you track their performance (metrics). Over time, as you refine the prompts and policies based on real incidents, your AI apprentice becomes more capable—but you always maintain oversight for critical decisions.
+
+<Callout type="tip">
+  **Production Enhancement:** Consider integrating with your existing incident
+  management platform (PagerDuty, Opsgenie, incident.io). The operator can
+  create incidents, update status, and close them automatically—providing a
+  complete audit trail.
+</Callout>
+
+---
+
+<Exercise
+  title="K8s Operator Lab"
+  difficulty="advanced"
+  objectives={[
+    "Deploy test pods and observe the agent's diagnosis",
+    "Extend the policy checker with custom OPA rules",
+    "Integrate Prometheus metrics for enhanced diagnosis",
+    "Implement GitOps-backed remediation with ArgoCD"
+  ]}
+  hints={[
+    "Start with the crashloop test pod—it's the simplest failure mode",
+    "Use kubectl logs and kubectl describe to verify agent actions",
+    "The Slack integration requires a bot token with chat:write scope",
+    "For GitOps, ensure your manifest repo has the correct structure"
+  ]}
+>
+
+**Core Tasks:**
+
+1. Deploy the test pods and observe the agent's diagnosis
+2. Add a new OPA policy that prevents scaling beyond 3 replicas
+3. Implement the Prometheus integration for memory metrics
+
+**Challenge Tasks:** 4. Add K8sGPT integration for enhanced diagnosis 5. Implement automatic post-mortem generation after incidents 6. Create a Grafana dashboard for operator metrics 7. Add multi-cluster support with cluster-specific policies
+
+</Exercise>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Running the operator with cluster-admin permissions",
+      why: "Violates principle of least privilege and creates security risks. If the AI is compromised, attackers have full cluster access.",
+      correct:
+        "Create a ServiceAccount with only the RBAC permissions needed for specific namespaces. Use separate roles for read (diagnosis) and write (remediation) operations.",
+    },
+    {
+      mistake: "Not deduplicating events in the watcher",
+      why: "Kubernetes sends multiple events for the same state change, leading to duplicate incidents and wasted LLM calls",
+      correct:
+        "Track seen events with a set based on pod/namespace/reason. Implement a cooldown period before re-alerting on the same pod.",
+    },
+    {
+      mistake: "Executing LLM-generated commands directly without validation",
+      why: "Prompt injection attacks can manipulate the LLM into generating malicious commands. A compromised log could contain instructions that the LLM follows.",
+      correct:
+        "Always validate LLM outputs against an allowlist. Use the Kubernetes Python client for type-safe operations instead of shell commands. Never use shell=True.",
+    },
+    {
+      mistake: "Passing raw logs to the LLM without sanitization",
+      why: "Logs may contain secrets, tokens, or prompt injection payloads. Sensitive data could be leaked to the LLM provider.",
+      correct:
+        "Sanitize logs to remove secrets, tokens, and PII before LLM processing. Truncate to reasonable length. Consider using regex patterns to detect and redact sensitive data.",
+    },
+    {
+      mistake: "Skipping policy checks for 'simple' remediations",
+      why: "Even simple actions like pod restarts can cause cascading failures if done incorrectly or in protected namespaces",
+      correct:
+        "Always run policy checks before any cluster modification. Use OPA/Kyverno for consistent enforcement. Fail closed if policy engine is unavailable.",
+    },
+    {
+      mistake: "Not implementing observability for the operator itself",
+      why: "Without metrics, you can't measure the operator's effectiveness or detect when it's making poor decisions",
+      correct:
+        "Export Prometheus metrics for incidents detected, diagnosis accuracy, approval rates, and MTTR. Create Grafana dashboards to monitor operator health.",
+    },
+  ]}
+/>
+
+---
+
+<ProgressCheckpoint
+  title="K8s Operator Check"
+  questions={[
+    {
+      question:
+        "Why do we use interrupt_before instead of interrupt_after for the executor?",
+      answer:
+        "interrupt_before pauses BEFORE the executor runs, allowing human review of the proposed fix. interrupt_after would execute first and then pause, which defeats the purpose of approval workflows. We want humans to approve changes before they're applied to the cluster.",
+    },
+    {
+      question:
+        "How does the GitOps pattern improve safety compared to direct execution?",
+      answer:
+        "GitOps provides: 1) An audit trail of all changes in Git history, 2) CI validation before changes are applied, 3) Easy rollback by reverting commits, 4) Separation of concerns—the operator proposes, ArgoCD/Flux applies, 5) Review process through PRs for high-risk changes.",
+    },
+    {
+      question:
+        "What are the key security considerations for AI-powered infrastructure agents?",
+      answer:
+        "Key considerations include: 1) Prompt injection defense—sanitize all inputs before LLM processing, 2) Output validation—never execute LLM outputs directly, 3) Least privilege RBAC—minimal permissions per namespace, 4) Secret redaction—never log or send secrets to LLMs, 5) Fail closed—block actions if policy engine is unavailable.",
+    },
+    {
+      question: "Why is observability important for the operator itself?",
+      answer:
+        "Observability lets you: 1) Measure effectiveness (diagnosis accuracy, MTTR reduction), 2) Detect degradation (low confidence scores, high escalation rates), 3) Identify improvement opportunities (common failure patterns), 4) Ensure compliance (audit trails, approval rates), 5) Debug issues (trace incident handling through the pipeline).",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Event-driven architecture enables reactive agents that respond to infrastructure changes in real-time",
+    "The Kubernetes Python client provides type-safe access to cluster resources—prefer it over shell commands",
+    "Policy-as-code with OPA and Kyverno ensures automated actions comply with organizational rules",
+    "Human-in-the-loop approval is essential for production safety—the AI proposes, humans approve",
+    "GitOps integration provides audit trails, enables rollback, and fits into existing CI/CD workflows",
+    "Prometheus metrics and Grafana dashboards enable monitoring of the operator's effectiveness",
+    "Security-first design protects against prompt injection and ensures least-privilege access",
+    "Multi-cluster support scales the pattern to enterprise environments",
+  ]}
+/>
+
+---
+
+## Further Reading
+
+- [Kubernetes Python Client](https://github.com/kubernetes-client/python) - Official Python client for Kubernetes
+- [K8sGPT](https://k8sgpt.ai/) - CNCF sandbox project for AI-powered Kubernetes troubleshooting
+- [Open Policy Agent](https://www.openpolicyagent.org/) - Policy-as-code for Kubernetes and beyond
+- [Kyverno](https://kyverno.io/) - Kubernetes-native policy management
+- [ArgoCD](https://argo-cd.readthedocs.io/) - Declarative GitOps CD for Kubernetes
+- [Flux](https://fluxcd.io/) - GitOps toolkit for Kubernetes
+- [SRE Book - Google](https://sre.google/sre-book/table-of-contents/) - Site Reliability Engineering principles
+- [GitOps-Backed Agentic Operators](https://dzone.com/articles/gitops-agentic-operator-kubernetes-auto-remediation) - Combining GitOps patterns with AI-driven remediation
+- [AI Agent Security Best Practices](https://www.ikangai.com/the-complete-guide-to-sandboxing-autonomous-agents-tools-frameworks-and-safety-essentials/) - Sandboxing and security for autonomous agents
+- [Prometheus Operator](https://prometheus-operator.dev/) - Kubernetes-native Prometheus deployment
+
+**Tomorrow**: The Model Context Protocol (MCP)—standardizing AI tool integration across platforms and providers.

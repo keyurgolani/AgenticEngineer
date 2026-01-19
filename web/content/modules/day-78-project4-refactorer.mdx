@@ -1,0 +1,1638 @@
+---
+title: "Project 4: The Autonomous Legacy Code Refactorer"
+description: "Safely upgrade a Python 2 codebase or add Type Hints using Neuro-Symbolic AI (LLM + AST)."
+week: 11
+day: 78
+---
+
+<ReadingTime minutes={35} />
+
+<Callout type="info">
+  **Project Tier:** This is a **Tier 4 Project** (4-8 hours). It demonstrates
+  the Neuro-Symbolic AI pattern—combining LLM reasoning with deterministic AST
+  manipulation for safe code transformation. Prerequisites: Complete foundational
+  modules (Days 1-30) and POC-01 first.
+</Callout>
+
+<SkillLevel level="advanced" description="Code transformation" />
+
+<Prerequisites
+  items={[
+    "Understanding of agent architectures (Days 01-03)",
+    "Familiarity with Python AST concepts",
+    "Experience with LangGraph (Day 09)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Understand the Neuro-Symbolic AI pattern (LLM + deterministic tools)",
+    "Use LibCST for safe, format-preserving code transformations",
+    "Build an agent that plans refactoring with LLM and executes with AST",
+    "Implement type hint inference for legacy Python code",
+  ]}
+/>
+
+**Objective:** Safely upgrade a Python 2 codebase to Python 3, or add Type Hints, without breaking the build.
+
+---
+
+## Project Requirements Document
+
+This section provides comprehensive requirements for implementing the Autonomous Legacy Code Refactorer. Use this as a reference for estimation, implementation, and verification.
+
+### User Stories
+
+| ID    | User Story                                                                                                                                      | Priority |
+| :---- | :---------------------------------------------------------------------------------------------------------------------------------------------- | :------- |
+| US-01 | As a **developer**, I want to automatically add type hints to my Python functions, so that I get better IDE support and catch bugs earlier.     | P0       |
+| US-02 | As a **developer**, I want the refactoring to preserve all comments and formatting, so that my code remains readable and git diffs are minimal. | P0       |
+| US-03 | As a **tech lead**, I want to refactor an entire directory of Python files, so that I can modernize a legacy codebase efficiently.              | P1       |
+| US-04 | As a **developer**, I want to preview changes before they're applied, so that I can review and approve the refactoring plan.                    | P1       |
+| US-05 | As a **developer**, I want the system to infer types from variable names and usage patterns, so that type hints are accurate.                   | P0       |
+| US-06 | As a **QA engineer**, I want the refactored code to pass the existing test suite, so that we don't introduce regressions.                       | P0       |
+| US-07 | As a **developer**, I want to customize which functions to refactor, so that I can exclude generated code or third-party wrappers.              | P2       |
+| US-08 | As a **developer**, I want a dry-run mode that shows what would change, so that I can estimate the scope of refactoring.                        | P1       |
+
+### Acceptance Criteria
+
+#### US-01: Automatic Type Hint Addition
+
+- **Given** a Python file with untyped functions
+- **When** the refactorer processes the file
+- **Then** the system:
+  - Adds return type annotations to all functions
+  - Adds parameter type annotations to all function arguments
+  - Uses standard library types (str, int, float, bool, List, Dict, Optional, etc.)
+  - Handles complex types (Union, Callable, TypeVar) when appropriate
+
+#### US-02: Format Preservation
+
+- **Given** a Python file with comments and specific formatting
+- **When** the refactorer processes the file
+- **Then** the system:
+  - Preserves all inline comments
+  - Preserves all docstrings
+  - Maintains original indentation style
+  - Keeps blank lines in their original positions
+  - Produces minimal git diff (only type annotations added)
+
+#### US-03: Directory Processing
+
+- **Given** a directory path with multiple Python files
+- **When** the refactorer runs in batch mode
+- **Then** the system:
+  - Recursively finds all `.py` files
+  - Processes each file independently
+  - Reports progress (X of Y files processed)
+  - Generates summary report of all changes
+
+#### US-04: Change Preview
+
+- **Given** a file to refactor
+- **When** the user requests preview mode
+- **Then** the system:
+  - Shows the refactoring plan as JSON
+  - Displays before/after diff for each function
+  - Does not modify any files
+  - Allows user to approve or reject
+
+#### US-05: Type Inference
+
+- **Given** a function with untyped parameters
+- **When** the LLM analyzes the function
+- **Then** the system infers types based on:
+  - Variable naming conventions (e.g., `user_id` → int, `name` → str)
+  - Return statements and their values
+  - Operations performed on parameters
+  - Docstring type hints (if present)
+  - Default parameter values
+
+#### US-06: Test Suite Compatibility
+
+- **Given** a codebase with existing tests
+- **When** refactoring is complete
+- **Then** the system:
+  - Runs the test suite automatically (if configured)
+  - Reports any test failures
+  - Provides rollback instructions if tests fail
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Autonomous Legacy Code Refactorer                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Input Layer                                     │ │
+│  │  ┌─────────────────┐    ┌─────────────────┐                           │ │
+│  │  │  File Scanner   │    │  Config Loader  │                           │ │
+│  │  │  (Find .py)     │    │  (Exclusions)   │                           │ │
+│  │  └─────────────────┘    └─────────────────┘                           │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Parsing Layer                                   │ │
+│  │  ┌─────────────────┐                                                   │ │
+│  │  │   LibCST Parser │───▶ Concrete Syntax Tree                         │ │
+│  │  │  (Preserves     │    (Comments, Whitespace Intact)                 │ │
+│  │  │   Formatting)   │                                                   │ │
+│  │  └─────────────────┘                                                   │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Analysis Layer (LLM)                            │ │
+│  │  ┌─────────────────┐    ┌─────────────────┐                           │ │
+│  │  │ Function        │───▶│  Type Inference │                           │ │
+│  │  │ Extractor       │    │  (LLM + Rules)  │                           │ │
+│  │  └─────────────────┘    └─────────────────┘                           │ │
+│  │                              │                                         │ │
+│  │                              ▼                                         │ │
+│  │                    ┌─────────────────┐                                 │ │
+│  │                    │ Refactoring Plan│                                 │ │
+│  │                    │ (JSON Schema)   │                                 │ │
+│  │                    └─────────────────┘                                 │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Transformation Layer                            │ │
+│  │  ┌─────────────────┐                                                   │ │
+│  │  │ LibCST          │───▶ Modified CST                                 │ │
+│  │  │ Transformer     │    (Type Hints Added)                            │ │
+│  │  │ (Deterministic) │                                                   │ │
+│  │  └─────────────────┘                                                   │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Output Layer                                    │ │
+│  │  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐   │ │
+│  │  │  Code Generator │    │  Diff Generator │    │  Test Runner    │   │ │
+│  │  │  (Write Files)  │    │  (Preview Mode) │    │  (Validation)   │   │ │
+│  │  └─────────────────┘    └─────────────────┘    └─────────────────┘   │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+| Component                | Responsibility                           | Deterministic?     |
+| :----------------------- | :--------------------------------------- | :----------------- |
+| **File Scanner**         | Find Python files, apply exclusion rules | ✅ Yes             |
+| **LibCST Parser**        | Parse code to CST preserving formatting  | ✅ Yes             |
+| **Function Extractor**   | Extract function signatures from CST     | ✅ Yes             |
+| **Type Inference (LLM)** | Analyze code and infer types             | ❌ No (LLM)        |
+| **Refactoring Plan**     | Structured JSON of planned changes       | ❌ No (LLM output) |
+| **LibCST Transformer**   | Apply type hints to CST                  | ✅ Yes             |
+| **Code Generator**       | Convert CST back to source code          | ✅ Yes             |
+
+### State Machine Design
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Idle
+    
+    Idle --> Scanning: start_refactor
+    
+    Scanning --> FilesFound: files_discovered
+    Scanning --> NoFiles: no_python_files
+    
+    NoFiles --> Idle: reset
+    
+    FilesFound --> ParsingFile: process_next_file
+    
+    ParsingFile --> ParseSuccess: parse_complete
+    ParsingFile --> ParseError: parse_failed
+    
+    ParseError --> ParsingFile: skip_file
+    ParseError --> Error: critical_error
+    
+    ParseSuccess --> ExtractingFunctions: auto_transition
+    
+    ExtractingFunctions --> FunctionsExtracted: extraction_complete
+    
+    FunctionsExtracted --> InferringTypes: auto_transition
+    
+    InferringTypes --> PlanGenerated: inference_complete
+    InferringTypes --> InferenceError: llm_failed
+    
+    InferenceError --> InferringTypes: retry
+    InferenceError --> Error: max_retries
+    
+    PlanGenerated --> AwaitingApproval: preview_mode
+    PlanGenerated --> Transforming: auto_mode
+    
+    AwaitingApproval --> Transforming: user_approves
+    AwaitingApproval --> ParsingFile: user_skips_file
+    AwaitingApproval --> Idle: user_cancels
+    
+    Transforming --> TransformComplete: transform_success
+    Transforming --> TransformError: transform_failed
+    
+    TransformError --> Error: critical_error
+    
+    TransformComplete --> WritingFile: auto_transition
+    
+    WritingFile --> FileComplete: write_success
+    WritingFile --> Error: write_failed
+    
+    FileComplete --> ParsingFile: more_files
+    FileComplete --> RunningTests: all_files_done
+    
+    RunningTests --> TestsPassed: tests_pass
+    RunningTests --> TestsFailed: tests_fail
+    RunningTests --> Complete: no_tests_configured
+    
+    TestsPassed --> Complete: auto_transition
+    TestsFailed --> RollbackPrompt: auto_transition
+    
+    RollbackPrompt --> RollingBack: user_confirms_rollback
+    RollbackPrompt --> Complete: user_accepts_failures
+    
+    RollingBack --> Idle: rollback_complete
+    
+    Complete --> Idle: reset
+    Error --> Idle: reset
+`}
+/>
+
+| State                 | Description                   | Timeout | Valid Transitions                   |
+| :-------------------- | :---------------------------- | :------ | :---------------------------------- |
+| `Idle`                | Awaiting refactor command     | None    | → Scanning                          |
+| `Scanning`            | Finding Python files          | 30s     | → FilesFound, NoFiles               |
+| `FilesFound`          | Files queued for processing   | 1s      | → ParsingFile                       |
+| `ParsingFile`         | LibCST parsing current file   | 10s     | → ParseSuccess, ParseError          |
+| `ParseSuccess`        | CST built successfully        | 1s      | → ExtractingFunctions               |
+| `ExtractingFunctions` | Finding functions in CST      | 5s      | → FunctionsExtracted                |
+| `FunctionsExtracted`  | Function list ready           | 1s      | → InferringTypes                    |
+| `InferringTypes`      | LLM analyzing functions       | 60s     | → PlanGenerated, InferenceError     |
+| `PlanGenerated`       | Refactoring plan ready        | None    | → AwaitingApproval, Transforming    |
+| `AwaitingApproval`    | Waiting for user review       | None    | → Transforming, ParsingFile, Idle   |
+| `Transforming`        | Applying changes to CST       | 10s     | → TransformComplete, TransformError |
+| `TransformComplete`   | CST modified                  | 1s      | → WritingFile                       |
+| `WritingFile`         | Writing modified code to disk | 5s      | → FileComplete, Error               |
+| `FileComplete`        | File processing done          | 1s      | → ParsingFile, RunningTests         |
+| `RunningTests`        | Executing test suite          | 300s    | → TestsPassed, TestsFailed          |
+| `TestsPassed`         | All tests pass                | 1s      | → Complete                          |
+| `TestsFailed`         | Some tests failed             | N/A     | → RollbackPrompt                    |
+| `RollbackPrompt`      | Asking user about rollback    | None    | → RollingBack, Complete             |
+| `RollingBack`         | Reverting changes             | 30s     | → Idle                              |
+| `Complete`            | Refactoring finished          | N/A     | → Idle                              |
+
+### Tool Specifications
+
+#### Tool: `scan_python_files`
+
+| Attribute            | Value                                                       |
+| :------------------- | :---------------------------------------------------------- |
+| **Purpose**          | Find all Python files in directory                          |
+| **Input**            | `directory: str, exclude_patterns: List[str]`               |
+| **Output**           | `List[str]` (file paths)                                    |
+| **Exclusions**       | `__pycache__`, `.git`, `venv`, `node_modules`, user-defined |
+| **Error Conditions** | Directory not found → raise error                           |
+
+#### Tool: `parse_with_libcst`
+
+| Attribute            | Value                                          |
+| :------------------- | :--------------------------------------------- |
+| **Purpose**          | Parse Python file to CST                       |
+| **Input**            | `file_path: str`                               |
+| **Output**           | `cst.Module`                                   |
+| **Preservation**     | Comments, whitespace, formatting all preserved |
+| **Error Conditions** | Syntax error → return error with line number   |
+
+#### Tool: `extract_functions`
+
+| Attribute            | Value                                                               |
+| :------------------- | :------------------------------------------------------------------ |
+| **Purpose**          | Find all function definitions in CST                                |
+| **Input**            | `module: cst.Module`                                                |
+| **Output**           | `List[{name, params, has_return_type, has_param_types, docstring}]` |
+| **Scope**            | Top-level and class methods                                         |
+| **Error Conditions** | None expected                                                       |
+
+#### Tool: `infer_types`
+
+| Attribute            | Value                                                                      |
+| :------------------- | :------------------------------------------------------------------------- |
+| **Purpose**          | Use LLM to infer types for functions                                       |
+| **Input**            | `function_signatures: List[dict], source_context: str`                     |
+| **Output**           | `RefactorPlan` (Pydantic model with function_name, arg_types, return_type) |
+| **Model**            | gpt-4o with structured output                                              |
+| **Context**          | Include surrounding code for better inference                              |
+| **Error Conditions** | Invalid types → validate against typing module                             |
+
+#### Tool: `apply_type_hints`
+
+| Attribute            | Value                                            |
+| :------------------- | :----------------------------------------------- |
+| **Purpose**          | Transform CST to add type annotations            |
+| **Input**            | `module: cst.Module, plan: RefactorPlan`         |
+| **Output**           | `cst.Module` (modified)                          |
+| **Transformer**      | `TypeHintTransformer(cst.CSTTransformer)`        |
+| **Deterministic**    | ✅ Yes - same plan always produces same output   |
+| **Error Conditions** | Invalid type syntax → skip function, log warning |
+
+#### Tool: `generate_diff`
+
+| Attribute            | Value                                    |
+| :------------------- | :--------------------------------------- |
+| **Purpose**          | Show before/after comparison             |
+| **Input**            | `original: str, modified: str`           |
+| **Output**           | `str` (unified diff format)              |
+| **Format**           | Standard unified diff with context lines |
+| **Error Conditions** | None expected                            |
+
+#### Tool: `write_file`
+
+| Attribute            | Value                                               |
+| :------------------- | :-------------------------------------------------- |
+| **Purpose**          | Write modified code to disk                         |
+| **Input**            | `file_path: str, content: str, backup: bool = True` |
+| **Output**           | `{success: bool, backup_path: str}`                 |
+| **Backup**           | Creates `.bak` file before overwriting              |
+| **Error Conditions** | Permission denied → raise error                     |
+
+#### Tool: `run_tests`
+
+| Attribute            | Value                                                  |
+| :------------------- | :----------------------------------------------------- |
+| **Purpose**          | Execute test suite to validate changes                 |
+| **Input**            | `test_command: str` (e.g., "pytest")                   |
+| **Output**           | `{passed: bool, output: str, failed_tests: List[str]}` |
+| **Timeout**          | 300 seconds                                            |
+| **Error Conditions** | Test command not found → skip tests                    |
+
+### Security Requirements
+
+| Requirement              | Implementation                             | Priority |
+| :----------------------- | :----------------------------------------- | :------- |
+| **No Code Execution**    | LLM only analyzes code, never executes it  | P0       |
+| **Backup Before Modify** | Create `.bak` files before any changes     | P0       |
+| **Atomic Writes**        | Write to temp file, then rename            | P1       |
+| **Path Validation**      | Prevent path traversal attacks             | P0       |
+| **Git Integration**      | Optionally commit changes with message     | P2       |
+| **Rollback Support**     | Ability to revert all changes              | P0       |
+| **Audit Trail**          | Log all file modifications                 | P1       |
+| **Exclusion Patterns**   | Respect `.gitignore` and custom exclusions | P1       |
+
+### Performance Requirements
+
+| Metric                            | Target       | Measurement                   |
+| :-------------------------------- | :----------- | :---------------------------- |
+| **File scanning (1000 files)**    | < 5 seconds  | Time to find all Python files |
+| **CST parsing (1000 LOC file)**   | < 2 seconds  | Time to parse single file     |
+| **Type inference (10 functions)** | < 15 seconds | Time for LLM to analyze       |
+| **CST transformation**            | < 1 second   | Time to apply type hints      |
+| **File write**                    | < 100ms      | Time to write modified file   |
+| **End-to-end (100 files)**        | < 10 minutes | Total refactoring time        |
+| **Memory usage**                  | < 500MB      | Peak memory during processing |
+| **LLM tokens per file**           | < 2000       | Average token usage           |
+
+### Deployment Checklist
+
+#### Pre-Deployment
+
+- [ ] Dependencies installed:
+  - [ ] `libcst` - CST parsing and transformation
+  - [ ] `langchain-openai` - LLM integration
+  - [ ] `pydantic` - Structured output
+  - [ ] `python-dotenv` - Environment management
+- [ ] Environment variables:
+  - [ ] `OPENAI_API_KEY` - Valid API key
+- [ ] Test files prepared:
+  - [ ] Sample Python file with untyped functions
+  - [ ] Expected output for comparison
+
+#### Smoke Tests
+
+- [ ] **Test 1: Single Function** - Refactor file with one function → Type hints added correctly
+- [ ] **Test 2: Comment Preservation** - File with inline comments → Comments unchanged
+- [ ] **Test 3: Class Methods** - File with class → Methods get type hints
+- [ ] **Test 4: Preview Mode** - Run with `--preview` → No files modified, diff shown
+- [ ] **Test 5: Batch Processing** - Run on directory → All files processed
+
+#### Post-Deployment Verification
+
+- [ ] Verify backup files created (`.bak`)
+- [ ] Run linter on refactored code (no syntax errors)
+- [ ] Run type checker (mypy) on refactored code
+- [ ] Compare git diff to expected changes
+
+#### Rollback Plan
+
+1. Restore from `.bak` files: `for f in *.bak; do mv "$f" "${f%.bak}"; done`
+2. Or use git: `git checkout -- .`
+3. Investigate failed transformations in logs
+4. Adjust exclusion patterns if needed
+
+---
+
+## 17.1 The Problem: "Blind" Refactoring
+
+![Refactoring Nano-bots](/images/refactoring_agent.png)
+
+{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison diagram showing:
+LEFT SIDE - "LLM-Only Refactoring" with red X marks:
+- Original code with comments and formatting
+- Arrow pointing to messy output with deleted comments, changed indentation, hallucinated code
+- Label: "Unreliable, loses context"
+
+RIGHT SIDE - "Neuro-Symbolic Refactoring" with green checkmarks:
+- Original code with comments
+- Arrow through "LLM Brain" (planning) + "AST Hands" (execution)
+- Output with preserved formatting, only type hints added
+- Label: "Reliable, preserves everything"
+
+Style: Clean, technical diagram with code snippets, use blue/green color scheme
+Placement: Directly after the section heading, before the list
+*/}
+
+If you ask an LLM to "rewrite this file to add type hints," it will often:
+
+1.  Delete comments.
+2.  Change formatting.
+3.  Hallucinate attributes.
+
+<Callout type="tip">
+  **Solution: Neuro-Symbolic AI.** Use the LLM as the **Brain** (Decision Maker)
+  and an AST Parser as the **Hands** (surgeon).
+</Callout>
+
+## 17.2 Architecture: LLM + AST
+
+{/* IMAGE_PLACEHOLDER: Create an interactive visualization showing the Neuro-Symbolic pipeline:
+- Three connected stages with animated flow:
+  1. PARSE stage: Python code → LibCST parser → Tree structure (show actual CST nodes)
+  2. PLAN stage: Tree → LLM analysis → JSON output (show example JSON with function names and types)
+  3. PATCH stage: JSON + Tree → Transformer → Modified code (highlight only type hints changed)
+- Include hover states that show details for each stage
+- Use a medical surgery metaphor: "Brain" (LLM) + "Hands" (AST) = "Surgeon"
+- Color code: Blue for deterministic steps, Purple for LLM step
+- Add small code snippets at each stage showing actual transformations
+Placement: Right after this paragraph, before the Mermaid diagram
+*/}
+
+[LibCST](https://libcst.readthedocs.io/) (from Instagram/Meta) is a Concrete Syntax Tree parser for Python that preserves all formatting details—comments, whitespace, and parentheses. Unlike Python's built-in `ast` module, LibCST allows you to modify code while keeping it human-readable.
+
+1.  **Parse**: Convert code to a Concrete Syntax Tree (LibCST).
+2.  **Plan**: Ask LLM: "Which functions need what return types? Return JSON."
+3.  **Patch**: Deterministically apply the JSON plan to the Tree.
+
+<div className="my-8">
+<Mermaid
+  chart={`
+graph TD
+    Code[Legacy Code] --> Parse[LibCST Parser]
+    Parse -->|Function Signatures| LLM
+    LLM -->|JSON Plan| Transformer[AST Transformer]
+    Parse --> Transformer
+    Transformer --> NewCode[Refactored Code]
+
+    style Transformer fill:#f9f,stroke:#333
+
+`}
+/>
+
+</div>
+
+### Why LibCST over ast?
+
+{/* IMAGE_PLACEHOLDER: Create an interactive comparison tool:
+- Split-screen code editor showing same Python function
+- LEFT: "ast module" - show original code, then after round-trip (comments gone, formatting changed)
+- RIGHT: "LibCST" - show original code, then after round-trip (identical, only type hints added)
+- Include a slider or toggle to switch between "before" and "after" states
+- Highlight differences with color coding (red for lost content, green for preserved)
+- Add tooltips explaining why each feature matters
+- Make it look like a real code diff tool (similar to GitHub's diff view)
+Placement: Replace or supplement the table below
+*/}
+
+| Feature            | `ast` module | LibCST       |
+| :----------------- | :----------- | :----------- |
+| **Comments**       | ❌ Lost      | ✅ Preserved |
+| **Whitespace**     | ❌ Lost      | ✅ Preserved |
+| **Formatting**     | ❌ Lost      | ✅ Preserved |
+| **Round-trip**     | ❌ No        | ✅ Yes       |
+| **Python support** | 3.0-3.13     | 3.0-3.13     |
+
+### LibCST 2024-2025 Updates
+
+LibCST has continued to evolve with Python's rapid release cycle:
+
+- **Python 3.12+ Support**: Full support for PEP 695 type parameter syntax (`type X = int`), f-string improvements, and the new `type` statement
+- **Performance Improvements**: 2024 releases include significant parsing speed improvements (up to 30% faster on large files)
+- **Better Error Messages**: Enhanced error reporting with precise location information for syntax errors
+
+### Choosing Your Parsing Approach
+
+{/* IMAGE_PLACEHOLDER: Create a decision tree flowchart:
+- Start node: "Need to refactor code?"
+- Branch 1: "Single language?" → Yes → "Python?" → Yes → "LibCST" (highlighted as best choice)
+- Branch 2: "Single language?" → No → "Multiple languages?" → "tree-sitter"
+- Branch 3: "Format preservation critical?" → Yes → "LibCST" or "RedBaron"
+- Branch 4: "Format preservation critical?" → No → "Simple changes?" → Yes → "Regex" (with warning icon)
+- Branch 5: "Exploratory only?" → "LLM-only" (with caution icon)
+- Use icons for each tool (Python logo for LibCST, tree icon for tree-sitter, etc.)
+- Color code by risk level: Green (safe), Yellow (caution), Red (risky)
+- Make it interactive: clicking each node shows pros/cons and example use cases
+Placement: Above or below the table
+*/}
+
+| Approach        | Best For                                  | Trade-offs                          |
+| :-------------- | :---------------------------------------- | :---------------------------------- |
+| **LibCST**      | Python-only, format-preserving transforms | Python-specific, larger dependency  |
+| **tree-sitter** | Multi-language support, fast parsing      | No format preservation, query-based |
+| **RedBaron**    | Simple Python transforms                  | Less maintained, slower than LibCST |
+| **Regex**       | Simple, pattern-based changes             | Fragile, can't handle edge cases    |
+| **LLM-only**    | Exploratory refactoring, small files      | Hallucination risk, format loss     |
+
+<Callout type="warning">
+  **When to use LLM-only refactoring**: Only for exploratory changes on small
+  files where you'll manually review every line. For production codebases,
+  always use AST-based approaches.
+</Callout>
+
+### Alternative: RedBaron
+
+[RedBaron](https://redbaron.readthedocs.io/) is another format-preserving Python parser. While less actively maintained than LibCST, it offers a simpler API for basic transformations:
+
+```python
+import redbaron
+
+source = "def add(a, b): return a + b"
+red = redbaron.RedBaron(source)
+
+# Find and modify function
+func = red.find("def", name="add")
+func.arguments[0].annotation = ": int"
+print(red.dumps())
+```
+
+**Recommendation**: Use LibCST for new projects—it's more actively maintained and has better Python 3.12+ support.
+
+---
+
+## 17.2.1 AI-Powered Code Transformation Tools (2024-2025)
+
+Before building a custom refactoring agent, consider whether existing AI-powered tools meet your needs. The landscape has evolved significantly:
+
+### Aider: AI Pair Programming
+
+[Aider](https://aider.chat/) is an open-source AI pair programming tool with deep git integration:
+
+```bash
+# Install and run
+pip install aider-chat
+aider --model gpt-4o
+
+# In aider session:
+/add legacy_module.py
+> Add type hints to all functions in this file
+```
+
+**Key Features**:
+
+- Automatic git commits with meaningful messages
+- Multi-file editing with dependency awareness
+- Supports GPT-4, Claude, and local models
+- Architect mode for planning complex changes
+
+**When to use**: Interactive refactoring sessions where you want human-in-the-loop review.
+
+### Cursor IDE
+
+[Cursor](https://cursor.sh/) provides AI-native code editing with context-aware refactoring:
+
+- **Cmd+K**: Inline code generation and transformation
+- **Composer**: Multi-file refactoring with codebase awareness
+- **@ mentions**: Reference specific files, docs, or symbols
+
+**When to use**: Day-to-day development with AI assistance, especially for teams already using VS Code.
+
+### Amazon Q Developer
+
+[Amazon Q Developer](https://aws.amazon.com/q/developer/) (formerly CodeWhisperer) offers enterprise-grade code transformation:
+
+- **Code Transformation**: Automated Java 8→17 upgrades, .NET modernization
+- **Security Scanning**: Built-in vulnerability detection
+- **Enterprise Features**: SSO, audit logs, policy controls
+
+**When to use**: Enterprise environments, especially AWS-heavy stacks or Java/.NET modernization.
+
+### GitHub Copilot Workspace
+
+[Copilot Workspace](https://githubnext.com/projects/copilot-workspace) (2024) provides task-oriented development:
+
+- Start from an issue or task description
+- AI generates a plan with file changes
+- Review and iterate before committing
+
+**When to use**: Issue-driven development where you want AI to propose complete solutions.
+
+### When to Build a Custom Agent
+
+Build your own refactoring agent when:
+
+| Scenario                 | Why Custom                                                  |
+| :----------------------- | :---------------------------------------------------------- |
+| **Proprietary patterns** | Your codebase has unique conventions tools don't understand |
+| **Batch processing**     | Need to refactor 1000+ files with consistent rules          |
+| **CI/CD integration**    | Automated refactoring as part of your pipeline              |
+| **Audit requirements**   | Need detailed logs of every change and decision             |
+| **Custom validation**    | Domain-specific correctness checks                          |
+
+<Callout type="info">
+  **Hybrid Approach**: Use tools like Aider for interactive work and custom
+  agents for batch automation. They complement each other well.
+</Callout>
+
+## 17.3 Practical Implementation
+
+_Prerequisites: `pip install libcst`_
+
+### Step 1: The Planner (LLM)
+
+We don't send the whole file if it's huge. We iterate over functions.
+
+```python
+# Prompt:
+# "Analyze this function signature. Infer the return type based on the variable names.
+# Output JSON: {'function_name': 'calculate_total', 'return_type': 'float'}"
+```
+
+### Step 2: The Surgeon (LibCST)
+
+{/* IMAGE_PLACEHOLDER: Create an animated AST transformation visualizer:
+- Show the CST tree structure for "def add(a, b): return a + b"
+- Visualize nodes: Module → FunctionDef → Name, Parameters, Return
+- Animate the transformation process:
+  1. Highlight the FunctionDef node
+  2. Show the plan JSON: {"add": "int"}
+  3. Animate adding the Annotation node to the returns field
+  4. Show the final tree with the new node highlighted in green
+- Include a "step through" control to see each transformation step
+- Display the code output updating in real-time as the tree changes
+- Use tree visualization similar to AST Explorer (https://astexplorer.net/)
+- Add tooltips showing node types and properties
+Placement: Right before the code block, as an interactive learning tool
+*/}
+
+This code is **100% deterministic**. It cannot hallucinate.
+
+```python
+import libcst as cst
+
+class TypeHintTransformer(cst.CSTTransformer):
+    def __init__(self, plan):
+        self.plan = plan # {'func_name': 'int', ...}
+
+    def leave_FunctionDef(self, original, updated):
+        fname = original.name.value
+        if fname in self.plan:
+            # Create the annotation node
+            new_type = self.plan[fname]
+            annotation = cst.Annotation(annotation=cst.Name(new_type))
+
+            # Return the updated node with the new return annotation
+            return updated.with_changes(returns=annotation)
+        return updated
+
+# Execution
+source = "def add(a, b): return a + b"
+plan = {"add": "int"}
+
+tree = cst.parse_module(source)
+transformer = TypeHintTransformer(plan)
+new_tree = tree.visit(transformer)
+print(new_tree.code)
+# Output: def add(a, b) -> int: return a + b
+```
+
+<Exercise title="Refactorer Lab">
+  1. Take a file with 10 functions missing type hints. 2. Run the Agent. 3.
+  **Verify**: Did it keep your comments? Did it mess up indentation? (LibCST
+  guarantees it won't).
+</Exercise>
+
+---
+
+# 17.4 Step-by-Step Implementation Guide (Lowest Level Details)
+
+Follow this guide to build the Autonomous Refactorer.
+
+## Phase 1: Scaffolding
+
+1.  **Dependencies**:
+
+    ```bash
+    mkdir refactor-agent
+    cd refactor-agent
+    python -m venv venv
+    source venv/bin/activate
+    pip install libcst langchain-openai python-dotenv
+    ```
+
+2.  **Legacy Code**:
+    Create `legacy.py` (The target):
+
+    ```python
+    def calculate_total(a, b):
+        # Adds two numbers
+        return a + b
+
+    def greeting(name):
+        return "Hello " + name
+    ```
+
+## Phase 2: Core Logic (The Code)
+
+**File: `refactor.py`**
+
+```python
+import libcst as cst
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+from typing import List, Dict
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# 1. Define the Schema
+class FunctionTypePlan(BaseModel):
+    function_name: str
+    arg_types: Dict[str, str] = Field(description="Map of argument name to type (e.g. {'a': 'int'})")
+    return_type: str = Field(description="Return type annotation (e.g. 'int')")
+
+class RefactorPlan(BaseModel):
+    functions: List[FunctionTypePlan]
+
+# 2. The CST Transformer (The Surgeon)
+class TypeHintTransformer(cst.CSTTransformer):
+    def __init__(self, plans: List[FunctionTypePlan]):
+        # Convert list to dict for lookup
+        self.plans = {p.function_name: p for p in plans}
+
+    def leave_FunctionDef(self, original, updated):
+        fname = original.name.value
+        if fname in self.plans:
+            plan = self.plans[fname]
+
+            # 1. Add Return Type
+            return_annotation = cst.Annotation(annotation=cst.Name(plan.return_type))
+
+            # 2. Add Argument Types
+            new_params = []
+            for param in updated.params.params:
+                pname = param.name.value
+                if pname in plan.arg_types:
+                    ptype = plan.arg_types[pname]
+                    new_param = param.with_changes(
+                        annotation=cst.Annotation(annotation=cst.Name(ptype))
+                    )
+                    new_params.append(new_param)
+                else:
+                    new_params.append(param)
+
+            return updated.with_changes(
+                returns=return_annotation,
+                params=updated.params.with_changes(params=new_params)
+            )
+        return updated
+
+# 3. Main Logic
+def main():
+    # A. Read Source
+    with open("legacy.py", "r") as f:
+        source_code = f.read()
+
+    # B. Plan (The LLM)
+    print("🧠 Analyzing code...")
+    llm = ChatOpenAI(model="gpt-4o").with_structured_output(RefactorPlan)
+    prompt = f"Analyze the following Python code and infer types for all functions:\n\n{source_code}"
+
+    plan = llm.invoke(prompt)
+    print(f"📋 Plan: {plan}")
+
+    # C. Patch (The Surgeon)
+    print("🔧 Applying patches...")
+    tree = cst.parse_module(source_code)
+    transformer = TypeHintTransformer(plan.functions)
+    modified_tree = tree.visit(transformer)
+
+    # D. Write Result
+    with open("legacy_refactored.py", "w") as f:
+        f.write(modified_tree.code)
+
+    print("✅ Done! Check legacy_refactored.py")
+
+if __name__ == "__main__":
+    main()
+```
+
+## Phase 3: Verification
+
+1.  **Run**: `python refactor.py`
+2.  **Check Output**: `cat legacy_refactored.py`
+
+    ```python
+    def calculate_total(a: int, b: int) -> int:
+        # Adds two numbers
+        return a + b
+
+    def greeting(name: str) -> str:
+        return "Hello " + name
+    ```
+
+3.  **Notice**: The comment `# Adds two numbers` was preserved perfectly. This is the power of LibCST over regex/text replacement.
+
+---
+
+## 17.5 Code Quality Validation
+
+{/* IMAGE_PLACEHOLDER: Create a validation pipeline diagram:
+- Show a horizontal flow with 4 stages:
+  1. "Refactor" (code with type hints added)
+  2. "Type Check" (mypy/pyright running, show terminal output)
+  3. "Test Suite" (pytest running, show pass/fail indicators)
+  4. "Commit" (git commit with checkmark) OR "Rollback" (undo icon)
+- Use traffic light colors: Green for pass, Red for fail, Yellow for warnings
+- Include actual terminal output snippets for each stage
+- Add a "failure path" showing rollback when validation fails
+- Make it look like a CI/CD pipeline visualization
+- Include timing information for each stage (e.g., "Type check: 2.3s")
+Placement: At the start of section 17.5, before the subsections
+*/}
+
+Refactoring without validation is dangerous. After applying type hints, you must verify the code still works correctly.
+
+### Type Checking with mypy/pyright
+
+Run static type checkers immediately after refactoring:
+
+```python
+import subprocess
+from typing import Tuple, List
+
+def validate_types(file_path: str) -> Tuple[bool, List[str]]:
+    """Run mypy on refactored file and return results."""
+    result = subprocess.run(
+        ["mypy", "--strict", file_path],
+        capture_output=True,
+        text=True
+    )
+
+    errors = []
+    if result.returncode != 0:
+        errors = [line for line in result.stdout.split("\n") if "error:" in line]
+
+    return result.returncode == 0, errors
+
+# Usage in refactoring pipeline
+success, errors = validate_types("legacy_refactored.py")
+if not success:
+    print(f"⚠️ Type errors found: {errors}")
+    # Optionally: ask LLM to fix the errors
+```
+
+<Callout type="tip">
+  **pyright vs mypy**: pyright (used by Pylance in VS Code) is faster and
+  catches more errors. Use `pyright --outputjson` for machine-readable output in
+  your agent.
+</Callout>
+
+### Pre-commit Hook Integration
+
+Integrate refactoring validation into your development workflow:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: type-check-refactored
+        name: Type check refactored files
+        entry: mypy --strict
+        language: system
+        types: [python]
+        stages: [commit]
+
+      - id: test-refactored
+        name: Run tests after refactoring
+        entry: pytest --tb=short
+        language: system
+        pass_filenames: false
+        stages: [commit]
+```
+
+### Automated Testing After Refactoring
+
+Your refactoring agent should run tests automatically:
+
+```python
+import subprocess
+from dataclasses import dataclass
+from typing import List, Optional
+
+@dataclass
+class TestResult:
+    passed: bool
+    failed_tests: List[str]
+    output: str
+
+def run_tests(test_command: str = "pytest", timeout: int = 300) -> TestResult:
+    """Run test suite and capture results."""
+    try:
+        result = subprocess.run(
+            test_command.split(),
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+
+        # Parse pytest output for failed tests
+        failed = []
+        for line in result.stdout.split("\n"):
+            if "FAILED" in line:
+                failed.append(line.split("FAILED")[1].strip())
+
+        return TestResult(
+            passed=result.returncode == 0,
+            failed_tests=failed,
+            output=result.stdout + result.stderr
+        )
+    except subprocess.TimeoutExpired:
+        return TestResult(
+            passed=False,
+            failed_tests=["TIMEOUT"],
+            output="Test suite timed out"
+        )
+```
+
+### Rollback Strategies
+
+When tests fail, you need reliable rollback:
+
+```python
+import shutil
+from pathlib import Path
+from typing import Dict
+
+class RefactoringTransaction:
+    """Manage refactoring with automatic rollback on failure."""
+
+    def __init__(self):
+        self.backups: Dict[Path, Path] = {}
+
+    def backup(self, file_path: Path) -> None:
+        """Create backup before modification."""
+        backup_path = file_path.with_suffix(file_path.suffix + ".bak")
+        shutil.copy2(file_path, backup_path)
+        self.backups[file_path] = backup_path
+
+    def rollback(self) -> None:
+        """Restore all files from backups."""
+        for original, backup in self.backups.items():
+            shutil.move(backup, original)
+        self.backups.clear()
+
+    def commit(self) -> None:
+        """Remove backups after successful refactoring."""
+        for backup in self.backups.values():
+            backup.unlink()
+        self.backups.clear()
+
+# Usage
+transaction = RefactoringTransaction()
+try:
+    for file in files_to_refactor:
+        transaction.backup(file)
+        refactor_file(file)
+
+    # Validate
+    test_result = run_tests()
+    if not test_result.passed:
+        print("❌ Tests failed, rolling back...")
+        transaction.rollback()
+    else:
+        print("✅ All tests passed, committing changes")
+        transaction.commit()
+except Exception as e:
+    transaction.rollback()
+    raise
+```
+
+---
+
+## 17.6 Multi-Language Support
+
+{/* IMAGE_PLACEHOLDER: Create a multi-language support matrix:
+- Grid layout showing languages (Python, TypeScript, Java, Go, Rust) vs. capabilities
+- For each language, show:
+  - Parser tool (LibCST, ts-morph, JavaParser, etc.)
+  - Format preservation (✓ or ✗)
+  - Type inference support
+  - Example code snippet
+- Include language logos for visual recognition
+- Add a "complexity meter" showing how difficult each language is to refactor
+- Make it interactive: clicking a language shows detailed implementation guide
+- Highlight Python + TypeScript as the "best supported" languages
+Placement: At the start of section 17.6, as an overview
+*/}
+
+While LibCST excels at Python, production codebases often span multiple languages. Here's how to extend your refactoring agent.
+
+### Tree-sitter for Language-Agnostic Parsing
+
+{/* IMAGE_PLACEHOLDER: Create a tree-sitter visualization:
+- Show the same function in 3 languages (Python, JavaScript, Rust)
+- Display the tree-sitter AST for each (similar structure despite different syntax)
+- Highlight common patterns: function definitions, parameters, return statements
+- Include a query example showing how to find functions across all languages
+- Use a unified color scheme to show equivalent nodes across languages
+- Add an interactive query builder where users can test tree-sitter queries
+- Link to AST Explorer with pre-loaded examples
+Placement: Right after the tree-sitter heading
+*/}
+
+[Tree-sitter](https://tree-sitter.github.io/) provides fast, incremental parsing for 100+ languages:
+
+```python
+import tree_sitter_python as tspython
+from tree_sitter import Language, Parser
+
+# Initialize parser
+PY_LANGUAGE = Language(tspython.language())
+parser = Parser(PY_LANGUAGE)
+
+# Parse code
+source = b"def add(a, b): return a + b"
+tree = parser.parse(source)
+
+# Query for functions
+query = PY_LANGUAGE.query("""
+(function_definition
+  name: (identifier) @func_name
+  parameters: (parameters) @params)
+""")
+
+captures = query.captures(tree.root_node)
+for node, name in captures:
+    print(f"{name}: {source[node.start_byte:node.end_byte].decode()}")
+```
+
+<Callout type="warning">
+  **Tree-sitter limitation**: Unlike LibCST, tree-sitter doesn't preserve
+  formatting during round-trip. Use it for analysis and query, but apply changes
+  with language-specific tools.
+</Callout>
+
+### TypeScript/JavaScript with ts-morph
+
+[ts-morph](https://ts-morph.com/) provides TypeScript-aware AST manipulation:
+
+```typescript
+import { Project, SyntaxKind } from "ts-morph";
+
+const project = new Project();
+const sourceFile = project.addSourceFileAtPath("legacy.ts");
+
+// Find all functions without return types
+const functions = sourceFile.getFunctions();
+for (const func of functions) {
+  if (!func.getReturnTypeNode()) {
+    // Infer type from implementation
+    const inferredType = func.getReturnType().getText();
+    func.setReturnType(inferredType);
+  }
+}
+
+// Save with formatting preserved
+sourceFile.saveSync();
+```
+
+**Key ts-morph features**:
+
+- Full TypeScript type inference
+- Preserves comments and formatting
+- Supports JSX/TSX
+- Integrates with TypeScript compiler
+
+### Java with JavaParser
+
+[JavaParser](https://javaparser.org/) handles Java AST manipulation:
+
+```java
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.MethodDeclaration;
+
+// Parse Java file
+CompilationUnit cu = StaticJavaParser.parse(new File("Legacy.java"));
+
+// Find methods and add annotations
+cu.findAll(MethodDeclaration.class).forEach(method -> {
+    if (!method.isAnnotationPresent("Override")) {
+        // Check if method overrides parent
+        // Add @Override if needed
+    }
+});
+
+// Write back with formatting
+System.out.println(cu.toString());
+```
+
+### Building a Multi-Language Refactoring Agent
+
+Here's a pattern for language-agnostic refactoring:
+
+```python
+from abc import ABC, abstractmethod
+from typing import List, Dict, Any
+from pathlib import Path
+
+class LanguageHandler(ABC):
+    """Abstract base for language-specific handlers."""
+
+    @abstractmethod
+    def parse(self, source: str) -> Any:
+        """Parse source code to AST."""
+        pass
+
+    @abstractmethod
+    def extract_functions(self, ast: Any) -> List[Dict]:
+        """Extract function signatures from AST."""
+        pass
+
+    @abstractmethod
+    def apply_type_hints(self, ast: Any, plan: Dict) -> str:
+        """Apply type hints and return modified source."""
+        pass
+
+class PythonHandler(LanguageHandler):
+    def parse(self, source: str):
+        import libcst as cst
+        return cst.parse_module(source)
+
+    # ... implementation
+
+class TypeScriptHandler(LanguageHandler):
+    def parse(self, source: str):
+        # Use ts-morph via subprocess or Node.js bridge
+        pass
+
+    # ... implementation
+
+class MultiLanguageRefactorer:
+    """Refactoring agent supporting multiple languages."""
+
+    HANDLERS = {
+        ".py": PythonHandler,
+        ".ts": TypeScriptHandler,
+        ".tsx": TypeScriptHandler,
+        ".java": JavaHandler,
+    }
+
+    def refactor_file(self, file_path: Path) -> str:
+        suffix = file_path.suffix
+        if suffix not in self.HANDLERS:
+            raise ValueError(f"Unsupported language: {suffix}")
+
+        handler = self.HANDLERS[suffix]()
+        source = file_path.read_text()
+
+        # Parse → Plan (LLM) → Apply
+        ast = handler.parse(source)
+        functions = handler.extract_functions(ast)
+        plan = self.llm_plan(functions)  # Language-agnostic planning
+        return handler.apply_type_hints(ast, plan)
+```
+
+---
+
+## 17.7 Production Considerations
+
+{/* IMAGE_PLACEHOLDER: Create a production readiness checklist visualization:
+- Dashboard-style layout with key metrics:
+  - Files processed: progress bar with count
+  - Type coverage: circular progress indicator (e.g., 73%)
+  - Test pass rate: gauge meter
+  - Performance: time per file chart
+- Include a "risk assessment" section with traffic lights:
+  - Backup strategy: Green (implemented)
+  - Rollback plan: Green (tested)
+  - Validation: Yellow (partial)
+- Add a timeline showing incremental rollout phases
+- Include real-world metrics from a sample refactoring project
+- Make it look like a professional monitoring dashboard
+Placement: At the start of section 17.7
+*/}
+
+Scaling refactoring from a single file to enterprise codebases requires careful planning.
+
+### Handling Large Codebases
+
+{/* IMAGE_PLACEHOLDER: Create a codebase chunking strategy diagram:
+- Visualize a large repository as a tree structure
+- Show different chunking strategies:
+  1. By directory (src/, tests/, lib/)
+  2. By file size (small, medium, large)
+  3. By change frequency (hot, warm, cold)
+  4. By priority (critical, high, medium, low)
+- Include a memory usage graph showing how chunking prevents OOM errors
+- Add a "batch processing" animation showing files moving through the pipeline
+- Display estimated time and cost for each strategy
+- Use a Gantt chart to show parallel processing opportunities
+Placement: Right after the "Handling Large Codebases" heading
+*/}
+
+**Chunking Strategies**:
+
+```python
+from pathlib import Path
+from typing import Iterator, List
+import os
+
+def chunk_files(
+    directory: Path,
+    chunk_size: int = 50,
+    max_file_size: int = 100_000  # 100KB
+) -> Iterator[List[Path]]:
+    """Yield chunks of files for batch processing."""
+
+    python_files = []
+    for file in directory.rglob("*.py"):
+        # Skip large files (process separately)
+        if file.stat().st_size > max_file_size:
+            yield [file]  # Process large files individually
+            continue
+
+        python_files.append(file)
+
+        if len(python_files) >= chunk_size:
+            yield python_files
+            python_files = []
+
+    if python_files:
+        yield python_files
+
+# Process in chunks to manage memory and API costs
+for chunk in chunk_files(Path("./src"), chunk_size=50):
+    process_batch(chunk)
+```
+
+**Memory Management**:
+
+- Process files in batches, not all at once
+- Release AST objects after processing each file
+- Use generators for file discovery
+- Consider multiprocessing for CPU-bound parsing
+
+### Incremental vs Big-Bang Refactoring
+
+{/* IMAGE_PLACEHOLDER: Create a comparison animation:
+- Split screen showing two parallel timelines:
+  LEFT: "Incremental Refactoring"
+  - Show small PRs being merged over time (weeks/months)
+  - Visualize gradual type coverage increase (0% → 25% → 50% → 75% → 100%)
+  - Display team velocity staying stable
+  - Show low risk meter throughout
+  
+  RIGHT: "Big-Bang Refactoring"
+  - Show one massive PR at the end
+  - Visualize sudden jump in type coverage (0% → 100%)
+  - Display team velocity dropping during refactoring
+  - Show high risk spike, then drop
+  
+- Include a "merge conflict" indicator showing frequency
+- Add a "team stress" meter (humorous but informative)
+- Use animated progress bars and timeline markers
+- Include a recommendation engine: "Based on your team size and codebase, we recommend..."
+Placement: Above or below the comparison table
+*/}
+
+| Approach        | Pros                                        | Cons                                  | Best For                        |
+| :-------------- | :------------------------------------------ | :------------------------------------ | :------------------------------ |
+| **Incremental** | Lower risk, easier review, gradual learning | Slower, mixed codebase state          | Active development, large teams |
+| **Big-Bang**    | Consistent codebase, one-time effort        | High risk, large PRs, merge conflicts | Stable codebases, small teams   |
+
+**Incremental Strategy**:
+
+```python
+from enum import Enum
+from dataclasses import dataclass
+
+class RefactorPriority(Enum):
+    CRITICAL = 1  # Core modules, high traffic
+    HIGH = 2      # Frequently modified files
+    MEDIUM = 3    # Stable, less critical
+    LOW = 4       # Generated code, tests
+
+@dataclass
+class RefactorPlan:
+    file: Path
+    priority: RefactorPriority
+    estimated_changes: int
+    dependencies: List[Path]
+
+def prioritize_refactoring(files: List[Path]) -> List[RefactorPlan]:
+    """Prioritize files for incremental refactoring."""
+    plans = []
+    for file in files:
+        # Analyze git history for change frequency
+        change_freq = get_git_change_frequency(file)
+
+        # Check import graph for dependencies
+        deps = analyze_dependencies(file)
+
+        # Assign priority
+        if "core" in str(file) or change_freq > 10:
+            priority = RefactorPriority.CRITICAL
+        elif change_freq > 5:
+            priority = RefactorPriority.HIGH
+        else:
+            priority = RefactorPriority.MEDIUM
+
+        plans.append(RefactorPlan(file, priority, 0, deps))
+
+    return sorted(plans, key=lambda p: p.priority.value)
+```
+
+### Git Integration for Atomic Commits
+
+Make each refactoring change a separate, reviewable commit:
+
+```python
+import subprocess
+from pathlib import Path
+from typing import Optional
+
+class GitIntegration:
+    """Manage git operations for refactoring."""
+
+    def __init__(self, repo_path: Path):
+        self.repo_path = repo_path
+
+    def create_branch(self, name: str) -> None:
+        """Create a new branch for refactoring."""
+        subprocess.run(
+            ["git", "checkout", "-b", f"refactor/{name}"],
+            cwd=self.repo_path,
+            check=True
+        )
+
+    def commit_file(
+        self,
+        file_path: Path,
+        message: str,
+        body: Optional[str] = None
+    ) -> None:
+        """Commit a single refactored file."""
+        subprocess.run(
+            ["git", "add", str(file_path)],
+            cwd=self.repo_path,
+            check=True
+        )
+
+        commit_msg = message
+        if body:
+            commit_msg = f"{message}\n\n{body}"
+
+        subprocess.run(
+            ["git", "commit", "-m", commit_msg],
+            cwd=self.repo_path,
+            check=True
+        )
+
+    def generate_commit_message(self, file: Path, changes: Dict) -> str:
+        """Generate descriptive commit message."""
+        func_count = len(changes.get("functions", []))
+        return f"refactor({file.stem}): add type hints to {func_count} functions"
+
+# Usage in refactoring pipeline
+git = GitIntegration(Path("."))
+git.create_branch("add-type-hints-2024")
+
+for file in files_to_refactor:
+    changes = refactor_file(file)
+    git.commit_file(
+        file,
+        git.generate_commit_message(file, changes),
+        body=f"Functions modified: {', '.join(changes['functions'])}"
+    )
+```
+
+### Code Review Integration (PR Generation)
+
+Automate PR creation with detailed descriptions:
+
+```python
+import subprocess
+from dataclasses import dataclass
+from typing import List
+
+@dataclass
+class RefactoringSummary:
+    files_modified: int
+    functions_typed: int
+    type_errors_fixed: int
+    test_status: str
+
+def generate_pr_description(summary: RefactoringSummary) -> str:
+    """Generate a detailed PR description."""
+    return f"""## 🔧 Automated Type Hint Refactoring
+
+### Summary
+- **Files modified**: {summary.files_modified}
+- **Functions typed**: {summary.functions_typed}
+- **Type errors fixed**: {summary.type_errors_fixed}
+- **Test status**: {summary.test_status}
+
+### Changes
+This PR adds type hints to Python functions using the Neuro-Symbolic refactoring agent:
+- LLM (GPT-4o) analyzed function signatures and inferred types
+- LibCST applied changes while preserving formatting
+- All changes validated with mypy --strict
+
+### Validation
+- [x] mypy --strict passes
+- [x] All existing tests pass
+- [x] No formatting changes (LibCST preserves whitespace)
+
+### Review Notes
+Please verify:
+1. Inferred types match your expectations
+2. Complex types (Union, Optional) are appropriate
+3. No `Any` types where more specific types are possible
+
+---
+*Generated by Autonomous Legacy Code Refactorer*
+"""
+
+def create_pull_request(
+    branch: str,
+    title: str,
+    body: str,
+    base: str = "main"
+) -> None:
+    """Create PR using GitHub CLI."""
+    subprocess.run(
+        [
+            "gh", "pr", "create",
+            "--title", title,
+            "--body", body,
+            "--base", base,
+            "--head", branch
+        ],
+        check=True
+    )
+```
+
+<Callout type="info">
+  **CI/CD Integration**: Add a GitHub Action that runs your refactoring agent on
+  PRs, suggesting type hints as review comments rather than auto-committing.
+</Callout>
+
+### Monitoring and Observability
+
+Track refactoring progress across your codebase:
+
+```python
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, List
+import json
+
+@dataclass
+class RefactoringMetrics:
+    """Track refactoring progress over time."""
+
+    timestamp: datetime = field(default_factory=datetime.now)
+    total_files: int = 0
+    typed_files: int = 0
+    total_functions: int = 0
+    typed_functions: int = 0
+    type_coverage: float = 0.0
+
+    def to_json(self) -> str:
+        return json.dumps({
+            "timestamp": self.timestamp.isoformat(),
+            "total_files": self.total_files,
+            "typed_files": self.typed_files,
+            "total_functions": self.total_functions,
+            "typed_functions": self.typed_functions,
+            "type_coverage": self.type_coverage
+        })
+
+def calculate_type_coverage(directory: Path) -> RefactoringMetrics:
+    """Calculate current type hint coverage."""
+    metrics = RefactoringMetrics()
+
+    for file in directory.rglob("*.py"):
+        metrics.total_files += 1
+
+        # Parse and analyze
+        tree = cst.parse_module(file.read_text())
+        functions = extract_functions(tree)
+
+        file_typed = True
+        for func in functions:
+            metrics.total_functions += 1
+            if func["has_return_type"] and func["has_param_types"]:
+                metrics.typed_functions += 1
+            else:
+                file_typed = False
+
+        if file_typed:
+            metrics.typed_files += 1
+
+    if metrics.total_functions > 0:
+        metrics.type_coverage = metrics.typed_functions / metrics.total_functions
+
+    return metrics
+```
+
+---
+
+<ModuleSummary
+  points={[
+    "Neuro-Symbolic AI combines LLM reasoning with deterministic AST manipulation",
+    "LibCST preserves comments, whitespace, and formatting during code transformation",
+    "The LLM plans refactoring (JSON output), the AST transformer executes it",
+    "This pattern eliminates hallucination risk in the actual code changes",
+    "Type hint inference demonstrates practical LLM + AST collaboration",
+    "AI tools like Aider, Cursor, and Copilot Workspace complement custom agents",
+    "Always validate refactoring with type checkers (mypy/pyright) and tests",
+    "Tree-sitter and ts-morph enable multi-language refactoring support",
+    "Production refactoring requires chunking, git integration, and rollback strategies",
+  ]}
+/>
+
+---
+
+## 🔗 Further Reading
+
+### Core Tools
+
+- [LibCST Documentation](https://libcst.readthedocs.io/) - Format-preserving Python CST
+- [LibCST GitHub (Instagram)](https://github.com/Instagram/LibCST)
+- [Tree-sitter](https://tree-sitter.github.io/) - Multi-language parsing
+- [ts-morph](https://ts-morph.com/) - TypeScript AST manipulation
+
+### AI-Powered Refactoring (2024-2025)
+
+- [Aider](https://aider.chat/) - AI pair programming with git integration
+- [Cursor](https://cursor.sh/) - AI-native code editor
+- [Amazon Q Developer](https://aws.amazon.com/q/developer/) - Enterprise code transformation
+- [GitHub Copilot Workspace](https://githubnext.com/projects/copilot-workspace) - Task-oriented development
+
+### Type Checking & Validation
+
+- [mypy Documentation](https://mypy.readthedocs.io/) - Static type checker for Python
+- [pyright](https://github.com/microsoft/pyright) - Fast type checker (powers Pylance)
+- [MonkeyType](https://github.com/Instagram/MonkeyType) - Runtime type collection
+
+### Background
+
+- [Brownfield vs Greenfield Development](https://en.wikipedia.org/wiki/Brownfield_development)
+
+**Tomorrow**: Day 79—The Financial Forensics Swarm.
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** The Neuro-Symbolic pattern (LLM + deterministic
+  tools) is a core architecture in the AgentOS capstone. The Coding Agent uses
+  similar patterns—LLM plans the changes, AST/structured tools execute them
+  safely.
+</Callout>
+
+### Prerequisite Exercises
+
+Before starting this project, complete:
+
+- **EX-02**: Structured Output (20 min) - JSON schema for refactoring plans
+- **EX-03**: Tool Definition (20 min) - Creating AST manipulation tools
+- **EX-05**: Prompt Templates (20 min) - Crafting effective code analysis prompts
+
+### Related POCs
+
+- **POC-01**: LangGraph State Machine (1-2 hours) - Workflow for multi-step refactoring
+- **POC-02**: Structured Output Parsing (1-2 hours) - Reliable JSON extraction for plans
+
+### Capstone Connection
+
+In the capstone's Coding Agent, you'll use:
+
+- LLM for planning code changes
+- AST tools for safe, deterministic execution
+- Validation pipelines to verify changes
+
+See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.

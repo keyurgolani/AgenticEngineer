@@ -1,0 +1,1494 @@
+---
+title: "Day 18: Lab - Memory-Augmented RAG Agent"
+description: "Hands-on lab building an agent that combines RAG retrieval with persistent memory."
+week: 3
+day: 18
+---
+
+<ReadingTime minutes={45} />
+
+<SkillLevel level="intermediate" description="Hands-on coding lab" />
+
+<Prerequisites
+  items={[
+    "Completed Day 17: RAG fundamentals",
+    "Completed Day 10: LangGraph Basics",
+    "Python environment with chromadb, openai installed",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Build a RAG pipeline that integrates with agent memory",
+    "Implement Agentic RAG with document grading and query rewriting",
+    "Implement semantic memory backed by a vector database",
+    "Create a conversational agent with LangGraph checkpointing",
+    "Combine episodic memory with document retrieval",
+    "Apply advanced RAG patterns: hybrid search, contextual compression, multi-query",
+    "Test memory persistence across sessions",
+  ]}
+/>
+
+---
+
+## Lab Overview
+
+<ConceptVisual src="/images/company_policy_system_architecture.png" alt="Company Policy Assistant Architecture" caption="The system combines a RAG pipeline, a persistent memory store, and an intelligent agent." />
+
+In this lab, you'll build a **Company Policy Assistant**—an agent that can answer questions about company documents while remembering user preferences and past interactions. This combines:
+
+- **RAG** (from Day 17) for document retrieval
+- **Semantic Memory** for user preferences
+- **Episodic Memory** for conversation history
+- **LangGraph Checkpointing** for session persistence
+- **LangGraph Store** for cross-thread user profiles
+
+<Callout type="info">
+  **What's New:** This lab uses LangGraph's Store API for cross-thread memory,
+  which persists user preferences across different conversation threads. This is
+  the recommended approach for production applications.
+</Callout>
+
+### Agentic RAG: Beyond Simple Retrieval
+
+Traditional RAG follows a fixed pipeline: retrieve → generate. **Agentic RAG** adds intelligence to this process:
+
+<ConceptVisual src="/images/rag_vs_agentic_rag_comparison.png" alt="Traditional vs Agentic RAG" caption="Agentic RAG adds critical reasoning loops to evaluate and improve quality." />
+
+<Mermaid
+  chart={`
+flowchart TB
+    Q[User Query] --> ROUTE{Query Router}
+    
+    ROUTE -->|Simple lookup| DIRECT[Direct Retrieval]
+    ROUTE -->|Complex query| DECOMP[Query Decomposition]
+    ROUTE -->|Needs clarification| CLARIFY[Ask User]
+    
+    DECOMP --> SUB1[Sub-query 1]
+    DECOMP --> SUB2[Sub-query 2]
+    
+    SUB1 --> RET1[Retrieve]
+    SUB2 --> RET2[Retrieve]
+    DIRECT --> RET3[Retrieve]
+    
+    RET1 --> GRADE{Grade Documents}
+    RET2 --> GRADE
+    RET3 --> GRADE
+    
+    GRADE -->|Relevant| GEN[Generate Answer]
+    GRADE -->|Not relevant| REWRITE[Rewrite Query]
+    REWRITE --> ROUTE
+    
+    GEN --> CHECK{Hallucination Check}
+    CHECK -->|Grounded| RESPOND[Final Response]
+    CHECK -->|Not grounded| GEN
+    
+    style ROUTE fill:#f9f,stroke:#333
+    style GRADE fill:#bbf,stroke:#333
+    style CHECK fill:#bfb,stroke:#333
+`}
+/>
+
+Key agentic RAG patterns we'll implement:
+
+- **Query routing**: Direct simple queries, decompose complex ones
+- **Document grading**: Verify retrieved documents are actually relevant
+- **Self-correction**: Rewrite queries when retrieval fails
+- **Hallucination checking**: Ensure answers are grounded in retrieved context
+
+<Callout type="info">
+  **Analogy: The Research Librarian** — Think of Agentic RAG like a skilled research librarian vs. a simple search engine. A search engine returns results and stops. A librarian evaluates if the books they found actually answer your question, tries different search terms if the first attempt fails, and double-checks that their recommendations are based on the books they found (not their own assumptions). That's the difference between traditional RAG and Agentic RAG.
+</Callout>
+
+<Mermaid
+  chart={`
+graph TB
+    User[User Query] --> Agent[Policy Assistant]
+    
+    subgraph Memory System
+        WM[Working Memory<br/>Current Task]
+        EM[Episodic Memory<br/>Past Conversations]
+        SM[Semantic Memory<br/>User Preferences]
+        Store[LangGraph Store<br/>Cross-Thread Data]
+    end
+    
+    subgraph RAG Pipeline
+        Docs[(Policy Documents)]
+        VDB[(Vector DB)]
+    end
+    
+    Agent --> WM
+    Agent --> EM
+    Agent --> SM
+    Agent --> Store
+    Agent --> VDB
+    VDB --> Docs
+    
+    style Agent fill:#f9f,stroke:#333
+    style VDB fill:#bbf,stroke:#333
+    style Store fill:#bfb,stroke:#333
+`}
+/>
+
+---
+
+## 6.1 Setup
+
+<ConceptVisual src="/images/setup_checklist_file_tree.png" alt="Project Structure" caption="Everything you need to build a production-ready agent." />
+
+First, install the required dependencies:
+
+```bash
+pip install chromadb openai langgraph langchain-openai langchain-core sentence-transformers
+```
+
+<Callout type="warning">
+  **Version Note:** This lab uses LangGraph 0.2+ which includes the Store API.
+  Run `pip install --upgrade langgraph` to ensure you have the latest version.
+</Callout>
+
+Create a project structure:
+
+```
+policy-assistant/
+├── documents/           # Policy documents to index
+│   ├── remote-work.md
+│   ├── expenses.md
+│   └── time-off.md
+├── memory/              # Persistent memory storage
+├── agent.py             # Main agent code
+└── test_agent.py        # Test scenarios
+```
+
+---
+
+## 6.2 Sample Policy Documents
+
+Create some sample policy documents to work with:
+
+```python title="setup_documents.py"
+from pathlib import Path
+
+# Create documents directory
+docs_dir = Path("documents")
+docs_dir.mkdir(exist_ok=True)
+
+# Remote Work Policy
+(docs_dir / "remote-work.md").write_text("""
+# Remote Work Policy
+
+## Eligibility
+All full-time employees who have completed their probation period (90 days)
+are eligible for remote work.
+
+## Schedule
+- Remote work is allowed Monday through Thursday
+- Friday is an in-office collaboration day (mandatory)
+- Core hours are 10am-3pm in your local timezone
+
+## Equipment
+The company provides:
+- Laptop (refreshed every 3 years)
+- Monitor (one 27" monitor)
+- $500 home office stipend (one-time)
+
+## Expectations
+- Must have reliable internet (minimum 50 Mbps)
+- Must be available during core hours
+- Must attend all scheduled meetings with camera on
+""")
+
+# Expense Policy
+(docs_dir / "expenses.md").write_text("""
+# Expense Policy
+
+## Submission Deadlines
+- All expenses must be submitted within 30 days of purchase
+- Monthly expense reports are due by the 25th of each month
+- Late submissions may be denied
+
+## Approval Limits
+- Under $100: Auto-approved
+- $100-$500: Manager approval required
+- $500-$5000: Director approval required
+- Over $5000: VP approval required
+
+## Travel
+- Book flights at least 14 days in advance
+- Economy class for flights under 6 hours
+- Business class allowed for flights over 6 hours
+- Hotel limit: $200/night in most cities, $350/night in high-cost cities
+
+## Meals
+- Breakfast: up to $20
+- Lunch: up to $30
+- Dinner: up to $50
+- Team meals: up to $75 per person
+""")
+
+# Time Off Policy
+(docs_dir / "time-off.md").write_text("""
+# Time Off Policy
+
+## PTO Allowance
+- 0-2 years: 15 days
+- 2-5 years: 20 days
+- 5+ years: 25 days
+
+## Sick Leave
+- 10 days per year
+- No carryover
+- Doctor's note required for 3+ consecutive days
+
+## Holidays
+The company observes 10 federal holidays plus 2 floating holidays.
+
+## Requesting Time Off
+- Submit requests at least 2 weeks in advance
+- Holiday periods require 4 weeks notice
+- Manager approval required for all PTO
+- Blackout periods may apply during critical business periods
+
+## Carryover
+- Up to 5 PTO days can carry over to the next year
+- Carryover days must be used by March 31
+""")
+
+print("✅ Created sample policy documents")
+```
+
+---
+
+## 6.3 Building the RAG Pipeline
+
+<ConceptVisual src="/images/rag_indexing_visualization.png" alt="Vector Indexing Process" caption="Documents are split into chunks, converted to vectors, and stored in high-dimensional space." />
+
+Now let's build a RAG pipeline that indexes these documents:
+
+```python title="rag_pipeline.py"
+import chromadb
+from pathlib import Path
+from typing import List, Dict, Any
+from sentence_transformers import SentenceTransformer
+
+class PolicyRAG:
+    """RAG pipeline for company policy documents."""
+
+    def __init__(self, persist_path: str = "./memory/rag"):
+        self.persist_path = Path(persist_path)
+        self.persist_path.mkdir(parents=True, exist_ok=True)
+
+        # Initialize ChromaDB with persistence
+        self.chroma = chromadb.PersistentClient(
+            path=str(self.persist_path)
+        )
+        self.collection = self.chroma.get_or_create_collection(
+            name="policies",
+            metadata={"hnsw:space": "cosine"}
+        )
+
+        # Local embedding model (no API calls needed)
+        self.embedder = SentenceTransformer('all-MiniLM-L6-v2')
+
+    def index_documents(self, docs_dir: str) -> int:
+        """Index all markdown documents in a directory."""
+        docs_path = Path(docs_dir)
+        indexed = 0
+
+        for file_path in docs_path.glob("*.md"):
+            content = file_path.read_text()
+            chunks = self._chunk_document(content, str(file_path))
+
+            for i, chunk in enumerate(chunks):
+                doc_id = f"{file_path.stem}_{i}"
+
+                # Generate embedding
+                embedding = self.embedder.encode(chunk["text"]).tolist()
+
+                # Upsert to handle re-indexing
+                self.collection.upsert(
+                    ids=[doc_id],
+                    documents=[chunk["text"]],
+                    embeddings=[embedding],
+                    metadatas=[{
+                        "source": chunk["source"],
+                        "section": chunk.get("section", ""),
+                        "chunk_index": i
+                    }]
+                )
+                indexed += 1
+
+        return indexed
+
+    def _chunk_document(
+        self,
+        content: str,
+        source: str
+    ) -> List[Dict[str, Any]]:
+        """Chunk document by sections (headers)."""
+        chunks: List[Dict[str, Any]] = []
+        current_section = ""
+        current_text = ""
+
+        for line in content.split("\n"):
+            if line.startswith("# "):
+                # New top-level section
+                if current_text.strip():
+                    chunks.append({
+                        "text": current_text.strip(),
+                        "source": source,
+                        "section": current_section
+                    })
+                current_section = line[2:].strip()
+                current_text = line + "\n"
+            elif line.startswith("## "):
+                # New subsection - save previous and start new
+                if current_text.strip():
+                    chunks.append({
+                        "text": current_text.strip(),
+                        "source": source,
+                        "section": current_section
+                    })
+                current_section = line[3:].strip()
+                current_text = line + "\n"
+            else:
+                current_text += line + "\n"
+
+        # Don't forget the last chunk
+        if current_text.strip():
+            chunks.append({
+                "text": current_text.strip(),
+                "source": source,
+                "section": current_section
+            })
+
+        return chunks
+
+    def search(self, query: str, n_results: int = 3) -> List[Dict[str, Any]]:
+        """Search for relevant policy chunks."""
+        # Generate query embedding
+        query_embedding = self.embedder.encode(query).tolist()
+
+        results = self.collection.query(
+            query_embeddings=[query_embedding],
+            n_results=n_results,
+            include=["documents", "metadatas", "distances"]
+        )
+
+        # Format results
+        formatted: List[Dict[str, Any]] = []
+        if results["documents"] and results["documents"][0]:
+            for doc, meta, dist in zip(
+                results["documents"][0],
+                results["metadatas"][0],
+                results["distances"][0]
+            ):
+                formatted.append({
+                    "content": doc,
+                    "source": meta["source"],
+                    "section": meta["section"],
+                    "relevance": 1 - dist  # Convert distance to similarity
+                })
+
+        return formatted
+
+    def to_context(self, query: str, n_results: int = 3) -> str:
+        """Convert search results to context string for LLM."""
+        results = self.search(query, n_results)
+
+        if not results:
+            return "No relevant policy documents found."
+
+        parts = ["## Relevant Policy Information\n"]
+        for r in results:
+            source_name = Path(r["source"]).stem.replace("-", " ").title()
+            parts.append(f"### {source_name} - {r['section']}")
+            parts.append(r["content"])
+            parts.append("")
+
+        return "\n".join(parts)
+
+
+# Test the RAG pipeline
+if __name__ == "__main__":
+    rag = PolicyRAG()
+
+    # Index documents
+    count = rag.index_documents("./documents")
+    print(f"✅ Indexed {count} chunks")
+
+    # Test search
+    results = rag.search("Can I work from home on Friday?")
+    for r in results:
+        print(f"\n📄 {r['section']} (relevance: {r['relevance']:.2f})")
+        print(r['content'][:200] + "...")
+```
+
+---
+
+## 6.4 Agentic RAG: Document Grading and Query Rewriting
+
+<ConceptVisual src="/images/agentic_rag_flowchart.png" alt="Agentic RAG Retry Loop" caption="Self-correction allows the agent to recover from poor initial retrieval." />
+
+Let's enhance our RAG pipeline with agentic capabilities—the ability to evaluate retrieval quality and self-correct when needed.
+
+```python title="agentic_rag.py"
+from typing import List, Dict, Any, Literal
+from openai import OpenAI
+import json
+
+class AgenticRAG:
+    """RAG pipeline with document grading and query rewriting."""
+
+    def __init__(self, base_rag: PolicyRAG):
+        self.rag = base_rag
+        self.client = OpenAI()
+
+    def query(
+        self,
+        question: str,
+        max_retries: int = 2
+    ) -> Dict[str, Any]:
+        """Query with automatic retry and query rewriting."""
+
+        current_query = question
+        attempts = []
+
+        for attempt in range(max_retries + 1):
+            # Step 1: Retrieve documents
+            docs = self.rag.search(current_query, n_results=5)
+
+            # Step 2: Grade document relevance
+            graded_docs = self._grade_documents(question, docs)
+            relevant_docs = [d for d in graded_docs if d["relevant"]]
+
+            attempts.append({
+                "query": current_query,
+                "docs_retrieved": len(docs),
+                "docs_relevant": len(relevant_docs)
+            })
+
+            # Step 3: If we have relevant docs, generate answer
+            if relevant_docs:
+                answer = self._generate_answer(question, relevant_docs)
+
+                # Step 4: Check for hallucination
+                if self._check_grounded(answer, relevant_docs):
+                    return {
+                        "answer": answer,
+                        "sources": [d["source"] for d in relevant_docs],
+                        "attempts": attempts,
+                        "grounded": True
+                    }
+
+            # Step 5: Rewrite query if we need to retry
+            if attempt < max_retries:
+                current_query = self._rewrite_query(
+                    original=question,
+                    previous_query=current_query,
+                    failed_docs=docs
+                )
+
+        # Fallback: return best effort answer
+        return {
+            "answer": "I couldn't find relevant information to answer this question confidently.",
+            "sources": [],
+            "attempts": attempts,
+            "grounded": False
+        }
+
+    def _grade_documents(
+        self,
+        question: str,
+        docs: List[Dict]
+    ) -> List[Dict]:
+        """Grade each document for relevance to the question."""
+
+        graded = []
+        for doc in docs:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{
+                    "role": "system",
+                    "content": """You are a relevance grader. Given a question and a document,
+determine if the document contains information relevant to answering the question.
+Return JSON: {"relevant": true/false, "reason": "brief explanation"}"""
+                }, {
+                    "role": "user",
+                    "content": f"Question: {question}\n\nDocument:\n{doc['content']}"
+                }],
+                response_format={"type": "json_object"}
+            )
+
+            grade = json.loads(response.choices[0].message.content)
+            graded.append({**doc, **grade})
+
+        return graded
+
+    def _rewrite_query(
+        self,
+        original: str,
+        previous_query: str,
+        failed_docs: List[Dict]
+    ) -> str:
+        """Rewrite query to improve retrieval."""
+
+        doc_summaries = "\n".join([
+            f"- {d['section']}: {d['content'][:100]}..."
+            for d in failed_docs[:3]
+        ])
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": """You are a query rewriter. The previous query didn't retrieve
+relevant documents. Rewrite it to be more specific or use different terminology.
+Return only the rewritten query, nothing else."""
+            }, {
+                "role": "user",
+                "content": f"""Original question: {original}
+Previous query: {previous_query}
+Documents retrieved (not relevant):
+{doc_summaries}
+
+Rewrite the query to find more relevant documents:"""
+            }]
+        )
+
+        return response.choices[0].message.content.strip()
+
+    def _generate_answer(
+        self,
+        question: str,
+        docs: List[Dict]
+    ) -> str:
+        """Generate answer from relevant documents."""
+
+        context = "\n\n".join([
+            f"[{d['section']}]\n{d['content']}"
+            for d in docs
+        ])
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": """Answer the question based ONLY on the provided context.
+If the context doesn't contain enough information, say so.
+Cite the relevant section when possible."""
+            }, {
+                "role": "user",
+                "content": f"Context:\n{context}\n\nQuestion: {question}"
+            }]
+        )
+
+        return response.choices[0].message.content
+
+    def _check_grounded(
+        self,
+        answer: str,
+        docs: List[Dict]
+    ) -> bool:
+        """Check if the answer is grounded in the documents."""
+
+        context = "\n".join([d['content'] for d in docs])
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": """You are a fact-checker. Determine if the answer is
+fully supported by the provided documents.
+Return JSON: {"grounded": true/false, "unsupported_claims": ["list of claims not in docs"]}"""
+            }, {
+                "role": "user",
+                "content": f"Documents:\n{context}\n\nAnswer to check:\n{answer}"
+            }],
+            response_format={"type": "json_object"}
+        )
+
+        result = json.loads(response.choices[0].message.content)
+        return result["grounded"]
+
+
+# Example usage
+if __name__ == "__main__":
+    base_rag = PolicyRAG()
+    base_rag.index_documents("./documents")
+
+    agentic = AgenticRAG(base_rag)
+
+    # This query might need rewriting
+    result = agentic.query("What happens if I submit expenses late?")
+
+    print(f"Answer: {result['answer']}")
+    print(f"Grounded: {result['grounded']}")
+    print(f"Attempts: {len(result['attempts'])}")
+    for i, attempt in enumerate(result['attempts']):
+        print(f"  {i+1}. Query: '{attempt['query']}' -> {attempt['docs_relevant']}/{attempt['docs_retrieved']} relevant")
+```
+
+<Callout type="tip">
+  **When to Use Agentic RAG:** Simple factual lookups don't need the overhead of
+  document grading. Use agentic patterns when: (1) queries are complex or
+  ambiguous, (2) retrieval quality varies, or (3) accuracy is critical and you
+  can afford extra latency.
+</Callout>
+
+<ConceptVisual src="/images/rag_decision_tree.png" alt="Decision Tree: When to use Agentic RAG?" caption="Use Agentic RAG for complex queries where accuracy outweighs speed." />
+
+---
+
+## 6.5 Adding User Memory
+
+<ConceptVisual src="/images/semantic_memory_filing_cabinet.png" alt="Semantic Memory vs Storage" caption="Semantic memory works like specific associations in the brain, not just keyword matches." />
+
+Now let's add semantic memory to remember user preferences:
+
+```python title="user_memory.py"
+import chromadb
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from datetime import datetime
+import json
+
+class UserMemory:
+    """Semantic memory for user preferences and facts."""
+
+    def __init__(self, persist_path: str = "./memory/users"):
+        self.persist_path = Path(persist_path)
+        self.persist_path.mkdir(parents=True, exist_ok=True)
+
+        self.chroma = chromadb.PersistentClient(
+            path=str(self.persist_path / "chroma")
+        )
+        self.preferences = self.chroma.get_or_create_collection("preferences")
+
+        # JSON file for structured user data
+        self.users_file = self.persist_path / "users.json"
+        self.users: Dict[str, Dict[str, Any]] = self._load_users()
+
+    def _load_users(self) -> Dict[str, Dict[str, Any]]:
+        """Load user data from disk."""
+        if self.users_file.exists():
+            return json.loads(self.users_file.read_text())
+        return {}
+
+    def _save_users(self) -> None:
+        """Save user data to disk."""
+        self.users_file.write_text(json.dumps(self.users, indent=2))
+
+    def set_user_info(self, user_id: str, key: str, value: Any) -> None:
+        """Store structured user information."""
+        if user_id not in self.users:
+            self.users[user_id] = {"created_at": datetime.now().isoformat()}
+
+        self.users[user_id][key] = value
+        self.users[user_id]["updated_at"] = datetime.now().isoformat()
+        self._save_users()
+
+        # Also store in vector DB for semantic search
+        pref_text = f"User {key}: {value}"
+        pref_id = f"{user_id}_{key}"
+
+        self.preferences.upsert(
+            ids=[pref_id],
+            documents=[pref_text],
+            metadatas=[{
+                "user_id": user_id,
+                "key": key,
+                "value": str(value),
+                "timestamp": datetime.now().isoformat()
+            }]
+        )
+
+    def get_user_info(self, user_id: str, key: str) -> Optional[Any]:
+        """Get specific user information."""
+        if user_id in self.users:
+            return self.users[user_id].get(key)
+        return None
+
+    def get_user_profile(self, user_id: str) -> Dict[str, Any]:
+        """Get complete user profile."""
+        return self.users.get(user_id, {})
+
+    def search_preferences(
+        self,
+        user_id: str,
+        query: str,
+        n: int = 5
+    ) -> List[str]:
+        """Search user preferences semantically."""
+        results = self.preferences.query(
+            query_texts=[query],
+            n_results=n,
+            where={"user_id": user_id}
+        )
+
+        if results["documents"] and results["documents"][0]:
+            return results["documents"][0]
+        return []
+
+    def to_context(self, user_id: str) -> str:
+        """Convert user profile to context string."""
+        profile = self.get_user_profile(user_id)
+
+        if not profile:
+            return "No user profile found."
+
+        parts = ["## User Profile\n"]
+        for key, value in profile.items():
+            if key not in ["created_at", "updated_at"]:
+                parts.append(f"- **{key}**: {value}")
+
+        return "\n".join(parts)
+
+
+# Test user memory
+if __name__ == "__main__":
+    memory = UserMemory()
+
+    # Store user preferences
+    memory.set_user_info("alice", "name", "Alice")
+    memory.set_user_info("alice", "department", "Engineering")
+    memory.set_user_info("alice", "tenure_years", 3)
+    memory.set_user_info("alice", "preferred_communication", "Slack")
+
+    # Retrieve
+    print(memory.to_context("alice"))
+```
+
+---
+
+## 6.6 Building the LangGraph Agent
+
+<ConceptVisual src="/images/langgraph_state_machine.png" alt="LangGraph State Machine" caption="The architecture explicitly separates retrieval, reasoning, and learning phases." />
+
+Now let's combine everything into a LangGraph agent with checkpointing and the Store API for cross-thread memory:
+
+```python title="agent.py"
+from typing import Annotated, TypedDict, List, Optional
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
+from langchain_core.runnables import RunnableConfig
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.store.memory import InMemoryStore
+from langgraph.store.base import BaseStore
+from operator import add
+import re
+
+# Import our components
+from rag_pipeline import PolicyRAG
+from user_memory import UserMemory
+
+
+class AgentState(TypedDict):
+    """State for the policy assistant agent."""
+    messages: Annotated[List[BaseMessage], add]
+    user_id: str
+    context: str
+
+
+class PolicyAssistant:
+    """Memory-augmented policy assistant agent."""
+
+    def __init__(self, persist_path: str = "./memory"):
+        # Initialize components
+        self.rag = PolicyRAG(f"{persist_path}/rag")
+        self.user_memory = UserMemory(f"{persist_path}/users")
+        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+        self.persist_path = persist_path
+
+        # Build the graph
+        self.graph = self._build_graph()
+
+    def _build_graph(self) -> StateGraph:
+        """Build the LangGraph workflow."""
+        workflow = StateGraph(AgentState)
+
+        # Add nodes
+        workflow.add_node("retrieve", self._retrieve_node)
+        workflow.add_node("respond", self._respond_node)
+        workflow.add_node("learn", self._learn_node)
+
+        # Add edges
+        workflow.add_edge(START, "retrieve")
+        workflow.add_edge("retrieve", "respond")
+        workflow.add_edge("respond", "learn")
+        workflow.add_edge("learn", END)
+
+        # Use SQLite for persistent checkpointing (conversation history)
+        checkpointer = SqliteSaver.from_conn_string(
+            f"{self.persist_path}/checkpoints.db"
+        )
+
+        # Use InMemoryStore for cross-thread memory (user profiles)
+        # In production, use PostgresStore for persistence
+        store = InMemoryStore()
+
+        return workflow.compile(checkpointer=checkpointer, store=store)
+
+    def _retrieve_node(
+        self,
+        state: AgentState,
+        config: RunnableConfig,
+        *,
+        store: BaseStore
+    ) -> dict:
+        """Retrieve relevant context from RAG and user memory."""
+        # Get the latest user message
+        last_message = state["messages"][-1]
+        query = last_message.content if hasattr(last_message, 'content') else str(last_message)
+        user_id = state["user_id"]
+
+        # Get RAG context
+        rag_context = self.rag.to_context(query)
+
+        # Get user context from Store (cross-thread memory)
+        namespace = (user_id, "profile")
+        profile_item = store.get(namespace, "info")
+
+        if profile_item:
+            user_context = f"## User Profile\n"
+            for key, value in profile_item.value.items():
+                user_context += f"- **{key}**: {value}\n"
+        else:
+            user_context = self.user_memory.to_context(user_id)
+
+        # Combine contexts
+        full_context = f"{user_context}\n\n{rag_context}"
+
+        return {"context": full_context}
+
+    def _respond_node(self, state: AgentState) -> dict:
+        """Generate response using LLM."""
+        system_prompt = f"""You are a helpful company policy assistant.
+Answer questions based on the provided policy documents and user context.
+
+{state['context']}
+
+Guidelines:
+- Be specific and cite the relevant policy when possible
+- If information isn't in the policies, say so clearly
+- Personalize responses based on user profile (e.g., tenure for PTO calculations)
+- If the user shares preferences or information about themselves, acknowledge it
+"""
+
+        messages = [SystemMessage(content=system_prompt)] + state["messages"]
+
+        response = self.llm.invoke(messages)
+
+        return {"messages": [response]}
+
+    def _learn_node(
+        self,
+        state: AgentState,
+        config: RunnableConfig,
+        *,
+        store: BaseStore
+    ) -> dict:
+        """Extract and store user information from the conversation."""
+        # Get the last user message
+        messages = state["messages"]
+        if len(messages) < 2:
+            return {}
+
+        last_user_msg = messages[-2].content if len(messages) >= 2 else ""
+        user_id = state["user_id"]
+
+        # Simple pattern matching for user info
+        # In production, use LLM to extract this
+        patterns = {
+            "name": r"(?:my name is|I'm|I am)\s+(\w+)",
+            "department": r"(?:I work in|I'm in|my department is)\s+(\w+)",
+            "tenure_years": r"(?:I've been here|working here for)\s+(\d+)\s+years?",
+        }
+
+        extracted = {}
+        for key, pattern in patterns.items():
+            match = re.search(pattern, last_user_msg, re.IGNORECASE)
+            if match:
+                value = match.group(1)
+                if key == "tenure_years":
+                    value = int(value)
+                extracted[key] = value
+                # Also store in legacy user memory
+                self.user_memory.set_user_info(user_id, key, value)
+
+        # Store in LangGraph Store for cross-thread persistence
+        if extracted:
+            namespace = (user_id, "profile")
+            existing = store.get(namespace, "info")
+            if existing:
+                # Merge with existing profile
+                profile = {**existing.value, **extracted}
+            else:
+                profile = extracted
+
+            store.put(namespace, "info", profile)
+
+        return {}
+
+    def chat(
+        self,
+        message: str,
+        user_id: str,
+        thread_id: Optional[str] = None
+    ) -> str:
+        """Send a message and get a response."""
+        if thread_id is None:
+            thread_id = f"{user_id}_default"
+
+        config = {
+            "configurable": {
+                "thread_id": thread_id,
+                "user_id": user_id
+            }
+        }
+
+        result = self.graph.invoke(
+            {
+                "messages": [HumanMessage(content=message)],
+                "user_id": user_id,
+                "context": ""
+            },
+            config
+        )
+
+        # Return the last AI message
+        for msg in reversed(result["messages"]):
+            if isinstance(msg, AIMessage):
+                return msg.content
+
+        return "I couldn't generate a response."
+
+    def get_conversation_history(
+        self,
+        user_id: str,
+        thread_id: Optional[str] = None
+    ) -> List[dict]:
+        """Get conversation history for a thread."""
+        if thread_id is None:
+            thread_id = f"{user_id}_default"
+
+        config = {"configurable": {"thread_id": thread_id}}
+
+        state = self.graph.get_state(config)
+
+        history = []
+        if state.values and "messages" in state.values:
+            for msg in state.values["messages"]:
+                history.append({
+                    "role": "user" if isinstance(msg, HumanMessage) else "assistant",
+                    "content": msg.content
+                })
+
+        return history
+```
+
+<Callout type="tip">
+  **Store vs UserMemory:** This example uses both the LangGraph Store (for
+  cross-thread data) and our custom UserMemory class. In production, you'd
+  likely use just the Store with a persistent backend like PostgresStore.
+</Callout>
+
+<Callout type="info">
+  **Analogy: Checkpointer vs Store** — Think of the Checkpointer as your conversation notebook—it records everything said in one meeting (thread). The Store is like your contact database—it remembers facts about people across all meetings. When Alice starts a new conversation (new thread), the Checkpointer starts fresh, but the Store still remembers she's in Engineering with 3 years tenure. This separation allows personalization without carrying over irrelevant conversation history.
+</Callout>
+
+---
+
+## 6.7 Testing the Agent
+
+{/* IMAGE_PLACEHOLDER: Create an interactive test scenario visualizer showing the 6 test cases as a timeline. Each test should be a card showing: (1) Test number and title, (2) User input as a speech bubble, (3) Expected behavior/outcome, (4) Visual indicator of what's being tested (e.g., RAG icon for test 1, memory icon for test 2, persistence icon for test 6). Make it interactive so clicking on a test card expands to show the full conversation flow and what's happening behind the scenes (which memories are accessed, what's retrieved from RAG, etc.). Add a "Run Test" button for each that simulates the test execution with animated progress. Use a vertical timeline layout with connecting lines between tests to show the progression. Place this at the start of section 6.7 to help learners understand the test strategy before running the code. */}
+
+Create a test script to verify everything works:
+
+```python title="test_agent.py"
+from agent import PolicyAssistant
+import time
+
+def test_policy_assistant():
+    """Test the policy assistant with various scenarios."""
+
+    # Initialize (this will index documents on first run)
+    print("🚀 Initializing Policy Assistant...")
+    assistant = PolicyAssistant()
+
+    # Index documents
+    from rag_pipeline import PolicyRAG
+    rag = PolicyRAG()
+    count = rag.index_documents("./documents")
+    print(f"📚 Indexed {count} document chunks\n")
+
+    # Test user: Alice
+    user_id = "alice"
+
+    print("=" * 60)
+    print("TEST 1: Basic Policy Question")
+    print("=" * 60)
+
+    response = assistant.chat(
+        "Can I work from home on Fridays?",
+        user_id
+    )
+    print(f"User: Can I work from home on Fridays?")
+    print(f"Assistant: {response}\n")
+
+    print("=" * 60)
+    print("TEST 2: User Introduces Themselves")
+    print("=" * 60)
+
+    response = assistant.chat(
+        "Hi, my name is Alice and I work in Engineering. I've been here for 3 years.",
+        user_id
+    )
+    print(f"User: Hi, my name is Alice and I work in Engineering. I've been here for 3 years.")
+    print(f"Assistant: {response}\n")
+
+    print("=" * 60)
+    print("TEST 3: Personalized Question (uses learned info)")
+    print("=" * 60)
+
+    response = assistant.chat(
+        "How many PTO days do I get?",
+        user_id
+    )
+    print(f"User: How many PTO days do I get?")
+    print(f"Assistant: {response}\n")
+
+    print("=" * 60)
+    print("TEST 4: Follow-up Question (tests conversation memory)")
+    print("=" * 60)
+
+    response = assistant.chat(
+        "What about sick days?",
+        user_id
+    )
+    print(f"User: What about sick days?")
+    print(f"Assistant: {response}\n")
+
+    print("=" * 60)
+    print("TEST 5: Expense Question")
+    print("=" * 60)
+
+    response = assistant.chat(
+        "I need to book a flight for a conference. What are the rules?",
+        user_id
+    )
+    print(f"User: I need to book a flight for a conference. What are the rules?")
+    print(f"Assistant: {response}\n")
+
+    # Test persistence
+    print("=" * 60)
+    print("TEST 6: Memory Persistence")
+    print("=" * 60)
+
+    # Create a new assistant instance (simulates restart)
+    print("Creating new assistant instance (simulating restart)...")
+    assistant2 = PolicyAssistant()
+
+    response = assistant2.chat(
+        "What's my name and how long have I been here?",
+        user_id
+    )
+    print(f"User: What's my name and how long have I been here?")
+    print(f"Assistant: {response}\n")
+
+    # Show conversation history
+    print("=" * 60)
+    print("CONVERSATION HISTORY")
+    print("=" * 60)
+
+    history = assistant2.get_conversation_history(user_id)
+    for i, msg in enumerate(history):
+        role = "👤 User" if msg["role"] == "user" else "🤖 Assistant"
+        content = msg["content"][:100] + "..." if len(msg["content"]) > 100 else msg["content"]
+        print(f"{i+1}. {role}: {content}")
+
+
+if __name__ == "__main__":
+    test_policy_assistant()
+```
+
+---
+
+## 6.8 Production Considerations
+
+{/* IMAGE_PLACEHOLDER: Create a comparison diagram showing Development vs Production architecture. Left side "Development": Show InMemoryStore (with warning icon), MemorySaver (with temporary icon), local ChromaDB. Right side "Production": Show PostgresStore (with checkmark), PostgresSaver (with checkmark), managed vector DB (Pinecone/Weaviate). Use arrows to show the migration path from dev to prod. Include metrics/stats showing the benefits of production setup: "Survives restarts ✓", "Scales horizontally ✓", "Multi-process safe ✓", "Backup & recovery ✓". Add a cost/complexity scale at the bottom showing the tradeoff. Use green for production-ready components and yellow/orange for development-only components. Place this at the start of section 6.8 to help learners understand the production migration path. */}
+
+For production deployments, replace the in-memory components with persistent backends:
+
+```python title="production_agent.py"
+from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.store.postgres import PostgresStore
+
+# Production checkpointer (conversation history)
+checkpointer = PostgresSaver.from_conn_string(
+    "postgresql://user:pass@localhost:5432/agent_db"
+)
+
+# Production store (cross-thread memory)
+store = PostgresStore.from_conn_string(
+    "postgresql://user:pass@localhost:5432/agent_db"
+)
+
+# Compile with production backends
+graph = workflow.compile(
+    checkpointer=checkpointer,
+    store=store
+)
+```
+
+<Callout type="warning">
+  **Database Setup:** Both PostgresSaver and PostgresStore require specific
+  tables. Run the setup migrations provided by LangGraph before first use. See
+  the [LangGraph Persistence
+  docs](https://langchain-ai.github.io/langgraph/concepts/persistence/) for
+  schema details.
+</Callout>
+
+### Alternative: Using Mem0 for Memory
+
+If you prefer a managed solution, [Mem0](https://mem0.ai) provides a production-ready memory layer:
+
+```python
+from mem0 import Memory
+
+# Initialize Mem0 (uses their hosted service or self-hosted)
+memory = Memory()
+
+# Add a memory
+memory.add(
+    "User prefers Python and works in Engineering",
+    user_id="alice",
+    metadata={"type": "preference"}
+)
+
+# Search memories
+results = memory.search(
+    "What programming language does the user prefer?",
+    user_id="alice"
+)
+
+# Get all memories for a user
+all_memories = memory.get_all(user_id="alice")
+```
+
+Mem0 handles memory extraction, deduplication, and conflict resolution automatically, making it a good choice when you want to focus on agent logic rather than memory infrastructure.
+
+---
+
+## 6.9 Advanced RAG Patterns
+
+{/* IMAGE_PLACEHOLDER: Create a visual comparison grid showing three advanced RAG patterns side-by-side. Each pattern should have: (1) Hybrid Search: Show two parallel paths (dense embeddings as colorful vectors, BM25 as keyword matching) merging into combined results with a weighted fusion formula visualization, (2) Contextual Compression: Show a document being "squeezed" through a filter that removes irrelevant sentences, with before/after text comparison, (3) Multi-Query Retrieval: Show one user query branching into 3 variations, each retrieving different documents, then deduplicating into a final result set. Use icons and visual metaphors (magnifying glass for search, filter funnel for compression, branching tree for multi-query). Add performance metrics for each (latency, accuracy improvement). Place this at the start of section 6.9 to give learners a visual overview of the patterns before diving into implementation details. */}
+
+Here are additional patterns to consider for production RAG systems:
+
+### Hybrid Search: Combining Dense and Sparse Retrieval
+
+Dense embeddings excel at semantic similarity but can miss exact keyword matches. Combine with sparse retrieval (BM25) for best results:
+
+{/* IMAGE_PLACEHOLDER: Create an interactive comparison tool showing Hybrid Search in action. Display a sample query "remote work Friday policy" with two side-by-side result panels: (1) Dense-only results showing semantically similar docs (may miss exact "Friday" mention), (2) Sparse-only results showing keyword matches (may miss semantic variations like "end of week"). Below, show the hybrid results combining both with adjustable alpha slider (0.0 = all sparse, 1.0 = all dense, 0.5 = balanced). Each result should show its dense score, sparse score, and combined score with visual bars. Highlight how hybrid catches both semantic matches AND exact keywords. Include example queries where each approach excels. Place this right after the heading to demonstrate the value of hybrid search before showing the implementation. */}
+
+<Callout type="info">
+  **Analogy: Google Search** — Modern search engines use hybrid retrieval! When you search "best pizza near me", they use semantic understanding (you want food recommendations) AND keyword matching (the word "pizza" must appear). Dense embeddings are like understanding intent; sparse retrieval is like exact word matching. Combining both gives you the best of both worlds—understanding AND precision.
+</Callout>
+
+```python
+from rank_bm25 import BM25Okapi
+import numpy as np
+
+class HybridSearch:
+    """Combines dense embeddings with BM25 sparse retrieval."""
+
+    def __init__(self, documents: List[str], embedder):
+        self.documents = documents
+        self.embedder = embedder
+
+        # Dense: embed all documents
+        self.embeddings = embedder.encode(documents)
+
+        # Sparse: build BM25 index
+        tokenized = [doc.lower().split() for doc in documents]
+        self.bm25 = BM25Okapi(tokenized)
+
+    def search(
+        self,
+        query: str,
+        n_results: int = 5,
+        alpha: float = 0.5  # Weight for dense vs sparse
+    ) -> List[Dict]:
+        """Hybrid search with configurable weighting."""
+
+        # Dense scores
+        query_embedding = self.embedder.encode(query)
+        dense_scores = np.dot(self.embeddings, query_embedding)
+        dense_scores = (dense_scores - dense_scores.min()) / (dense_scores.max() - dense_scores.min() + 1e-8)
+
+        # Sparse scores
+        sparse_scores = np.array(self.bm25.get_scores(query.lower().split()))
+        sparse_scores = (sparse_scores - sparse_scores.min()) / (sparse_scores.max() - sparse_scores.min() + 1e-8)
+
+        # Combine with Reciprocal Rank Fusion or weighted sum
+        combined = alpha * dense_scores + (1 - alpha) * sparse_scores
+
+        # Get top results
+        top_indices = np.argsort(combined)[::-1][:n_results]
+
+        return [
+            {"content": self.documents[i], "score": combined[i]}
+            for i in top_indices
+        ]
+```
+
+### Contextual Compression
+
+Reduce noise by compressing retrieved documents to only the relevant parts:
+
+{/* IMAGE_PLACEHOLDER: Create an animated before/after visualization of contextual compression. Show a long policy document (500+ words) on the left with most text grayed out and only 2-3 relevant sentences highlighted in color. An animated "compression" effect (like a squeeze or filter) transitions to the right side showing only the highlighted sentences extracted. Include metrics showing "Original: 487 tokens → Compressed: 89 tokens (81% reduction)". Add a side-by-side comparison of LLM responses using full doc vs compressed doc, showing that compressed version produces the same quality answer but faster. Use a visual metaphor of a juicer extracting the essential juice from fruit. Place this right after the heading to show the dramatic impact of compression before the code. */}
+
+```python
+class ContextualCompressor:
+    """Compresses documents to only relevant portions."""
+
+    def __init__(self):
+        self.client = OpenAI()
+
+    def compress(
+        self,
+        question: str,
+        documents: List[str]
+    ) -> List[str]:
+        """Extract only relevant portions from each document."""
+
+        compressed = []
+        for doc in documents:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{
+                    "role": "system",
+                    "content": """Extract ONLY the sentences from the document that are
+relevant to answering the question. Return the relevant sentences verbatim.
+If nothing is relevant, return "NOT_RELEVANT"."""
+                }, {
+                    "role": "user",
+                    "content": f"Question: {question}\n\nDocument:\n{doc}"
+                }]
+            )
+
+            result = response.choices[0].message.content
+            if result != "NOT_RELEVANT":
+                compressed.append(result)
+
+        return compressed
+```
+
+### Multi-Query Retrieval
+
+Generate multiple query variations to improve recall:
+
+{/* IMAGE_PLACEHOLDER: Create an interactive multi-query visualization showing query expansion in action. Start with a single user query "How many vacation days do I get?" in the center. Show it branching into 3 variations: "PTO allowance policy", "annual leave entitlement", "vacation time allocation". Each variation retrieves 3 documents (show as cards). Use a Venn diagram or set visualization to show overlapping and unique documents from each query. Highlight deduplicated final results with a count (e.g., "9 retrieved → 6 unique"). Add a "coverage improvement" metric showing how multi-query finds 40% more relevant docs than single query. Make it interactive so users can input their own query and see it expand. Use a tree/branching visual metaphor. Place this right after the heading to demonstrate the power of query expansion before the implementation code. */}
+
+```python
+class MultiQueryRetriever:
+    """Generates multiple queries to improve retrieval coverage."""
+
+    def __init__(self, base_retriever):
+        self.retriever = base_retriever
+        self.client = OpenAI()
+
+    def retrieve(
+        self,
+        question: str,
+        n_queries: int = 3
+    ) -> List[Dict]:
+        """Generate multiple queries and deduplicate results."""
+
+        # Generate query variations
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": f"""Generate {n_queries} different versions of the given question.
+Each version should approach the question from a different angle or use different terminology.
+Return as JSON: {{"queries": ["query1", "query2", ...]}}"""
+            }, {
+                "role": "user",
+                "content": question
+            }],
+            response_format={"type": "json_object"}
+        )
+
+        queries = json.loads(response.choices[0].message.content)["queries"]
+        queries.append(question)  # Include original
+
+        # Retrieve for each query
+        all_docs = []
+        seen_content = set()
+
+        for query in queries:
+            docs = self.retriever.search(query, n_results=3)
+            for doc in docs:
+                content_hash = hash(doc["content"])
+                if content_hash not in seen_content:
+                    seen_content.add(content_hash)
+                    all_docs.append(doc)
+
+        return all_docs
+```
+
+<Callout type="info">
+  **RAG Evaluation:** Always measure your RAG system's performance. Key metrics
+  include: (1) **Retrieval precision** - are retrieved docs relevant? (2)
+  **Answer faithfulness** - is the answer grounded in retrieved docs? (3)
+  **Answer relevance** - does the answer address the question? Tools like RAGAS
+  and TruLens can automate this evaluation.
+</Callout>
+
+---
+
+<Exercise
+  title="Extend the Policy Assistant"
+  difficulty="intermediate"
+  objectives={[
+    "Add episodic memory to track past questions and answers",
+    "Implement document grading to filter irrelevant retrievals",
+    "Add query rewriting when initial retrieval fails",
+    "Implement a 'similar questions' feature using vector search",
+    "Add support for multiple conversation threads per user"
+  ]}
+  hints={[
+    "Use the EpisodicMemory class from the main module",
+    "Store each Q&A pair as an episode with the question as the searchable summary",
+    "Use the AgenticRAG class as a starting point for document grading",
+    "Thread IDs can include a topic or timestamp for organization",
+    "Consider privacy implications when building admin features"
+  ]}
+>
+
+### Bonus Challenges
+
+1. **Hybrid Search**: Combine BM25 with dense embeddings for better retrieval on policy-specific terminology
+
+2. **Proactive Suggestions**: If a user asks about PTO, proactively mention related policies (sick leave, holidays)
+
+3. **Confidence Scoring**: Add confidence scores to responses based on RAG relevance scores and document grading
+
+4. **Multi-turn Clarification**: If the query is ambiguous, ask clarifying questions before searching
+
+5. **Query Routing**: Route simple factual queries directly to RAG, but decompose complex queries into sub-questions
+
+</Exercise>
+
+---
+
+<ProgressCheckpoint
+  title="Lab Checkpoint"
+  questions={[
+    {
+      question:
+        "Why do we use SQLiteSaver instead of MemorySaver in production?",
+      answer:
+        "MemorySaver stores checkpoints in memory, which is lost when the process restarts. SQLiteSaver persists to disk, allowing conversation history to survive restarts and be shared across processes.",
+    },
+    {
+      question: "What's the difference between the Checkpointer and the Store?",
+      answer:
+        "Checkpointer saves conversation state within a single thread (short-term memory). Store persists data across all threads for a user (long-term memory like preferences). Use checkpointer for chat history, Store for user profiles.",
+    },
+    {
+      question:
+        "What is document grading in Agentic RAG and why is it important?",
+      answer:
+        "Document grading uses an LLM to evaluate whether retrieved documents are actually relevant to the question. It's important because vector similarity doesn't guarantee relevance—a document might be semantically similar but not contain the answer. Grading filters out noise before generation.",
+    },
+    {
+      question: "When should you use query rewriting in a RAG pipeline?",
+      answer:
+        "Use query rewriting when initial retrieval returns no relevant documents (after grading). The rewriter generates alternative phrasings or uses different terminology to find documents that the original query missed. It's a self-correction mechanism.",
+    },
+    {
+      question: "How does the agent personalize responses for different users?",
+      answer:
+        "The agent stores user information (name, department, tenure) in both UserMemory and the LangGraph Store. When building context, it retrieves the user profile and includes it in the system prompt, allowing the LLM to personalize responses (e.g., calculating PTO based on tenure).",
+    },
+    {
+      question: "What's the purpose of the 'learn' node in the graph?",
+      answer:
+        "The learn node extracts user information from conversations and stores it in both semantic memory and the LangGraph Store. This allows the agent to build a user profile over time without explicit data entry.",
+    },
+  ]}
+/>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Not persisting the ChromaDB client",
+      fix: "Use PersistentClient instead of Client to save embeddings to disk",
+    },
+    {
+      mistake: "Forgetting to pass thread_id in config",
+      fix: "Always include thread_id in the configurable dict - without it, checkpointing won't work",
+    },
+    {
+      mistake: "Indexing documents on every startup",
+      fix: "Check if documents are already indexed, or use upsert to handle re-indexing gracefully",
+    },
+    {
+      mistake: "Including too much context in the prompt",
+      fix: "Limit RAG results to 3-5 chunks and summarize user profile to essential facts",
+    },
+    {
+      mistake: "Confusing Store and Checkpointer",
+      fix: "Checkpointer = conversation history within a thread. Store = cross-thread data like user profiles",
+    },
+    {
+      mistake: "Using InMemoryStore in production",
+      fix: "InMemoryStore loses data on restart. Use PostgresStore or a persistent backend for production",
+    },
+    {
+      mistake: "Skipping document grading for all queries",
+      fix: "Document grading adds latency. Use it selectively for complex queries where accuracy matters most",
+    },
+    {
+      mistake: "Not setting a retry limit for query rewriting",
+      fix: "Always set max_retries to prevent infinite loops. 2-3 retries is usually sufficient",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Combined RAG retrieval with semantic user memory for personalized responses",
+    "Implemented Agentic RAG with document grading and query rewriting for self-correction",
+    "Used LangGraph checkpointing (SQLiteSaver) for persistent conversation history",
+    "Implemented LangGraph Store for cross-thread user profile persistence",
+    "Implemented automatic user preference extraction from conversations",
+    "Built a complete agent with retrieve → respond → learn workflow",
+    "Explored advanced patterns: hybrid search, contextual compression, multi-query retrieval",
+    "Tested memory persistence across agent restarts",
+  ]}
+/>
+
+---
+
+## 🔗 Related Resources
+
+- [Day 17: RAG Fundamentals](/modules/day-17-rag) — Chunking, embeddings, and vector databases
+- [Day 20: Agent Memory Systems](/modules/day-20-memory) — Memory types and architecture
+- [Day 10: LangGraph Basics](/modules/day-10-langgraph-basics) — Graph construction and state management
+- [LangGraph Persistence Docs](https://langchain-ai.github.io/langgraph/concepts/persistence/) — Official checkpointing guide
+- [LangGraph Long-Term Memory](https://blog.langchain.com/launching-long-term-memory-support-in-langgraph/) — Cross-thread memory with Store API
+- [Agentic RAG Tutorial](https://sajalsharma.com/posts/comprehensive-agentic-rag) — Comprehensive guide to query routing and self-correction
+- [RAGAS: RAG Evaluation](https://docs.ragas.io/) — Framework for evaluating RAG pipelines
+- [Mem0 Documentation](https://docs.mem0.ai/) — Alternative managed memory solution
+
+**Tomorrow**: We'll dive deeper into Agent Memory Systems—exploring working, episodic, semantic, and procedural memory with LangGraph checkpointing.

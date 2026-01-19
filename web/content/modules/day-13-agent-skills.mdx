@@ -1,0 +1,655 @@
+---
+title: "Agent Skills Standard"
+description: "Master the open standard for modular AI capabilities. Learn progressive disclosure, skill packaging, and cross-platform agent interoperability."
+day: 13
+week: 3
+tags:
+  [
+    "agent-skills",
+    "progressive-disclosure",
+    "modularity",
+    "interoperability",
+    "standards",
+  ]
+---
+
+# Agent Skills Standard
+
+## The Context Window Problem
+
+Every agent faces a fundamental constraint: **context window bloat**. Loading all possible instructions upfront wastes tokens and dilutes focus.
+
+```python
+# ❌ Traditional approach: Load everything
+system_prompt = """
+You are an AI assistant with these capabilities:
+
+1. Code Review (500 words of instructions...)
+2. Database Design (400 words of instructions...)
+3. API Documentation (350 words of instructions...)
+4. Security Audit (450 words of instructions...)
+5. Performance Optimization (400 words of instructions...)
+... (20 more capabilities)
+
+Total: 15,000 tokens consumed before user even asks a question!
+"""
+```
+
+**Agent Skills** solves this with **progressive disclosure**: load only what you need, when you need it.
+
+<ConceptVisual
+  src="/images/progressive_disclosure_architecture.png"
+  alt="Progressive disclosure showing lightweight metadata vs full skill loading"
+  caption="Skills load metadata first (35 tokens), full instructions only when activated (2500+ tokens)"
+/>
+
+<Callout type="insight">
+  **Key Innovation**: Skills consume only 30-50 tokens until activated, then
+  inject full instructions on-demand. This enables agents to access hundreds of
+  specialized capabilities without context bloat.
+</Callout>
+
+<SkillDiscoveryDemo />
+
+## What is a Skill?
+
+A **skill** is a self-contained directory containing:
+
+1. **SKILL.md**: Instructions and metadata
+2. **scripts/**: Executable tools
+3. **references/**: Documentation and examples
+4. **assets/**: Templates and resources
+
+<ConceptVisual
+  src="/images/skill_structure_diagram.png"
+  alt="Skill Directory Structure"
+  caption="Standard skill anatomy: Core instructions, scripts, docs, and assets."
+/>
+
+```
+my-skill/
+├── SKILL.md              # Core instructions
+├── scripts/
+│   ├── analyze.py        # Executable script
+│   └── validate.sh       # Helper script
+├── references/
+│   ├── examples.md       # Usage examples
+│   └── api-docs.md       # API reference
+└── assets/
+    └── template.json     # Code template
+```
+
+## Creating Your First Skill
+
+### Step 1: Define SKILL.md
+
+````markdown
+---
+name: "code-reviewer"
+description: "Performs comprehensive code reviews following team standards"
+---
+
+# Code Review Skill
+
+## Purpose
+
+Review code for security, performance, and maintainability issues.
+
+## Process
+
+1. **Security Analysis**
+   - Check for SQL injection vulnerabilities
+   - Verify input validation
+   - Review authentication/authorization
+   - Scan for hardcoded secrets
+
+2. **Performance Review**
+   - Identify N+1 queries
+   - Check for inefficient algorithms
+   - Review caching strategies
+   - Analyze database indexes
+
+3. **Code Quality**
+   - Verify naming conventions
+   - Check error handling
+   - Review test coverage
+   - Assess documentation
+
+## Output Format
+
+```markdown
+## Security Issues
+
+- [HIGH] SQL injection in login.py:45
+- [MEDIUM] Missing input validation in api.py:123
+
+## Performance Concerns
+
+- [HIGH] N+1 query in users_controller.py:67
+- [LOW] Missing index on users.email
+
+## Code Quality
+
+- [MEDIUM] Inconsistent naming in utils.py
+- [LOW] Missing docstrings in helpers.py
+
+## Recommendations
+
+1. Use parameterized queries
+2. Add database index
+3. Implement input validation
+```
+````
+
+## Available Resources
+
+- `references/security-checklist.md`: Security best practices
+- `scripts/analyze.py`: Static analysis tool
+- `assets/review-template.md`: Review template
+
+````
+
+### Step 2: Add Supporting Resources
+
+**references/security-checklist.md**:
+```markdown
+# Security Checklist
+
+## Input Validation
+- [ ] All user inputs are validated
+- [ ] SQL queries use parameterized statements
+- [ ] File uploads are restricted by type
+- [ ] Path traversal is prevented
+
+## Authentication
+- [ ] Passwords are hashed (bcrypt/argon2)
+- [ ] Session tokens are secure
+- [ ] Rate limiting is implemented
+- [ ] MFA is available
+
+## Data Protection
+- [ ] Sensitive data is encrypted at rest
+- [ ] HTTPS is enforced
+- [ ] API keys are not hardcoded
+- [ ] Logs don't contain PII
+````
+
+**scripts/analyze.py**:
+
+```python
+#!/usr/bin/env python3
+"""Static analysis tool for code review"""
+
+import sys
+import re
+from pathlib import Path
+
+def check_sql_injection(code: str) -> list:
+    """Detect potential SQL injection"""
+    issues = []
+
+    # Pattern: f"SELECT ... {variable}"
+    pattern = r'f["\'].*SELECT.*\{.*\}.*["\']'
+    matches = re.finditer(pattern, code, re.IGNORECASE)
+
+    for match in matches:
+        issues.append({
+            "type": "SQL Injection",
+            "severity": "HIGH",
+            "line": code[:match.start()].count('\n') + 1,
+            "code": match.group()
+        })
+
+    return issues
+
+def check_hardcoded_secrets(code: str) -> list:
+    """Detect hardcoded secrets"""
+    issues = []
+
+    patterns = [
+        (r'password\s*=\s*["\'][^"\']+["\']', "Hardcoded Password"),
+        (r'api_key\s*=\s*["\'][^"\']+["\']', "Hardcoded API Key"),
+        (r'secret\s*=\s*["\'][^"\']+["\']', "Hardcoded Secret"),
+    ]
+
+    for pattern, issue_type in patterns:
+        matches = re.finditer(pattern, code, re.IGNORECASE)
+        for match in matches:
+            issues.append({
+                "type": issue_type,
+                "severity": "HIGH",
+                "line": code[:match.start()].count('\n') + 1,
+                "code": match.group()
+            })
+
+    return issues
+
+def analyze_file(filepath: str):
+    """Analyze a single file"""
+    with open(filepath, 'r') as f:
+        code = f.read()
+
+    issues = []
+    issues.extend(check_sql_injection(code))
+    issues.extend(check_hardcoded_secrets(code))
+
+    return issues
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: analyze.py <file>")
+        sys.exit(1)
+
+    issues = analyze_file(sys.argv[1])
+
+    if issues:
+        print(f"Found {len(issues)} issues:")
+        for issue in issues:
+            print(f"  [{issue['severity']}] {issue['type']} at line {issue['line']}")
+    else:
+        print("No issues found!")
+```
+
+### Step 3: Install the Skill
+
+```bash
+# Create skill directory
+mkdir -p ~/.gemini/skills/code-reviewer
+
+# Copy skill files
+cp -r my-skill/* ~/.gemini/skills/code-reviewer/
+
+# Verify installation
+gemini skills list
+```
+
+## Using Skills in Agents
+
+### Discovery Phase (Lightweight)
+
+```python
+from typing import List, Dict
+
+class SkillRegistry:
+    """Manages available skills"""
+
+    def __init__(self, skills_dir: str = "~/.gemini/skills"):
+        self.skills_dir = Path(skills_dir).expanduser()
+        self.skills = self._discover_skills()
+
+    def _discover_skills(self) -> List[Dict]:
+        """Discover all available skills"""
+        skills = []
+
+        for skill_path in self.skills_dir.iterdir():
+            if not skill_path.is_dir():
+                continue
+
+            skill_md = skill_path / "SKILL.md"
+            if not skill_md.exists():
+                continue
+
+            # Parse frontmatter
+            with open(skill_md, 'r') as f:
+                content = f.read()
+
+            # Extract metadata (simplified)
+            name = self._extract_metadata(content, "name")
+            description = self._extract_metadata(content, "description")
+
+            skills.append({
+                "name": name,
+                "description": description,
+                "path": skill_path,
+                "tokens": 35  # Approximate token cost for metadata
+            })
+
+        return skills
+
+    def _extract_metadata(self, content: str, key: str) -> str:
+        """Extract metadata from frontmatter"""
+        pattern = f'{key}:\\s*"([^"]+)"'
+        match = re.search(pattern, content)
+        return match.group(1) if match else ""
+
+    def get_skill_catalog(self) -> str:
+        """Get lightweight catalog for agent context"""
+        catalog = "## Available Skills\n\n"
+
+        for skill in self.skills:
+            catalog += f"- **{skill['name']}**: {skill['description']}\n"
+
+        return catalog  # Only ~200 tokens for 20 skills!
+
+# Usage
+registry = SkillRegistry()
+catalog = registry.get_skill_catalog()
+
+print(catalog)
+# Output:
+# ## Available Skills
+#
+# - **code-reviewer**: Performs comprehensive code reviews
+# - **api-designer**: Designs RESTful APIs following best practices
+# - **db-optimizer**: Optimizes database queries and schemas
+# ...
+```
+
+### Activation Phase (Full Context)
+
+```python
+class SkillActivator:
+    """Activates skills on-demand"""
+
+    def __init__(self, registry: SkillRegistry):
+        self.registry = registry
+
+    def activate(self, skill_name: str) -> Dict:
+        """Load full skill context"""
+
+        # Find skill
+        skill = next(
+            (s for s in self.registry.skills if s["name"] == skill_name),
+            None
+        )
+
+        if not skill:
+            raise ValueError(f"Skill '{skill_name}' not found")
+
+        skill_path = skill["path"]
+
+        # Load SKILL.md
+        with open(skill_path / "SKILL.md", 'r') as f:
+            instructions = f.read()
+
+        # List available resources
+        resources = {
+            "scripts": list((skill_path / "scripts").glob("*")) if (skill_path / "scripts").exists() else [],
+            "references": list((skill_path / "references").glob("*")) if (skill_path / "references").exists() else [],
+            "assets": list((skill_path / "assets").glob("*")) if (skill_path / "assets").exists() else [],
+        }
+
+        # Build file tree
+        file_tree = self._build_file_tree(skill_path)
+
+        return {
+            "name": skill_name,
+            "instructions": instructions,
+            "resources": resources,
+            "file_tree": file_tree,
+            "path": skill_path
+        }
+
+    def _build_file_tree(self, path: Path, prefix: str = "") -> str:
+        """Build visual file tree"""
+        tree = ""
+        items = sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name))
+
+        for i, item in enumerate(items):
+            is_last = i == len(items) - 1
+            connector = "└── " if is_last else "├── "
+            tree += f"{prefix}{connector}{item.name}\n"
+
+            if item.is_dir() and item.name in ["scripts", "references", "assets"]:
+                extension = "    " if is_last else "│   "
+                tree += self._build_file_tree(item, prefix + extension)
+
+        return tree
+
+# Usage
+activator = SkillActivator(registry)
+
+# Agent decides to use code-reviewer skill
+activated = activator.activate("code-reviewer")
+
+print(f"Activated: {activated['name']}")
+print(f"Instructions: {len(activated['instructions'])} chars")
+print(f"File tree:\n{activated['file_tree']}")
+```
+
+## Building an Agent with Skills
+
+````python
+from langchain_openai import ChatOpenAI
+from langchain.tools import tool
+
+class SkillAgent:
+    """Agent that uses skills on-demand"""
+
+    def __init__(self):
+        self.llm = ChatOpenAI(model="gpt-4o", temperature=0)
+        self.registry = SkillRegistry()
+        self.activator = SkillActivator(self.registry)
+        self.active_skills = {}
+
+    @tool
+    def activate_skill(self, skill_name: str) -> str:
+        """Activate a skill to access its full instructions"""
+        activated = self.activator.activate(skill_name)
+        self.active_skills[skill_name] = activated
+        return f"Activated {skill_name}. Instructions loaded."
+
+    @tool
+    def execute_skill_script(self, skill_name: str, script_name: str, args: str = "") -> str:
+        """Execute a script from an activated skill"""
+        if skill_name not in self.active_skills:
+            return f"Error: Skill '{skill_name}' not activated"
+
+        skill = self.active_skills[skill_name]
+        script_path = skill["path"] / "scripts" / script_name
+
+        if not script_path.exists():
+            return f"Error: Script '{script_name}' not found"
+
+        # Execute script
+        import subprocess
+        result = subprocess.run(
+            [str(script_path)] + args.split(),
+            capture_output=True,
+            text=True
+        )
+
+        return result.stdout if result.returncode == 0 else result.stderr
+
+    def run(self, task: str) -> str:
+        """Execute task using skills as needed"""
+
+        # Build initial context with skill catalog
+        catalog = self.registry.get_skill_catalog()
+
+        system_prompt = f"""
+You are an AI assistant with access to specialized skills.
+
+{catalog}
+
+To use a skill:
+1. Call activate_skill(skill_name) to load full instructions
+2. Follow the skill's instructions
+3. Use execute_skill_script() if needed
+
+Current task: {task}
+"""
+
+        # Create agent with tools
+        from langchain.agents import create_openai_functions_agent, AgentExecutor
+        from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            MessagesPlaceholder(variable_name="chat_history", optional=True),
+            ("human", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ])
+
+        tools = [self.activate_skill, self.execute_skill_script]
+        agent = create_openai_functions_agent(self.llm, tools, prompt)
+        executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+
+        result = executor.invoke({"input": task})
+        return result["output"]
+
+# Usage
+agent = SkillAgent()
+
+result = agent.run("""
+Review this Python code for security issues:
+
+```python
+def login(username, password):
+    query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
+    return db.execute(query)
+````
+
+""")
+
+print(result)
+
+```
+
+**Agent Execution**:
+```
+
+> Entering new AgentExecutor chain...
+
+Thought: I need to review code for security. The code-reviewer skill can help.
+
+Action: activate_skill
+Action Input: code-reviewer
+
+Observation: Activated code-reviewer. Instructions loaded.
+
+Thought: Now I'll follow the skill's security analysis process.
+
+Action: execute_skill_script
+Action Input: code-reviewer analyze.py temp_code.py
+
+Observation: Found 1 issues:
+[HIGH] SQL Injection at line 2
+
+Thought: I have enough information to provide a comprehensive review.
+
+Final Answer:
+
+## Security Issues
+
+- [HIGH] SQL injection vulnerability in line 2
+  - The code uses f-string formatting to build SQL queries
+  - This allows attackers to inject malicious SQL code
+
+## Recommendations
+
+1. Use parameterized queries:
+
+   ```python
+   query = "SELECT * FROM users WHERE username=? AND password=?"
+   return db.execute(query, (username, password))
+   ```
+
+2. Hash passwords (never store plaintext):
+   ```python
+   import bcrypt
+   hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+   ```
+
+> Finished chain.
+
+````
+
+## Skill Precedence
+
+Skills can be installed at three levels:
+
+```python
+class SkillRegistry:
+    def __init__(self):
+        self.skill_paths = [
+            Path("~/.gemini/skills").expanduser(),      # User skills
+            Path(".gemini/skills"),                      # Workspace skills
+            Path("/usr/share/gemini/skills"),           # Extension skills
+        ]
+
+    def _discover_skills(self) -> List[Dict]:
+        """Discover skills with precedence: Workspace > User > Extension"""
+        skills_by_name = {}
+
+        # Reverse order so workspace overrides user overrides extension
+        for skills_dir in reversed(self.skill_paths):
+            if not skills_dir.exists():
+                continue
+
+            for skill_path in skills_dir.iterdir():
+                if not skill_path.is_dir():
+                    continue
+
+                skill_md = skill_path / "SKILL.md"
+                if not skill_md.exists():
+                    continue
+
+                name = self._extract_name(skill_md)
+                skills_by_name[name] = {
+                    "name": name,
+                    "path": skill_path,
+                    "source": skills_dir.name
+                }
+
+        return list(skills_by_name.values())
+````
+
+## Exercise: Build a Custom Skill
+
+<Exercise
+  title="Database Design Skill"
+  difficulty="intermediate"
+  timeEstimate="60 minutes"
+>
+
+Create a skill that helps design database schemas:
+
+**Requirements**:
+
+1. Create SKILL.md with design process
+2. Add references/normalization-guide.md
+3. Create scripts/validate-schema.py
+4. Add assets/schema-template.sql
+5. Test with SkillAgent
+
+**Acceptance Criteria**:
+
+- Skill activates successfully
+- Provides step-by-step design guidance
+- Validation script catches common issues
+- Template generates valid SQL
+
+**Extension Challenge**:
+
+- Add support for multiple database types (PostgreSQL, MySQL, MongoDB)
+- Create interactive schema visualizer
+- Implement migration generator
+
+</Exercise>
+
+## Key Takeaways
+
+<Callout type="success">
+
+**What You Learned**:
+
+1. **Progressive disclosure** prevents context window bloat
+2. **Skills are modular** and can be shared across platforms
+3. **Activation is on-demand**, consuming tokens only when needed
+4. **Skills include** instructions, scripts, references, and assets
+5. **Precedence rules** allow workspace-specific customization
+
+</Callout>
+
+## Next Steps
+
+Next, we'll explore the **Router Lab**—building intelligent routing systems that direct queries to specialized agents.
+
+<PageNavigation
+  prev={{
+    title: "Agentic Context Engineering",
+    href: "/modules/day-12-agentic-context-engineering",
+  }}
+  next={{ title: "Router Lab", href: "/modules/day-14-router-lab" }}
+/>

@@ -1,32 +1,250 @@
 ---
 title: "Day 00: Environment Setup"
-description: "Prepare your local environment and mindset for the 30-day Agentic AI journey."
+description: "Prepare your local environment and mindset for the 90-day Agentic AI journey."
 week: 1
 day: 0
 ---
 
+<ReadingTime minutes={15} />
+
+<SkillLevel level="beginner" description="No prior setup required" />
+
+<LearningObjectives
+  objectives={[
+    "Set up a complete development environment for AI agent development",
+    "Configure API access for OpenAI, Anthropic, and other providers",
+    "Understand the 'agentic mindset' and how it differs from traditional development",
+    "Verify your installation is ready for Day 01",
+  ]}
+/>
+
 # Day 00: Environment Setup & Prerequisites
 
-Welcome to **Agentic Engineer**. Before we dive into the code on Day 01, we need to ensure your machine and your mind are ready.
+Welcome to **Agentic Engineer**—a comprehensive 90-day journey to mastering production-grade AI agents. Before we dive into the code on Day 01, we need to ensure your machine and your mind are ready.
+
+## Your 90-Day Journey
+
+<ConceptVisual
+  src="/images/course_roadmap_journey.png"
+  alt="90-Day Agentic Engineer Roadmap"
+  caption="Your journey from Foundations (Month 1) to Multi-Agent Systems (Month 2) and Advanced Architectures (Month 3)."
+/>
+
+This course spans **3 months (12 weeks)** of structured learning:
+
+<Mermaid
+  chart={`
+timeline
+    title Agentic Engineer: 90-Day Curriculum
+    section Month 1
+        Days 1-30 : Foundations & Core Concepts
+                  : LLM fundamentals
+                  : Prompt engineering
+                  : Single-agent systems
+                  : RAG & Memory
+    section Month 2
+        Days 31-60 : Multi-Agent Systems
+                   : Orchestration patterns
+                   : Security & Observability
+                   : Production reliability
+    section Month 3
+        Days 61-90 : Advanced Architectures
+                   : Agent swarms
+                   : Enterprise deployment
+                   : Capstone projects
+`}
+/>
+
+By the end of this course, you'll have built multiple production-ready agents, including a Deep Research Agent, a Kubernetes Operator Agent, and an AgentOS Ecosystem.
+
+### What You'll Build
+
+Throughout this 90-day journey, you'll complete increasingly complex projects:
+
+<ComparisonTable
+  title="Course Projects Overview"
+  items={[
+    {
+      name: "Mini Projects",
+      description: "Weeks 1-4",
+      icon: "🔨",
+      features: {
+        complexity: "Beginner",
+        duration: "1-2 days each",
+        skills: "Core fundamentals",
+        examples: "Prompt Library, Memory Service",
+      },
+    },
+    {
+      name: "Specialized Projects",
+      description: "Weeks 5-10",
+      icon: "⚙️",
+      features: {
+        complexity: "Intermediate",
+        duration: "3-5 days each",
+        skills: "Production patterns",
+        examples: "Privacy Analyst, Refactoring Agent",
+      },
+    },
+    {
+      name: "Capstone Projects",
+      description: "Weeks 8-12",
+      icon: "🏆",
+      highlight: true,
+      features: {
+        complexity: "Advanced",
+        duration: "1-2 weeks each",
+        skills: "Full-stack agent systems",
+        examples: "Deep Research Agent, K8s Operator",
+      },
+    },
+  ]}
+  features={[
+    { key: "complexity", label: "Complexity Level" },
+    { key: "duration", label: "Time Investment" },
+    { key: "skills", label: "Skills Developed" },
+    { key: "examples", label: "Example Projects" },
+  ]}
+  highlightBest={false}
+/>
 
 ## The Agentic Mindset
 
-Building Agents is different from building traditional software.
+Building Agents is different from building traditional software. This isn't just a new framework to learn—it's a fundamental shift in how you think about software systems.
 
-- **Deterministic vs. Probabilistic:** Traditional code is deterministic (1+1=2). LLMs are probabilistic (1+1 might be 2, or "Two", or a poem about math). You must design for uncertainty.
-- **Tools, not Features:** You aren't just building features; you are building _tools_ for an AI to use.
-- **Iteration is Key:** Your first prompt will fail. Your first agent loop will get stuck. This isn't a bug; it's the process.
+<Callout type="info">
+  **The Pilot Analogy:** Think of yourself as an aircraft designer, not a pilot.
+  Traditional developers "fly" their code—they control every action. Agentic
+  engineers design the cockpit, instruments, and autopilot systems. The AI
+  "flies" the plane, but you determine what it can see, what controls it has
+  access to, and what guardrails keep it safe.
+</Callout>
+
+<Mermaid
+  chart={`
+flowchart LR
+    subgraph Traditional["Traditional Software"]
+        I1[Input] --> P1[Deterministic Logic]
+        P1 --> O1[Predictable Output]
+    end
+    
+    subgraph Agentic["Agentic Software"]
+        I2[Input] --> P2[LLM Reasoning]
+        P2 --> D{Decision}
+        D --> T1[Tool A]
+        D --> T2[Tool B]
+        D --> T3[Reflect & Retry]
+        T1 --> O2[Variable Output]
+        T2 --> O2
+        T3 --> P2
+    end
+    
+    style Traditional fill:#1e293b,stroke:#475569
+    style Agentic fill:#1e3a5f,stroke:#3b82f6
+`}
+/>
+
+### Key Mindset Shifts
+
+<SideBySide
+  title="Traditional vs. Agentic Development"
+  left={{
+    title: "Traditional Software",
+    icon: "🔧",
+    color: "border-zinc-500/20 bg-zinc-500/5",
+    items: [
+      "Deterministic: 1+1 always equals 2",
+      "You build features users interact with directly",
+      "Bugs are failures to fix immediately",
+      "Test once, deploy, done",
+      "Predictable execution paths",
+    ],
+  }}
+  right={{
+    title: "Agentic Software",
+    icon: "🤖",
+    color: "border-blue-500/20 bg-blue-500/5",
+    items: [
+      "Probabilistic: 1+1 might be '2', 'Two', or a poem",
+      "You build tools for an AI to use",
+      "First attempts failing is the process",
+      "Iterate rapidly, embrace experimentation",
+      "Variable outputs requiring guardrails",
+    ],
+  }}
+/>
+
+- **Deterministic vs. Probabilistic:** Traditional code is deterministic (1+1=2). LLMs are probabilistic (1+1 might be 2, or "Two", or a poem about math). You must design for uncertainty and build guardrails around probabilistic outputs.
+- **Tools, not Features:** You aren't just building features; you are building _tools_ for an AI to use. Think of yourself as designing an API that an intelligent system will call.
+- **Iteration is Key:** Your first prompt will fail. Your first agent loop will get stuck. This isn't a bug; it's the process. Embrace rapid experimentation.
+- **Reliability Through Structure:** While LLMs are probabilistic, you can achieve reliable behavior through structured outputs, validation layers, and well-defined decision boundaries—similar to how weather forecasting builds reliable warning systems on probabilistic models.
 
 <Callout type="important">
   **Goal:** strict types, loose prompts. Be rigid with your infrastructure but
-  flexible with your intelligence layer.
+  flexible with your intelligence layer. Your code should validate and constrain
+  the AI's outputs, not the other way around.
 </Callout>
+
+Think of it like this: a spreadsheet is deterministic—same inputs always produce the same result. A conversation with an expert advisor is probabilistic—even asking the same question twice may yield different wording, but the intent stays consistent. Your job is to build systems that harness this adaptive intelligence while maintaining predictable, safe behavior.
 
 This shift requires a fundamental change in how we approach problems:
 
 ![The Agentic Mindset: Deterministic vs Probabilistic](/images/agentic-mindset.png)
 
+### The Agent Loop in Action
+
+To visualize how agents think and act, here's an interactive demonstration of the core agent loop you'll be building throughout this course:
+
+<ThinkingLoop />
+
+This **Perception → Reasoning → Action → Memory** cycle is the heartbeat of every agent you'll build. Understanding this loop is essential before diving into code.
+
+## Learning Path Overview
+
+Before diving into setup, here's how your 90-day journey is structured to build skills progressively:
+
+<Mermaid
+  chart={`
+flowchart TB
+    subgraph M1["Month 1: Foundations"]
+        W1[Week 1-2: LLM Basics & Prompting]
+        W2[Week 3-4: Single Agents & Tools]
+        W1 --> W2
+    end
+    
+    subgraph M2["Month 2: Production"]
+        W3[Week 5-6: Multi-Agent Systems]
+        W4[Week 7-8: Security & Reliability]
+        W3 --> W4
+    end
+    
+    subgraph M3["Month 3: Mastery"]
+        W5[Week 9-10: Advanced Patterns]
+        W6[Week 11-12: Capstone Projects]
+        W5 --> W6
+    end
+    
+    M1 --> M2 --> M3
+    
+    style M1 fill:#1e3a5f,stroke:#3b82f6
+    style M2 fill:#1e3a5f,stroke:#3b82f6
+    style M3 fill:#1e3a5f,stroke:#3b82f6
+`}
+/>
+
+<Callout type="tip">
+  **Pacing Tip:** Each day's content is designed for 1-2 hours of focused
+  learning. If you're working full-time, consider spreading each "day" across
+  2-3 actual days. The goal is deep understanding, not speed.
+</Callout>
+
 ## System Prerequisites
+
+<ConceptVisual
+  src="/images/prerequisites_pillars.png"
+  alt="Prerequisites: Node.js, Python, Docker"
+  caption="The three pillars of your Agent Development Environment: Node.js for frontend/API, Python for agent logic, and Docker for containerization."
+/>
 
 We strongly recommend a Unix-based environment (macOS or Linux). Windows users should use WSL2.
 
@@ -53,16 +271,36 @@ nvm use --lts
 We use Python for backend agents, graph logic, and data processing.
 
 - **Requirement:** Python 3.10 or higher.
-- **Recommendation:** Use `uv` (a fast Python package manager) or `conda`.
+- **Recommendation:** Use `uv` (a blazing-fast Python package manager written in Rust).
 
 ```bash
-# Install uv (Recommended for speed)
+# Install uv (Recommended - replaces pip, venv, pyenv, and more)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# OR use standard pip/venv
+# Create a new project with uv
+uv init my-agent-project
+cd my-agent-project
+uv add langgraph langchain-openai
+
+# OR use standard pip/venv (slower but familiar)
 python3 -m venv venv
 source venv/bin/activate
+pip install langgraph langchain-openai
 ```
+
+<Callout type="tip">
+  **Why uv?** It's 10-100x faster than pip, handles Python version management,
+  and creates isolated environments automatically. It's quickly becoming the
+  standard for Python development in 2025. UV can replace pip, poetry, pyenv,
+  and virtualenv—all in one tool.
+</Callout>
+
+**Key uv commands you'll use:**
+
+- `uv init` — Initialize a new project with `pyproject.toml`
+- `uv add <package>` — Add dependencies (like `pip install`)
+- `uv sync` — Install all dependencies from lock file
+- `uv python install 3.12` — Install specific Python versions
 
 </Step>
 
@@ -78,24 +316,66 @@ Required for running local LLMs (Ollama) and sandboxed environments (E2B simulat
 
 ## API Access
 
+<ConceptVisual
+  src="/images/api_providers_flow.png"
+  alt="API Providers Integration Flow"
+  caption="Your agent orchestrates intelligence from OpenAI/Anthropic, searches via Tavily, and is monitored by LangSmith."
+/>
+
 You will need access to foundation models. We refrain from using "free tiers" for production-grade agent engineering as rate limits will block your progress.
 
-| Provider      | Purpose                                    | Key Variable        |
-| :------------ | :----------------------------------------- | :------------------ |
-| **OpenAI**    | General Reasoning (GPT-4o)                 | `OPENAI_API_KEY`    |
-| **Anthropic** | Coding & Complex Logic (Claude 3.5 Sonnet) | `ANTHROPIC_API_KEY` |
-| **Tavily**    | Search Tool for Agents                     | `TAVILY_API_KEY`    |
+| Provider      | Purpose                                       | Key Variable        |
+| :------------ | :-------------------------------------------- | :------------------ |
+| **OpenAI**    | General Reasoning (GPT-4o, GPT-5)             | `OPENAI_API_KEY`    |
+| **Anthropic** | Coding & Complex Logic (Claude 4 Sonnet/Opus) | `ANTHROPIC_API_KEY` |
+| **Tavily**    | Search Tool for Agents                        | `TAVILY_API_KEY`    |
+| **LangSmith** | Tracing & Debugging (highly recommended)      | `LANGSMITH_API_KEY` |
 
-_(Optional later: E2B for sandboxing, LangSmith for tracing)_
+<Callout type="info">
+  **Model Evolution:** AI models are updated frequently. While we reference
+  specific models like GPT-4o and Claude 4 Sonnet, always check the provider's
+  documentation for the latest recommended models. The patterns you learn here
+  apply regardless of which specific model version you use.
+</Callout>
+
+<Callout type="warning">
+  **Cost Awareness:** API calls cost money. GPT-4o costs approximately $2.50 per
+  million input tokens and $10 per million output tokens. Claude 4 Sonnet is
+  similar. Budget $20-50 for completing this course, depending on how much you
+  experiment. Use smaller models (GPT-4o-mini, Claude 3.5 Haiku) for initial
+  testing to save costs.
+</Callout>
+
+<Callout type="info">
+  **LangSmith:** While optional for getting started, LangSmith is essential for
+  debugging agents in production. Sign up at
+  [smith.langchain.com](https://smith.langchain.com) for free tier access. We'll
+  use it extensively starting in Week 2.
+</Callout>
+
+_(Optional later: E2B for sandboxed code execution)_
 
 ## IDE Setup
 
-We recommend **VS Code** with the following extensions to maintain sanity:
+<ConceptVisual
+  src="/images/vscode_setup_mockup.png"
+  alt="VS Code / Cursor Setup"
+  caption="Recommended IDE setup with key extensions for a productive agentic workflow."
+/>
+
+We recommend **VS Code** or **Cursor** with the following extensions to maintain sanity:
 
 - **ESLint & Prettier:** For strict code formatting.
 - **Python (Microsoft):** Essential debugging tools.
 - **MDX:** For viewing these course materials locally.
 - **Pretty TypeScript Errors:** Makes TS errors readable.
+- **Continue (optional):** AI-powered coding assistant that works with local models.
+
+<Callout type="tip">
+  **Cursor Users:** If you're using Cursor IDE, you already have AI assistance
+  built-in. The patterns you learn in this course will help you understand
+  what's happening under the hood when Cursor's AI helps you code.
+</Callout>
 
 ### Recommended Configuration
 
@@ -127,13 +407,31 @@ insert_final_newline = true
 
 ## Setting Up the Repository
 
-<Terminal
-  command="git clone https://github.com/your-username/agentic-engineer-course.git
-cd agentic-engineer-course
-npm install
-# If using Python for later modules:
-uv venv && uv pip install -r requirements.txt"
+<ConceptVisual
+  src="/images/repo_setup_flowchart.png"
+  alt="Repository Setup Flow"
+  caption="Five simple steps to get your environment ready: Clone -> Navigate -> Install -> Configure -> Verify."
 />
+
+```bash
+# Clone the course repository
+git clone https://github.com/keyurgolani/AgenticEngineer.git
+cd AgenticEngineer
+
+# Navigate to the web directory and install dependencies
+cd web
+npm install
+
+# If using Python for later modules:
+uv sync  # If using uv (recommended)
+# OR
+pip install -r requirements.txt  # If using pip
+```
+
+<Callout type="info">
+  The course materials, code examples, and exercises are all included in this
+  repository under the `web/content/` directory.
+</Callout>
 
 ### Configure Environment
 
@@ -148,23 +446,81 @@ Open `.env.local` and populate your keys:
 ```bash
 # .env.local
 OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 TAVILY_API_KEY=tvly-...
+LANGSMITH_API_KEY=lsv2_...  # Optional but recommended
 ```
 
 ## Verify Installation
 
 Run the following command to check if your environment is ready:
 
-<Terminal
-  command="npm run verify"
-  output="> Checking Node.js... OK (v20.10.0)
+```bash
+npm run verify
+```
+
+Expected output:
+
+```
+> Checking Node.js... OK (v20.10.0)
 > Checking Python... OK (3.11.0)
 > Checking Docker... OK
 > Verifying API Keys...
   - OpenAI: OK
   - Anthropic: OK
-> Environment checks passed. Ready for Day 01."
+> Environment checks passed. Ready for Day 01.
+```
+
+<Callout type="warning">
+  **Troubleshooting:** If any checks fail, revisit the corresponding setup step
+  above. Common issues include missing environment variables or outdated Node.js
+  versions.
+</Callout>
+
+### Environment Checklist
+
+Use this checklist to track your setup progress:
+
+<Exercise
+  title="Setup Verification Checklist"
+  difficulty="Easy"
+  objectives={[
+    "Node.js v18.17+ installed (run: node --version)",
+    "Python 3.10+ installed (run: python3 --version)",
+    "Docker Desktop running (run: docker --version)",
+    "Git configured with your credentials",
+    "OpenAI API key set in .env.local",
+    "Anthropic API key set in .env.local",
+    "Repository cloned and npm install completed",
+    "npm run verify passes all checks",
+  ]}
+/>
+
+### Common Setup Issues
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "API key not found or invalid",
+      fix: "Ensure your .env.local file has no spaces around the '=' sign and keys don't have quotes. Restart your terminal after setting environment variables.",
+    },
+    {
+      mistake: "Node.js version too old",
+      fix: "Run 'nvm install --lts && nvm use --lts' to get the latest LTS version. Verify with 'node --version'.",
+    },
+    {
+      mistake: "Python packages fail to install",
+      fix: "Ensure you're in a virtual environment. Try 'python3 -m pip install --upgrade pip' first, then retry.",
+    },
+    {
+      mistake: "Docker not running",
+      fix: "Start Docker Desktop application. On Linux, run 'sudo systemctl start docker'.",
+    },
+    {
+      mistake: "Permission denied errors",
+      fix: "On macOS/Linux, you may need to use 'sudo' for global installs, or better, use nvm/uv which install to user directories.",
+    },
+  ]}
 />
 
 ## One Last Thing
@@ -180,4 +536,115 @@ Run the following command to check if your environment is ready:
   ]}
 />
 
-You are now ready to begin. See you on Day 01.
+### Verify Your API Access
+
+Test your OpenAI API key with this curl command:
+
+```bash
+curl https://api.openai.com/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Say hello to an aspiring agentic engineer!"}],
+    "max_tokens": 50
+  }'
+```
+
+Or test Anthropic:
+
+```bash
+curl https://api.anthropic.com/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "claude-sonnet-4-20250514",
+    "max_tokens": 50,
+    "messages": [{"role": "user", "content": "Say hello to an aspiring agentic engineer!"}]
+  }'
+```
+
+<Callout type="tip">
+  If you see a JSON response with a message, you're ready! If you get an error,
+  double-check your API key is set correctly in your environment.
+</Callout>
+
+---
+
+## What's Next?
+
+<ConceptVisual
+  src="/images/day_01_05_preview.png"
+  alt="Days 1-5 Preview"
+  caption="Your first week: From basic agent loops to structured outputs and tool use."
+/>
+
+After completing this setup, you're ready to begin your agentic engineering journey. Here's what to expect:
+
+| Day        | Topic               | What You'll Learn                                      |
+| :--------- | :------------------ | :----------------------------------------------------- |
+| **Day 01** | Anatomy of an Agent | Core components: perception, reasoning, action, memory |
+| **Day 02** | Your First LLM Call | Making API calls, understanding tokens and context     |
+| **Day 03** | Prompt Engineering  | Crafting effective prompts, few-shot learning          |
+| **Day 04** | Tool Calling        | Giving agents the ability to take actions              |
+| **Day 05** | Structured Output   | Ensuring reliable, parseable responses                 |
+
+<Callout type="tip">
+  **Pro Tip:** Bookmark this page! You'll likely return here if you need to set
+  up a new machine or help a colleague get started.
+</Callout>
+
+## Related Day 00 Modules
+
+Before moving to Day 01, make sure you've reviewed these foundational modules:
+
+- **[AI Foundations](/modules/day-00-foundations)** — Understand the building blocks of AI and LLMs
+- **[How to Use This Course](/modules/day-00-how-to-learn)** — Learning strategies and course navigation
+- **[Glossary](/modules/day-00-glossary)** — Reference for all key terms
+
+---
+
+You are now ready to begin. See you on Day 01!
+
+## Quick Knowledge Check
+
+Before moving on, test your understanding of the agentic mindset:
+
+<Quiz
+  id="mindset-check"
+  moduleSlug="day-00-course-setup"
+  question="When building an AI agent, your first prompt fails and the agent gets stuck in a loop. What should you do?"
+  options={[
+    {
+      id: "a",
+      text: "Report it as a bug and wait for a fix",
+      isCorrect: false,
+      explanation:
+        "In agentic development, initial failures are expected and part of the iterative process.",
+    },
+    {
+      id: "b",
+      text: "Embrace it as part of the process and iterate rapidly",
+      isCorrect: true,
+      explanation:
+        "Correct! Agentic development is inherently iterative. Your first attempts will fail, and that's how you learn what works.",
+    },
+    {
+      id: "c",
+      text: "Switch to a different LLM provider",
+      isCorrect: false,
+      explanation:
+        "The issue is rarely the provider—it's usually about refining your prompts, tools, and guardrails.",
+    },
+    {
+      id: "d",
+      text: "Add more features to handle edge cases",
+      isCorrect: false,
+      explanation:
+        "Adding features without understanding the failure mode often makes things worse. Iterate on the core loop first.",
+    },
+  ]}
+  hint="Think about the 'Iteration is Key' mindset shift we discussed."
+  explanation="The agentic mindset embraces failure as feedback. Unlike traditional software where bugs are problems, in agent development, initial failures guide you toward better prompts, tools, and guardrails."
+/>

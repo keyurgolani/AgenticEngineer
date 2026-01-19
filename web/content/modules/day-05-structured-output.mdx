@@ -28,7 +28,11 @@ print(structured_llm.invoke("My name is John and I'm 25. I like coding."))
 # Output: UserProfile(name='John', age=25, interests=['coding'])
 ```
 
-### 5.3 Why is this "Agentic"?
+### 5.3 Try It Yourself
+
+<SchemaValidatorPlayground />
+
+### 5.4 Why is this "Agentic"?
 
 Agents need to call tools. To call a tool `weather(city: str)`, the LLM _must_ output exactly `{"city": "Paris"}`.
 Structured output is the bridge between the Brain and the Hands.

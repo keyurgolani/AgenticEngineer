@@ -1,0 +1,1684 @@
+---
+title: "Project Hierarchy: From Exercises to Capstone"
+description: "Complete guide to the 5-tier project system: Exercises, POCs, Mini Projects, Projects, and the Capstone Ecosystem"
+week: 4
+day: 23
+---
+
+<ReadingTime minutes={30} />
+
+<Callout type="info">
+  **Learning Philosophy:** This 90-day course uses a progressive project hierarchy
+  where each level builds upon the previous. By the end of the 3-month journey, you'll have constructed
+  a complete self-hosted agentic ecosystem from components you've built and
+  understood across 12 weeks of structured learning.
+</Callout>
+
+{/* IMAGE_PLACEHOLDER: Create a visual pyramid diagram showing the 5-tier project hierarchy. The pyramid should have 5 levels from bottom to top: (1) Exercises at the base (widest), (2) POCs, (3) Mini Projects, (4) Projects, (5) Capstone at the peak. Each level should show the time investment (15-30min, 1-2hrs, 2-4hrs, 4-8hrs, 20+hrs) and number of items. Use a gradient color scheme from light blue at the base to deep purple at the peak. Include small icons for each tier: checkmark for exercises, beaker for POCs, cube for mini projects, puzzle pieces for projects, and crown for capstone. Place this after the Learning Philosophy callout. */}
+
+## The Five Tiers of Project Work
+
+Throughout the 90-day curriculum, you'll progress through five distinct tiers of hands-on work. Each tier builds upon the previous, creating a scaffolded learning experience that takes you from basic concepts to production-ready systems.
+
+{/* IMAGE_PLACEHOLDER: Create an interactive progress tracker showing all 90 days of the course with color-coded markers for each project tier. Days 1-30 (Month 1) should show exercises and POCs in light blue, Days 31-60 (Month 2) should show mini projects and projects in medium blue, Days 61-90 (Month 3) should show advanced projects and capstone work in deep blue/purple. Include hover states that show which specific exercise/project occurs on each day. This should be a horizontal timeline with week markers (12 weeks total) and month divisions clearly visible. Place this before the table. */}
+
+| Tier | Type              | Time      | Purpose                 | Outcome                          | Course Phase        |
+| ---- | ----------------- | --------- | ----------------------- | -------------------------------- | ------------------- |
+| 1    | **Exercises**     | 15-30 min | Quick skill practice    | Immediate concept validation     | Weeks 1-4 (Month 1) |
+| 2    | **POCs**          | 1-2 hours | Prove a component works | Working prototype of one concept | Weeks 1-4 (Month 1) |
+| 3    | **Mini Projects** | 2-4 hours | Standalone service      | Deployable microservice          | Weeks 5-8 (Month 2) |
+| 4    | **Projects**      | 4-8 hours | End-to-end system       | Complete solution to one problem | Weeks 6-10          |
+| 5    | **Capstone**      | 20+ hours | Full ecosystem          | Self-hosted agentic platform     | Weeks 9-12 (Month 3)|
+
+---
+
+## Tier 1: Exercises (15-30 minutes each)
+
+Quick, focused exercises that validate understanding of a single concept. Each exercise has immediate, observable outcomes. These form the foundation of your learning in the first month (Weeks 1-4).
+
+{/* IMAGE_PLACEHOLDER: Create a grid layout showing all 15 exercises (EX-01 through EX-15) as interactive cards. Each card should display: exercise number, title, estimated time, and a small icon representing the concept (e.g., API icon for LLM call, brain for memory, search icon for embeddings). Cards should have a subtle hover effect that reveals "Builds Toward" information. Use a consistent color scheme with light backgrounds and accent colors. Arrange in a 3x5 grid. Place this after the tier description. */}
+
+### Month 1: Foundations (Weeks 1-4)
+
+#### EX-01: First LLM Call
+
+**Objective:** Make your first programmatic LLM call and observe the response.
+
+```python
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+response = llm.invoke("Explain what an AI agent is in one sentence.")
+print(response.content)
+```
+
+**Builds Toward:** Every agent in the capstone uses LLM calls.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- Script executes without authentication errors
+- Response object contains a non-empty `content` attribute
+- Response is contextually relevant to the prompt (mentions agents, autonomy, or AI)
+- Execution completes in under 10 seconds
+
+**Expected Output:** A single sentence definition printed to console, e.g., `"An AI agent is an autonomous system that perceives its environment and takes actions to achieve specific goals."` The exact wording will vary due to temperature=0.7.
+
+**Common Pitfalls:**
+
+- Missing `OPENAI_API_KEY` environment variable — ensure it's exported or in `.env`
+- Using `response` directly instead of `response.content` (prints the full AIMessage object)
+- Rate limiting on new API keys — wait 60 seconds and retry
+- Forgetting to install langchain-openai: `pip install langchain-openai`
+
+**Extension Challenge:** Modify the script to accept user input via `input()`, make 3 consecutive calls with different prompts, and measure the average response time using `time.perf_counter()`. Print timing statistics at the end.
+
+</Callout>
+
+---
+
+#### EX-02: Structured Output Parsing
+
+**Objective:** Force an LLM to return JSON that matches a schema.
+
+```python
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+from typing import List
+
+class TaskAnalysis(BaseModel):
+    task_type: str = Field(description="Type: research, code, creative, or general")
+    complexity: str = Field(description="Complexity: low, medium, or high")
+    keywords: List[str] = Field(description="Key terms from the request")
+
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+structured_llm = llm.with_structured_output(TaskAnalysis)
+
+result = structured_llm.invoke("Write a Python function to sort a list")
+print(f"Type: {result.task_type}, Complexity: {result.complexity}")
+```
+
+**Builds Toward:** Request classification in the Orchestrator.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- `result` is a valid `TaskAnalysis` instance (not a dict or string)
+- `task_type` is one of: "research", "code", "creative", or "general"
+- `complexity` is one of: "low", "medium", or "high"
+- `keywords` is a non-empty list containing at least "Python" or "function" or "sort"
+- No JSON parsing errors or validation exceptions
+
+**Expected Output:** `Type: code, Complexity: low` (or medium). The keywords list should contain terms like `["Python", "function", "sort", "list"]`. Exact values may vary but must conform to the schema.
+
+**Common Pitfalls:**
+
+- Using `temperature > 0` can cause inconsistent field values — use `temperature=0` for classification
+- Pydantic v1 vs v2 syntax differences — ensure you're using `from pydantic import BaseModel` (v2)
+- Overly restrictive `Field` descriptions cause the LLM to fail validation — keep descriptions flexible
+- Not handling `ValidationError` when the LLM returns malformed output in edge cases
+
+**Extension Challenge:** Create a `BatchClassifier` that processes a list of 5 different task descriptions, returns all results, and calculates the distribution of task types. Add a `confidence: float` field to the schema and filter results where confidence < 0.7.
+
+</Callout>
+
+---
+
+#### EX-03: Simple Tool Definition
+
+**Objective:** Define a tool that an LLM can call.
+
+```python
+from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+
+@tool
+def get_word_count(text: str) -> int:
+    """Count the number of words in the given text."""
+    return len(text.split())
+
+llm = ChatOpenAI(model="gpt-4o-mini")
+llm_with_tools = llm.bind_tools([get_word_count])
+
+response = llm_with_tools.invoke("Count words in: 'The quick brown fox'")
+print(response.tool_calls)
+```
+
+**Builds Toward:** All agents use tools for external actions.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- `response.tool_calls` is a non-empty list (length >= 1)
+- First tool call has `name` equal to `"get_word_count"`
+- Tool call `args` contains a `text` key with the input string
+- The tool function itself returns `4` when invoked with "The quick brown fox"
+- No exceptions during tool binding or invocation
+
+**Expected Output:**
+
+```python
+[{'name': 'get_word_count', 'args': {'text': 'The quick brown fox'}, 'id': 'call_...', 'type': 'tool_call'}]
+```
+
+The `id` will be a unique identifier. The LLM decides to call the tool rather than answering directly.
+
+**Common Pitfalls:**
+
+- Missing docstring on the tool function — LLMs need the description to understand when to use it
+- Forgetting to actually execute the tool after getting `tool_calls` — the LLM only _requests_ the call
+- Type hints missing on tool parameters — causes schema generation to fail
+- Using `@tool` without importing from `langchain_core.tools` (not `langchain.tools`)
+
+**Extension Challenge:** Add a second tool `get_character_count(text: str) -> int` and modify the prompt to ask for both word and character counts. Implement a loop that executes all requested tool calls and prints their results. Handle the case where the LLM calls no tools.
+
+</Callout>
+
+---
+
+#### EX-04: Environment Variable Configuration
+
+**Objective:** Set up proper configuration management with dotenv.
+
+```python
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+print(f"Model: {os.getenv('DEFAULT_MODEL')}")
+print(f"API Key Set: {'Yes' if os.getenv('OPENAI_API_KEY') else 'No'}")
+```
+
+**Builds Toward:** All services use environment-based configuration.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- `.env` file exists in the project root with at least `OPENAI_API_KEY` and `DEFAULT_MODEL`
+- `load_dotenv()` returns `True` (file found and loaded)
+- `os.getenv('OPENAI_API_KEY')` returns a non-None value
+- `os.getenv('DEFAULT_MODEL')` returns a valid model name (e.g., "gpt-4o-mini")
+- Sensitive values are NOT printed to console (only confirmation they exist)
+
+**Expected Output:**
+
+```
+Model: gpt-4o-mini
+API Key Set: Yes
+```
+
+If `.env` is missing or misconfigured, you'll see `Model: None` and `API Key Set: No`.
+
+**Common Pitfalls:**
+
+- `.env` file in wrong directory — must be in the directory where script runs or use `load_dotenv(dotenv_path="path/to/.env")`
+- Committing `.env` to git — add it to `.gitignore` immediately
+- Spaces around `=` in `.env` file — use `KEY=value` not `KEY = value`
+- Quotes in values causing issues — `API_KEY=sk-xxx` not `API_KEY="sk-xxx"` (unless you need spaces)
+- Not installing python-dotenv: `pip install python-dotenv`
+
+**Extension Challenge:** Create a `Config` class using Pydantic's `BaseSettings` that validates all required environment variables at startup, provides type coercion (e.g., `DEBUG=true` → `bool`), and raises clear errors for missing required values. Include `OPENAI_API_KEY`, `DEFAULT_MODEL`, `LOG_LEVEL`, and `DEBUG` fields.
+
+</Callout>
+
+---
+
+#### EX-05: Prompt Template Variables
+
+**Objective:** Create reusable prompts with variable substitution.
+
+```python
+from jinja2 import Template
+
+system_template = Template("""You are a {{ role }} specializing in {{ domain }}.
+Your communication style is {{ style }}.""")
+
+rendered = system_template.render(
+    role="senior software engineer",
+    domain="Python backend development",
+    style="concise and technical"
+)
+print(rendered)
+```
+
+**Builds Toward:** Prompt Library service template engine.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- Template renders without `UndefinedError` exceptions
+- All three variables (`role`, `domain`, `style`) are substituted in the output
+- Output contains no `{{ }}` template syntax (all variables resolved)
+- Rendered string is valid for use as an LLM system prompt
+- Template can be re-rendered with different values without recreation
+
+**Expected Output:**
+
+```
+You are a senior software engineer specializing in Python backend development.
+Your communication style is concise and technical.
+```
+
+Whitespace and newlines should be preserved exactly as defined in the template.
+
+**Common Pitfalls:**
+
+- Using f-strings instead of Jinja2 — f-strings can't be stored/loaded from files or databases
+- Missing variables in `render()` call — causes `UndefinedError` (use `Template(..., undefined=StrictUndefined)` to catch early)
+- HTML escaping enabled by default in some contexts — use `Markup` or `|safe` filter if needed
+- Not installing Jinja2: `pip install Jinja2`
+- Confusing Jinja2 `{{ }}` with LangChain's `{ }` template syntax
+
+**Extension Challenge:** Create a `PromptTemplate` class that loads templates from `.j2` files, supports nested templates with `{% include %}`, validates that all required variables are provided before rendering, and caches compiled templates for performance. Test with a multi-section agent prompt that includes role, tools, and constraints sections.
+
+</Callout>
+
+---
+
+### Month 1: Agent Patterns (Weeks 1-4)
+
+#### EX-06: ReAct Loop (Single Iteration)
+
+**Objective:** Implement one cycle of Reason, Act, Observe.
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+
+@tool
+def calculator(expression: str) -> str:
+    """Evaluate a mathematical expression."""
+    return str(eval(expression))
+
+llm = ChatOpenAI(model="gpt-4o-mini")
+llm_with_tools = llm.bind_tools([calculator])
+
+response = llm_with_tools.invoke("What is 15% of 240?")
+if response.tool_calls:
+    result = calculator.invoke(response.tool_calls[0]['args'])
+    print(f"Result: {result}")
+```
+
+**Builds Toward:** Agent execution loops in all specialized agents.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- `response.tool_calls` contains at least one tool call for `calculator`
+- Tool call args contain a valid mathematical expression (e.g., `"240 * 0.15"` or `"240 * 15 / 100"`)
+- Executing the tool returns the correct result (`"36"` or `"36.0"`)
+- The complete ReAct cycle (Reason → Act → Observe) executes without errors
+- Result is printed to console with correct formatting
+
+**Expected Output:**
+
+```
+Result: 36.0
+```
+
+The LLM reasons about the calculation, decides to use the calculator tool, and the result is computed and displayed.
+
+**Common Pitfalls:**
+
+- Using `eval()` in production — security risk! Use `ast.literal_eval()` or a safe math parser like `numexpr`
+- Not checking if `tool_calls` is empty before accessing `[0]` — causes IndexError
+- Forgetting to invoke the tool after getting the tool call — LLM only requests, doesn't execute
+- Expression format varies by LLM — some return `"15% * 240"` which `eval()` can't parse
+- Missing error handling for malformed expressions
+
+**Extension Challenge:** Implement a full ReAct loop that continues until the LLM stops requesting tools. Add a `memory` tool that stores intermediate results, and solve a multi-step problem like "What is 15% of 240, then add 50, then divide by 2?" Track and display each reasoning step.
+
+</Callout>
+
+---
+
+#### EX-07: Conversation Memory (In-Memory)
+
+**Objective:** Maintain conversation context across multiple turns.
+
+```python
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(model="gpt-4o-mini")
+history = []
+
+def chat(msg: str) -> str:
+    history.append({"role": "user", "content": msg})
+    response = llm.invoke(history)
+    history.append({"role": "assistant", "content": response.content})
+    return response.content
+
+print(chat("My name is Alex."))
+print(chat("What's my name?"))  # Should remember "Alex"
+```
+
+**Builds Toward:** Short-term memory in Memory Service.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- First response acknowledges the name introduction appropriately
+- Second response correctly recalls "Alex" from conversation history
+- `history` list contains 4 entries after both exchanges (2 user + 2 assistant)
+- Each history entry has correct `role` ("user" or "assistant") and non-empty `content`
+- Memory persists across function calls within the same session
+
+**Expected Output:**
+
+```
+Nice to meet you, Alex! How can I help you today?
+Your name is Alex.
+```
+
+The exact wording varies, but the second response must contain "Alex" demonstrating memory retention.
+
+**Common Pitfalls:**
+
+- Using `response` instead of `response.content` when appending to history — stores AIMessage object, not string
+- History growing unbounded — implement max length with sliding window (keep last N messages)
+- Role format mismatch — some APIs expect `{"role": "user", "content": "..."}`, others expect HumanMessage objects
+- Not handling empty responses — check `response.content` before appending
+- Forgetting that history is global — multiple users would share memory (use session IDs in production)
+
+**Extension Challenge:** Implement a `ConversationManager` class with: (1) session-based isolation using UUIDs, (2) configurable max history length with summarization of older messages, (3) a `clear()` method, and (4) persistence to a JSON file. Test with two interleaved conversations to verify isolation.
+
+</Callout>
+
+---
+
+#### EX-08: Simple Router (If/Else)
+
+**Objective:** Route requests to different handlers based on content.
+
+```python
+def classify_request(message: str) -> str:
+    message_lower = message.lower()
+    if any(kw in message_lower for kw in ["code", "function", "debug"]):
+        return "code"
+    elif any(kw in message_lower for kw in ["research", "find", "search"]):
+        return "research"
+    return "general"
+
+# Test
+print(classify_request("Write a Python function"))  # code
+print(classify_request("Research AI trends"))       # research
+```
+
+**Builds Toward:** Smart Orchestrator request classification.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- "Write a Python function" returns `"code"`
+- "Research AI trends" returns `"research"`
+- "Hello there" returns `"general"` (no matching keywords)
+- Classification is case-insensitive ("WRITE CODE" → "code")
+- Function handles empty strings without crashing (returns "general")
+
+**Expected Output:**
+
+```
+code
+research
+```
+
+The router correctly identifies the intent based on keyword matching.
+
+**Common Pitfalls:**
+
+- Case sensitivity — forgetting `.lower()` causes "Code" to not match "code"
+- Keyword order matters — checking "code" before "research" means "research code patterns" routes to code
+- Overlapping keywords — "find the code bug" matches both "find" (research) and "code" — first match wins
+- Empty string handling — `"".lower()` works but ensure no index errors
+- Hardcoded keywords don't scale — consider configuration file or database
+
+**Extension Challenge:** Replace keyword matching with TF-IDF or embedding-based classification. Create a training set of 20 labeled examples (5 per category: code, research, general, creative), compute centroids for each category, and classify new requests by nearest centroid. Compare accuracy against the keyword approach.
+
+</Callout>
+
+---
+
+#### EX-09: Embedding Generation
+
+**Objective:** Generate vector embeddings for text.
+
+```python
+from sentence_transformers import SentenceTransformer
+import numpy as np
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+texts = ["How do I write a Python function?", "Python function syntax"]
+embeddings = model.encode(texts)
+
+similarity = np.dot(embeddings[0], embeddings[1]) / (
+    np.linalg.norm(embeddings[0]) * np.linalg.norm(embeddings[1])
+)
+print(f"Similarity: {similarity:.3f}")  # High similarity expected
+```
+
+**Builds Toward:** Semantic search in Memory and RAG services.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- `embeddings` is a numpy array with shape `(2, 384)` — two texts, 384 dimensions each
+- Similarity score is between 0.0 and 1.0 (cosine similarity range for normalized vectors)
+- Similar texts ("Python function" queries) have similarity > 0.7
+- Dissimilar texts ("Python function" vs "Italian cooking recipes") have similarity < 0.4
+- Embedding generation completes in < 100ms for short texts on CPU
+
+**Expected Output:**
+
+```
+Similarity: 0.847
+```
+
+The high similarity (> 0.8) indicates the two texts are semantically related (both about Python functions).
+
+**Common Pitfalls:**
+
+- First run downloads the model (~90MB) — can timeout in constrained environments
+- Using wrong model name — `"all-MiniLM-L6-v2"` not `"all-minilm-l6-v2"` (case-sensitive)
+- Not normalizing vectors before dot product — use the full cosine formula or `util.cos_sim()`
+- GPU/CPU mismatch — model defaults to GPU if available, force CPU with `device='cpu'` if needed
+- Memory issues with large batches — process in chunks of 32-64 texts
+
+**Extension Challenge:** Build a `SemanticMatcher` class that: (1) pre-computes embeddings for a list of canonical categories, (2) classifies new text by finding the nearest category, (3) returns top-3 matches with scores, and (4) supports adding new categories at runtime. Test with 10 categories and 50 sample queries.
+
+</Callout>
+
+---
+
+#### EX-10: FastAPI Endpoint
+
+**Objective:** Create a simple API endpoint.
+
+```python
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class ChatRequest(BaseModel):
+    message: str
+
+@app.post("/chat")
+def chat(request: ChatRequest):
+    return {"response": f"You said: {request.message}"}
+
+# Run with: uvicorn main:app --reload
+```
+
+**Builds Toward:** All services expose FastAPI endpoints.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- Server starts without errors on `uvicorn main:app --reload`
+- `POST /chat` with `{"message": "Hello"}` returns `{"response": "You said: Hello"}`
+- Invalid JSON body returns 422 Unprocessable Entity with validation details
+- Missing `message` field returns 422 with field-level error
+- Server responds in < 50ms for simple echo requests
+
+**Expected Output:**
+
+```bash
+$ curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello"}'
+
+{"response":"You said: Hello"}
+```
+
+The endpoint echoes the input message with a prefix.
+
+**Common Pitfalls:**
+
+- Port 8000 already in use — specify different port: `uvicorn main:app --port 8001`
+- Forgetting `Content-Type: application/json` header — causes 422 error
+- Using `@app.get` instead of `@app.post` for request body — GET doesn't support body
+- Pydantic model in wrong location — must be defined before the route that uses it
+- Not installing uvicorn: `pip install "uvicorn[standard]"`
+
+**Extension Challenge:** Extend the API with: (1) `GET /health` returning `{"status": "healthy", "timestamp": "..."}`, (2) `POST /chat` that actually calls an LLM, (3) request logging middleware that logs method, path, and latency, (4) CORS middleware for browser access. Add OpenAPI documentation with examples.
+
+</Callout>
+
+---
+
+### Month 1: Memory and RAG (Weeks 1-4)
+
+#### EX-11: Redis Basic Operations
+
+**Objective:** Store and retrieve data from Redis.
+
+```python
+import redis
+import json
+
+r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+
+# Store conversation
+session_id = "session_123"
+r.rpush(f"messages:{session_id}", json.dumps({"role": "user", "content": "Hello"}))
+r.expire(f"messages:{session_id}", 14400)  # 4 hour TTL
+
+# Retrieve
+messages = r.lrange(f"messages:{session_id}", 0, -1)
+print([json.loads(m) for m in messages])
+```
+
+**Builds Toward:** Short-term memory storage.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- Connection to Redis succeeds (no `ConnectionError`)
+- `rpush` returns the new list length (1 after first push)
+- `expire` returns `True` indicating TTL was set
+- `lrange` returns all messages in insertion order
+- Messages are valid JSON that can be parsed back to dicts
+- Key expires after 4 hours (14400 seconds)
+
+**Expected Output:**
+
+```python
+[{'role': 'user', 'content': 'Hello'}]
+```
+
+The message is stored and retrieved as a parsed Python dict.
+
+**Common Pitfalls:**
+
+- Redis not running — start with `docker run -p 6379:6379 redis:alpine` or `brew services start redis`
+- Forgetting `decode_responses=True` — returns bytes instead of strings
+- Not JSON-encoding before storage — `rpush` with dict fails, must use `json.dumps()`
+- TTL not set — messages persist forever, consuming memory
+- Key naming collisions — use namespaced keys like `app:messages:{session_id}`
+
+**Extension Challenge:** Build a `RedisConversationStore` class with: (1) `add_message(session_id, role, content)`, (2) `get_messages(session_id, limit=50)`, (3) `clear_session(session_id)`, (4) automatic TTL refresh on each access, and (5) message count tracking per session. Add connection pooling for production use.
+
+</Callout>
+
+---
+
+#### EX-12: Document Chunking
+
+**Objective:** Split a document into chunks for embedding.
+
+```python
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+text = """AI agents can use tools and maintain memory.
+They work autonomously toward goals."""
+
+splitter = RecursiveCharacterTextSplitter(chunk_size=50, chunk_overlap=10)
+chunks = splitter.split_text(text)
+
+for i, chunk in enumerate(chunks):
+    print(f"Chunk {i}: {chunk}")
+```
+
+**Builds Toward:** Document processing in RAG service.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- `chunks` is a non-empty list of strings
+- Each chunk length is ≤ `chunk_size` (50 characters)
+- Adjacent chunks have overlapping content (10 characters overlap)
+- No content is lost — concatenating chunks (minus overlaps) reconstructs original
+- Chunks split at natural boundaries (spaces, newlines) when possible
+
+**Expected Output:**
+
+```
+Chunk 0: AI agents can use tools and maintain memory.
+Chunk 1: maintain memory.
+They work autonomously toward goals.
+```
+
+Note: Exact chunking depends on the splitter's boundary detection. Overlap ensures context continuity.
+
+**Common Pitfalls:**
+
+- `chunk_size` too small — creates many tiny chunks, loses context
+- `chunk_overlap` >= `chunk_size` — causes infinite loop or duplicate content
+- Not accounting for token count — character count ≠ token count for LLMs
+- Splitting mid-word or mid-sentence — use `RecursiveCharacterTextSplitter` which prefers natural boundaries
+- Forgetting metadata — chunks lose source document reference
+
+**Extension Challenge:** Implement a `SmartChunker` that: (1) respects sentence boundaries using NLTK or spaCy, (2) preserves code blocks intact (don't split mid-function), (3) adds metadata (chunk_index, source_doc, char_range), (4) supports multiple strategies (fixed, semantic, paragraph-based). Test with a mixed document containing prose and code.
+
+</Callout>
+
+---
+
+#### EX-13: Vector Store (ChromaDB)
+
+**Objective:** Store and query vectors in ChromaDB.
+
+```python
+import chromadb
+from sentence_transformers import SentenceTransformer
+
+client = chromadb.Client()
+collection = client.create_collection("docs")
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+docs = ["Python is a language", "JavaScript runs in browsers"]
+embeddings = embedder.encode(docs).tolist()
+
+collection.add(documents=docs, embeddings=embeddings, ids=["d1", "d2"])
+
+query = "web development language"
+query_emb = embedder.encode([query]).tolist()
+results = collection.query(query_embeddings=query_emb, n_results=1)
+print(results["documents"])  # JavaScript doc
+```
+
+**Builds Toward:** Vector storage in RAG service.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- Collection is created without errors
+- `add()` successfully stores 2 documents with embeddings and IDs
+- Query returns the most semantically similar document ("JavaScript runs in browsers")
+- Results include document content, not just IDs
+- `n_results=1` returns exactly 1 result
+
+**Expected Output:**
+
+```python
+[['JavaScript runs in browsers']]
+```
+
+The query "web development language" correctly retrieves the JavaScript document (more relevant than Python for web dev).
+
+**Common Pitfalls:**
+
+- Duplicate IDs on re-run — use `get_or_create_collection()` or delete first
+- Embedding dimension mismatch — ensure query embedding uses same model as stored embeddings
+- Empty results — check that documents were actually added (collection.count())
+- ChromaDB persistence — default is in-memory, use `PersistentClient` for disk storage
+- Not converting numpy arrays to lists — ChromaDB expects `List[List[float]]`
+
+**Extension Challenge:** Build a `VectorStore` wrapper that: (1) auto-generates embeddings on add (no manual encoding), (2) supports metadata filtering (`where={"category": "tech"}`), (3) implements upsert (update if exists), (4) provides batch operations for 1000+ documents, and (5) includes relevance score thresholding (filter results below 0.5 similarity).
+
+</Callout>
+
+---
+
+#### EX-14: Simple RAG Query
+
+**Objective:** Answer a question using retrieved context.
+
+```python
+from langchain_openai import ChatOpenAI
+
+# Assume we retrieved: "The company was founded in 2020 by Jane Smith."
+context = "The company was founded in 2020 by Jane Smith."
+question = "Who founded the company?"
+
+llm = ChatOpenAI(model="gpt-4o-mini")
+prompt = f"Context: {context}\n\nQuestion: {question}\nAnswer:"
+response = llm.invoke(prompt)
+print(response.content)  # Jane Smith
+```
+
+**Builds Toward:** RAG service query endpoint.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- Response correctly answers "Jane Smith" (extracted from context)
+- Answer is grounded in the provided context (not hallucinated)
+- Response is concise (ideally just the name, not a full sentence)
+- LLM doesn't claim uncertainty when the answer is clearly in context
+- Execution completes in < 2 seconds
+
+**Expected Output:**
+
+```
+Jane Smith
+```
+
+Or a complete sentence: "The company was founded by Jane Smith." Both are acceptable as long as the answer is correct and grounded.
+
+**Common Pitfalls:**
+
+- Context too long — exceeds model context window, truncate or chunk
+- Prompt format matters — clear separation between context and question improves accuracy
+- Hallucination risk — LLM may invent details not in context, add "Answer only from the context provided"
+- No answer in context — LLM should say "I don't know" not make something up
+- Missing source attribution — for production, track which chunk provided the answer
+
+**Extension Challenge:** Build a `RAGQueryEngine` that: (1) retrieves top-3 relevant chunks from a vector store, (2) constructs a prompt with all chunks as context, (3) generates an answer with source citations (`[1]`, `[2]`), (4) includes confidence scoring based on chunk relevance, and (5) handles "no relevant context found" gracefully.
+
+</Callout>
+
+---
+
+#### EX-15: Fact Extraction from Conversation
+
+**Objective:** Extract facts from a conversation for long-term memory.
+
+```python
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel
+from typing import List
+
+class Facts(BaseModel):
+    facts: List[str]
+    preferences: List[str]
+
+llm = ChatOpenAI(model="gpt-4o-mini")
+structured_llm = llm.with_structured_output(Facts)
+
+conversation = "User: I prefer Python over JavaScript for backend work."
+result = structured_llm.invoke(f"Extract facts and preferences:\n{conversation}")
+print(f"Facts: {result.facts}")
+print(f"Preferences: {result.preferences}")
+```
+
+**Builds Toward:** Memory consolidation in Memory Service.
+
+<Callout type="tip">
+**Acceptance Criteria:**
+- `result` is a valid `Facts` instance with `facts` and `preferences` lists
+- `preferences` list contains at least one item about Python preference
+- Facts and preferences are distinct (preferences are subjective, facts are objective)
+- Extraction handles conversations with multiple facts/preferences
+- Empty conversation returns empty lists (not None or error)
+
+**Expected Output:**
+
+```
+Facts: []
+Preferences: ['Prefers Python over JavaScript for backend work']
+```
+
+The statement is correctly classified as a preference (subjective choice) rather than a fact.
+
+**Common Pitfalls:**
+
+- Confusing facts vs preferences — "User's name is Alex" is a fact, "User likes Python" is a preference
+- Over-extraction — extracting every sentence as a fact, be selective for important information
+- Under-extraction — missing implicit facts ("I've been coding for 10 years" → fact: 10 years experience)
+- Duplicate extraction — same fact extracted multiple times from rephrased statements
+- Schema too rigid — allow flexible fact formats, don't force specific structure
+
+**Extension Challenge:** Build a `MemoryExtractor` that: (1) processes multi-turn conversations, (2) categorizes extractions (facts, preferences, goals, relationships), (3) detects contradictions with previously stored memories, (4) assigns importance scores (1-5) to each extraction, and (5) merges/updates existing memories when new information refines old. Test with a 10-turn conversation.
+
+</Callout>
+
+---
+
+## Tier 2: Proof of Concepts (1-2 hours each)
+
+POCs prove that a specific component or pattern works. They are more substantial than exercises but focused on one concept. These bridge the gap between basic exercises and full services, typically completed during Weeks 1-4 alongside exercises.
+
+{/* IMAGE_PLACEHOLDER: Create a visual flowchart showing how POCs connect to both exercises (below) and mini projects (above). Show 6 POC boxes (POC-01 through POC-06) with arrows indicating: (1) which exercises they build upon (dotted lines going down), and (2) which mini projects they enable (solid lines going up). Use a layered design with exercises at bottom, POCs in middle, mini projects at top. Include small preview icons for each POC (state machine diagram for POC-01, vector space for POC-02, cloud providers for POC-03, version tree for POC-04, search icon for POC-05, classification matrix for POC-06). Place this after the tier description. */}
+
+### POC-01: LangGraph State Machine
+
+**Time:** 1.5 hours | **Builds Toward:** Orchestrator, All Agents
+
+**Objective:** Build a simple state machine using LangGraph that demonstrates state transitions and conditional routing.
+
+```python
+from typing import TypedDict, Literal
+from langgraph.graph import StateGraph, END
+
+class AgentState(TypedDict):
+    message: str
+    classification: str
+    response: str
+
+def classify_node(state: AgentState) -> dict:
+    message = state["message"].lower()
+    if "code" in message:
+        return {"classification": "code"}
+    elif "research" in message:
+        return {"classification": "research"}
+    return {"classification": "general"}
+
+def code_node(state: AgentState) -> dict:
+    return {"response": f"[CODE] {state['message']}"}
+
+def research_node(state: AgentState) -> dict:
+    return {"response": f"[RESEARCH] {state['message']}"}
+
+def general_node(state: AgentState) -> dict:
+    return {"response": f"[GENERAL] {state['message']}"}
+
+def route(state: AgentState) -> Literal["code", "research", "general"]:
+    return state["classification"]
+
+workflow = StateGraph(AgentState)
+workflow.add_node("classify", classify_node)
+workflow.add_node("code", code_node)
+workflow.add_node("research", research_node)
+workflow.add_node("general", general_node)
+
+workflow.set_entry_point("classify")
+workflow.add_conditional_edges("classify", route)
+workflow.add_edge("code", END)
+workflow.add_edge("research", END)
+workflow.add_edge("general", END)
+
+app = workflow.compile()
+result = app.invoke({"message": "Write Python code"})
+print(result["response"])
+```
+
+**Validation:** Messages route to correct agent nodes based on classification.
+
+<Callout type="info">
+  **Technical Requirements:** LangGraph >= 0.2.0 with StateGraph support. Python
+  3.11+ for TypedDict and Literal type hints. State must be immutable between
+  node transitions (return new dict, don't mutate). All nodes must return
+  partial state updates (only changed keys). Conditional edges must return valid
+  node names as strings.
+</Callout>
+
+**Architecture Diagram Description:**
+
+```
+Entry → [classify] → (conditional) → [code|research|general] → END
+                          ↓
+         Route function inspects state["classification"]
+         Returns string matching target node name
+```
+
+**Test Scenarios:**
+
+1. Code request ("Write a Python function") → Routes to code node, response prefixed with `[CODE]`
+2. Research request ("Find information about AI") → Routes to research node, response prefixed with `[RESEARCH]`
+3. Ambiguous request ("Hello") → Routes to general node, response prefixed with `[GENERAL]`
+4. Mixed signals ("Research how to code") → Classification picks dominant signal, routes consistently
+5. Empty message → Graceful handling, routes to general without crash
+
+**Success Metrics:**
+
+- Classification accuracy ≥ 95% on clear requests
+- State transitions complete in < 50ms (excluding LLM calls)
+- Zero state mutation errors across 100 invocations
+- Graph compiles without warnings
+
+**Production Considerations:**
+
+- Add checkpointing with `MemorySaver` for state persistence across failures
+- Implement timeout handling for each node (wrap in `asyncio.wait_for`)
+- Add observability: trace IDs, node execution timing, state snapshots
+- Consider async nodes (`async def`) for I/O-bound operations
+- Add retry logic with exponential backoff for LLM-based classification
+- Implement circuit breaker pattern for downstream service failures
+
+---
+
+### POC-02: Semantic Memory Search
+
+**Time:** 1.5 hours | **Builds Toward:** Memory Service, RAG Service
+
+**Objective:** Implement semantic search over stored memories using embeddings.
+
+```python
+from sentence_transformers import SentenceTransformer
+import numpy as np
+from dataclasses import dataclass
+from typing import List, Tuple
+
+@dataclass
+class Memory:
+    content: str
+    embedding: np.ndarray
+
+class SemanticMemoryStore:
+    def __init__(self):
+        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.memories: List[Memory] = []
+
+    def store(self, content: str):
+        embedding = self.model.encode(content)
+        self.memories.append(Memory(content, embedding))
+
+    def recall(self, query: str, top_k: int = 3) -> List[Tuple[str, float]]:
+        query_emb = self.model.encode(query)
+        results = []
+        for mem in self.memories:
+            sim = np.dot(query_emb, mem.embedding) / (
+                np.linalg.norm(query_emb) * np.linalg.norm(mem.embedding)
+            )
+            results.append((mem.content, float(sim)))
+        return sorted(results, key=lambda x: x[1], reverse=True)[:top_k]
+
+store = SemanticMemoryStore()
+store.store("User prefers Python over JavaScript")
+store.store("User works on machine learning projects")
+store.store("User's name is Alex")
+
+results = store.recall("What programming language?")
+for content, score in results:
+    print(f"[{score:.3f}] {content}")
+```
+
+**Validation:** Similar queries retrieve related memories with high scores.
+
+<Callout type="info">
+  **Technical Requirements:** sentence-transformers >= 2.2.0 with
+  `all-MiniLM-L6-v2` model (384-dim embeddings). NumPy for efficient vector
+  operations (cosine similarity). Memory storage must support O(n) linear scan
+  initially, O(log n) with indexing later. Embeddings must be normalized for
+  consistent similarity scores (0.0 to 1.0 range). Thread-safe storage for
+  concurrent read/write access.
+</Callout>
+
+**Architecture Diagram Description:**
+
+```
+[Store Operation]
+Input Text → Embedding Model → Vector (384-dim) → Memory List
+
+[Recall Operation]
+Query Text → Embedding Model → Query Vector
+                                    ↓
+                            Cosine Similarity vs All Memories
+                                    ↓
+                            Sort by Score → Top-K Results
+```
+
+**Test Scenarios:**
+
+1. Exact match query ("User prefers Python") → Returns matching memory with score > 0.9
+2. Semantic match ("What language does user like?") → Returns Python preference with score > 0.7
+3. Unrelated query ("What is the weather?") → All results have score < 0.5
+4. Empty store recall → Returns empty list without error
+5. Large store (1000+ memories) → Recall completes in < 500ms
+
+**Success Metrics:**
+
+- Semantic similarity correctly ranks related content (MRR@3 ≥ 0.8)
+- Embedding generation < 50ms per text on CPU
+- Memory footprint < 2KB per stored memory (content + embedding)
+- Recall latency < 100ms for stores with < 1000 memories
+
+**Production Considerations:**
+
+- Replace linear scan with FAISS or Annoy for approximate nearest neighbor (ANN) search
+- Add embedding caching to avoid re-encoding identical content
+- Implement memory expiration (TTL) and importance-based eviction
+- Use batch encoding for bulk memory ingestion (10x faster)
+- Add metadata filtering (timestamp, source, category) before similarity search
+- Consider dimensionality reduction (PCA) for very large stores
+- Implement persistence layer (SQLite, PostgreSQL with pgvector)
+
+---
+
+### POC-03: Multi-Provider LLM Abstraction
+
+**Time:** 2 hours | **Builds Toward:** LLM Router Service
+
+**Objective:** Create a unified interface for multiple LLM providers with automatic fallback.
+
+```python
+from abc import ABC, abstractmethod
+from typing import List, Dict
+import os
+
+class LLMProvider(ABC):
+    @abstractmethod
+    async def chat(self, messages: List[Dict]) -> str:
+        pass
+
+    @abstractmethod
+    def is_available(self) -> bool:
+        pass
+
+class OpenAIProvider(LLMProvider):
+    async def chat(self, messages: List[Dict]) -> str:
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(model="gpt-4o-mini")
+        response = await llm.ainvoke(messages)
+        return response.content
+
+    def is_available(self) -> bool:
+        return bool(os.getenv("OPENAI_API_KEY"))
+
+class UnifiedLLM:
+    def __init__(self):
+        self.providers = [OpenAIProvider()]
+
+    async def chat(self, messages: List[Dict]) -> str:
+        for provider in self.providers:
+            if provider.is_available():
+                try:
+                    return await provider.chat(messages)
+                except Exception:
+                    continue
+        raise RuntimeError("No providers available")
+```
+
+**Validation:** Fallback works when primary provider unavailable.
+
+<Callout type="info">
+**Technical Requirements:** Abstract base class with `@abstractmethod` for provider interface. Async-first design (`async def chat`) for non-blocking I/O. Provider availability check must be fast (< 10ms, no network calls). Support for at least 3 providers: OpenAI, Anthropic, local (Ollama). Unified message format compatible with OpenAI chat completion schema. Environment-based configuration for API keys and endpoints.
+</Callout>
+
+**Architecture Diagram Description:**
+
+```
+[UnifiedLLM]
+     ↓
+[Provider Registry] → [OpenAI] (priority: 1)
+                    → [Anthropic] (priority: 2)
+                    → [Ollama] (priority: 3, local fallback)
+     ↓
+For each provider (by priority):
+  1. Check is_available()
+  2. Try chat() with timeout
+  3. On success → return response
+  4. On failure → log error, try next provider
+     ↓
+All failed → raise RuntimeError
+```
+
+**Test Scenarios:**
+
+1. Primary available → Uses OpenAI, returns response in < 2s
+2. Primary unavailable (no API key) → Falls back to Anthropic seamlessly
+3. All cloud providers down → Falls back to local Ollama
+4. Provider timeout (> 30s) → Catches exception, tries next provider
+5. Rate limit error (429) → Implements backoff, retries or falls back
+
+**Success Metrics:**
+
+- Fallback latency overhead < 100ms (time to detect failure + switch)
+- Provider health check < 10ms per provider
+- 99.9% request success rate with 3+ providers configured
+- Zero data loss during provider switches (messages preserved)
+
+**Production Considerations:**
+
+- Implement circuit breaker pattern (fail fast after N consecutive failures)
+- Add provider health monitoring with periodic ping checks
+- Support request routing based on model capabilities (vision, function calling)
+- Implement cost-aware routing (prefer cheaper providers for simple tasks)
+- Add request/response logging for debugging and audit trails
+- Support streaming responses with provider-agnostic interface
+- Implement token counting and budget enforcement per provider
+- Add retry with exponential backoff (1s, 2s, 4s) before fallback
+
+---
+
+### POC-04: Prompt Versioning System
+
+**Time:** 1.5 hours | **Builds Toward:** Prompt Library Service
+
+**Objective:** Implement prompt storage with version history and rollback.
+
+```python
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, List
+import copy
+
+@dataclass
+class PromptVersion:
+    version: int
+    content: str
+    created_at: datetime
+    notes: str
+
+@dataclass
+class Prompt:
+    name: str
+    content: str
+    version: int = 1
+    versions: List[PromptVersion] = field(default_factory=list)
+
+class PromptStore:
+    def __init__(self):
+        self.prompts: Dict[str, Prompt] = {}
+
+    def create(self, name: str, content: str) -> Prompt:
+        prompt = Prompt(name=name, content=content)
+        prompt.versions.append(PromptVersion(1, content, datetime.now(), "Initial"))
+        self.prompts[name] = prompt
+        return prompt
+
+    def update(self, name: str, content: str, notes: str = "") -> Prompt:
+        prompt = self.prompts[name]
+        prompt.version += 1
+        prompt.content = content
+        prompt.versions.append(PromptVersion(prompt.version, content, datetime.now(), notes))
+        return prompt
+
+    def rollback(self, name: str, to_version: int) -> Prompt:
+        prompt = self.prompts[name]
+        for v in prompt.versions:
+            if v.version == to_version:
+                return self.update(name, v.content, f"Rollback to v{to_version}")
+        raise ValueError(f"Version {to_version} not found")
+```
+
+**Validation:** Versions increment, historical versions retrievable, rollback works.
+
+<Callout type="info">
+  **Technical Requirements:** Immutable version history (versions can never be
+  deleted or modified). Version numbers must be monotonically increasing
+  integers. Each version must capture: content, timestamp, author (if
+  multi-user), change notes. Support Jinja2 template syntax for variable
+  interpolation. Maximum 100 versions per prompt (configurable, with archival
+  strategy). Thread-safe operations for concurrent access.
+</Callout>
+
+**Architecture Diagram Description:**
+
+```
+[PromptStore]
+     ↓
+[Prompt] ─────────────────────────────────────
+  │ name: str                                 │
+  │ content: str (current)                    │
+  │ version: int (current)                    │
+  │ versions: List[PromptVersion]             │
+  └───────────────────────────────────────────┘
+           ↓
+[PromptVersion]
+  │ version: int
+  │ content: str
+  │ created_at: datetime
+  │ notes: str
+  │ hash: str (content fingerprint)
+```
+
+**Test Scenarios:**
+
+1. Create prompt → Version 1 created, content matches, timestamp set
+2. Update prompt 3 times → Version increments to 4, all versions in history
+3. Rollback to version 2 → Creates version 5 with version 2's content, notes indicate rollback
+4. Get version history → Returns all versions in chronological order
+5. Duplicate content update → Still creates new version (audit trail preserved)
+
+**Success Metrics:**
+
+- Version creation < 5ms (excluding persistence)
+- History retrieval O(1) for latest, O(n) for full history
+- Zero data loss on rollback operations
+- Content hash collision rate < 1 in 10^9
+
+**Production Considerations:**
+
+- Add database persistence (PostgreSQL with JSONB for versions)
+- Implement diff storage (store deltas instead of full content for large prompts)
+- Add access control (who can create, update, rollback)
+- Support prompt inheritance (base prompts with overrides)
+- Implement A/B testing support (serve different versions to different users)
+- Add prompt validation (syntax check, variable extraction)
+- Support bulk import/export for prompt migration
+- Implement soft delete with recovery window
+
+---
+
+### POC-05: Web Search Integration
+
+**Time:** 2 hours | **Builds Toward:** Research Agent Service
+
+**Objective:** Integrate web search and content extraction for research.
+
+```python
+import httpx
+from bs4 import BeautifulSoup
+from typing import List
+from dataclasses import dataclass
+
+@dataclass
+class SearchResult:
+    title: str
+    url: str
+    snippet: str
+
+class WebSearcher:
+    async def search(self, query: str, num_results: int = 5) -> List[SearchResult]:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://html.duckduckgo.com/html/",
+                params={"q": query},
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            soup = BeautifulSoup(response.text, "html.parser")
+            results = []
+            for r in soup.select(".result")[:num_results]:
+                title = r.select_one(".result__title")
+                snippet = r.select_one(".result__snippet")
+                url = r.select_one(".result__url")
+                if title and url:
+                    results.append(SearchResult(
+                        title=title.get_text(strip=True),
+                        url=url.get_text(strip=True),
+                        snippet=snippet.get_text(strip=True) if snippet else ""
+                    ))
+            return results
+```
+
+**Validation:** Search returns relevant results, content extraction works.
+
+<Callout type="info">
+  **Technical Requirements:** httpx >= 0.24.0 for async HTTP requests with
+  connection pooling. BeautifulSoup4 with lxml parser for fast HTML parsing.
+  Request timeout: 10s for search, 30s for content extraction. User-Agent
+  rotation to avoid blocking (minimum 5 different agents). Rate limiting: max 10
+  requests/minute to any single domain. Support for multiple search backends
+  (DuckDuckGo, SerpAPI, Brave).
+</Callout>
+
+**Architecture Diagram Description:**
+
+```
+[WebSearcher]
+     ↓
+[search(query)] ──→ DuckDuckGo HTML API
+                         ↓
+                   Parse Results (title, url, snippet)
+                         ↓
+                   Return List[SearchResult]
+
+[extract_content(url)] ──→ HTTP GET with timeout
+                              ↓
+                         HTML → BeautifulSoup
+                              ↓
+                         Extract: title, main content, metadata
+                              ↓
+                         Clean: remove scripts, ads, navigation
+```
+
+**Test Scenarios:**
+
+1. Simple query ("Python tutorials") → Returns 5+ results with valid URLs
+2. No results query (random UUID) → Returns empty list, no exception
+3. Content extraction from Wikipedia → Extracts clean text, > 500 chars
+4. Blocked request (403/429) → Graceful handling, returns partial results
+5. Timeout scenario → Raises TimeoutError after configured duration
+
+**Success Metrics:**
+
+- Search latency < 2s for 5 results (95th percentile)
+- Content extraction success rate > 90% for mainstream sites
+- Result relevance: top 3 results contain query terms > 80% of time
+- Zero unhandled exceptions on malformed HTML
+
+**Production Considerations:**
+
+- Implement search result caching (Redis, 1-hour TTL)
+- Add proxy rotation for high-volume usage
+- Support JavaScript-rendered pages (Playwright/Puppeteer integration)
+- Implement robots.txt compliance checking
+- Add content deduplication (same content from different URLs)
+- Support structured data extraction (JSON-LD, OpenGraph)
+- Implement concurrent extraction with semaphore (max 5 parallel)
+- Add source credibility scoring based on domain authority
+- Consider legal compliance (terms of service, rate limits)
+
+---
+
+### POC-06: Request Classification with LLM
+
+**Time:** 1.5 hours | **Builds Toward:** Smart Orchestrator
+
+**Objective:** Use an LLM to classify requests into agent categories.
+
+```python
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+from typing import Literal
+
+class Classification(BaseModel):
+    agent: Literal["research", "code", "analysis", "creative", "assistant"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    reasoning: str
+
+class RequestClassifier:
+    def __init__(self):
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        self.classifier = llm.with_structured_output(Classification)
+
+    async def classify(self, message: str) -> Classification:
+        prompt = f"""Classify this request:
+"{message}"
+
+Categories: research, code, analysis, creative, assistant"""
+        return await self.classifier.ainvoke(prompt)
+
+# Usage
+classifier = RequestClassifier()
+result = await classifier.classify("Write a Python sorting function")
+print(f"Agent: {result.agent}, Confidence: {result.confidence}")
+```
+
+**Validation:** Clear requests classified accurately, confidence reflects certainty.
+
+<Callout type="info">
+**Technical Requirements:** LangChain >= 0.2.0 with structured output support. Pydantic v2 for schema validation and type coercion. Temperature = 0 for deterministic classification. Model: gpt-4o-mini minimum (gpt-4o for complex edge cases). Response must include: agent category, confidence score (0-1), reasoning. Classification latency budget: < 500ms (excluding network).
+</Callout>
+
+**Architecture Diagram Description:**
+
+```
+[RequestClassifier]
+     ↓
+[classify(message)]
+     ↓
+Construct prompt with:
+  - Message to classify
+  - Category definitions with examples
+  - Output schema (Pydantic model)
+     ↓
+LLM with structured output
+     ↓
+Parse response → Classification object
+     ↓
+Validate confidence threshold
+     ↓
+Return (agent, confidence, reasoning)
+```
+
+**Test Scenarios:**
+
+1. Clear code request ("Write a sorting algorithm") → agent="code", confidence > 0.9
+2. Clear research request ("What is quantum computing?") → agent="research", confidence > 0.9
+3. Ambiguous request ("Help me with my project") → confidence < 0.7, reasoning explains ambiguity
+4. Multi-intent request ("Research AI and write code for it") → Primary intent identified, reasoning notes secondary
+5. Adversarial input (prompt injection attempt) → Classifies as "assistant", doesn't execute injected instructions
+
+**Success Metrics:**
+
+- Classification accuracy ≥ 92% on labeled test set (100+ examples)
+- Confidence calibration: high confidence (>0.8) predictions accurate >95% of time
+- Average latency < 400ms (p95 < 800ms)
+- Reasoning provides actionable explanation in >90% of cases
+
+**Production Considerations:**
+
+- Implement hybrid classification: rule-based pre-filter + LLM for edge cases
+- Add classification caching for repeated/similar requests
+- Support confidence thresholds with human escalation for low-confidence cases
+- Implement few-shot examples in prompt for improved accuracy
+- Add classification feedback loop (user corrections improve model)
+- Support multi-label classification for complex requests
+- Implement cost tracking per classification (token usage)
+- Add A/B testing framework for prompt optimization
+- Consider fine-tuned classifier model for high-volume production
+- Implement request preprocessing (normalize, expand abbreviations)
+
+---
+
+## Tier 3: Mini Projects (2-4 hours each)
+
+Mini Projects are standalone services that can be deployed independently. They form the building blocks of the capstone ecosystem. These are the focus of Weeks 5-8 (Month 2), where you'll build production-ready microservices.
+
+{/* IMAGE_PLACEHOLDER: Create a microservices architecture diagram showing all 5 mini projects as service boxes with their ports. Each service box should include: service name, port number, key features (3-4 bullet points), and technology icons (FastAPI, Redis, PostgreSQL, etc.). Show inter-service communication with labeled arrows (e.g., "Memory Service → RAG Service: context retrieval"). Use a modern cloud architecture style with rounded rectangles, subtle shadows, and a professional color palette. Include a legend explaining the arrow types (sync call, async message, data flow). Place this before the table. */}
+
+| MP  | Service        | Port | Purpose                                 | Week Coverage |
+| --- | -------------- | ---- | --------------------------------------- | ------------- |
+| 01  | Prompt Library | 8001 | Prompt storage, versioning, rendering   | Week 6 (Day 37)|
+| 02  | Memory Service | 8002 | STM (Redis), LTM (PostgreSQL), Episodic | Week 6 (Day 38)|
+| 03  | RAG Service    | 8003 | Document ingestion, vector search       | Week 6 (Day 39)|
+| 04  | LLM Router     | 8004 | Multi-provider routing, fallback        | Week 7 (Day 40)|
+| 05  | Research Agent | 8005 | Web search, synthesis                   | Week 7 (Day 41)|
+
+Each mini project is covered in detail in Days 37-41. See those modules for complete implementations.
+
+---
+
+## Tier 4: Projects (4-8 hours each)
+
+Full projects combine multiple concepts into end-to-end systems. These span Weeks 6-10 and represent significant milestones in your 90-day journey. Each project integrates multiple mini-projects and demonstrates production-ready patterns.
+
+{/* IMAGE_PLACEHOLDER: Create a project roadmap visualization showing the 5 major projects as milestone markers on a curved path. Each project should be represented by a circular node with: project number, title, day number, estimated hours, and 2-3 key technology icons. Connect the nodes with a flowing path line that shows progression. Add small branch indicators showing which mini-projects (MP-01 through MP-05) feed into each project. Use a journey/roadmap aesthetic with subtle animations on hover. Include week markers (Week 6, 7, 8, 9, 10) along the path. Place this after the tier description. */}
+
+### Project 1: Deep Research Analyst (Day 08)
+
+**Time:** 6 hours | **Week:** 2 (Month 1)
+
+Build an autonomous agent that researches topics, browses the web, and synthesizes comprehensive reports with citations.
+
+**Architecture:** Query Planner → Search Loop → Content Extraction → Synthesis → Report
+
+**Key Skills:** Agent loops, web search, multi-source synthesis, citation tracking
+
+**Integrates:** Exercises EX-01, EX-03, EX-06, POC-05
+
+---
+
+### Project 2: Self-Healing K8s Operator (Day 10)
+
+**Time:** 8 hours | **Week:** 2 (Month 1)
+
+Create an agentic Kubernetes operator that monitors cluster state, detects issues, and autonomously applies fixes.
+
+**Architecture:** Event Watcher → Log Analyzer → Diagnosis Agent → Fix Generator → Approval Gate
+
+**Key Skills:** Event-driven agents, infrastructure automation, human-in-the-loop
+
+**Integrates:** Exercises EX-02, EX-03, EX-06, POC-01
+
+---
+
+### Project 3: Secure Local Data Analyst (Day 15)
+
+**Time:** 6 hours | **Week:** 3 (Month 1)
+
+A local-first agent that analyzes sensitive CSV/Excel data using SQL/Python without data leaving your machine.
+
+**Architecture:** Data Loader → Schema Analyzer → Query Planner → Sandboxed Execution → Results
+
+**Key Skills:** Local LLMs, secure code execution, data analysis
+
+**Integrates:** Exercises EX-01, EX-02, EX-04, POC-03
+
+---
+
+### Project 4: Legacy Code Refactorer (Day 17)
+
+**Time:** 8 hours | **Week:** 3 (Month 1)
+
+An agent that traverses git repositories, builds dependency graphs, and autonomously refactors legacy code.
+
+**Architecture:** Repo Analyzer → AST Parser → Pattern Detector → Refactor Planner → PR Creator
+
+**Key Skills:** Code understanding, AST analysis, automated refactoring
+
+**Integrates:** Exercises EX-02, EX-03, EX-05, POC-04
+
+---
+
+### Project 5: Financial Forensics Swarm (Day 22)
+
+**Time:** 8 hours | **Week:** 4 (Month 1)
+
+A multi-agent swarm that detects fraud patterns in real-time transaction streams.
+
+**Architecture:** Stream Processor → Dispatcher → Worker Swarm → Pattern Aggregator → Alert Generator
+
+**Key Skills:** Swarm orchestration, real-time processing, specialized workers
+
+**Integrates:** Exercises EX-06, EX-08, EX-09, POC-01, POC-02
+
+---
+
+## Tier 5: Capstone - AgentOS
+
+**Time:** 20+ hours | **Weeks:** 9-12 (Month 3)
+
+The capstone integrates everything into a self-hosted agentic ecosystem. This is the culmination of your 90-day journey, bringing together all exercises, POCs, mini-projects, and projects into a unified platform.
+
+{/* IMAGE_PLACEHOLDER: Create an animated system architecture diagram showing the complete AgentOS ecosystem. Use a layered approach with 4 distinct layers: (1) UI Layer at top (Web Dashboard, REST API, CLI), (2) Core Layer (API Gateway, Smart Orchestrator, 5 specialized agents), (3) Service Layer (5 mini-projects with their ports), (4) Infrastructure Layer at bottom (Docker, Redis, PostgreSQL, Vector DB). Show data flow with animated arrows between components. Use a modern dark theme with glowing connection lines and subtle pulse animations on active components. Include a legend explaining component types and connection patterns. This should be an interactive diagram where hovering over a component highlights its dependencies. Place this before the Mermaid diagram. */}
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph UI[User Interfaces]
+        Web[Web Dashboard]
+        API[REST API]
+        CLI[CLI Tool]
+    end
+    
+    subgraph Core[AgentOS Core]
+        GW[API Gateway]
+        Orch[Smart Orchestrator]
+        
+        GW --> Orch
+        Orch --> R1[Research Agent]
+        Orch --> R2[Code Agent]
+        Orch --> R3[Analysis Agent]
+        Orch --> R4[Creative Agent]
+        Orch --> R5[Assistant Agent]
+    end
+    
+    subgraph Services[Service Layer]
+        S1[Prompt Library]
+        S2[Memory Service]
+        S3[RAG Service]
+        S4[LLM Router]
+        S5[Research Service]
+    end
+    
+    Web --> GW
+    API --> GW
+    CLI --> GW
+    
+    R1 --> S1
+    R1 --> S2
+    R1 --> S5
+    R2 --> S1
+    R2 --> S3
+    R3 --> S2
+    R3 --> S3
+`}
+/>
+
+### What You Build in the Capstone
+
+The capstone is structured across the final month (Weeks 9-12) of your 90-day journey. Each phase builds incrementally toward a fully functional agentic platform.
+
+{/* IMAGE_PLACEHOLDER: Create a Gantt chart-style timeline showing the 5 capstone phases across Weeks 9-12. Each phase should be a horizontal bar showing: phase name, duration in hours, week span, and key deliverables. Use different colors for each phase (Phase 1: blue, Phase 2: green, Phase 3: purple, Phase 4: orange, Phase 5: red). Include milestone markers at the end of each phase. Show dependencies with connecting lines between phases. Add a progress indicator showing cumulative hours (0 to 20+). Place this before the phase descriptions. */}
+
+**Phase 1: Service Integration (4 hours)** | Week 9
+
+- Deploy all 5 mini-project services
+- Configure Docker Compose networking
+- Verify inter-service communication
+
+**Phase 2: Smart Orchestrator (4 hours)** | Week 10
+
+- Request classification with hybrid approach
+- Context enrichment from Memory and RAG
+- Agent routing based on classification
+
+**Phase 3: Agent Fleet (6 hours)** | Week 10-11
+
+- 5 specialized agents with unique capabilities
+- Each agent uses relevant services
+- Consistent interface via BaseAgent class
+
+**Phase 4: API Gateway (3 hours)** | Week 11
+
+- Unified entry point with authentication
+- Rate limiting and usage tracking
+- Health monitoring endpoints
+
+**Phase 5: Web Dashboard (4 hours)** | Week 12
+
+- Real-time chat interface
+- Agent activity monitoring
+- Document management
+- Prompt library browser
+
+### Capstone Validation Checklist
+
+Use this comprehensive checklist to validate your completed AgentOS ecosystem. By the end of Week 12, all items should be checked off.
+
+{/* IMAGE_PLACEHOLDER: Create an interactive checklist dashboard with 4 sections matching the categories below. Each section should be a card with a progress ring showing completion percentage. Items within each section should have checkboxes that can be toggled (for demonstration purposes). Use green checkmarks for completed items, gray circles for incomplete. Include an overall progress indicator at the top showing total completion across all categories. Add small icons next to each item (server icon for services, brain for orchestrator, robot for agents, docker whale for infrastructure). Use a clean, modern design with subtle shadows and hover effects. Place this before the checklist text. */}
+
+**Services:**
+
+- ✓ All 5 services running and healthy
+- ✓ Inter-service communication working
+- ✓ Database migrations applied
+- ✓ Health check endpoints responding
+- ✓ Service logs accessible and structured
+
+**Orchestrator:**
+
+- ✓ Request classification accurate (>90%)
+- ✓ Context enrichment includes memories
+- ✓ Agent routing works for all types
+- ✓ Fallback handling for edge cases
+- ✓ Request/response logging enabled
+
+**Agents:**
+
+- ✓ Research agent returns cited answers
+- ✓ Code agent generates working code
+- ✓ Analysis agent processes data
+- ✓ Creative agent produces content
+- ✓ Assistant handles misc requests
+- ✓ All agents use appropriate services
+
+**Infrastructure:**
+
+- ✓ Docker Compose starts all services
+- ✓ Local LLM (Ollama) working
+- ✓ Cloud LLM fallback working
+- ✓ Redis persistence configured
+- ✓ PostgreSQL backups enabled
+- ✓ Vector database indexed
+
+---
+
+## Skill Progression Map
+
+This matrix shows how skills develop across the 90-day curriculum, from first introduction in exercises through mastery in the capstone. Track your progress as you move from left to right.
+
+{/* IMAGE_PLACEHOLDER: Create an interactive skill progression matrix visualization. Show 12 skills as rows (LLM Calls, Structured Output, Tool Use, State Machines, Embeddings, Vector Search, Redis, FastAPI, Multi-Provider, Prompt Templates, Web Search, Classification). Show 5 columns representing the tiers (Exercise, POC, Mini Project, Project, Capstone). Each cell should contain the specific exercise/project code (e.g., "EX-01", "POC-01") where that skill is used. Use a color gradient from light (first exposure) to dark (mastery) as you move left to right. Add hover tooltips showing skill descriptions and learning outcomes. Include a "Your Progress" overlay where users can mark completed items. Use a modern table design with alternating row colors and clear grid lines. Place this before the table. */}
+
+| Skill             | Exercise | POC    | Mini Project | Project | Capstone       |
+| ----------------- | -------- | ------ | ------------ | ------- | -------------- |
+| LLM Calls         | EX-01    | -      | All          | All     | All Agents     |
+| Structured Output | EX-02    | POC-06 | MP-01        | P1, P3  | Classifier     |
+| Tool Use          | EX-03    | POC-01 | MP-05        | P1, P2  | All Agents     |
+| State Machines    | -        | POC-01 | -            | P1, P5  | Orchestrator   |
+| Embeddings        | EX-09    | POC-02 | MP-02, MP-03 | P1      | Memory, RAG    |
+| Vector Search     | EX-13    | POC-02 | MP-03        | P1      | RAG Service    |
+| Redis             | EX-11    | -      | MP-02        | -       | STM            |
+| FastAPI           | EX-10    | -      | All MPs      | All     | Gateway        |
+| Multi-Provider    | -        | POC-03 | MP-04        | P3      | LLM Router     |
+| Prompt Templates  | EX-05    | POC-04 | MP-01        | All     | Prompt Library |
+| Web Search        | -        | POC-05 | MP-05        | P1      | Research Agent |
+| Classification    | EX-08    | POC-06 | -            | P5      | Orchestrator   |
+
+---
+
+## Getting Started
+
+Your 90-day journey is structured to build skills progressively across three distinct months:
+
+{/* IMAGE_PLACEHOLDER: Create a three-panel infographic showing the learning path across the 90 days. Panel 1 (Month 1/Days 1-30): "Foundations" - show icons for exercises, POCs, and early projects with a foundation/building blocks theme. Panel 2 (Month 2/Days 31-60): "Production Skills" - show icons for mini-projects and services with a construction/assembly theme. Panel 3 (Month 3/Days 61-90): "Mastery" - show the complete AgentOS ecosystem with a rocket/launch theme. Use a horizontal layout with arrows connecting the panels. Include key metrics for each month (number of exercises, projects, hours invested). Use an inspiring color gradient from blue (start) to purple (mastery). Place this after the "Getting Started" heading. */}
+
+1. **Month 1 (Weeks 1-4, Days 1-30):** Complete all exercises (EX-01 through EX-15) and build POCs (POC-01 through POC-06). Focus on fundamentals: LLM interactions, memory systems, RAG patterns, and basic agent architectures.
+
+2. **Month 2 (Weeks 5-8, Days 31-60):** Implement mini projects (MP-01 through MP-05) as standalone services. Learn production engineering: API design, service orchestration, observability, and reliability patterns.
+
+3. **Month 3 (Weeks 9-12, Days 61-90):** Build full projects and integrate into the capstone. Master advanced architectures: multi-agent systems, swarm patterns, enterprise deployment, and the complete AgentOS ecosystem.
+
+<Callout type="tip">
+  **Pro Tip:** Do not skip the exercises. Each one teaches a fundamental skill
+  that you will use repeatedly in larger projects. The 15-30 minutes invested
+  pays off exponentially throughout the 90-day journey.
+</Callout>
+
+<Exercise title="Start Your Journey">
+  
+Begin with EX-01: First LLM Call. Set up your environment, make your first API call, and observe the response. This single exercise unlocks everything that follows.
+
+Once comfortable, work through the exercises in order. Each builds on the previous, creating a solid foundation for the POCs and projects ahead.
+
+**Your First Week Checklist:**
+- Day 1-2: Complete EX-01 through EX-05 (environment setup and basics)
+- Day 3-4: Complete EX-06 through EX-10 (agent patterns and APIs)
+- Day 5-6: Complete EX-11 through EX-15 (memory and RAG)
+- Day 7: Start POC-01 (LangGraph State Machine)
+
+By the end of Week 1, you'll have completed 15 exercises and your first proof of concept, establishing a strong foundation for the remaining 11 weeks.
+
+</Exercise>

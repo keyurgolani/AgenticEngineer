@@ -1,0 +1,1778 @@
+---
+title: "Day 20: Agent Memory Systems"
+description: "Implementing short-term, long-term, and episodic memory for persistent agents using LangGraph checkpointing."
+week: 3
+day: 20
+---
+
+<ReadingTime minutes={35} />
+
+<SkillLevel level="intermediate" description="Hands-on Python implementation" />
+
+<Prerequisites
+  items={[
+    "Completed Day 02: Context Engineering (L1/L2/L3 memory hierarchy)",
+    "Completed Day 03: LangGraph Basics (state, nodes, edges)",
+    "Completed Day 05: RAG (vector databases, embeddings)",
+    "Python classes and data structures",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Distinguish between the four types of agent memory",
+    "Implement working memory for current task state",
+    "Build episodic memory using vector databases",
+    "Create semantic memory for facts and preferences",
+    "Use LangGraph checkpointing for conversation persistence",
+    "Integrate all memory types into a unified system",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Working Memory",
+      definition:
+        "Short-term storage for the current task—like RAM in a computer (maps to L1 from Day 02)",
+    },
+    {
+      term: "Episodic Memory",
+      definition:
+        "Storage of past experiences and interactions for later retrieval (maps to L2)",
+    },
+    {
+      term: "Semantic Memory",
+      definition:
+        "Long-term storage of facts, knowledge, and user preferences (maps to L3)",
+    },
+    {
+      term: "Procedural Memory",
+      definition:
+        "Learned patterns and successful workflows the agent can reuse",
+    },
+    {
+      term: "Checkpointer",
+      definition:
+        "LangGraph's persistence mechanism that saves graph state at each step",
+    },
+    {
+      term: "Thread",
+      definition:
+        "A unique conversation identifier that groups related checkpoints together",
+    },
+    {
+      term: "Memory Consolidation",
+      definition:
+        "The process of extracting, deduplicating, and updating memories from conversations—similar to how humans consolidate memories during sleep",
+    },
+    {
+      term: "Graph Memory",
+      definition:
+        "Memory stored as entities (nodes) and relationships (edges), enabling complex relational reasoning across interconnected facts",
+    },
+  ]}
+/>
+
+---
+
+## The Memory Hierarchy
+
+<Callout type="info">
+  **Connection to Day 02:** Remember the L1/L2/L3 memory hierarchy we introduced
+  in Context Engineering? Today we implement it. Working Memory = L1 (context
+  window), Episodic Memory = L2 (vector database), Semantic Memory = L3
+  (archival facts).
+</Callout>
+
+<ConceptIntro
+  title="Agent Memory Systems"
+  analogy="Think about how you remember things. Your working memory holds what you're actively thinking about (like a phone number you're about to dial). Your episodic memory stores experiences (what you did yesterday). Your semantic memory holds facts (Paris is in France). Your procedural memory stores skills (how to ride a bike). Agents need all four types to be truly useful."
+  technicalDef="Agent memory systems provide persistence across interactions. Working memory holds current task state in the context window. Episodic memory stores past interactions in a vector database. Semantic memory stores facts and preferences. Procedural memory captures successful patterns for reuse."
+  whyItMatters="Without memory, every conversation starts from scratch. Memory enables personalization, learning from mistakes, and building on past work—the difference between a useful assistant and a forgetful chatbot."
+/>
+
+Human cognition relies on multiple memory systems working together. Production agents need the same—working memory for immediate tasks, episodic memory for experiences, and semantic memory for facts.
+
+<Callout type="warning">
+  **2024-2025 Memory Revolution:** The field of agent memory has evolved
+  rapidly. Research from [Mem0](https://arxiv.org/abs/2504.19413) shows that
+  structured memory systems achieve 26% better accuracy than naive approaches
+  while reducing latency by 91%. Graph-based memory representations are emerging
+  as the gold standard for complex relational reasoning.
+</Callout>
+
+<RealWorldExample
+  title="A Personal Assistant That Remembers"
+  scenario="You've been working with an AI assistant for months on a software project."
+  implementation="The agent remembers: (Working) Your current task is fixing a bug. (Episodic) Last week you struggled with a similar bug and solved it by checking the logs. (Semantic) You prefer Python over JavaScript, and your codebase uses PostgreSQL. (Procedural) When you say 'deploy', it knows to run your specific deployment script."
+  takeaway="Each memory type serves a different purpose. Together, they create an assistant that truly knows you and your project."
+/>
+
+---
+
+## 6.1 Memory Types for Agents
+
+<ConceptVisual
+  src="/images/agent_memory_architecture_layers.png"
+  alt="Four Layers of Agent Memory"
+  caption="Memory systems map directly to human cognitive structures for robustness."
+/>
+
+![Agent Memory Architecture](/images/memory_systems.png)
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph Working Memory
+        WM[Current Task Context]
+        WM --> Scratchpad[Scratchpad]
+        WM --> ActiveGoals[Active Goals]
+    end
+    
+    subgraph Episodic Memory
+        EM[Past Experiences]
+        EM --> Conversations[Conversation History]
+        EM --> Actions[Action Traces]
+    end
+    
+    subgraph Semantic Memory
+        SM[Facts & Knowledge]
+        SM --> UserPrefs[User Preferences]
+        SM --> DomainKnowledge[Domain Knowledge]
+    end
+    
+    subgraph Procedural Memory
+        PM[Learned Skills]
+        PM --> Patterns[Successful Patterns]
+        PM --> Workflows[Workflow Templates]
+    end
+    
+    style WM fill:#f9f,stroke:#333
+    style EM fill:#bbf,stroke:#333
+    style SM fill:#bfb,stroke:#333
+    style PM fill:#ff9,stroke:#333
+`}
+/>
+
+### Memory Type Comparison
+
+| Memory Type    | What It Stores      | Persistence | Access Pattern     | Day 02 Mapping | Human Analogy                |
+| :------------- | :------------------ | :---------- | :----------------- | :------------- | :--------------------------- |
+| **Working**    | Current task state  | Session     | Direct read/write  | L1 (Context)   | What you're thinking now     |
+| **Episodic**   | Past interactions   | Long-term   | Temporal retrieval | L2 (Vector DB) | What you did yesterday       |
+| **Semantic**   | Facts and knowledge | Permanent   | Semantic search    | L3 (Archival)  | Things you learned in school |
+| **Procedural** | Learned behaviors   | Permanent   | Pattern matching   | L3 (Archival)  | How to ride a bike           |
+
+### Modern Memory Taxonomy
+
+Recent research has proposed a more nuanced taxonomy for agent memory based on three dimensions:
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph Forms["Memory Forms"]
+        TL[Token-level<br/>Raw context window]
+        PM[Parametric<br/>Fine-tuned weights]
+        LT[Latent<br/>Hidden state vectors]
+    end
+    
+    subgraph Functions["Memory Functions"]
+        FM[Factual Memory<br/>Facts & knowledge]
+        EM[Experiential Memory<br/>Past interactions]
+        WM[Working Memory<br/>Current task state]
+    end
+    
+    subgraph Dynamics["Memory Dynamics"]
+        FO[Formation<br/>How memories are created]
+        EV[Evolution<br/>How memories update]
+        RT[Retrieval<br/>How memories are accessed]
+    end
+    
+    Forms --> Functions
+    Functions --> Dynamics
+    
+    style TL fill:#f9f,stroke:#333
+    style FM fill:#bbf,stroke:#333
+    style FO fill:#bfb,stroke:#333
+`}
+/>
+
+This taxonomy helps us understand that memory isn't just about _what_ is stored, but _how_ it's represented, _why_ it's needed, and _when_ it changes.
+
+<ConceptVisual
+  src="/images/memory_taxonomy_cube.png"
+  alt="3D Memory Taxonomy"
+  caption="Memory isn't just storage; it's a multi-dimensional system of forms, functions, and dynamics."
+/>
+
+---
+
+## 6.2 Implementing Working Memory
+
+<ConceptVisual
+  src="/images/working_memory_process.png"
+  alt="Working Memory Lifecycle"
+  caption="Working memory manages the immediate context, just like RAM in a computer."
+/>
+
+Working memory holds the agent's current focus—active goals, intermediate results, and task state.
+
+```python
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+from datetime import datetime
+
+@dataclass
+class WorkingMemory:
+    """Agent's short-term working memory."""
+
+    # Current task context
+    current_goal: str = ""
+    sub_goals: List[str] = field(default_factory=list)
+
+    # Scratchpad for intermediate results
+    scratchpad: Dict[str, Any] = field(default_factory=dict)
+
+    # Recent observations (sliding window)
+    observations: List[Dict[str, Any]] = field(default_factory=list)
+    max_observations: int = 10
+
+    def set_goal(self, goal: str) -> None:
+        """Set the current high-level goal."""
+        self.current_goal = goal
+        self.sub_goals = []
+        self.scratchpad = {}
+
+    def add_sub_goal(self, sub_goal: str) -> None:
+        """Add a sub-goal to the current task."""
+        self.sub_goals.append(sub_goal)
+
+    def complete_sub_goal(self, sub_goal: str) -> None:
+        """Mark a sub-goal as complete."""
+        if sub_goal in self.sub_goals:
+            self.sub_goals.remove(sub_goal)
+
+    def write(self, key: str, value: Any) -> None:
+        """Write to scratchpad."""
+        self.scratchpad[key] = {
+            "value": value,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    def read(self, key: str) -> Optional[Any]:
+        """Read from scratchpad."""
+        if key in self.scratchpad:
+            return self.scratchpad[key]["value"]
+        return None
+
+    def add_observation(self, observation: Dict[str, Any]) -> None:
+        """Add an observation, maintaining sliding window."""
+        self.observations.append({
+            **observation,
+            "timestamp": datetime.now().isoformat()
+        })
+
+        # Keep only recent observations
+        if len(self.observations) > self.max_observations:
+            self.observations = self.observations[-self.max_observations:]
+
+    def to_context(self) -> str:
+        """Convert working memory to context string for LLM."""
+        parts: List[str] = []
+
+        if self.current_goal:
+            parts.append(f"Current Goal: {self.current_goal}")
+
+        if self.sub_goals:
+            parts.append(f"Remaining Sub-goals: {', '.join(self.sub_goals)}")
+
+        if self.scratchpad:
+            scratchpad_str = "\n".join([
+                f"  - {k}: {v['value']}"
+                for k, v in self.scratchpad.items()
+            ])
+            parts.append(f"Scratchpad:\n{scratchpad_str}")
+
+        if self.observations:
+            recent = self.observations[-3:]  # Last 3 observations
+            obs_str = "\n".join([
+                f"  - {o.get('action', 'unknown')}: {str(o.get('result', ''))[:100]}"
+                for o in recent
+            ])
+            parts.append(f"Recent Observations:\n{obs_str}")
+
+        return "\n\n".join(parts)
+```
+
+---
+
+## 6.3 Implementing Episodic Memory
+
+<ConceptVisual
+  src="/images/episodic_timeline_visualization.png"
+  alt="Episodic Memory Timeline"
+  caption="Events are stored sequentially but retrieved by semantic similarity."
+/>
+
+Episodic memory stores past experiences—conversations, actions, and their outcomes. This maps to L2 in our memory hierarchy from Day 02.
+
+```python
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from datetime import datetime
+import chromadb
+
+class EpisodicMemory:
+    """Long-term storage of agent experiences."""
+
+    def __init__(self, persist_path: str = "./episodic_memory"):
+        self.persist_path = Path(persist_path)
+        self.persist_path.mkdir(exist_ok=True)
+
+        # Vector store for semantic search over episodes
+        self.chroma = chromadb.PersistentClient(path=str(self.persist_path / "chroma"))
+        self.collection = self.chroma.get_or_create_collection("episodes")
+
+        # JSON store for full episode data
+        self.episodes_file = self.persist_path / "episodes.jsonl"
+
+    def store_episode(self, episode: Dict[str, Any]) -> str:
+        """Store a complete interaction episode."""
+        episode_id = f"ep_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+
+        # Create searchable summary
+        summary = self._create_summary(episode)
+
+        # Store in vector DB for retrieval
+        self.collection.add(
+            documents=[summary],
+            metadatas=[{
+                "episode_id": episode_id,
+                "timestamp": datetime.now().isoformat(),
+                "goal": episode.get("goal", ""),
+                "outcome": episode.get("outcome", "unknown")
+            }],
+            ids=[episode_id]
+        )
+
+        # Store full episode in JSONL
+        with open(self.episodes_file, "a") as f:
+            f.write(json.dumps({
+                "id": episode_id,
+                "timestamp": datetime.now().isoformat(),
+                **episode
+            }) + "\n")
+
+        return episode_id
+
+    def _create_summary(self, episode: Dict[str, Any]) -> str:
+        """Create a searchable summary of an episode."""
+        parts: List[str] = []
+
+        if "goal" in episode:
+            parts.append(f"Goal: {episode['goal']}")
+
+        if "actions" in episode:
+            actions = [a.get("action", "") for a in episode["actions"][:5]]
+            parts.append(f"Actions: {', '.join(actions)}")
+
+        if "outcome" in episode:
+            parts.append(f"Outcome: {episode['outcome']}")
+
+        if "learnings" in episode:
+            parts.append(f"Learnings: {episode['learnings']}")
+
+        return " | ".join(parts)
+
+    def recall_similar(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+        """Recall episodes similar to the query."""
+        results = self.collection.query(
+            query_texts=[query],
+            n_results=n_results
+        )
+
+        episodes: List[Dict[str, Any]] = []
+        if results["metadatas"] and results["metadatas"][0]:
+            for metadata in results["metadatas"][0]:
+                episode = self._load_episode(metadata["episode_id"])
+                if episode:
+                    episodes.append(episode)
+
+        return episodes
+
+    def recall_recent(self, n: int = 5) -> List[Dict[str, Any]]:
+        """Recall the most recent episodes."""
+        episodes: List[Dict[str, Any]] = []
+
+        if self.episodes_file.exists():
+            with open(self.episodes_file, "r") as f:
+                lines = f.readlines()
+                for line in lines[-n:]:
+                    episodes.append(json.loads(line))
+
+        return episodes
+
+    def _load_episode(self, episode_id: str) -> Optional[Dict[str, Any]]:
+        """Load full episode data by ID."""
+        if self.episodes_file.exists():
+            with open(self.episodes_file, "r") as f:
+                for line in f:
+                    episode = json.loads(line)
+                    if episode.get("id") == episode_id:
+                        return episode
+        return None
+
+    def to_context(self, query: Optional[str] = None, n: int = 3) -> str:
+        """Convert relevant episodes to context string."""
+        if query:
+            episodes = self.recall_similar(query, n)
+        else:
+            episodes = self.recall_recent(n)
+
+        if not episodes:
+            return "No relevant past experiences found."
+
+        parts = ["Relevant Past Experiences:"]
+        for ep in episodes:
+            parts.append(f"- Goal: {ep.get('goal', 'unknown')}")
+            parts.append(f"  Outcome: {ep.get('outcome', 'unknown')}")
+            if ep.get("learnings"):
+                parts.append(f"  Learning: {ep['learnings']}")
+
+        return "\n".join(parts)
+```
+
+---
+
+## 6.4 Implementing Semantic Memory
+
+<ConceptVisual
+  src="/images/semantic_knowledge_graph.png"
+  alt="Semantic Knowledge Graph"
+  caption="Facts, preferences, and domain knowledge form an interconnected graph."
+/>
+
+Semantic memory stores facts, user preferences, and domain knowledge. This maps to L3 (archival) in our memory hierarchy.
+
+<Callout type="info">
+  **Memory Consolidation:** Unlike simple key-value storage, modern semantic
+  memory systems use LLMs to extract, deduplicate, and update facts. When a user
+  says "I moved to Seattle" after previously saying "I live in Portland," the
+  system should update—not duplicate—the location fact.
+</Callout>
+
+```python
+from pathlib import Path
+from typing import Any, Dict, List
+from datetime import datetime
+import chromadb
+
+class SemanticMemory:
+    """Long-term storage of facts and knowledge."""
+
+    def __init__(self, persist_path: str = "./semantic_memory"):
+        self.persist_path = Path(persist_path)
+        self.persist_path.mkdir(exist_ok=True)
+
+        self.chroma = chromadb.PersistentClient(path=str(self.persist_path / "chroma"))
+
+        # Separate collections for different knowledge types
+        self.facts = self.chroma.get_or_create_collection("facts")
+        self.preferences = self.chroma.get_or_create_collection("preferences")
+        self.domain = self.chroma.get_or_create_collection("domain_knowledge")
+
+    def store_fact(self, fact: str, source: str = "observation", confidence: float = 1.0) -> None:
+        """Store a fact with metadata."""
+        fact_id = f"fact_{hash(fact) % 10**8}"
+
+        self.facts.upsert(
+            documents=[fact],
+            metadatas=[{
+                "source": source,
+                "confidence": confidence,
+                "timestamp": datetime.now().isoformat()
+            }],
+            ids=[fact_id]
+        )
+
+    def store_preference(self, user_id: str, preference: str, value: Any) -> None:
+        """Store a user preference."""
+        pref_id = f"pref_{user_id}_{hash(preference) % 10**6}"
+
+        self.preferences.upsert(
+            documents=[f"{preference}: {value}"],
+            metadatas=[{
+                "user_id": user_id,
+                "preference_key": preference,
+                "preference_value": str(value),
+                "timestamp": datetime.now().isoformat()
+            }],
+            ids=[pref_id]
+        )
+
+    def recall_facts(self, query: str, n: int = 5) -> List[str]:
+        """Recall facts relevant to a query."""
+        results = self.facts.query(
+            query_texts=[query],
+            n_results=n
+        )
+        return results["documents"][0] if results["documents"] else []
+
+    def get_user_preferences(self, user_id: str) -> Dict[str, str]:
+        """Get all preferences for a user."""
+        results = self.preferences.get(
+            where={"user_id": user_id}
+        )
+
+        prefs: Dict[str, str] = {}
+        if results["metadatas"]:
+            for metadata in results["metadatas"]:
+                prefs[metadata["preference_key"]] = metadata["preference_value"]
+
+        return prefs
+
+    def to_context(self, query: str, user_id: str | None = None) -> str:
+        """Convert relevant knowledge to context string."""
+        parts: List[str] = []
+
+        # Relevant facts
+        facts = self.recall_facts(query, n=5)
+        if facts:
+            parts.append("Relevant Facts:")
+            for fact in facts:
+                parts.append(f"  - {fact}")
+
+        # User preferences
+        if user_id:
+            prefs = self.get_user_preferences(user_id)
+            if prefs:
+                parts.append(f"\nUser Preferences:")
+                for k, v in prefs.items():
+                    parts.append(f"  - {k}: {v}")
+
+        return "\n".join(parts) if parts else "No relevant knowledge found."
+```
+
+---
+
+## 6.4.1 Implementing Procedural Memory
+
+<ConceptVisual
+  src="/images/procedural_pattern_library.png"
+  alt="Procedural Pattern Library"
+  caption="Successful workflows are stored as reusable patterns with success rates."
+/>
+
+Procedural memory stores learned patterns and successful workflows. Unlike semantic memory (facts), procedural memory captures _how_ to do things—successful action sequences the agent can reuse.
+
+```python
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from datetime import datetime
+import json
+import chromadb
+
+class ProceduralMemory:
+    """Storage for learned patterns and successful workflows."""
+
+    def __init__(self, persist_path: str = "./procedural_memory"):
+        self.persist_path = Path(persist_path)
+        self.persist_path.mkdir(exist_ok=True)
+
+        self.chroma = chromadb.PersistentClient(path=str(self.persist_path / "chroma"))
+        self.patterns = self.chroma.get_or_create_collection("patterns")
+
+        # JSON store for full workflow data
+        self.workflows_file = self.persist_path / "workflows.json"
+        self.workflows: Dict[str, Any] = self._load_workflows()
+
+    def _load_workflows(self) -> Dict[str, Any]:
+        """Load workflows from disk."""
+        if self.workflows_file.exists():
+            return json.loads(self.workflows_file.read_text())
+        return {}
+
+    def _save_workflows(self) -> None:
+        """Save workflows to disk."""
+        self.workflows_file.write_text(json.dumps(self.workflows, indent=2))
+
+    def store_pattern(
+        self,
+        trigger: str,
+        actions: List[str],
+        outcome: str,
+        success_rate: float = 1.0
+    ) -> str:
+        """Store a successful action pattern."""
+        pattern_id = f"pattern_{hash(trigger) % 10**8}"
+
+        pattern_data = {
+            "trigger": trigger,
+            "actions": actions,
+            "outcome": outcome,
+            "success_rate": success_rate,
+            "uses": 1,
+            "created_at": datetime.now().isoformat(),
+            "last_used": datetime.now().isoformat()
+        }
+
+        # Store in vector DB for semantic matching
+        self.patterns.upsert(
+            documents=[f"When: {trigger}. Do: {' -> '.join(actions)}. Result: {outcome}"],
+            metadatas=[{
+                "pattern_id": pattern_id,
+                "success_rate": success_rate,
+                "uses": 1
+            }],
+            ids=[pattern_id]
+        )
+
+        # Store full data
+        self.workflows[pattern_id] = pattern_data
+        self._save_workflows()
+
+        return pattern_id
+
+    def find_pattern(self, situation: str, min_success_rate: float = 0.7) -> Optional[Dict[str, Any]]:
+        """Find a matching pattern for the current situation."""
+        results = self.patterns.query(
+            query_texts=[situation],
+            n_results=3,
+            where={"success_rate": {"$gte": min_success_rate}}
+        )
+
+        if results["ids"] and results["ids"][0]:
+            best_id = results["ids"][0][0]
+            pattern = self.workflows.get(best_id)
+
+            if pattern:
+                # Update usage stats
+                pattern["uses"] += 1
+                pattern["last_used"] = datetime.now().isoformat()
+                self._save_workflows()
+
+            return pattern
+
+        return None
+
+    def update_success_rate(self, pattern_id: str, success: bool) -> None:
+        """Update pattern success rate based on outcome."""
+        if pattern_id in self.workflows:
+            pattern = self.workflows[pattern_id]
+            uses = pattern["uses"]
+            current_rate = pattern["success_rate"]
+
+            # Exponential moving average
+            new_rate = (current_rate * (uses - 1) + (1.0 if success else 0.0)) / uses
+            pattern["success_rate"] = new_rate
+
+            # Update vector DB metadata
+            self.patterns.update(
+                ids=[pattern_id],
+                metadatas=[{"success_rate": new_rate, "uses": uses}]
+            )
+
+            self._save_workflows()
+
+    def to_context(self, situation: str) -> str:
+        """Get relevant patterns as context."""
+        pattern = self.find_pattern(situation)
+
+        if not pattern:
+            return "No relevant learned patterns found."
+
+        return f"""Learned Pattern (success rate: {pattern['success_rate']:.0%}):
+When facing: {pattern['trigger']}
+Recommended actions: {' → '.join(pattern['actions'])}
+Expected outcome: {pattern['outcome']}"""
+
+
+# Example usage
+if __name__ == "__main__":
+    proc_mem = ProceduralMemory()
+
+    # Store a successful debugging pattern
+    proc_mem.store_pattern(
+        trigger="Python import error",
+        actions=[
+            "Check if package is installed (pip list)",
+            "Verify virtual environment is activated",
+            "Check for circular imports",
+            "Verify __init__.py exists"
+        ],
+        outcome="Import error resolved",
+        success_rate=0.9
+    )
+
+    # Later, when facing a similar situation
+    pattern = proc_mem.find_pattern("ModuleNotFoundError in Python script")
+    if pattern:
+        print(f"Try these steps: {pattern['actions']}")
+```
+
+<Callout type="info">
+  **Procedural vs Episodic:** Episodic memory stores *what happened* (specific
+  experiences). Procedural memory stores *what to do* (generalized patterns).
+  When an agent successfully completes a task multiple times, extract the common
+  pattern and store it as procedural memory.
+</Callout>
+
+---
+
+## 6.5 Memory Consolidation Strategies
+
+<ConceptVisual
+  src="/images/memory_consolidation_factory.png"
+  alt="Memory Consolidation Factory"
+  caption="Visualizing memory consolidation as a factory process: Extract facts -> Evaluate against existing knowledge -> Decide action (Update/Add/Delete) -> Execute."
+/>
+
+Memory consolidation is the process of extracting, deduplicating, and updating memories from conversations. Without consolidation, memory systems become bloated with redundant or contradictory information.
+
+### The Consolidation Pipeline
+
+<Mermaid
+  chart={`
+flowchart LR
+    subgraph Extraction
+        MSG[New Message] --> EXT[Extract Facts]
+        EXT --> CAND[Candidate Memories]
+    end
+    
+    subgraph Evaluation
+        CAND --> SIM[Find Similar<br/>Existing Memories]
+        SIM --> EVAL[LLM Evaluates<br/>Relationship]
+    end
+    
+    subgraph Operations
+        EVAL --> ADD[ADD: New fact]
+        EVAL --> UPD[UPDATE: Merge info]
+        EVAL --> DEL[DELETE: Contradicted]
+        EVAL --> NOOP[NOOP: Duplicate]
+    end
+    
+    ADD --> DB[(Memory Store)]
+    UPD --> DB
+    DEL --> DB
+    
+    style MSG fill:#f9f,stroke:#333
+    style DB fill:#bbf,stroke:#333
+`}
+/>
+
+### Implementing Memory Consolidation
+
+```python
+from openai import OpenAI
+from typing import List, Dict, Any, Literal
+import json
+
+class MemoryConsolidator:
+    """Consolidates memories using LLM-based evaluation."""
+
+    def __init__(self, vector_store, embedding_model):
+        self.client = OpenAI()
+        self.vector_store = vector_store
+        self.embedding_model = embedding_model
+
+    def consolidate(
+        self,
+        new_memory: str,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """Consolidate a new memory with existing memories."""
+
+        # Step 1: Find similar existing memories
+        similar = self.vector_store.search(
+            query=new_memory,
+            filter={"user_id": user_id},
+            top_k=5
+        )
+
+        if not similar:
+            # No similar memories - just add
+            return self._add_memory(new_memory, user_id)
+
+        # Step 2: Use LLM to determine operation
+        operation = self._evaluate_memory(new_memory, similar)
+
+        # Step 3: Execute operation
+        if operation["action"] == "ADD":
+            return self._add_memory(new_memory, user_id)
+        elif operation["action"] == "UPDATE":
+            return self._update_memory(
+                operation["target_id"],
+                operation["merged_content"],
+                user_id
+            )
+        elif operation["action"] == "DELETE":
+            return self._delete_memory(operation["target_id"])
+        else:  # NOOP
+            return {"action": "NOOP", "reason": "Duplicate information"}
+
+    def _evaluate_memory(
+        self,
+        new_memory: str,
+        existing: List[Dict]
+    ) -> Dict[str, Any]:
+        """Use LLM to evaluate how new memory relates to existing ones."""
+
+        existing_str = "\n".join([
+            f"[ID: {m['id']}] {m['content']}"
+            for m in existing
+        ])
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": """You are a memory consolidation system.
+Analyze the new memory against existing memories and decide:
+- ADD: New information not covered by existing memories
+- UPDATE: New info should be merged with an existing memory (provide merged content)
+- DELETE: New info contradicts and replaces an existing memory
+- NOOP: New info is already captured in existing memories
+
+Return JSON: {"action": "ADD|UPDATE|DELETE|NOOP", "target_id": "...", "merged_content": "...", "reason": "..."}"""
+            }, {
+                "role": "user",
+                "content": f"New memory: {new_memory}\n\nExisting memories:\n{existing_str}"
+            }],
+            response_format={"type": "json_object"}
+        )
+
+        return json.loads(response.choices[0].message.content)
+
+    def _add_memory(self, content: str, user_id: str) -> Dict[str, Any]:
+        """Add a new memory to the store."""
+        memory_id = self.vector_store.add(
+            content=content,
+            metadata={"user_id": user_id}
+        )
+        return {"action": "ADD", "id": memory_id}
+
+    def _update_memory(
+        self,
+        memory_id: str,
+        new_content: str,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """Update an existing memory with merged content."""
+        self.vector_store.update(
+            id=memory_id,
+            content=new_content,
+            metadata={"user_id": user_id, "updated": True}
+        )
+        return {"action": "UPDATE", "id": memory_id}
+
+    def _delete_memory(self, memory_id: str) -> Dict[str, Any]:
+        """Mark a memory as invalid (soft delete)."""
+        self.vector_store.update(
+            id=memory_id,
+            metadata={"valid": False}
+        )
+        return {"action": "DELETE", "id": memory_id}
+```
+
+### Summarization for Long Conversations
+
+{/* IMAGE_PLACEHOLDER: Create an animated visualization showing conversation summarization as a compression process. Show a long conversation thread as a series of message bubbles that grows until it hits a token limit threshold (visualize as a progress bar filling up). When the limit is reached, animate the older half of messages being "compressed" into a summary box (like files being zipped). Show the summary prepended to the remaining messages, creating space for new messages. Include a token counter showing how summarization reduces token usage while preserving key information. Visualize the rolling summarization pattern: every N messages triggers a summarization cycle. Use a "memory consolidation during sleep" metaphor where older memories get compressed into summaries while recent memories stay detailed. Add an interactive slider where learners can adjust the max_tokens threshold and see how it affects summarization frequency. */}
+
+When conversations grow long, summarization helps maintain context without exceeding token limits:
+
+```python
+class ConversationSummarizer:
+    """Summarizes conversation history to manage context length."""
+
+    def __init__(self, max_tokens: int = 2000):
+        self.client = OpenAI()
+        self.max_tokens = max_tokens
+
+    def summarize_if_needed(
+        self,
+        messages: List[Dict],
+        current_summary: str = ""
+    ) -> tuple[List[Dict], str]:
+        """Summarize older messages if context is too long."""
+
+        # Estimate token count (rough: 4 chars per token)
+        total_chars = sum(len(m.get("content", "")) for m in messages)
+        estimated_tokens = total_chars // 4
+
+        if estimated_tokens <= self.max_tokens:
+            return messages, current_summary
+
+        # Split: summarize older half, keep recent half
+        split_point = len(messages) // 2
+        to_summarize = messages[:split_point]
+        to_keep = messages[split_point:]
+
+        # Generate summary
+        new_summary = self._create_summary(to_summarize, current_summary)
+
+        return to_keep, new_summary
+
+    def _create_summary(
+        self,
+        messages: List[Dict],
+        previous_summary: str
+    ) -> str:
+        """Create a summary of messages."""
+
+        messages_text = "\n".join([
+            f"{m['role']}: {m['content']}"
+            for m in messages
+        ])
+
+        prompt = f"""Summarize this conversation segment concisely.
+Focus on: key facts, decisions made, user preferences, and action items.
+
+Previous context: {previous_summary or 'None'}
+
+New messages to summarize:
+{messages_text}
+
+Summary:"""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=500
+        )
+
+        return response.choices[0].message.content
+```
+
+<Callout type="tip">
+  **Rolling Summarization:** A common pattern is to summarize every N messages
+  (e.g., 10-20 turns) and prepend the summary to the context. This maintains
+  awareness of the full conversation while keeping token usage bounded.
+</Callout>
+
+---
+
+## 6.6 LangGraph Checkpointing for Conversation Memory
+
+{/* IMAGE_PLACEHOLDER: Create an interactive visualization of LangGraph's checkpointing system. Show a conversation thread as a branching timeline where each checkpoint is a node. Visualize: (1) Thread creation with a unique thread_id, (2) Messages being added and state being saved at each step (show the checkpoint being written to storage), (3) Multiple threads for the same user running in parallel, (4) Time travel: ability to fork from any checkpoint and create alternate timelines. Include a database visualization showing how checkpoints are stored (thread_id, checkpoint_id, state blob, metadata). Animate the persistence cycle: invoke() → process → save checkpoint → return result. Show the difference between MemorySaver (in-memory, lost on restart) and SqliteSaver/PostgresSaver (persistent, survives restarts). Use a "save game" metaphor from video games where you can save progress and reload from any point. Add an interactive component where learners can simulate creating threads, adding messages, and seeing checkpoints being created. */}
+
+<Callout type="info">
+  **Connection to Day 03:** LangGraph's checkpointing system provides built-in
+  persistence for agent state. This is the recommended way to implement
+  conversation memory in production LangGraph agents.
+</Callout>
+
+LangGraph provides a powerful persistence layer through **checkpointers**. When you compile a graph with a checkpointer, it automatically saves the graph state at every step, enabling:
+
+- **Conversation memory** across multiple interactions
+- **Human-in-the-loop** workflows with pause/resume
+- **Time travel** to replay or fork from any checkpoint
+- **Fault tolerance** to recover from failures
+
+### Basic Checkpointing Setup
+
+```python
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from typing import Annotated, TypedDict
+from operator import add
+
+class ConversationState(TypedDict):
+    """State for a conversational agent."""
+    messages: Annotated[list[BaseMessage], add]
+
+def chat_node(state: ConversationState) -> dict:
+    """Process messages and generate response."""
+    llm = ChatOpenAI(model="gpt-4o-mini")
+    response = llm.invoke(state["messages"])
+    return {"messages": [response]}
+
+# Build the graph
+workflow = StateGraph(ConversationState)
+workflow.add_node("chat", chat_node)
+workflow.add_edge(START, "chat")
+workflow.add_edge("chat", END)
+
+# Compile with checkpointer for persistence
+checkpointer = MemorySaver()  # In-memory for development
+graph = workflow.compile(checkpointer=checkpointer)
+
+# Use thread_id to maintain conversation across calls
+config = {"configurable": {"thread_id": "user-123-session-1"}}
+
+# First message
+result = graph.invoke(
+    {"messages": [HumanMessage(content="Hi, I'm Alice!")]},
+    config
+)
+print(result["messages"][-1].content)
+
+# Second message - agent remembers the conversation!
+result = graph.invoke(
+    {"messages": [HumanMessage(content="What's my name?")]},
+    config
+)
+print(result["messages"][-1].content)  # "Your name is Alice!"
+```
+
+### Production Checkpointers
+
+For production, use persistent checkpointers that survive restarts:
+
+```python
+# SQLite - good for single-server deployments
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+checkpointer = SqliteSaver.from_conn_string("./agent_memory.db")
+
+# PostgreSQL - good for multi-server deployments
+from langgraph.checkpoint.postgres import PostgresSaver
+
+checkpointer = PostgresSaver.from_conn_string(
+    "postgresql://user:pass@localhost/agent_db"
+)
+
+# Compile graph with production checkpointer
+graph = workflow.compile(checkpointer=checkpointer)
+```
+
+### Accessing Conversation History
+
+```python
+# Get current state for a thread
+state = graph.get_state(config)
+print(f"Messages: {len(state.values['messages'])}")
+print(f"Last checkpoint: {state.config['configurable']['checkpoint_id']}")
+
+# Get full history of checkpoints
+for snapshot in graph.get_state_history(config):
+    print(f"Step {snapshot.metadata['step']}: {snapshot.values}")
+```
+
+---
+
+## 6.6.1 LangGraph Store for Cross-Thread Memory
+
+{/* IMAGE_PLACEHOLDER: Create a comparison diagram showing Checkpointer vs Store side-by-side. Left side: Checkpointer with multiple thread timelines (thread-1, thread-2, thread-3) each with their own isolated state and checkpoints. Right side: Store with a shared knowledge base that all threads can access (user preferences, facts, settings). Show data flow: Thread 1 writes a preference to Store → Thread 2 reads the same preference. Visualize namespaces as folders organizing data by user and category. Include a practical example: user sets coding preference in Thread 1 (morning conversation) → preference is stored in Store → user asks for code help in Thread 2 (afternoon conversation) → agent retrieves preference from Store and personalizes response. Use a "personal locker vs shared library" metaphor: checkpoints are your personal locker (only you can access), Store is the shared library (everyone can access). Add an interactive component showing how semantic search works in the Store with embedding visualization. */}
+
+<Callout type="warning">
+  **New in LangGraph (2024):** LangGraph now provides a built-in **Store API**
+  for long-term, cross-thread memory. This is different from checkpointing—while
+  checkpoints save state within a thread, the Store persists data across all
+  threads (e.g., user preferences that apply to every conversation).
+</Callout>
+
+The Store API provides a simple key-value interface with optional semantic search:
+
+```python
+from langgraph.store.memory import InMemoryStore
+from langgraph.graph import StateGraph, START, END
+from langchain_openai import OpenAIEmbeddings
+
+# Create a store with semantic search capability
+store = InMemoryStore(
+    index={
+        "embed": OpenAIEmbeddings(model="text-embedding-3-small"),
+        "dims": 1536
+    }
+)
+
+# Store user preferences (persists across all threads)
+user_id = "alice"
+namespace = (user_id, "preferences")
+
+store.put(
+    namespace,
+    "coding_style",
+    {
+        "language": "Python",
+        "framework": "FastAPI",
+        "style": "functional with type hints"
+    }
+)
+
+# Retrieve by key
+item = store.get(namespace, "coding_style")
+print(item.value)  # {"language": "Python", ...}
+
+# Semantic search across memories
+results = store.search(
+    namespace,
+    query="What programming language does the user prefer?"
+)
+```
+
+### Using Store in LangGraph Nodes
+
+```python
+from langgraph.graph import StateGraph, START, END
+from langgraph.store.memory import InMemoryStore
+from langchain_core.runnables import RunnableConfig
+
+def personalized_response(state: dict, config: RunnableConfig, *, store: InMemoryStore):
+    """Node that uses cross-thread memory for personalization."""
+    user_id = config["configurable"].get("user_id", "anonymous")
+    namespace = (user_id, "preferences")
+
+    # Get user preferences from store
+    prefs = store.get(namespace, "coding_style")
+
+    if prefs:
+        # Use preferences to personalize response
+        style_context = f"User prefers {prefs.value['language']} with {prefs.value['style']}"
+    else:
+        style_context = "No user preferences found"
+
+    # ... generate response using style_context
+    return {"response": f"Personalized for: {style_context}"}
+
+# Build graph with store
+workflow = StateGraph(dict)
+workflow.add_node("respond", personalized_response)
+workflow.add_edge(START, "respond")
+workflow.add_edge("respond", END)
+
+store = InMemoryStore()
+graph = workflow.compile(store=store)
+
+# Use with user context
+config = {"configurable": {"user_id": "alice", "thread_id": "conv-1"}}
+result = graph.invoke({"query": "Help me write code"}, config)
+```
+
+<Callout type="tip">
+  **Store vs Checkpointer:** Use **checkpointers** for conversation history
+  within a thread (short-term). Use **Store** for user profiles, preferences,
+  and facts that should persist across all conversations (long-term).
+</Callout>
+
+---
+
+## 6.7 Graph-Based Memory
+
+{/* IMAGE_PLACEHOLDER: Create an interactive graph visualization showing entities as nodes and relationships as edges. Start with a simple example: Alice (Person) → works_with → Bob (Person), Bob → reports_to → Carol (Person), Alice → works_on → Project X (Project). Animate a query: "Who does Alice's manager report to?" Show the graph traversal: start at Alice → follow works_with edge → reach Bob → follow reports_to edge → reach Carol. Highlight the path in the graph. Compare this with a vector search visualization showing how vector search might miss the connection. Include a more complex example with multiple entity types (People, Projects, Locations, Organizations) and relationship types (works_at, located_in, manages, collaborates_with). Make it interactive: let learners click on nodes to see properties, click on edges to see relationship details, and adjust traversal depth to see how subgraph extraction works. Use a "social network" or "mind map" metaphor. Add a comparison panel showing the same query answered by vector-only vs graph-based memory to demonstrate the difference. */}
+
+Graph memory represents information as entities (nodes) and relationships (edges), enabling complex relational reasoning that vector-only approaches struggle with.
+
+<Callout type="info">
+  **Why Graph Memory?** Consider: "Alice's manager is Bob. Bob reports to
+  Carol." A vector search for "Who does Alice's manager report to?" might not
+  connect these facts. Graph memory explicitly models the relationship chain:
+  Alice → managed_by → Bob → reports_to → Carol.
+</Callout>
+
+### When to Use Graph Memory
+
+| Scenario                                     | Vector Memory    | Graph Memory |
+| :------------------------------------------- | :--------------- | :----------- |
+| "What's the user's favorite color?"          | ✅ Great         | ✅ Works     |
+| "Who are all the people the user mentioned?" | ⚠️ May miss some | ✅ Great     |
+| "What's the relationship between X and Y?"   | ❌ Struggles     | ✅ Great     |
+| "Find all projects Alice worked on with Bob" | ❌ Struggles     | ✅ Great     |
+
+<VectorVsGraphMemoryComparison />
+
+### Implementing Graph Memory
+
+```python
+from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass
+from openai import OpenAI
+import json
+
+@dataclass
+class Entity:
+    """A node in the memory graph."""
+    id: str
+    name: str
+    entity_type: str  # Person, Location, Project, etc.
+    properties: Dict[str, Any]
+
+@dataclass
+class Relationship:
+    """An edge in the memory graph."""
+    source_id: str
+    target_id: str
+    relation_type: str  # works_with, located_in, owns, etc.
+    properties: Dict[str, Any]
+
+class GraphMemory:
+    """Graph-based memory for relational reasoning."""
+
+    def __init__(self, persist_path: str = "./graph_memory"):
+        self.client = OpenAI()
+        self.entities: Dict[str, Entity] = {}
+        self.relationships: List[Relationship] = []
+        self.persist_path = persist_path
+
+    def extract_and_store(self, text: str, user_id: str) -> Dict[str, Any]:
+        """Extract entities and relationships from text."""
+
+        # Use LLM to extract structured information
+        extraction = self._extract_graph_elements(text)
+
+        added_entities = []
+        added_relationships = []
+
+        # Process entities
+        for entity_data in extraction.get("entities", []):
+            entity = self._upsert_entity(entity_data, user_id)
+            added_entities.append(entity.id)
+
+        # Process relationships
+        for rel_data in extraction.get("relationships", []):
+            rel = self._add_relationship(rel_data, user_id)
+            if rel:
+                added_relationships.append(rel)
+
+        return {
+            "entities_added": len(added_entities),
+            "relationships_added": len(added_relationships)
+        }
+
+    def _extract_graph_elements(self, text: str) -> Dict[str, Any]:
+        """Use LLM to extract entities and relationships."""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": """Extract entities and relationships from the text.
+Return JSON with:
+{
+  "entities": [
+    {"name": "...", "type": "Person|Location|Project|Organization|Concept", "properties": {...}}
+  ],
+  "relationships": [
+    {"source": "entity_name", "target": "entity_name", "relation": "works_at|knows|located_in|...", "properties": {...}}
+  ]
+}"""
+            }, {
+                "role": "user",
+                "content": text
+            }],
+            response_format={"type": "json_object"}
+        )
+
+        return json.loads(response.choices[0].message.content)
+
+    def _upsert_entity(self, data: Dict, user_id: str) -> Entity:
+        """Add or update an entity."""
+        entity_id = f"{user_id}_{data['name'].lower().replace(' ', '_')}"
+
+        if entity_id in self.entities:
+            # Update existing entity
+            existing = self.entities[entity_id]
+            existing.properties.update(data.get("properties", {}))
+            return existing
+
+        # Create new entity
+        entity = Entity(
+            id=entity_id,
+            name=data["name"],
+            entity_type=data["type"],
+            properties=data.get("properties", {})
+        )
+        self.entities[entity_id] = entity
+        return entity
+
+    def _add_relationship(
+        self,
+        data: Dict,
+        user_id: str
+    ) -> Optional[Relationship]:
+        """Add a relationship between entities."""
+        source_id = f"{user_id}_{data['source'].lower().replace(' ', '_')}"
+        target_id = f"{user_id}_{data['target'].lower().replace(' ', '_')}"
+
+        # Ensure both entities exist
+        if source_id not in self.entities or target_id not in self.entities:
+            return None
+
+        rel = Relationship(
+            source_id=source_id,
+            target_id=target_id,
+            relation_type=data["relation"],
+            properties=data.get("properties", {})
+        )
+        self.relationships.append(rel)
+        return rel
+
+    def query(self, question: str, user_id: str) -> str:
+        """Query the graph to answer a question."""
+
+        # Find relevant entities
+        relevant_entities = self._find_relevant_entities(question, user_id)
+
+        # Traverse relationships from those entities
+        subgraph = self._extract_subgraph(relevant_entities, depth=2)
+
+        # Format as context
+        return self._format_subgraph(subgraph)
+
+    def _find_relevant_entities(
+        self,
+        question: str,
+        user_id: str
+    ) -> List[Entity]:
+        """Find entities relevant to the question."""
+        # Simple keyword matching (use embeddings in production)
+        question_lower = question.lower()
+        relevant = []
+
+        for entity in self.entities.values():
+            if entity.id.startswith(user_id):
+                if entity.name.lower() in question_lower:
+                    relevant.append(entity)
+
+        return relevant
+
+    def _extract_subgraph(
+        self,
+        start_entities: List[Entity],
+        depth: int
+    ) -> Tuple[List[Entity], List[Relationship]]:
+        """Extract a subgraph around the starting entities."""
+        visited_ids = set(e.id for e in start_entities)
+        entities = list(start_entities)
+        rels = []
+
+        current_ids = visited_ids.copy()
+
+        for _ in range(depth):
+            new_ids = set()
+            for rel in self.relationships:
+                if rel.source_id in current_ids:
+                    rels.append(rel)
+                    if rel.target_id not in visited_ids:
+                        new_ids.add(rel.target_id)
+                        if rel.target_id in self.entities:
+                            entities.append(self.entities[rel.target_id])
+                elif rel.target_id in current_ids:
+                    rels.append(rel)
+                    if rel.source_id not in visited_ids:
+                        new_ids.add(rel.source_id)
+                        if rel.source_id in self.entities:
+                            entities.append(self.entities[rel.source_id])
+
+            visited_ids.update(new_ids)
+            current_ids = new_ids
+
+        return entities, rels
+
+    def _format_subgraph(
+        self,
+        subgraph: Tuple[List[Entity], List[Relationship]]
+    ) -> str:
+        """Format subgraph as context string."""
+        entities, rels = subgraph
+
+        if not entities:
+            return "No relevant information found in memory graph."
+
+        parts = ["## Known Entities"]
+        for e in entities:
+            props = ", ".join(f"{k}: {v}" for k, v in e.properties.items())
+            parts.append(f"- {e.name} ({e.entity_type}){': ' + props if props else ''}")
+
+        if rels:
+            parts.append("\n## Relationships")
+            for r in rels:
+                source = self.entities.get(r.source_id)
+                target = self.entities.get(r.target_id)
+                if source and target:
+                    parts.append(f"- {source.name} --[{r.relation_type}]--> {target.name}")
+
+        return "\n".join(parts)
+```
+
+<Callout type="warning">
+  **Production Graph Databases:** For production, use a proper graph database
+  like Neo4j or Amazon Neptune. The example above is simplified for learning.
+  Graph databases provide efficient traversal, ACID transactions, and query
+  languages like Cypher.
+</Callout>
+
+### Hybrid Memory: Combining Vector and Graph
+
+The most effective memory systems combine both approaches:
+
+```python
+class HybridMemory:
+    """Combines vector search with graph relationships."""
+
+    def __init__(self):
+        self.vector_memory = SemanticMemory()  # From earlier
+        self.graph_memory = GraphMemory()
+
+    def store(self, text: str, user_id: str) -> None:
+        """Store in both vector and graph memory."""
+        # Vector: for semantic similarity search
+        self.vector_memory.store_fact(text, source="conversation")
+
+        # Graph: for relational reasoning
+        self.graph_memory.extract_and_store(text, user_id)
+
+    def retrieve(self, query: str, user_id: str) -> str:
+        """Retrieve from both and combine."""
+        # Get semantically similar facts
+        vector_context = self.vector_memory.to_context(query, user_id)
+
+        # Get graph relationships
+        graph_context = self.graph_memory.query(query, user_id)
+
+        return f"{vector_context}\n\n{graph_context}"
+```
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Graph
+    participant Checkpointer
+    participant DB[(Storage)]
+    
+    User->>Graph: invoke(message, thread_id="123")
+    Graph->>Checkpointer: Load state for thread 123
+    Checkpointer->>DB: Query checkpoints
+    DB-->>Checkpointer: Previous state
+    Checkpointer-->>Graph: Restored state
+    
+    Graph->>Graph: Process message
+    Graph->>Checkpointer: Save checkpoint
+    Checkpointer->>DB: Store state
+    
+    Graph-->>User: Response
+    
+    Note over User,DB: Next message continues from saved state
+`}
+/>
+
+---
+
+## 6.8 The Unified Memory System
+
+{/* IMAGE_PLACEHOLDER: Create a comprehensive system architecture diagram showing all four memory types integrated together. Design it as a layered architecture: (1) Top layer: Agent interface receiving queries, (2) Memory orchestration layer: build_context() method deciding which memories to retrieve, (3) Four memory stores in parallel: Working (in-process), Episodic (ChromaDB), Semantic (ChromaDB collections), Procedural (JSON + ChromaDB), (4) Storage layer: disk persistence. Show data flows: query comes in → orchestrator queries all relevant memory types in parallel → results are combined into unified context → context is passed to LLM. Include a timeline showing the lifecycle: start_task() → record_action() → complete_task() → memories are consolidated and distributed to appropriate stores. Visualize the selective retrieval: not all memories are included, only relevant ones based on the query. Use a "mission control dashboard" metaphor where different memory systems are monitoring stations providing different types of information. Add metrics showing token usage with vs without selective retrieval. */}
+
+Combine all memory types into a coherent system:
+
+```python
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+class AgentMemorySystem:
+    """Unified memory system combining all memory types."""
+
+    def __init__(self, agent_id: str, persist_path: str = "./agent_memory"):
+        self.agent_id = agent_id
+        base_path = Path(persist_path) / agent_id
+
+        self.working = WorkingMemory()
+        self.episodic = EpisodicMemory(str(base_path / "episodic"))
+        self.semantic = SemanticMemory(str(base_path / "semantic"))
+        self.procedural = ProceduralMemory(str(base_path / "procedural"))
+
+    def build_context(self, query: str, user_id: Optional[str] = None) -> str:
+        """Build complete memory context for LLM."""
+        sections: List[str] = []
+
+        # Working memory (always included)
+        working_ctx = self.working.to_context()
+        if working_ctx:
+            sections.append(f"## Working Memory\n{working_ctx}")
+
+        # Procedural memory (relevant patterns)
+        procedural_ctx = self.procedural.to_context(query)
+        if procedural_ctx and "No relevant" not in procedural_ctx:
+            sections.append(f"## Learned Patterns\n{procedural_ctx}")
+
+        # Episodic memory (relevant experiences)
+        episodic_ctx = self.episodic.to_context(query, n=3)
+        if episodic_ctx and "No relevant" not in episodic_ctx:
+            sections.append(f"## Past Experiences\n{episodic_ctx}")
+
+        # Semantic memory (relevant facts)
+        semantic_ctx = self.semantic.to_context(query, user_id)
+        if semantic_ctx and "No relevant" not in semantic_ctx:
+            sections.append(f"## Knowledge Base\n{semantic_ctx}")
+
+        return "\n\n".join(sections)
+
+    def start_task(self, goal: str) -> None:
+        """Initialize memory for a new task."""
+        self.working.set_goal(goal)
+
+    def record_action(self, action: str, result: str, success: bool) -> None:
+        """Record an action in working memory."""
+        self.working.add_observation({
+            "action": action,
+            "result": result,
+            "success": success
+        })
+
+    def complete_task(self, outcome: str, learnings: Optional[str] = None) -> None:
+        """Complete a task and store the episode."""
+        episode: Dict[str, Any] = {
+            "goal": self.working.current_goal,
+            "actions": self.working.observations,
+            "scratchpad": self.working.scratchpad,
+            "outcome": outcome,
+            "learnings": learnings
+        }
+
+        self.episodic.store_episode(episode)
+
+        # Extract and store any facts learned
+        if learnings:
+            self.semantic.store_fact(learnings, source="task_completion")
+
+        # If task was successful, consider storing as procedural pattern
+        if outcome == "success" and len(self.working.observations) > 0:
+            actions = [obs.get("action", "") for obs in self.working.observations]
+            self.procedural.store_pattern(
+                trigger=self.working.current_goal,
+                actions=actions,
+                outcome=outcome,
+                success_rate=1.0
+            )
+
+        # Clear working memory
+        self.working = WorkingMemory()
+
+    def learn_preference(self, user_id: str, preference: str, value: Any) -> None:
+        """Learn a user preference."""
+        self.semantic.store_preference(user_id, preference, value)
+```
+
+---
+
+## 6.9 Memory-Augmented Agent
+
+{/* IMAGE_PLACEHOLDER: Create an end-to-end flow diagram showing a complete memory-augmented agent in action. Show a user query entering the system → agent starts task (working memory initialized) → memory context is built (queries all memory types) → LLM generates response using memory context → task completes (episode stored, facts extracted, patterns learned) → working memory cleared. Include a split-screen comparison: left side shows an agent WITHOUT memory (every query starts fresh, no personalization), right side shows the SAME agent WITH memory (remembers context, personalizes responses, learns from past interactions). Visualize the memory context being injected into the system prompt. Show concrete examples: Query 1: "I prefer Python" → stored in semantic memory. Query 2: "Help me write code" → agent retrieves Python preference and provides Python examples. Query 3: "I had trouble with imports last time" → agent recalls episodic memory and suggests solutions. Use a "personal assistant evolution" metaphor showing the agent getting smarter over time as memories accumulate. */}
+
+Integrate the memory system with our agent:
+
+```python
+from openai import OpenAI
+from typing import Any, Dict, Optional
+
+class MemoryAugmentedAgent:
+    """Agent with full memory capabilities."""
+
+    def __init__(self, agent_id: str, model: str = "gpt-4o-mini"):
+        self.client = OpenAI()
+        self.model = model
+        self.memory = AgentMemorySystem(agent_id)
+        self.tools: Dict[str, Any] = {}
+
+    def run(self, user_input: str, user_id: Optional[str] = None) -> str:
+        """Run agent with memory context."""
+        # Start task
+        self.memory.start_task(user_input)
+
+        # Build memory-augmented context
+        memory_context = self.memory.build_context(user_input, user_id)
+
+        system_prompt = f"""You are a helpful assistant with memory.
+
+{memory_context}
+
+Use your memory to provide personalized, context-aware responses.
+Learn from past experiences to improve your performance.
+"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input}
+        ]
+
+        # Run agent loop (simplified)
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.1
+        )
+
+        result = response.choices[0].message.content or ""
+
+        # Record completion
+        self.memory.complete_task(
+            outcome="success",
+            learnings=self._extract_learnings(user_input, result)
+        )
+
+        return result
+
+    def _extract_learnings(self, query: str, response: str) -> str:
+        """Extract learnings from an interaction (simplified)."""
+        # In production, use LLM to extract key learnings
+        return f"Successfully answered query about: {query[:50]}..."
+```
+
+---
+
+<Exercise
+  title="Build a Personal Assistant with Memory"
+  difficulty="intermediate"
+  objectives={[
+    "Remember user's name and preferences",
+    "Recall relevant past conversations",
+    "Learn from successful interactions",
+    "Persist memory across sessions"
+  ]}
+  hints={[
+    "Start with just semantic memory for preferences",
+    "Use ChromaDB's persistent client to save across sessions",
+    "Test by restarting your Python script and checking if memories persist"
+  ]}
+>
+
+### Test Scenarios
+
+```python
+# Session 1
+agent.run("My name is Alice and I prefer Python over JavaScript", user_id="alice")
+agent.run("What's the best way to parse JSON?", user_id="alice")
+
+# Session 2 (new session, same user)
+agent.run("What language should I use for this project?", user_id="alice")
+# Should remember Alice prefers Python!
+```
+
+</Exercise>
+
+---
+
+<ProgressCheckpoint
+  title="Memory Systems Check"
+  questions={[
+    {
+      question:
+        "What's the difference between working memory and episodic memory?",
+      answer:
+        "Working memory holds the current task state (like RAM)—it's fast but temporary. Episodic memory stores past experiences in a vector database—it persists long-term and is retrieved when relevant.",
+    },
+    {
+      question:
+        "Why would you use semantic memory instead of just storing everything in episodic memory?",
+      answer:
+        "Semantic memory stores facts and preferences that are always true (user prefers Python), while episodic memory stores specific experiences (last Tuesday's debugging session). Facts don't need temporal context.",
+    },
+    {
+      question:
+        "How does the unified memory system decide what context to include?",
+      answer:
+        "It builds context selectively: working memory is always included (current task), episodic memory is searched for relevant past experiences, and semantic memory is queried for relevant facts and user preferences.",
+    },
+    {
+      question:
+        "What happens when you call `complete_task()` on the memory system?",
+      answer:
+        "It stores the entire task as an episode in episodic memory, extracts any learnings as facts in semantic memory, and clears working memory for the next task.",
+    },
+  ]}
+/>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Including all memories in every prompt",
+      fix: "Be selective—retrieve only relevant memories based on the current query",
+    },
+    {
+      mistake: "Not persisting memory to disk",
+      fix: "Use ChromaDB's PersistentClient or save to files for cross-session memory",
+    },
+    {
+      mistake: "Storing raw conversation logs as memories",
+      fix: "Extract and structure key information: decisions, preferences, outcomes",
+    },
+    {
+      mistake: "Forgetting to clear working memory between tasks",
+      fix: "Call complete_task() or reset working memory when starting new tasks",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Four memory types: Working (current), Episodic (experiences), Semantic (facts), Procedural (skills)",
+    "Memory hierarchy maps to Day 02: Working=L1, Episodic=L2, Semantic=L3",
+    "Memory consolidation extracts, deduplicates, and updates facts using LLM evaluation",
+    "Graph memory enables relational reasoning that vector-only approaches struggle with",
+    "LangGraph checkpointing provides built-in conversation persistence via threads",
+    "LangGraph Store API enables cross-thread memory for user preferences and facts",
+    "Hybrid memory (vector + graph) provides the best of both approaches",
+    "Memory should be selective—retrieve relevant context, not everything",
+    "Persist memory to disk for cross-session continuity (SQLite, PostgreSQL)",
+    "Consider Mem0 or Letta for production-ready memory infrastructure",
+  ]}
+/>
+
+---
+
+## 🔗 Further Reading
+
+- [Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory](https://arxiv.org/abs/2504.19413) — State-of-the-art memory architecture with graph-based representations (2024)
+- [MemGPT: Towards LLMs as Operating Systems](https://arxiv.org/abs/2310.08560) — The foundational paper on agent memory management
+- [Letta (formerly MemGPT)](https://www.letta.com/) — Open-source framework for building stateful agents with memory
+- [Generative Agents: Interactive Simulacra](https://arxiv.org/abs/2304.03442) — Stanford's research on agents with memory
+- [LangGraph Persistence Documentation](https://langchain-ai.github.io/langgraph/concepts/persistence/) — Official guide to checkpointing
+- [LangGraph Long-Term Memory](https://blog.langchain.com/launching-long-term-memory-support-in-langgraph/) — Cross-thread memory with the Store API
+- [A Survey on the Memory Mechanism of Large Language Model based Agents](https://arxiv.org/abs/2404.13501) — Comprehensive taxonomy of agent memory systems
+- [DeepLearning.AI: LLMs as Operating Systems](https://www.deeplearning.ai/short-courses/llms-as-operating-systems-agent-memory/) — Free course on agent memory
+
+<Callout type="tip">
+  **Letta Update:** MemGPT has evolved into Letta, an open-source agent
+  framework focused on stateful, memory-first agents. Letta provides
+  production-ready implementations of the memory patterns covered in this
+  module.
+</Callout>
+
+<Callout type="info">
+  **Mem0:** [Mem0](https://mem0.ai) is a production-ready memory layer that
+  achieved 26% better accuracy than OpenAI's memory while reducing latency by
+  91% in benchmarks. It offers both vector-based and graph-based memory with
+  automatic consolidation. Consider it for production deployments where you want
+  a battle-tested solution.
+</Callout>
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** Memory systems are what make the AgentOS capstone
+  truly intelligent. Your agents will use working memory for current tasks,
+  episodic memory to learn from past research sessions, semantic memory for user
+  preferences, and procedural memory to reuse successful patterns.
+</Callout>
+
+<MemorySystemSimulator />
+
+### Recommended Exercises
+
+Complete these exercises to reinforce the concepts from this module:
+
+- **EX-07: Working Memory** (20 min) - Implement a working memory system with scratchpad, goals, and observations. Practice the patterns shown in section 6.2. See the [Project Hierarchy](/modules/day-00-project-hierarchy) for full details.
+
+- **EX-11: Episodic Memory** (25 min) - Build an episodic memory store using ChromaDB that can record and recall past agent experiences based on semantic similarity.
+
+- **EX-15: LangGraph Checkpointing** (30 min) - Add persistence to a LangGraph agent using checkpointers. Implement conversation memory that survives restarts.
+
+### POC Opportunity
+
+If you want to go deeper, try **POC-02: Memory-Augmented Agent** which builds a complete agent with all four memory types (working, episodic, semantic, procedural) integrated into a unified system. This POC directly prepares you for the memory architecture in the capstone.
+
+---
+
+**Today's Lab**: [Day 18: Memory-Augmented RAG Lab](/modules/day-18-rag-lab) — Hands-on implementation combining RAG with memory systems.
+
+**Coming Up**: [Day 23: From Exercises to Capstone](/modules/day-23-project-hierarchy)—understanding the project structure that leads to your Month 1 capstone.

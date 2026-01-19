@@ -1,0 +1,2481 @@
+---
+title: "Final Capstone: Self-Hosted Agentic Ecosystem"
+description: "Build a complete self-hosted platform with an orchestrator, agent fleet, and all supporting services."
+week: 12
+day: 87
+---
+
+<ReadingTime minutes={90} />
+
+<SkillLevel level="expert" description="Full-stack agent platform" />
+
+<Prerequisites
+  items={[
+    "Completed all mini-projects (Days 82-86)",
+    "Understanding of Docker and container orchestration",
+    "Experience with full-stack application development",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Integrate all mini-project services into a unified platform",
+    "Build a smart orchestrator with request classification and routing",
+    "Create specialized agents for different task types",
+    "Deploy the complete system using Docker Compose",
+    "Build a web dashboard and CLI for interaction",
+  ]}
+/>
+
+<Callout type="warning">
+  **The Ultimate Challenge:** This capstone combines everything you've learned.
+  You'll build a production-grade, self-hosted AI platform that rivals
+  commercial offerings—entirely under your control.
+</Callout>
+
+<KeyTerms
+  terms={[
+    {
+      term: "AgentOS",
+      definition:
+        "The self-hosted agentic ecosystem you're building—a complete AI platform with orchestration, agents, and services",
+    },
+    {
+      term: "Smart Orchestrator",
+      definition:
+        "Central component that classifies requests and routes them to specialized agents",
+    },
+    {
+      term: "Agent Fleet",
+      definition:
+        "Collection of purpose-built agents (Research, Code, Analysis, Creative, Assistant) working together",
+    },
+    {
+      term: "API Gateway",
+      definition:
+        "Unified entry point for all requests, handling authentication, rate limiting, and routing",
+    },
+    {
+      term: "Service Mesh",
+      definition:
+        "Architecture pattern where services communicate via APIs, enabling loose coupling and independent scaling",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build "AgentOS"—a self-hosted agentic ecosystem with an intelligent orchestrator, specialized agent fleet, and unified API. Supports local LLMs (Ollama/LMStudio) and cloud providers, with full memory, RAG, and research capabilities.
+
+{/* IMAGE_PLACEHOLDER: Create a hero illustration showing the AgentOS ecosystem as a futuristic command center. Show a central orchestrator hub in the middle with glowing connections to 5 specialized agent pods (Research, Code, Analysis, Creative, Assistant) arranged in a circle. Each agent pod should have distinct visual characteristics: Research with magnifying glass/web icons, Code with terminal/brackets, Analysis with charts/graphs, Creative with palette/lightbulb, Assistant with helping hand. Include visual representations of supporting services (Memory as a brain, RAG as a library, LLM Router as a traffic controller) in the background. Use a dark tech aesthetic with blue/purple gradients and glowing connections. Place this at the top of the Project Overview section. */}
+
+**What You'll Build**:
+
+- Central Orchestrator that routes requests to specialized agents
+- Fleet of purpose-built agents (Research, Code, Analysis, Creative, Assistant)
+- Unified API gateway with authentication
+- Web dashboard for monitoring and interaction
+- Complete integration of all mini-project services
+
+**Think of AgentOS like a hospital emergency room**: When a patient arrives, the triage nurse (orchestrator) quickly assesses the situation and routes them to the right specialist—cardiology, orthopedics, neurology, etc. Each specialist has access to the patient's medical history (memory), can order tests and review results (RAG), and uses the best available equipment (LLM router). The entire system works together seamlessly to provide the best care.
+
+## Module Summary
+
+In this final capstone, we architected and built "AgentOS," a comprehensive self-hosted platform.
+
+1.  **System Integration**: We unified all previous mini-projects—Prompt Library, Memory, RAG, LLM Router, and Research Agent—into a cohesive ecosystem.
+2.  **Smart Orchestration**: We built a central router that intelligently classifies user intent and dispatches tasks to the most capable specialist agent.
+3.  **Full-Stack Implementation**: We developed the entire stack, from the FastAPI Gateway and React-based Dashboard to the Docker Compose infrastructure.
+4.  **Production Readiness**: We focused on real-world concerns like component decoupling, configuration management, and service isolation.
+
+This project represents the culmination of the entire 90-day course, demonstrating how to build, deploy, and manage a production-grade agentic ecosystem.
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing the journey from Day 1 to Day 87. Show a winding path with key milestones: Month 1 (Foundations - show building blocks), Month 2 (Multi-Agent Systems - show connected nodes), Month 3 (Advanced Architecture - show the complete AgentOS ecosystem). Use a mountain climbing metaphor where Day 87 is the summit with a flag labeled "AgentOS". Include small icons representing each mini-project (Days 82-86) as base camps before the final summit. Use an inspiring color gradient from blue (start) to gold (summit). Place this after the Module Summary. */}
+
+---
+
+## Capstone Specification
+
+This section provides detailed requirements, milestones, and evaluation criteria to ensure you know exactly what "done" looks like for the AgentOS final capstone.
+
+### Milestone Breakdown
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a MilestoneTracker component that displays the 8 milestones as an interactive checklist. Each milestone should be expandable to show deliverables, time estimates, and dependencies. Include a progress bar at the top showing overall completion. Allow users to check off completed milestones and save progress to local storage. Add estimated completion dates based on user's start date. */}
+
+| Milestone                          | Deliverable                                                                     | Time Estimate | Dependencies               |
+| :--------------------------------- | :------------------------------------------------------------------------------ | :------------ | :------------------------- |
+| **M1: Project Structure & Config** | Directory structure, YAML configs, environment setup                            | 2-3 hours     | None                       |
+| **M2: Service Integration**        | Connect all 5 mini-project services (Prompt, Memory, RAG, LLM Router, Research) | 4-6 hours     | M1, Mini-projects complete |
+| **M3: Smart Orchestrator**         | Request classifier, agent router, orchestration graph                           | 4-5 hours     | M2                         |
+| **M4: Specialized Agents**         | Implement all 5 agents (Research, Code, Analysis, Creative, Assistant)          | 6-8 hours     | M3                         |
+| **M5: API Gateway**                | FastAPI gateway with auth, rate limiting, unified endpoints                     | 3-4 hours     | M4                         |
+| **M6: Web Dashboard**              | React/HTML dashboard with chat, agent status, document management               | 4-6 hours     | M5                         |
+| **M7: Docker Deployment**          | Complete docker-compose.yml with all services, volumes, networking              | 3-4 hours     | M6                         |
+| **M8: CLI & Testing**              | CLI tool, integration tests, documentation                                      | 2-3 hours     | M7                         |
+
+**Total Estimated Time:** 28-39 hours (approximately 1 week full-time)
+
+{/* IMAGE_PLACEHOLDER: Create a Gantt chart visualization showing the 8 milestones as horizontal bars with dependencies indicated by arrows. Use different colors for each phase: Setup (M1), Integration (M2-M4), User Interface (M5-M6), Deployment (M7-M8). Show the critical path highlighted in a brighter color. Include small icons for each milestone type (folder for M1, puzzle pieces for M2, brain for M3, robots for M4, gateway for M5, screen for M6, container for M7, terminal for M8). Place this after the milestone table. */}
+
+### Definition of Done
+
+Your AgentOS is complete when ALL of the following criteria are met:
+
+| Category           | Requirement                                        | Verification Method                   |
+| :----------------- | :------------------------------------------------- | :------------------------------------ |
+| **Services**       | All 5 mini-project services running and healthy    | `curl /health` returns 200 for each   |
+| **Services**       | Services communicate via internal Docker network   | Logs show inter-service calls         |
+| **Orchestration**  | Smart orchestrator classifies requests correctly   | Test with 10 diverse queries          |
+| **Orchestration**  | Requests route to appropriate specialist agent     | Verify agent_used in response         |
+| **Agents**         | All 5 specialist agents functional                 | Test each with domain-specific query  |
+| **Agents**         | Agents use supporting services (Memory, RAG, etc.) | Trace shows service calls             |
+| **Gateway**        | Unified `/chat` endpoint accepts all request types | API test suite passes                 |
+| **Gateway**        | Authentication via X-User-Id header                | Requests without header rejected      |
+| **Dashboard**      | Web UI loads and displays chat interface           | Browser test                          |
+| **Dashboard**      | Real-time agent status visible                     | Dashboard shows which agent responded |
+| **Infrastructure** | `docker-compose up` starts entire stack            | All containers healthy                |
+| **Infrastructure** | Local LLM (Ollama) integrated and functional       | Test with `prefer_local: true`        |
+| **Infrastructure** | Cloud LLM fallback works                           | Test with Ollama disabled             |
+| **CLI**            | CLI tool can send messages and list agents         | `agentos chat "hello"` works          |
+| **Resilience**     | System handles service failures gracefully         | Kill one service, verify degradation  |
+| **Performance**    | Response time < 10s for simple queries             | Timing measurements                   |
+| **Documentation**  | README with setup instructions                     | New user can deploy in 30 min         |
+
+### Architecture Decision Records (ADRs)
+
+#### ADR-001: Microservices Architecture
+
+**Context:** AgentOS requires multiple capabilities (memory, RAG, LLM routing, etc.) that could be built as a monolith or as separate services.
+
+**Decision:** Implement as microservices with each capability as an independent service communicating via HTTP APIs.
+
+**Real-World Analogy:** Think of this like a restaurant kitchen. Instead of one chef doing everything (monolith), you have specialized stations—grill, sauté, pastry, salad. Each station (service) focuses on what it does best, and the expeditor (orchestrator) coordinates the orders. If the grill breaks down, the rest of the kitchen keeps running.
+
+{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison diagram. Left side: "Monolithic Architecture" showing a single large box with all components tightly packed inside, with a crack running through it labeled "Single point of failure". Right side: "Microservices Architecture" showing separate, loosely connected boxes for each service (Memory, RAG, LLM Router, etc.) with flexible connection lines between them. Use visual metaphors: monolith as a solid block, microservices as LEGO bricks. Place this in the ADR-001 section. */}
+
+**Consequences:**
+
+- ✅ Independent scaling of services based on load
+- ✅ Technology flexibility (different languages/frameworks per service)
+- ✅ Fault isolation (one service failure doesn't crash everything)
+- ✅ Easier testing and deployment of individual components
+- ⚠️ Network latency between services
+- ⚠️ More complex deployment and monitoring
+- ⚠️ Distributed system challenges (consistency, debugging)
+
+#### ADR-002: Hybrid LLM Strategy (Local-First with Cloud Fallback)
+
+**Context:** Users want privacy and cost control (local LLMs) but also need access to powerful models (cloud) for complex tasks.
+
+**Decision:** Implement LLM Router service that prefers local Ollama models but falls back to cloud providers (OpenAI, Anthropic) based on task complexity and user preferences.
+
+**Real-World Analogy:** This is like having a home gym with basic equipment for daily workouts (local LLMs), but maintaining a membership at a premium gym with specialized equipment for serious training sessions (cloud LLMs). You use what you have at home for most tasks, but when you need that Olympic-grade equipment, you go to the premium facility.
+
+{/* IMAGE_PLACEHOLDER: Create a decision flow diagram showing the LLM routing logic. Start with "User Request" at the top, then show a decision diamond "Prefer Local?" with Yes/No paths. Yes path goes to "Local LLM (Ollama)" with a sub-decision "Available & Capable?" that can fallback to cloud. No path goes directly to "Cloud LLM Selection" showing OpenAI and Anthropic options. Use icons: house for local, cloud for cloud providers, arrows showing fallback paths. Add cost indicators ($, $$, $$$) next to each option. Place this in ADR-002 section. */}
+
+**Consequences:**
+
+- ✅ Privacy-preserving for sensitive data
+- ✅ Cost optimization (local is free after hardware)
+- ✅ Access to state-of-the-art models when needed
+- ✅ Graceful degradation if cloud is unavailable
+- ⚠️ Local models require GPU hardware
+- ⚠️ Quality difference between local and cloud models
+- ⚠️ More complex routing logic
+
+#### ADR-003: Request Classification Before Routing
+
+**Context:** Incoming requests could be handled by any of 5 specialist agents. Need to determine the best agent for each request.
+
+**Decision:** Implement two-stage classification: fast keyword matching first, then LLM-based classification for ambiguous requests.
+
+**Real-World Analogy:** This is like how email spam filters work. First, they check for obvious spam keywords (fast, cheap). If it's unclear, they use machine learning models to analyze the content more deeply (slower, more accurate). Most emails are caught by the fast filter, saving computational resources for the tricky cases.
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a RequestClassifierDemo component that lets users type in sample queries and see in real-time how the classifier works. Show both stages: keyword matching with highlighted keywords and confidence scores, then LLM classification if needed. Display which agent would be selected and why. Include example queries like "Research quantum computing" (research), "Fix my Python code" (code), "Analyze sales data" (analysis), etc. */}
+
+**Consequences:**
+
+- ✅ Fast routing for obvious requests (keywords)
+- ✅ Accurate routing for complex requests (LLM)
+- ✅ Configurable confidence thresholds
+- ⚠️ Additional latency for LLM classification
+- ⚠️ Classification errors route to wrong agent
+- ⚠️ Keyword lists need maintenance
+
+#### ADR-004: Centralized Configuration via YAML
+
+**Context:** Multiple services and agents need configuration (models, prompts, routing rules). Configuration could be hardcoded, environment variables, or external files.
+
+**Decision:** Use YAML configuration files (`agents.yaml`, `providers.yaml`, `policies.yaml`) loaded at startup.
+
+**Consequences:**
+
+- ✅ Human-readable configuration
+- ✅ Easy to modify without code changes
+- ✅ Version controllable
+- ✅ Supports complex nested structures
+- ⚠️ No runtime configuration updates (requires restart)
+- ⚠️ YAML parsing errors can be cryptic
+- ⚠️ Secrets should not be in YAML (use env vars)
+
+#### ADR-005: Docker Compose for Deployment
+
+**Context:** AgentOS has 10+ services that need to be deployed together with proper networking and dependencies.
+
+**Decision:** Use Docker Compose for local development and single-server deployment. Kubernetes manifests as stretch goal.
+
+**Consequences:**
+
+- ✅ Single command deployment (`docker-compose up`)
+- ✅ Consistent environments (dev = prod)
+- ✅ Built-in service discovery via container names
+- ✅ Volume management for persistence
+- ⚠️ Single-server limitation (no horizontal scaling)
+- ⚠️ Resource constraints on one machine
+- ⚠️ Not suitable for high-availability production
+
+### Integration Test Plan
+
+Execute these end-to-end test scenarios to validate the complete system:
+
+#### Test Scenario 1: Full Stack Deployment
+
+```bash
+#!/bin/bash
+# test_deployment.sh
+
+# Start the stack
+docker-compose up -d
+
+# Wait for services to be healthy
+sleep 30
+
+# Check all services
+services=("gateway:8000" "orchestrator:8080" "prompt-library:8001"
+          "memory:8002" "rag:8003" "llm-router:8004" "research:8005")
+
+for service in "${services[@]}"; do
+    name="${service%%:*}"
+    port="${service##*:}"
+    status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$port/health")
+    if [ "$status" != "200" ]; then
+        echo "FAIL: $name is not healthy"
+        exit 1
+    fi
+    echo "PASS: $name is healthy"
+done
+
+echo "All services deployed successfully"
+```
+
+#### Test Scenario 2: Agent Routing Accuracy
+
+```python
+def test_agent_routing():
+    """Verify requests route to correct agents."""
+    test_cases = [
+        ("Research the history of quantum computing", "research"),
+        ("Write a Python function to sort a list", "code"),
+        ("Analyze this sales data for trends", "analysis"),
+        ("Write a creative story about a robot", "creative"),
+        ("What's the weather like today?", "assistant"),
+    ]
+
+    for query, expected_agent in test_cases:
+        response = requests.post(
+            "http://localhost:8000/chat",
+            json={"message": query},
+            headers={"X-User-Id": "test"}
+        )
+        result = response.json()
+
+        assert result["agent_used"] == expected_agent, \
+            f"Query '{query}' routed to {result['agent_used']}, expected {expected_agent}"
+```
+
+#### Test Scenario 3: Memory Persistence
+
+```python
+def test_memory_persistence():
+    """Verify conversation memory persists across requests."""
+    user_id = "memory-test-user"
+    session_id = str(uuid.uuid4())
+
+    # First message
+    response1 = requests.post(
+        "http://localhost:8000/chat",
+        json={"message": "My name is Alice", "session_id": session_id},
+        headers={"X-User-Id": user_id}
+    )
+
+    # Second message should remember
+    response2 = requests.post(
+        "http://localhost:8000/chat",
+        json={"message": "What's my name?", "session_id": session_id},
+        headers={"X-User-Id": user_id}
+    )
+
+    assert "Alice" in response2.json()["response"]
+```
+
+#### Test Scenario 4: RAG Integration
+
+```python
+def test_rag_integration():
+    """Verify RAG service is used for document queries."""
+    user_id = "rag-test-user"
+
+    # Upload a document
+    requests.post(
+        f"http://localhost:8003/rag/{user_id}/documents",
+        files={"file": ("test.txt", "The capital of France is Paris.")}
+    )
+
+    # Query should use RAG
+    response = requests.post(
+        "http://localhost:8000/chat",
+        json={"message": "What is the capital of France according to my documents?"},
+        headers={"X-User-Id": user_id}
+    )
+
+    assert "Paris" in response.json()["response"]
+```
+
+#### Test Scenario 5: Local LLM Preference
+
+```python
+def test_local_llm_preference():
+    """Verify local LLM is used when preferred."""
+    response = requests.post(
+        "http://localhost:8000/chat",
+        json={
+            "message": "Hello, how are you?",
+            "preferences": {"prefer_local": True}
+        },
+        headers={"X-User-Id": "test"}
+    )
+
+    # Check metadata for model used
+    metadata = response.json().get("metadata", {})
+    assert "llama" in metadata.get("model", "").lower() or \
+           "ollama" in metadata.get("provider", "").lower()
+```
+
+#### Test Scenario 6: Service Failure Resilience
+
+```python
+def test_service_failure_resilience():
+    """Verify system handles service failures gracefully."""
+    # Stop the research service
+    os.system("docker-compose stop research")
+
+    try:
+        # Research query should fail gracefully
+        response = requests.post(
+            "http://localhost:8000/chat",
+            json={"message": "Research quantum computing"},
+            headers={"X-User-Id": "test"}
+        )
+
+        # Should not crash, should return error or fallback
+        assert response.status_code in [200, 503]
+        if response.status_code == 200:
+            assert "unavailable" in response.json()["response"].lower() or \
+                   response.json()["agent_used"] != "research"
+    finally:
+        os.system("docker-compose start research")
+```
+
+### Demo Script
+
+Follow this script to demonstrate your completed AgentOS:
+
+#### Setup (5 minutes)
+
+```bash
+# Clone and start
+git clone <your-repo>
+cd agentos
+cp .env.example .env
+# Add API keys to .env
+
+# Start everything
+docker-compose up -d
+
+# Pull local models
+docker exec agentos-ollama-1 ollama pull llama3.1:8b
+docker exec agentos-ollama-1 ollama pull codellama:13b
+
+# Verify health
+curl http://localhost:8000/health
+```
+
+#### Demo Flow (15 minutes)
+
+**1. Introduction (2 min)**
+
+> "This is AgentOS—a complete self-hosted AI platform. It includes 5 specialized agents, unified memory, RAG, and intelligent LLM routing. Everything runs locally with optional cloud fallback."
+
+**2. Architecture Walkthrough (2 min)**
+
+> "Let me show you the architecture:
+>
+> - API Gateway handles all requests
+> - Smart Orchestrator classifies and routes
+> - 5 specialist agents handle different task types
+> - Supporting services provide memory, RAG, and LLM access"
+
+**3. Web Dashboard Demo (3 min)**
+
+```
+# Open browser to http://localhost:3000
+# Show the chat interface
+# Send a research query
+# Point out the agent indicator and sources
+```
+
+**4. Multi-Agent Demonstration (4 min)**
+
+```python
+# CLI demo
+./agentos chat "Research the latest developments in fusion energy"
+# Show research agent response with citations
+
+./agentos chat "Write a Python function to calculate fibonacci"
+# Show code agent response
+
+./agentos chat "Analyze the trend: 10, 15, 22, 31, 42"
+# Show analysis agent response
+
+./agentos chat "Write a haiku about programming"
+# Show creative agent response
+```
+
+**5. Memory Demo (2 min)**
+
+```python
+# Show memory persistence
+./agentos chat "Remember that my favorite language is Python"
+# ... later ...
+./agentos chat "What's my favorite programming language?"
+# Should remember Python
+```
+
+**6. Local vs Cloud LLM (2 min)**
+
+```python
+# Show local preference
+./agentos chat "Hello" --prefer-local
+# Show it uses Ollama
+
+# Show cloud fallback
+# Disable Ollama, show it falls back to OpenAI
+```
+
+#### Key Talking Points
+
+- "Everything runs on your hardware—complete privacy"
+- "Smart routing means the right agent for every task"
+- "Memory persists across sessions"
+- "Local-first with cloud fallback for best of both worlds"
+- "One command deployment with Docker Compose"
+
+### Evaluation Rubric
+
+| Category                       | Criteria                               | Points | Scoring Guide                                            |
+| :----------------------------- | :------------------------------------- | :----- | :------------------------------------------------------- |
+| **Service Integration (25%)**  |                                        |        |                                                          |
+|                                | All 5 mini-project services integrated | 10     | Full: all 5 / Partial: 3-4 / None: 0-2                   |
+|                                | Services communicate correctly         | 10     | Full: all calls work / Partial: some / None: broken      |
+|                                | Health checks implemented              | 5      | Full: all services / Partial: some / None: none          |
+| **Orchestration (20%)**        |                                        |        |                                                          |
+|                                | Request classifier accurate            | 10     | Full: >90% / Partial: 70-90% / None: under 70%           |
+|                                | All 5 agents implemented               | 10     | Full: all functional / Partial: 3-4 / None: 0-2          |
+| **Infrastructure (20%)**       |                                        |        |                                                          |
+|                                | Docker Compose deployment works        | 10     | Full: one command / Partial: manual steps / None: broken |
+|                                | Local LLM (Ollama) integrated          | 5      | Full: working / Partial: configured / None: missing      |
+|                                | Cloud fallback works                   | 5      | Full: automatic / Partial: manual / None: none           |
+| **User Interface (15%)**       |                                        |        |                                                          |
+|                                | API Gateway functional                 | 5      | Full: all endpoints / Partial: some / None: broken       |
+|                                | Web Dashboard functional               | 5      | Full: full features / Partial: basic / None: none        |
+|                                | CLI tool functional                    | 5      | Full: all commands / Partial: some / None: none          |
+| **Resilience & Quality (20%)** |                                        |        |                                                          |
+|                                | Graceful service failure handling      | 5      | Full: automatic / Partial: manual / None: crashes        |
+|                                | Error handling comprehensive           | 5      | Full: all paths / Partial: some / None: none             |
+|                                | Documentation complete                 | 5      | Full: README + comments / Partial: some / None: none     |
+|                                | Code quality (types, structure)        | 5      | Full: clean / Partial: acceptable / None: messy          |
+
+**Grading Scale:**
+
+- **90-100:** Exceeds expectations - Production ready, impressive polish
+- **80-89:** Meets expectations - Solid implementation, minor gaps
+- **70-79:** Approaching expectations - Core works, needs refinement
+- **60-69:** Below expectations - Significant functionality missing
+- **Under 60:** Does not meet expectations - Major components broken
+
+### Stretch Goals
+
+Completed the core requirements? Try these enhancements:
+
+| Stretch Goal              | Difficulty | Description                                             |
+| :------------------------ | :--------- | :------------------------------------------------------ |
+| **Multi-tenancy**         | ⭐⭐⭐     | Support multiple users/organizations with isolated data |
+| **JWT Authentication**    | ⭐⭐       | Replace X-User-Id with proper JWT auth                  |
+| **Rate Limiting**         | ⭐⭐       | Implement per-user rate limits with Redis               |
+| **Prometheus Metrics**    | ⭐⭐       | Add observability with Prometheus + Grafana             |
+| **Agent Collaboration**   | ⭐⭐⭐     | Allow agents to call other agents for complex tasks     |
+| **Voice Interface**       | ⭐⭐⭐     | Add Whisper for speech-to-text, TTS for responses       |
+| **Plugin System**         | ⭐⭐⭐     | Allow custom agents/tools to be added dynamically       |
+| **Kubernetes Deployment** | ⭐⭐⭐     | Create Helm charts for K8s deployment                   |
+| **Mobile App**            | ⭐⭐⭐     | Build iOS/Android app using the API                     |
+| **Workflow Automation**   | ⭐⭐       | Schedule recurring agent tasks                          |
+| **Fine-tuning Pipeline**  | ⭐⭐⭐     | Add capability to fine-tune local models                |
+| **Prompt Marketplace**    | ⭐⭐       | Share and discover prompts between users                |
+
+### Troubleshooting Guide
+
+#### Issue: "Docker Compose fails to start all services"
+
+**Symptoms:** Some containers exit immediately or stay in "restarting" state.
+
+**Causes:**
+
+1. Port conflicts with existing services
+2. Insufficient memory/CPU
+3. Missing environment variables
+4. Service dependency issues
+
+**Solutions:**
+
+```bash
+# Check which services are failing
+docker-compose ps
+
+# View logs for failing service
+docker-compose logs <service-name>
+
+# Check for port conflicts
+lsof -i :8000  # Check each port
+
+# Increase Docker resources (Docker Desktop settings)
+# Minimum: 8GB RAM, 4 CPUs
+
+# Verify .env file has all required variables
+cat .env | grep -E "^[A-Z]"
+
+# Start services in dependency order
+docker-compose up -d postgres redis
+sleep 10
+docker-compose up -d
+```
+
+#### Issue: "Ollama models not loading"
+
+**Symptoms:** Local LLM requests fail with "model not found" or timeout.
+
+**Causes:**
+
+1. Models not pulled
+2. Insufficient GPU memory
+3. Ollama container not healthy
+
+**Solutions:**
+
+```bash
+# Pull models explicitly
+docker exec agentos-ollama-1 ollama pull llama3.1:8b
+
+# Check Ollama logs
+docker-compose logs ollama
+
+# Verify GPU access (if using)
+docker exec agentos-ollama-1 nvidia-smi
+
+# Use smaller model if memory constrained
+docker exec agentos-ollama-1 ollama pull llama3.2:3b
+
+# Test Ollama directly
+curl http://localhost:11434/api/generate -d '{
+  "model": "llama3.1:8b",
+  "prompt": "Hello"
+}'
+```
+
+#### Issue: "Orchestrator routing to wrong agent"
+
+**Symptoms:** Queries consistently go to wrong specialist agent.
+
+**Causes:**
+
+1. Keyword configuration incorrect
+2. LLM classifier prompt needs tuning
+3. Confidence threshold too low/high
+
+**Solutions:**
+
+```yaml
+# config/agents.yaml - Update keywords
+routing:
+  keywords:
+    research:
+      [
+        "research",
+        "find",
+        "search",
+        "investigate",
+        "what is",
+        "who is",
+        "learn about",
+      ]
+    code:
+      [
+        "code",
+        "program",
+        "function",
+        "debug",
+        "implement",
+        "python",
+        "javascript",
+        "fix bug",
+      ]
+    # Add more specific keywords
+
+  # Adjust threshold
+  confidence_threshold: 0.6 # Lower = more LLM classification
+```
+
+```python
+# Test classification directly
+from orchestrator.classifier import RequestClassifier
+classifier = RequestClassifier(config)
+result = classifier.classify("your test query")
+print(result)  # See which agent and confidence
+```
+
+#### Issue: "Memory service not persisting data"
+
+**Symptoms:** Conversations not remembered across sessions, memories disappear.
+
+**Causes:**
+
+1. PostgreSQL volume not mounted
+2. Redis not persisting
+3. User ID not consistent
+
+**Solutions:**
+
+```yaml
+# docker-compose.yml - Verify volumes
+postgres:
+  volumes:
+    - postgres-data:/var/lib/postgresql/data # Must be present
+
+redis:
+  volumes:
+    - redis-data:/data
+  command: redis-server --appendonly yes # Enable persistence
+```
+
+```python
+# Verify user ID is consistent
+# Check X-User-Id header is being passed correctly
+response = requests.post(
+    "http://localhost:8000/chat",
+    headers={"X-User-Id": "consistent-user-id"},  # Same every time
+    json={"message": "Remember this"}
+)
+```
+
+#### Issue: "RAG not finding uploaded documents"
+
+**Symptoms:** Queries about uploaded documents return generic responses.
+
+**Causes:**
+
+1. Document not properly chunked/embedded
+2. ChromaDB collection not persisted
+3. Query not matching document content
+
+**Solutions:**
+
+```bash
+# Check ChromaDB has documents
+curl http://localhost:8003/rag/test-user/documents
+
+# Verify volume is mounted
+docker-compose exec rag ls -la /app/chroma_db
+
+# Re-upload document
+curl -X POST http://localhost:8003/rag/test-user/documents \
+  -F "file=@document.pdf"
+
+# Test query directly against RAG service
+curl "http://localhost:8003/rag/test-user/query?query=your+search+term"
+```
+
+#### Issue: "API Gateway returning 500 errors"
+
+**Symptoms:** All requests to gateway fail with internal server error.
+
+**Causes:**
+
+1. Orchestrator service down
+2. Configuration file missing/invalid
+3. Unhandled exception in request processing
+
+**Solutions:**
+
+```bash
+# Check gateway logs
+docker-compose logs gateway
+
+# Verify orchestrator is healthy
+curl http://localhost:8080/health
+
+# Check configuration files exist
+docker-compose exec gateway ls -la /app/config/
+
+# Test with minimal request
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: test" \
+  -d '{"message": "hello"}'
+```
+
+#### Issue: "Dashboard not connecting to API"
+
+**Symptoms:** Web dashboard loads but chat doesn't work, shows connection errors.
+
+**Causes:**
+
+1. CORS not configured
+2. API URL incorrect in dashboard config
+3. Gateway not accessible from browser
+
+**Solutions:**
+
+```python
+# gateway/main.py - Verify CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+```javascript
+// dashboard - Check API URL
+const API_URL = "http://localhost:8000"; // Must be accessible from browser
+
+// Test from browser console
+fetch("http://localhost:8000/health")
+  .then((r) => r.json())
+  .then(console.log);
+```
+
+---
+
+## System Architecture
+
+{/* IMAGE_PLACEHOLDER: Create a comprehensive system architecture diagram showing all components of AgentOS. Use a layered approach: Top layer (User Interface) with Web Dashboard, REST API, and CLI. Middle layer (AgentOS Core) with API Gateway, Smart Orchestrator, and the 5 specialized agents arranged in a pentagon. Bottom layer (Supporting Services) with Prompt Library, Memory Service, RAG Service, LLM Router, and Research Service. Lowest layer (LLM Providers) showing Ollama, LM Studio, OpenAI, and Anthropic. Use different colors for each layer and show data flow with animated arrows. Add small icons representing each component's function. Make it visually similar to AWS architecture diagrams but with a modern, clean aesthetic. Place this before the Mermaid diagram. */}
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Create an ArchitectureExplorer component that makes the Mermaid diagram interactive. When users hover over or click on a component, show a tooltip with: component description, responsibilities, API endpoints, dependencies, and links to relevant code sections. Add a "trace request" feature where users can click a sample request and watch it flow through the system with animated highlighting. */}
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "User Interface"
+        WebUI[Web Dashboard]
+        API[REST API]
+        CLI[CLI Tool]
+    end
+    
+    subgraph "AgentOS Core"
+        Gateway[API Gateway] --> Orchestrator[Smart Orchestrator]
+        
+        Orchestrator --> Router{Request Router}
+        
+        Router --> Research[Research Agent]
+        Router --> Code[Code Agent]
+        Router --> Analysis[Analysis Agent]
+        Router --> Creative[Creative Agent]
+        Router --> Assistant[General Assistant]
+    end
+    
+    subgraph "Supporting Services"
+        PromptLib[Prompt Library]
+        Memory[Memory Service]
+        RAG[RAG Service]
+        LLMRouter[LLM Router]
+        ResearchSvc[Research Service]
+    end
+    
+    subgraph "LLM Providers"
+        Ollama[Ollama<br/>Local]
+        LMStudio[LM Studio<br/>Local]
+        OpenAI[OpenAI<br/>Cloud]
+        Anthropic[Anthropic<br/>Cloud]
+    end
+    
+    Research --> PromptLib
+    Research --> Memory
+    Research --> ResearchSvc
+    
+    Code --> PromptLib
+    Code --> RAG
+    
+    Analysis --> Memory
+    Analysis --> RAG
+    
+    LLMRouter --> Ollama
+    LLMRouter --> LMStudio
+    LLMRouter --> OpenAI
+    LLMRouter --> Anthropic
+    
+    Research --> LLMRouter
+    Code --> LLMRouter
+    Analysis --> LLMRouter
+    Creative --> LLMRouter
+    Assistant --> LLMRouter
+    
+    WebUI --> Gateway
+    API --> Gateway
+    CLI --> Gateway
+    
+    style Orchestrator fill:#f9f,stroke:#333,stroke-width:3px
+    style LLMRouter fill:#bbf,stroke:#333
+`}
+/>
+
+---
+
+## Step-by-Step Implementation
+
+### Phase 1: Project Structure (30 minutes)
+
+```bash
+mkdir agentos
+cd agentos
+
+# Create directory structure
+mkdir -p {services,agents,orchestrator,gateway,dashboard,config,scripts}
+mkdir -p services/{prompt-library,memory,rag,llm-router,research}
+mkdir -p agents/{research,code,analysis,creative,assistant}
+
+# Initialize Python environment
+python -m venv venv
+source venv/bin/activate
+
+# Install core dependencies
+pip install fastapi uvicorn langgraph langchain langchain-openai langchain-anthropic \
+    sentence-transformers chromadb redis sqlalchemy httpx pydantic python-dotenv \
+    websockets jinja2
+```
+
+#### Complete Project Structure
+
+```
+agentos/
+├── docker-compose.yml          # Full stack deployment
+├── .env.example
+├── config/
+│   ├── agents.yaml             # Agent configurations
+│   ├── providers.yaml          # LLM provider configs
+│   └── policies.yaml           # Routing policies
+├── gateway/
+│   ├── main.py                 # API Gateway
+│   ├── auth.py                 # Authentication
+│   └── rate_limiter.py
+├── orchestrator/
+│   ├── main.py                 # Smart Orchestrator
+│   ├── classifier.py           # Request classifier
+│   ├── router.py               # Agent router
+│   └── state.py                # Orchestration state
+├── agents/
+│   ├── base.py                 # Base agent class
+│   ├── research/
+│   ├── code/
+│   ├── analysis/
+│   ├── creative/
+│   └── assistant/
+├── services/                   # Mini-project services
+│   ├── prompt-library/
+│   ├── memory/
+│   ├── rag/
+│   ├── llm-router/
+│   └── research/
+├── dashboard/                  # Web UI
+│   ├── templates/
+│   └── static/
+└── scripts/
+    ├── setup.sh
+    └── seed_data.py
+```
+
+---
+
+### Phase 2: Configuration System (20 minutes)
+
+```yaml
+# config/agents.yaml
+agents:
+  research:
+    name: "Research Agent"
+    description: "Deep web research and synthesis"
+    capabilities:
+      - web_search
+      - document_analysis
+      - citation_tracking
+    default_model: "gpt-4o"
+    fallback_model: "llama3.1:8b"
+    prompts:
+      system: "research_system_v2"
+      user: "research_query"
+    tools:
+      - web_search
+      - document_retrieval
+    max_iterations: 5
+
+  code:
+    name: "Code Agent"
+    description: "Code generation, review, and debugging"
+    capabilities:
+      - code_generation
+      - code_review
+      - debugging
+      - refactoring
+    default_model: "gpt-4o"
+    fallback_model: "codellama:13b"
+    prompts:
+      system: "code_system_v1"
+    tools:
+      - code_execution
+      - file_operations
+      - documentation_search
+
+  analysis:
+    name: "Analysis Agent"
+    description: "Data analysis and insights"
+    capabilities:
+      - data_analysis
+      - visualization
+      - statistical_analysis
+    default_model: "gpt-4o-mini"
+    prompts:
+      system: "analysis_system_v1"
+    tools:
+      - code_execution
+      - document_retrieval
+
+  creative:
+    name: "Creative Agent"
+    description: "Creative writing and content generation"
+    capabilities:
+      - creative_writing
+      - content_generation
+      - brainstorming
+    default_model: "claude-sonnet-4-20250514"
+    fallback_model: "gpt-4o"
+    prompts:
+      system: "creative_system_v1"
+    temperature: 0.8
+
+  assistant:
+    name: "General Assistant"
+    description: "General-purpose assistant for misc tasks"
+    capabilities:
+      - general_qa
+      - task_planning
+      - summarization
+    default_model: "gpt-4o-mini"
+    fallback_model: "llama3.1:8b"
+    prompts:
+      system: "assistant_system_v1"
+
+routing:
+  # Keywords that trigger specific agents
+  keywords:
+    research:
+      ["research", "find out", "search", "investigate", "what is", "who is"]
+    code:
+      [
+        "code",
+        "program",
+        "function",
+        "debug",
+        "fix",
+        "implement",
+        "python",
+        "javascript",
+      ]
+    analysis: ["analyze", "data", "statistics", "chart", "graph", "trend"]
+    creative: ["write", "story", "creative", "poem", "blog", "content"]
+
+  # Default agent when no match
+  default: "assistant"
+
+  # Confidence threshold for routing
+  confidence_threshold: 0.7
+```
+
+```yaml
+# config/providers.yaml
+providers:
+  local:
+    ollama:
+      enabled: true
+      base_url: "http://localhost:11434"
+      models:
+        - name: "llama3.1:8b"
+          context: 8192
+          capabilities: ["general", "code", "reasoning"]
+        - name: "codellama:13b"
+          context: 16384
+          capabilities: ["code"]
+        - name: "mistral:7b"
+          context: 8192
+          capabilities: ["general", "fast"]
+
+    lmstudio:
+      enabled: false
+      base_url: "http://localhost:1234"
+
+  cloud:
+    openai:
+      enabled: true
+      models:
+        - name: "gpt-4o"
+          context: 128000
+          cost_input: 0.0025
+          cost_output: 0.01
+        - name: "gpt-4o-mini"
+          context: 128000
+          cost_input: 0.00015
+          cost_output: 0.0006
+
+    anthropic:
+      enabled: true
+      models:
+        - name: "claude-sonnet-4-20250514"
+          context: 200000
+          cost_input: 0.003
+          cost_output: 0.015
+
+preferences:
+  prefer_local: true
+  max_cost_per_request: 0.10
+  fallback_enabled: true
+```
+
+---
+
+### Phase 3: The Smart Orchestrator (45 minutes)
+
+```python
+# orchestrator/main.py
+from typing import Dict, List, Optional, Any
+from pydantic import BaseModel
+from langgraph.graph import StateGraph, END
+from orchestrator.classifier import RequestClassifier
+from orchestrator.router import AgentRouter
+from orchestrator.state import OrchestratorState
+import yaml
+import asyncio
+
+class OrchestratorRequest(BaseModel):
+    user_id: str
+    session_id: str
+    message: str
+    context: Optional[Dict] = None
+    preferences: Optional[Dict] = None
+
+class OrchestratorResponse(BaseModel):
+    response: str
+    agent_used: str
+    confidence: float
+    sources: Optional[List[Dict]] = None
+    metadata: Dict = {}
+
+class SmartOrchestrator:
+    """Central orchestrator that routes requests to specialized agents."""
+
+    def __init__(self, config_path: str = "config/agents.yaml"):
+        with open(config_path) as f:
+            self.config = yaml.safe_load(f)
+
+        self.classifier = RequestClassifier(self.config["routing"])
+        self.router = AgentRouter(self.config["agents"])
+        self.graph = self._build_graph()
+
+    def _build_graph(self) -> StateGraph:
+        """Build the orchestration graph."""
+
+        workflow = StateGraph(OrchestratorState)
+
+        # Add nodes
+        workflow.add_node("classify", self._classify_node)
+        workflow.add_node("enrich_context", self._enrich_context_node)
+        workflow.add_node("route_to_agent", self._route_node)
+        workflow.add_node("execute_agent", self._execute_node)
+        workflow.add_node("post_process", self._post_process_node)
+
+        # Set entry point
+        workflow.set_entry_point("classify")
+
+        # Add edges
+        workflow.add_edge("classify", "enrich_context")
+        workflow.add_edge("enrich_context", "route_to_agent")
+        workflow.add_edge("route_to_agent", "execute_agent")
+        workflow.add_edge("execute_agent", "post_process")
+        workflow.add_edge("post_process", END)
+
+        return workflow.compile()
+
+    async def _classify_node(self, state: OrchestratorState) -> Dict:
+        """Classify the request to determine the best agent."""
+        classification = await self.classifier.classify(
+            message=state["message"],
+            context=state.get("context")
+        )
+
+        return {
+            "target_agent": classification["agent"],
+            "classification_confidence": classification["confidence"],
+            "detected_intent": classification["intent"],
+            "detected_entities": classification["entities"]
+        }
+
+    async def _enrich_context_node(self, state: OrchestratorState) -> Dict:
+        """Enrich context with memory and relevant documents."""
+        enriched = {}
+
+        # Fetch user memories
+        try:
+            from services.memory_client import MemoryClient
+            memory_client = MemoryClient()
+
+            # Get relevant long-term memories
+            memories = await memory_client.recall(
+                user_id=state["user_id"],
+                query=state["message"],
+                top_k=3
+            )
+            enriched["memories"] = memories
+
+            # Get conversation history
+            history = await memory_client.get_messages(
+                user_id=state["user_id"],
+                session_id=state["session_id"],
+                limit=10
+            )
+            enriched["conversation_history"] = history
+
+        except Exception as e:
+            print(f"Memory enrichment failed: {e}")
+
+        # Fetch relevant documents if RAG is needed
+        if state["target_agent"] in ["research", "analysis", "code"]:
+            try:
+                from services.rag_client import RAGClient
+                rag_client = RAGClient()
+
+                docs = await rag_client.query(
+                    user_id=state["user_id"],
+                    query=state["message"],
+                    top_k=3
+                )
+                enriched["relevant_documents"] = docs
+
+            except Exception as e:
+                print(f"RAG enrichment failed: {e}")
+
+        return {"enriched_context": enriched}
+
+    async def _route_node(self, state: OrchestratorState) -> Dict:
+        """Route to the appropriate agent."""
+        agent_config = self.router.get_agent_config(state["target_agent"])
+
+        # Get prompt from library
+        try:
+            from services.prompt_client import PromptClient
+            prompt_client = PromptClient()
+
+            prompt = await prompt_client.get_prompt(
+                name=agent_config["prompts"]["system"],
+                variables={
+                    "user_id": state["user_id"],
+                    "context": state.get("enriched_context", {})
+                }
+            )
+
+            return {"agent_prompt": prompt}
+
+        except Exception as e:
+            print(f"Prompt fetch failed: {e}")
+            return {"agent_prompt": None}
+
+    async def _execute_node(self, state: OrchestratorState) -> Dict:
+        """Execute the selected agent."""
+        agent = self.router.get_agent(state["target_agent"])
+
+        result = await agent.execute(
+            message=state["message"],
+            context=state.get("enriched_context", {}),
+            prompt=state.get("agent_prompt"),
+            preferences=state.get("preferences", {})
+        )
+
+        return {
+            "agent_response": result["response"],
+            "agent_metadata": result.get("metadata", {}),
+            "sources": result.get("sources", [])
+        }
+
+    async def _post_process_node(self, state: OrchestratorState) -> Dict:
+        """Post-process the response and update memory."""
+
+        # Store conversation in memory
+        try:
+            from services.memory_client import MemoryClient
+            memory_client = MemoryClient()
+
+            # Store user message
+            await memory_client.add_message(
+                user_id=state["user_id"],
+                session_id=state["session_id"],
+                role="user",
+                content=state["message"]
+            )
+
+            # Store assistant response
+            await memory_client.add_message(
+                user_id=state["user_id"],
+                session_id=state["session_id"],
+                role="assistant",
+                content=state["agent_response"],
+                metadata={"agent": state["target_agent"]}
+            )
+
+        except Exception as e:
+            print(f"Memory storage failed: {e}")
+
+        return {"status": "completed"}
+
+    async def process(self, request: OrchestratorRequest) -> OrchestratorResponse:
+        """Process a request through the orchestration pipeline."""
+
+        initial_state = {
+            "user_id": request.user_id,
+            "session_id": request.session_id,
+            "message": request.message,
+            "context": request.context,
+            "preferences": request.preferences,
+            "status": "started"
+        }
+
+        result = await self.graph.ainvoke(initial_state)
+
+        return OrchestratorResponse(
+            response=result["agent_response"],
+            agent_used=result["target_agent"],
+            confidence=result["classification_confidence"],
+            sources=result.get("sources"),
+            metadata=result.get("agent_metadata", {})
+        )
+```
+
+### Phase 4: Request Classifier (30 minutes)
+
+```python
+# orchestrator/classifier.py
+from langchain_openai import ChatOpenAI
+from typing import Dict, List, Optional
+import re
+
+class RequestClassifier:
+    """Classify incoming requests to route to the right agent."""
+
+    def __init__(self, routing_config: Dict):
+        self.config = routing_config
+        self.keywords = routing_config.get("keywords", {})
+        self.default_agent = routing_config.get("default", "assistant")
+        self.threshold = routing_config.get("confidence_threshold", 0.7)
+        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+    async def classify(
+        self,
+        message: str,
+        context: Optional[Dict] = None
+    ) -> Dict:
+        """Classify a request and return routing information."""
+
+        # First, try keyword-based classification (fast)
+        keyword_result = self._keyword_classify(message)
+
+        if keyword_result["confidence"] >= self.threshold:
+            return keyword_result
+
+        # Fall back to LLM classification (more accurate)
+        llm_result = await self._llm_classify(message, context)
+
+        # Use the higher confidence result
+        if llm_result["confidence"] > keyword_result["confidence"]:
+            return llm_result
+
+        return keyword_result
+
+    def _keyword_classify(self, message: str) -> Dict:
+        """Fast keyword-based classification."""
+        message_lower = message.lower()
+
+        scores = {}
+        for agent, keywords in self.keywords.items():
+            score = sum(1 for kw in keywords if kw in message_lower)
+            scores[agent] = score
+
+        if not scores or max(scores.values()) == 0:
+            return {
+                "agent": self.default_agent,
+                "confidence": 0.3,
+                "intent": "general",
+                "entities": [],
+                "method": "keyword_default"
+            }
+
+        best_agent = max(scores, key=scores.get)
+        max_score = scores[best_agent]
+
+        # Normalize confidence
+        confidence = min(0.9, 0.4 + (max_score * 0.15))
+
+        return {
+            "agent": best_agent,
+            "confidence": confidence,
+            "intent": best_agent,
+            "entities": [],
+            "method": "keyword"
+        }
+
+    async def _llm_classify(
+        self,
+        message: str,
+        context: Optional[Dict]
+    ) -> Dict:
+        """LLM-based classification for complex requests."""
+
+        agents_desc = """
+Available agents:
+- research: Web research, fact-finding, investigation, "what is", "who is", "find out"
+- code: Programming, debugging, code review, implementation, any programming language
+- analysis: Data analysis, statistics, trends, charts, numerical analysis
+- creative: Creative writing, stories, content, brainstorming, marketing copy
+- assistant: General questions, planning, summarization, misc tasks
+"""
+
+        prompt = f"""{agents_desc}
+
+User message: "{message}"
+
+Classify this message. Return JSON:
+{{"agent": "agent_name", "confidence": 0.0-1.0, "intent": "brief intent", "entities": ["key entities"]}}"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        try:
+            import json
+            result = json.loads(response.content)
+            result["method"] = "llm"
+            return result
+        except:
+            return {
+                "agent": self.default_agent,
+                "confidence": 0.5,
+                "intent": "unknown",
+                "entities": [],
+                "method": "llm_fallback"
+            }
+```
+
+---
+
+### Phase 5: Base Agent Class (30 minutes)
+
+```python
+# agents/base.py
+from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, Any
+from pydantic import BaseModel
+import httpx
+
+class AgentResponse(BaseModel):
+    response: str
+    sources: Optional[List[Dict]] = None
+    metadata: Dict = {}
+    tokens_used: Optional[int] = None
+
+class BaseAgent(ABC):
+    """Base class for all specialized agents."""
+
+    def __init__(self, config: Dict):
+        self.config = config
+        self.name = config.get("name", "Agent")
+        self.capabilities = config.get("capabilities", [])
+        self.default_model = config.get("default_model", "gpt-4o-mini")
+        self.fallback_model = config.get("fallback_model")
+        self.temperature = config.get("temperature", 0.7)
+
+        # Service clients
+        self.llm_router_url = "http://localhost:8004"
+        self.memory_url = "http://localhost:8002"
+        self.rag_url = "http://localhost:8003"
+        self.prompt_url = "http://localhost:8001"
+
+    async def execute(
+        self,
+        message: str,
+        context: Dict = None,
+        prompt: Dict = None,
+        preferences: Dict = None
+    ) -> AgentResponse:
+        """Execute the agent's task."""
+
+        # Build the full context
+        full_context = await self._build_context(message, context)
+
+        # Get system prompt
+        system_prompt = await self._get_system_prompt(prompt)
+
+        # Execute the agent-specific logic
+        result = await self._execute(message, full_context, system_prompt, preferences)
+
+        return result
+
+    async def _build_context(self, message: str, context: Dict) -> Dict:
+        """Build context for the agent."""
+        full_context = context or {}
+
+        # Add agent-specific context building
+        agent_context = await self._get_agent_context(message)
+        full_context.update(agent_context)
+
+        return full_context
+
+    async def _get_system_prompt(self, prompt: Dict) -> str:
+        """Get the system prompt for this agent."""
+        if prompt and "system_prompt" in prompt:
+            return prompt["system_prompt"]
+
+        # Fallback to default prompt
+        return self._get_default_prompt()
+
+    @abstractmethod
+    async def _execute(
+        self,
+        message: str,
+        context: Dict,
+        system_prompt: str,
+        preferences: Dict
+    ) -> AgentResponse:
+        """Agent-specific execution logic."""
+        pass
+
+    @abstractmethod
+    async def _get_agent_context(self, message: str) -> Dict:
+        """Get agent-specific context."""
+        pass
+
+    @abstractmethod
+    def _get_default_prompt(self) -> str:
+        """Get default system prompt."""
+        pass
+
+    async def _call_llm(
+        self,
+        messages: List[Dict],
+        task_type: str = "general",
+        prefer_local: bool = True
+    ) -> str:
+        """Call LLM through the router."""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.llm_router_url}/llm/chat",
+                json={
+                    "messages": messages,
+                    "task_type": task_type,
+                    "prefer_local": prefer_local
+                },
+                timeout=60.0
+            )
+            result = response.json()
+            return result["content"]
+
+    async def _search_documents(
+        self,
+        query: str,
+        user_id: str,
+        top_k: int = 5
+    ) -> List[Dict]:
+        """Search RAG documents."""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.rag_url}/rag/{user_id}/query",
+                params={"query": query, "top_k": top_k}
+            )
+            return response.json()
+
+    async def _recall_memories(
+        self,
+        query: str,
+        user_id: str,
+        top_k: int = 3
+    ) -> List[Dict]:
+        """Recall relevant memories."""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.memory_url}/memory/{user_id}/long-term/recall",
+                json={"query": query, "top_k": top_k}
+            )
+            return response.json()
+```
+
+---
+
+### Phase 6: Specialized Agents (45 minutes)
+
+```python
+# agents/research/agent.py
+from agents.base import BaseAgent, AgentResponse
+from typing import Dict, List
+import httpx
+
+class ResearchAgent(BaseAgent):
+    """Agent specialized in web research and synthesis."""
+
+    def __init__(self, config: Dict):
+        super().__init__(config)
+        self.research_url = "http://localhost:8005"
+
+    async def _execute(
+        self,
+        message: str,
+        context: Dict,
+        system_prompt: str,
+        preferences: Dict
+    ) -> AgentResponse:
+        """Execute research task."""
+
+        # Conduct web research
+        research_result = await self._conduct_research(message)
+
+        # Synthesize with context
+        synthesis_prompt = f"""{system_prompt}
+
+User Question: {message}
+
+Research Findings:
+{research_result['answer']}
+
+User Context:
+- Memories: {context.get('memories', 'None')}
+- Relevant Documents: {context.get('relevant_documents', 'None')}
+
+Provide a comprehensive answer based on the research and context.
+Cite sources using [1], [2], etc."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": synthesis_prompt}
+        ]
+
+        response = await self._call_llm(messages, task_type="reasoning")
+
+        return AgentResponse(
+            response=response,
+            sources=research_result.get("citations", []),
+            metadata={
+                "sources_consulted": research_result.get("sources_consulted", 0),
+                "research_iterations": research_result.get("iterations", 1)
+            }
+        )
+
+    async def _conduct_research(self, query: str) -> Dict:
+        """Conduct web research."""
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.research_url}/research/",
+                json={
+                    "question": query,
+                    "max_iterations": 3,
+                    "sources_per_iteration": 5
+                },
+                timeout=120.0
+            )
+            return response.json()
+
+    async def _get_agent_context(self, message: str) -> Dict:
+        """Get research-specific context."""
+        return {"research_mode": True}
+
+    def _get_default_prompt(self) -> str:
+        return """You are an expert research analyst. Your role is to:
+1. Synthesize information from multiple sources
+2. Provide accurate, well-cited answers
+3. Acknowledge uncertainty when appropriate
+4. Present balanced perspectives on controversial topics
+
+Always cite your sources and distinguish between facts and opinions."""
+```
+
+```python
+# agents/code/agent.py
+from agents.base import BaseAgent, AgentResponse
+from typing import Dict
+
+class CodeAgent(BaseAgent):
+    """Agent specialized in code generation and review."""
+
+    async def _execute(
+        self,
+        message: str,
+        context: Dict,
+        system_prompt: str,
+        preferences: Dict
+    ) -> AgentResponse:
+        """Execute code task."""
+
+        # Search for relevant code documentation
+        docs = context.get("relevant_documents", [])
+
+        # Build code-specific prompt
+        code_context = ""
+        if docs:
+            code_context = "\n\nRelevant Documentation:\n" + "\n".join([
+                f"- {d.get('content', '')[:500]}" for d in docs[:3]
+            ])
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"{message}{code_context}"}
+        ]
+
+        response = await self._call_llm(messages, task_type="code", prefer_local=True)
+
+        return AgentResponse(
+            response=response,
+            metadata={"task_type": "code"}
+        )
+
+    async def _get_agent_context(self, message: str) -> Dict:
+        """Detect programming language and context."""
+        # Simple language detection
+        languages = {
+            "python": ["python", "pip", "django", "flask", "pandas"],
+            "javascript": ["javascript", "js", "node", "react", "vue"],
+            "typescript": ["typescript", "ts", "angular"],
+            "rust": ["rust", "cargo"],
+            "go": ["golang", "go "]
+        }
+
+        message_lower = message.lower()
+        detected = "python"  # default
+
+        for lang, keywords in languages.items():
+            if any(kw in message_lower for kw in keywords):
+                detected = lang
+                break
+
+        return {"detected_language": detected}
+
+    def _get_default_prompt(self) -> str:
+        return """You are an expert software engineer. Your role is to:
+1. Write clean, efficient, well-documented code
+2. Follow best practices and design patterns
+3. Consider edge cases and error handling
+4. Explain your code when asked
+
+Always provide complete, runnable code examples."""
+```
+
+```python
+# agents/assistant/agent.py
+from agents.base import BaseAgent, AgentResponse
+from typing import Dict
+
+class AssistantAgent(BaseAgent):
+    """General-purpose assistant agent."""
+
+    async def _execute(
+        self,
+        message: str,
+        context: Dict,
+        system_prompt: str,
+        preferences: Dict
+    ) -> AgentResponse:
+        """Execute general assistant task."""
+
+        # Build context-aware prompt
+        context_str = ""
+
+        if context.get("memories"):
+            context_str += "\n\nRelevant memories about this user:\n"
+            for mem in context["memories"][:3]:
+                context_str += f"- {mem.get('content', '')}\n"
+
+        if context.get("conversation_history"):
+            context_str += "\n\nRecent conversation:\n"
+            for msg in context["conversation_history"][-5:]:
+                context_str += f"{msg['role']}: {msg['content'][:200]}\n"
+
+        messages = [
+            {"role": "system", "content": system_prompt + context_str},
+            {"role": "user", "content": message}
+        ]
+
+        response = await self._call_llm(
+            messages,
+            task_type="general",
+            prefer_local=preferences.get("prefer_local", True)
+        )
+
+        return AgentResponse(response=response)
+
+    async def _get_agent_context(self, message: str) -> Dict:
+        return {}
+
+    def _get_default_prompt(self) -> str:
+        return """You are a helpful, friendly AI assistant. Your role is to:
+1. Answer questions clearly and concisely
+2. Help with planning and organization
+3. Provide balanced, thoughtful advice
+4. Admit when you don't know something
+
+Be conversational but professional."""
+```
+
+---
+
+### Phase 7: API Gateway (30 minutes)
+
+```python
+# gateway/main.py
+from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, Dict, List
+from orchestrator.main import SmartOrchestrator, OrchestratorRequest
+import uuid
+
+app = FastAPI(
+    title="AgentOS API Gateway",
+    description="Unified API for the Agentic Ecosystem",
+    version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+orchestrator = SmartOrchestrator()
+
+# Request/Response Models
+class ChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+    context: Optional[Dict] = None
+    preferences: Optional[Dict] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    session_id: str
+    agent_used: str
+    confidence: float
+    sources: Optional[List[Dict]] = None
+
+class SessionInfo(BaseModel):
+    session_id: str
+    user_id: str
+    created_at: str
+    message_count: int
+
+# Simple auth (replace with proper auth in production)
+async def get_user_id(x_user_id: str = Header(default="anonymous")) -> str:
+    return x_user_id
+
+# Endpoints
+@app.post("/chat", response_model=ChatResponse)
+async def chat(
+    request: ChatRequest,
+    user_id: str = Depends(get_user_id)
+):
+    """Send a message to the agent ecosystem."""
+
+    session_id = request.session_id or str(uuid.uuid4())
+
+    orchestrator_request = OrchestratorRequest(
+        user_id=user_id,
+        session_id=session_id,
+        message=request.message,
+        context=request.context,
+        preferences=request.preferences
+    )
+
+    result = await orchestrator.process(orchestrator_request)
+
+    return ChatResponse(
+        response=result.response,
+        session_id=session_id,
+        agent_used=result.agent_used,
+        confidence=result.confidence,
+        sources=result.sources
+    )
+
+@app.get("/agents")
+async def list_agents():
+    """List available agents and their capabilities."""
+    return {
+        "agents": [
+            {
+                "name": "research",
+                "description": "Web research and synthesis",
+                "capabilities": ["web_search", "citation_tracking"]
+            },
+            {
+                "name": "code",
+                "description": "Code generation and review",
+                "capabilities": ["code_generation", "debugging"]
+            },
+            {
+                "name": "analysis",
+                "description": "Data analysis and insights",
+                "capabilities": ["data_analysis", "visualization"]
+            },
+            {
+                "name": "creative",
+                "description": "Creative writing and content",
+                "capabilities": ["creative_writing", "brainstorming"]
+            },
+            {
+                "name": "assistant",
+                "description": "General-purpose assistant",
+                "capabilities": ["general_qa", "planning"]
+            }
+        ]
+    }
+
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "services": {
+            "orchestrator": "up",
+            "llm_router": "checking...",
+            "memory": "checking...",
+            "rag": "checking..."
+        }
+    }
+
+@app.get("/stats")
+async def stats(user_id: str = Depends(get_user_id)):
+    """Get usage statistics."""
+    return {
+        "user_id": user_id,
+        "total_messages": 0,
+        "agents_used": {},
+        "tokens_used": 0
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+```
+
+---
+
+### Phase 8: Docker Compose Deployment (20 minutes)
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+
+services:
+  # Core Services
+  gateway:
+    build: ./gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - ORCHESTRATOR_URL=http://orchestrator:8080
+    depends_on:
+      - orchestrator
+      - redis
+      - postgres
+
+  orchestrator:
+    build: ./orchestrator
+    ports:
+      - "8080:8080"
+    environment:
+      - PROMPT_LIBRARY_URL=http://prompt-library:8001
+      - MEMORY_URL=http://memory:8002
+      - RAG_URL=http://rag:8003
+      - LLM_ROUTER_URL=http://llm-router:8004
+      - RESEARCH_URL=http://research:8005
+    depends_on:
+      - prompt-library
+      - memory
+      - rag
+      - llm-router
+      - research
+
+  # Supporting Services
+  prompt-library:
+    build: ./services/prompt-library
+    ports:
+      - "8001:8001"
+    volumes:
+      - prompt-data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///./data/prompts.db
+
+  memory:
+    build: ./services/memory
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/memory
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+
+  rag:
+    build: ./services/rag
+    ports:
+      - "8003:8003"
+    volumes:
+      - rag-data:/app/chroma_db
+    environment:
+      - CHROMA_PATH=/app/chroma_db
+
+  llm-router:
+    build: ./services/llm-router
+    ports:
+      - "8004:8004"
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+  research:
+    build: ./services/research
+    ports:
+      - "8005:8005"
+    environment:
+      - SEARXNG_URL=http://searxng:8080
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+
+  # Infrastructure
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=memory
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+
+  # Local LLM (Ollama)
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Self-hosted Search
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./config/searxng:/etc/searxng
+
+  # Web Dashboard
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://gateway:8000
+
+volumes:
+  postgres-data:
+  redis-data:
+  ollama-data:
+  prompt-data:
+  rag-data:
+```
+
+---
+
+### Phase 9: Web Dashboard (30 minutes)
+
+```python
+# dashboard/main.py
+from fastapi import FastAPI, Request
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+import httpx
+
+app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
+API_URL = "http://localhost:8000"
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page(request: Request):
+    return templates.TemplateResponse("chat.html", {"request": request})
+
+@app.get("/agents", response_class=HTMLResponse)
+async def agents_page(request: Request):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{API_URL}/agents")
+        agents = response.json()["agents"]
+    return templates.TemplateResponse("agents.html", {
+        "request": request,
+        "agents": agents
+    })
+
+@app.get("/documents", response_class=HTMLResponse)
+async def documents_page(request: Request):
+    return templates.TemplateResponse("documents.html", {"request": request})
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    return templates.TemplateResponse("settings.html", {"request": request})
+```
+
+```html
+<!-- dashboard/templates/chat.html -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AgentOS - Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-900 text-white min-h-screen">
+    <div class="flex h-screen">
+      <!-- Sidebar -->
+      <aside class="w-64 bg-gray-800 p-4">
+        <h1 class="text-xl font-bold mb-6">🤖 AgentOS</h1>
+        <nav class="space-y-2">
+          <a href="/chat" class="block px-4 py-2 rounded bg-gray-700"
+            >💬 Chat</a
+          >
+          <a href="/agents" class="block px-4 py-2 rounded hover:bg-gray-700"
+            >🤖 Agents</a
+          >
+          <a href="/documents" class="block px-4 py-2 rounded hover:bg-gray-700"
+            >📄 Documents</a
+          >
+          <a href="/settings" class="block px-4 py-2 rounded hover:bg-gray-700"
+            >⚙️ Settings</a
+          >
+        </nav>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="flex-1 flex flex-col">
+        <!-- Chat Messages -->
+        <div id="messages" class="flex-1 overflow-y-auto p-6 space-y-4">
+          <div class="text-center text-gray-500">
+            Start a conversation with your agent fleet
+          </div>
+        </div>
+
+        <!-- Input -->
+        <div class="p-4 border-t border-gray-700">
+          <form id="chat-form" class="flex gap-4">
+            <input
+              type="text"
+              id="message-input"
+              class="flex-1 bg-gray-800 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Ask anything..."
+            />
+            <button
+              type="submit"
+              class="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-medium"
+            >
+              Send
+            </button>
+          </form>
+        </div>
+      </main>
+
+      <!-- Agent Info Sidebar -->
+      <aside class="w-72 bg-gray-800 p-4 border-l border-gray-700">
+        <h2 class="font-semibold mb-4">Current Agent</h2>
+        <div id="agent-info" class="text-sm text-gray-400">
+          Waiting for message...
+        </div>
+
+        <h2 class="font-semibold mt-6 mb-4">Sources</h2>
+        <div id="sources" class="text-sm text-gray-400">No sources yet</div>
+      </aside>
+    </div>
+
+    <script>
+      const messagesDiv = document.getElementById("messages");
+      const form = document.getElementById("chat-form");
+      const input = document.getElementById("message-input");
+      const agentInfo = document.getElementById("agent-info");
+      const sourcesDiv = document.getElementById("sources");
+
+      let sessionId = null;
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const message = input.value.trim();
+        if (!message) return;
+
+        // Add user message
+        addMessage("user", message);
+        input.value = "";
+
+        // Send to API
+        try {
+          const response = await fetch("http://localhost:8000/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-User-Id": "dashboard-user",
+            },
+            body: JSON.stringify({
+              message: message,
+              session_id: sessionId,
+            }),
+          });
+
+          const data = await response.json();
+          sessionId = data.session_id;
+
+          // Add assistant message
+          addMessage("assistant", data.response);
+
+          // Update agent info
+          agentInfo.innerHTML = `
+                    <div class="mb-2"><strong>Agent:</strong> ${
+                      data.agent_used
+                    }</div>
+                    <div><strong>Confidence:</strong> ${(
+                      data.confidence * 100
+                    ).toFixed(0)}%</div>
+                `;
+
+          // Update sources
+          if (data.sources && data.sources.length > 0) {
+            sourcesDiv.innerHTML = data.sources
+              .map(
+                (s) =>
+                  `<a href="${s.url}" target="_blank" class="block text-blue-400 hover:underline mb-1">${s.title}</a>`
+              )
+              .join("");
+          }
+        } catch (error) {
+          addMessage("system", "Error: " + error.message);
+        }
+      });
+
+      function addMessage(role, content) {
+        const div = document.createElement("div");
+        div.className =
+          role === "user"
+            ? "ml-auto max-w-2xl bg-blue-600 rounded-lg p-4"
+            : "max-w-2xl bg-gray-800 rounded-lg p-4";
+        div.innerHTML = `<div class="whitespace-pre-wrap">${content}</div>`;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+    </script>
+  </body>
+</html>
+```
+
+---
+
+### Phase 10: CLI Tool (15 minutes)
+
+```python
+# scripts/agentos_cli.py
+#!/usr/bin/env python3
+import click
+import httpx
+import json
+
+API_URL = "http://localhost:8000"
+
+@click.group()
+def cli():
+    """AgentOS Command Line Interface"""
+    pass
+
+@cli.command()
+@click.argument('message')
+@click.option('--user', '-u', default='cli-user', help='User ID')
+@click.option('--session', '-s', default=None, help='Session ID')
+def chat(message, user, session):
+    """Send a message to AgentOS"""
+    with httpx.Client() as client:
+        response = client.post(
+            f"{API_URL}/chat",
+            headers={"X-User-Id": user},
+            json={
+                "message": message,
+                "session_id": session
+            }
+        )
+        data = response.json()
+
+        click.echo(f"\n🤖 [{data['agent_used']}] ({data['confidence']:.0%} confidence)")
+        click.echo("-" * 50)
+        click.echo(data['response'])
+
+        if data.get('sources'):
+            click.echo("\n📚 Sources:")
+            for s in data['sources']:
+                click.echo(f"  - {s['title']}: {s['url']}")
+
+@cli.command()
+def agents():
+    """List available agents"""
+    with httpx.Client() as client:
+        response = client.get(f"{API_URL}/agents")
+        data = response.json()
+
+        click.echo("\n🤖 Available Agents:")
+        for agent in data['agents']:
+            click.echo(f"\n  {agent['name']}")
+            click.echo(f"    {agent['description']}")
+            click.echo(f"    Capabilities: {', '.join(agent['capabilities'])}")
+
+@cli.command()
+def health():
+    """Check system health"""
+    with httpx.Client() as client:
+        response = client.get(f"{API_URL}/health")
+        data = response.json()
+
+        click.echo(f"\n🏥 System Status: {data['status']}")
+        for service, status in data['services'].items():
+            icon = "✅" if status == "up" else "❌"
+            click.echo(f"  {icon} {service}: {status}")
+
+if __name__ == "__main__":
+    cli()
+```
+
+---
+
+## Running the Complete System
+
+```bash
+# 1. Start infrastructure
+docker-compose up -d postgres redis ollama searxng
+
+# 2. Pull local models
+docker exec -it agentos-ollama-1 ollama pull llama3.1:8b
+docker exec -it agentos-ollama-1 ollama pull codellama:13b
+
+# 3. Start services
+docker-compose up -d
+
+# 4. Seed initial data
+python scripts/seed_data.py
+
+# 5. Test the system
+python scripts/agentos_cli.py chat "What is quantum computing?"
+
+# 6. Open dashboard
+open http://localhost:3000
+```
+
+---
+
+## Testing Your Ecosystem
+
+```bash
+# Test research agent
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: test-user" \
+  -d '{"message": "Research the latest developments in fusion energy"}'
+
+# Test code agent
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Write a Python function to calculate fibonacci numbers"}'
+
+# Test with local LLM preference
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Explain recursion", "preferences": {"prefer_local": true}}'
+```
+
+---
+
+<Exercise title="Final Capstone Challenges">
+  
+**Level 1: Core Functionality**
+1. Deploy the complete system using Docker Compose
+2. Test all 5 agents with appropriate queries
+3. Upload a document and query it through RAG
+
+**Level 2: Enhancements** 4. Add a new specialized agent (e.g., "Finance Agent") 5. Implement conversation branching (fork a conversation) 6. Add webhook notifications for long-running tasks
+
+**Level 3: Production Ready** 7. Add proper authentication (JWT/OAuth) 8. Implement rate limiting and usage quotas 9. Add observability (Prometheus metrics, structured logging) 10. Deploy to a cloud provider with auto-scaling
+
+**Level 4: Advanced** 11. Implement agent collaboration (agents calling other agents) 12. Add voice input/output using Whisper and TTS 13. Create a mobile app using the API 14. Implement fine-tuning pipeline for custom models
+
+</Exercise>
+
+---
+
+## What You've Built
+
+Congratulations! You've built a complete, self-hosted AI platform that includes:
+
+{/* IMAGE_PLACEHOLDER: Create a "component showcase" infographic displaying all 10 major components of AgentOS as cards arranged in a grid. Each card should have: an icon, component name, one-line purpose, and a small visual representation of what it does. Use a modern card design with subtle shadows and hover effects. Components: Smart Orchestrator (brain with routing paths), Agent Fleet (5 robot icons), Prompt Library (book/template icon), Memory Service (brain with storage), RAG Service (document search), LLM Router (traffic controller), Research Service (magnifying glass over web), API Gateway (fortress gate), Web Dashboard (computer screen), CLI Tool (terminal window). Use a cohesive color scheme and place this at the start of "What You've Built" section. */}
+
+| Component              | Purpose                                    |
+| ---------------------- | ------------------------------------------ |
+| **Smart Orchestrator** | Routes requests to the right agent         |
+| **Agent Fleet**        | 5 specialized agents for different tasks   |
+| **Prompt Library**     | Centralized, versioned prompt management   |
+| **Memory Service**     | Short-term, long-term, and episodic memory |
+| **RAG Service**        | Document embedding and retrieval           |
+| **LLM Router**         | Intelligent model selection with fallbacks |
+| **Research Service**   | Web search and synthesis                   |
+| **API Gateway**        | Unified API with authentication            |
+| **Web Dashboard**      | User interface for interaction             |
+| **CLI Tool**           | Command-line access                        |
+
+---
+
+## Architecture Principles Applied
+
+{/* IMAGE_PLACEHOLDER: Create an illustrated guide showing the 6 architecture principles as a visual framework. Use a hexagonal layout with each principle as a hexagon containing: principle name, icon, and key benefit. Center hexagon shows "AgentOS" with connections to all 6 principles. Use visual metaphors: Separation of Concerns (puzzle pieces), Loose Coupling (flexible joints), Local-First (house with shield), Graceful Degradation (safety net), Observability (magnifying glass over gears), Security (lock and shield). Add subtle animations showing how each principle works. Place this at the start of the Architecture Principles section. */}
+
+1. **Separation of Concerns**: Each service has a single responsibility
+   - _Like a well-organized toolbox where each tool has its designated spot and purpose_
+
+2. **Loose Coupling**: Services communicate via APIs
+   - _Like electrical outlets—you can plug in any compatible device without rewiring the house_
+
+3. **Local-First**: Prefer local LLMs when possible
+   - _Like cooking at home before ordering takeout—cheaper, more control, and private_
+
+4. **Graceful Degradation**: Fallbacks at every level
+   - _Like a car with multiple safety systems—if one fails, others keep you safe_
+
+5. **Observability**: Logging, metrics, and tracing
+   - _Like a car dashboard showing speed, fuel, temperature—you always know what's happening_
+
+6. **Security**: Authentication, rate limiting, input validation
+   - _Like a building with security guards, badge access, and surveillance—multiple layers of protection_
+
+---
+
+## Next Steps
+
+Your AgentOS is a foundation. Consider extending it with:
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Create an ExtensionRoadmap component that displays these next steps as an interactive roadmap. Each extension should be a card showing: difficulty level (stars), estimated time, prerequisites, and potential impact. Allow users to mark extensions they're interested in and generate a personalized learning path. Include links to relevant resources and documentation for each extension. Add a community voting feature to see which extensions are most popular. */}
+
+- **Multi-tenancy**: Support multiple users/organizations
+  - _Difficulty: ⭐⭐⭐ | Impact: High | Time: 2-3 weeks_
+  
+- **Plugin System**: Allow custom agents and tools
+  - _Difficulty: ⭐⭐⭐⭐ | Impact: Very High | Time: 3-4 weeks_
+  
+- **Marketplace**: Share and discover prompts/agents
+  - _Difficulty: ⭐⭐⭐ | Impact: High | Time: 2-3 weeks_
+  
+- **Mobile Apps**: iOS/Android clients
+  - _Difficulty: ⭐⭐⭐ | Impact: Medium | Time: 4-6 weeks_
+  
+- **Voice Interface**: Conversational AI
+  - _Difficulty: ⭐⭐ | Impact: Medium | Time: 1-2 weeks_
+  
+- **Workflow Automation**: Scheduled agent tasks
+  - _Difficulty: ⭐⭐ | Impact: High | Time: 1-2 weeks_
+
+{/* IMAGE_PLACEHOLDER: Create a "future vision" illustration showing AgentOS evolving into a comprehensive platform. Show the current AgentOS in the center with branching paths leading to different extensions (multi-tenancy as multiple buildings, plugin system as modular blocks, marketplace as a bazaar, mobile apps as phones/tablets, voice interface as sound waves, workflow automation as a calendar/clock). Use a futuristic, aspirational style with glowing connections and a sense of growth and possibility. Place this at the end of the Next Steps section. */}
+
+---
+
+## Congratulations, Agentic Architect! 🎉
+
+You've completed the journey from understanding basic agent concepts to building a production-grade, self-hosted AI platform. You now have the skills to:
+
+- Design multi-agent systems
+- Implement memory and RAG
+- Build reliable, observable AI services
+- Deploy and scale agent infrastructure
+
+{/* IMAGE_PLACEHOLDER: Create a celebratory "achievement unlocked" illustration showing a developer (silhouette) standing on top of the AgentOS platform, arms raised in victory. Show the 90-day journey as a timeline below with key milestones marked. Include badges/achievements earned: "Foundation Master" (Month 1), "Multi-Agent Architect" (Month 2), "Production Engineer" (Month 3), and the final "Agentic Architect" badge glowing brightly. Use an inspiring color palette with gold accents and confetti elements. Add the text "90 Days. 12 Weeks. 1 Complete AI Platform." Place this at the very end of the module. */}
+
+**The future of AI is agentic, and you're now equipped to build it.**
+
+Throughout this 90-day journey, you've:
+- **Month 1 (Days 1-30)**: Mastered LLM fundamentals, prompt engineering, and single-agent systems
+- **Month 2 (Days 31-60)**: Built multi-agent orchestration with production-grade patterns
+- **Month 3 (Days 61-90)**: Created advanced architectures and deployed complete systems
+
+You've completed 5 mini-projects, 4 specialized projects, and 3 major capstones. You've written thousands of lines of code, debugged complex distributed systems, and learned to think like an agentic architect.
+
+**What's next?** The skills you've gained are immediately applicable to real-world problems. Whether you're building internal tools, launching a startup, or contributing to open source, you have the foundation to create intelligent, autonomous systems that make a difference.
+
+**Keep building. Keep learning. Keep pushing the boundaries of what's possible with AI agents.**
+
+---
+
+*Share your AgentOS implementation with the community using #AgenticEngineer and #AgentOS. We'd love to see what you build!* and you're ready to build it.
+
+<ModuleSummary
+  points={[
+    "AgentOS integrates all mini-project services into a cohesive, self-hosted platform",
+    "Smart orchestration classifies requests and routes them to specialized agents",
+    "Separation of concerns and loose coupling enable independent scaling and maintenance",
+    "Local-first architecture with cloud fallbacks optimizes cost and ensures availability",
+    "Docker Compose deployment provides reproducible, portable infrastructure",
+  ]}
+/>
+
+**Welcome to the fleet.** 🚀

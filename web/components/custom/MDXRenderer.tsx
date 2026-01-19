@@ -45,6 +45,11 @@ import { CodeTabs, CodeDiff, InlineDiff } from "./CodeTabs"
 import { CollapsibleCode, ExpandableSection, DeepDive } from "./CollapsibleCode"
 import { ReActLoop, ToolTimeline, MultiAgentFlow } from "./animations/AgentFlow"
 import { TokenCalculator, TokenCounter } from "./interactive/TokenCalculator"
+import { CostCalculator } from "./interactive/calculators/CostCalculator"
+import { TokenBudgetAllocator } from "./interactive/calculators/TokenBudgetAllocator"
+import { RiskScoreCalculator } from "./interactive/calculators/RiskScoreCalculator"
+import { BenchmarkCalculator } from "./interactive/calculators/BenchmarkCalculator"
+import { SchemaValidatorPlayground } from "./interactive/SchemaValidatorPlayground"
 import { FillInBlank, CodeCompletion } from "./FillInBlank"
 import { ComparisonTable, SideBySide, ProsCons } from "./ComparisonTable"
 import { AgentArchitecture, AgentComponentCard } from "./animations/AgentArchitecture"
@@ -55,6 +60,23 @@ import { KnowledgeBase } from "./interactive/KnowledgeBase"
 import { TransformerArchitecture } from "./animations/TransformerArchitecture"
 import { TokenFlowAnimation } from "./animations/TokenFlowAnimation"
 import { StepAnimation } from "./animations/StepAnimation"
+import { ProtocolComparisonTool } from "./interactive/helpers/ProtocolComparisonTool"
+import { HybridSearchVisualizer } from "./interactive/visualizers/HybridSearchVisualizer"
+import { MemorySystemSimulator } from "./interactive/simulators/MemorySystemSimulator"
+import { ContextFetcherSimulator } from "./interactive/simulators/ContextFetcherSimulator"
+import { MCPServerBuilder } from "./interactive/builders/MCPServerBuilder"
+import { PromptTemplateBuilder } from "./interactive/builders/PromptTemplateBuilder"
+import { ContextCompressionPlayground } from "./interactive/playgrounds/ContextCompressionPlayground"
+import { ImpossibleTravelDetector } from "./interactive/detectors/ImpossibleTravelDetector"
+import { SyntheticIdentityDetector } from "./interactive/detectors/SyntheticIdentityDetector"
+import { VectorVsGraphMemoryComparison } from "./interactive/comparisons/VectorVsGraphMemoryComparison"
+import { FraudGraphExplorer } from "./interactive/explorers/FraudGraphExplorer"
+import { ModuleNavigation as PageNavigation } from "./PageNavigation"
+import { ReasoningModelComparison } from "./interactive/ReasoningModelComparison"
+import { ACEPlaybookVisualizer } from "./interactive/ACEPlaybookVisualizer"
+import { LLMsTxtGenerator } from "./interactive/LLMsTxtGenerator"
+import { SkillDiscoveryDemo } from "./interactive/SkillDiscoveryDemo"
+import { ReasoningProcess } from "./animations/ReasoningProcess"
 
 import { CodeBlock } from "./CodeBlock"
 
@@ -160,6 +182,10 @@ const components = {
       MultiAgentFlow,
       TokenCalculator,
       TokenCounter,
+      CostCalculator,
+      TokenBudgetAllocator,
+      RiskScoreCalculator,
+      SchemaValidatorPlayground,
       FillInBlank,
       CodeCompletion,
       ComparisonTable,
@@ -169,6 +195,24 @@ const components = {
       AgentComponentCard,
       PromptBuilder,
       PromptTemplate,
+      ProtocolComparisonTool,
+      HybridSearchVisualizer,
+      MemorySystemSimulator,
+      MCPServerBuilder,
+      ContextCompressionPlayground,
+      ImpossibleTravelDetector,
+      BenchmarkCalculator,
+      PromptTemplateBuilder,
+      VectorVsGraphMemoryComparison,
+      FraudGraphExplorer,
+      SyntheticIdentityDetector,
+      ContextFetcherSimulator,
+      PageNavigation,
+      ReasoningModelComparison,
+      ACEPlaybookVisualizer,
+      LLMsTxtGenerator,
+      SkillDiscoveryDemo,
+      ReasoningProcess,
     }
     
 import { transformerRenderWhitespace } from "@shikijs/transformers"

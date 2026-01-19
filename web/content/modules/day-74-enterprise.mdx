@@ -1,0 +1,710 @@
+---
+title: "Day 74: Enterprise Patterns"
+description: "Scaling AI agents in enterprise environments with reliability, compliance, and governance."
+week: 10
+day: 74
+---
+
+<ReadingTime minutes={35} />
+
+<SkillLevel level="advanced" description="Enterprise deployment" />
+
+<Prerequisites
+  items={[
+    "Understanding of agent architectures (Days 01-10)",
+    "Familiarity with observability (Day 16)",
+    "Knowledge of security patterns (Days 18-19)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Understand the gap between demos and enterprise production",
+    "Learn enterprise requirements: reliability, audit logs, RBAC",
+    "Study real-world case studies of agents in production",
+    "Design agent systems that meet enterprise compliance needs",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "RBAC",
+      definition:
+        "Role-Based Access Control - restricting system access based on user roles",
+    },
+    {
+      term: "Audit Log",
+      definition:
+        "Chronological record of system activities for compliance and debugging",
+    },
+    {
+      term: "SLA",
+      definition:
+        "Service Level Agreement - guaranteed uptime and performance metrics",
+    },
+    {
+      term: "PII",
+      definition:
+        "Personally Identifiable Information - data that must be protected",
+    },
+  ]}
+/>
+
+---
+
+## 74.1 The Reality Gap
+
+{/* IMAGE_PLACEHOLDER: Create an illustration showing two contrasting scenes side-by-side: Left side shows a simple, clean demo environment with a single happy user and "It works!" text. Right side shows a complex enterprise environment with multiple users, servers, compliance checkmarks, monitoring dashboards, and alert symbols. Use a split-screen design with vibrant colors on the demo side and professional, structured layout on the enterprise side. This visual should emphasize the stark difference between demo and production environments. */}
+
+<Callout type="warning">
+  **The Hard Truth:** Twitter demos are not enterprise production. What works in
+  a notebook rarely survives contact with real users, compliance teams, and
+  99.9% uptime requirements.
+</Callout>
+
+**Think of it like this:** Building a demo agent is like cooking a meal for yourself at home. Building an enterprise agent is like running a restaurant chain—you need health inspections, consistent quality across locations, supply chain management, and the ability to serve thousands of customers simultaneously without anyone getting food poisoning.
+
+### Demo vs. Production
+
+{/* IMAGE_PLACEHOLDER: Create a comparison table visualization as an infographic. Left column shows "Demo" with casual, simple icons (single user, restart button, "works on my machine" badge). Right column shows "Enterprise Production" with professional, complex icons (multiple users, redundancy systems, SLA badges, security shields). Use contrasting colors - playful for demo side, professional for enterprise side. Make it visually striking to emphasize the gap. */}
+
+| Aspect             | Demo                   | Enterprise Production           |
+| :----------------- | :--------------------- | :------------------------------ |
+| **Error Handling** | "It usually works"     | Graceful degradation, fallbacks |
+| **Latency**        | "Give it a moment"     | P99 < 2 seconds                 |
+| **Scale**          | 1 user                 | 10,000 concurrent users         |
+| **Data**           | Synthetic              | PII, regulated data             |
+| **Uptime**         | "Restart if it breaks" | 99.9% SLA                       |
+| **Audit**          | None                   | Every action logged             |
+| **Access**         | Open                   | RBAC, SSO, MFA                  |
+
+**Understanding the Numbers:**
+- **P99 < 2 seconds**: 99% of requests must complete in under 2 seconds (not average, but 99th percentile)
+- **99.9% SLA**: Only 43 minutes of downtime allowed per month
+- **10,000 concurrent users**: Your system must handle 10K simultaneous requests without degradation
+
+### What Enterprises Actually Care About
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing four pillars of enterprise AI: Reliability (with icons of shields and backup systems), Compliance (with checkmarks and legal documents), Governance (with organizational charts and approval stamps), and Operations (with monitoring dashboards and alert bells). Each pillar should have 3-4 sub-items listed below it. Use a professional color scheme with icons and connecting lines to show how these pillars support the overall enterprise AI system. */}
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Enterprise Requirements"
+        R[Reliability] --> R1[Fallback chains]
+        R --> R2[Circuit breakers]
+        R --> R3[Health checks]
+        
+        C[Compliance] --> C1[Audit logs]
+        C --> C2[Data residency]
+        C --> C3[PII handling]
+        
+        G[Governance] --> G1[RBAC]
+        G --> G2[Approval workflows]
+        G --> G3[Cost controls]
+        
+        O[Operations] --> O1[Monitoring]
+        O --> O2[Alerting]
+        O --> O3[Incident response]
+    end
+    
+    style R fill:#f9f,stroke:#333
+    style C fill:#bbf,stroke:#333
+    style G fill:#bfb,stroke:#333
+    style O fill:#ff9,stroke:#333
+`}
+/>
+
+**Enterprise Priorities Explained:**
+- **Reliability**: Your agent must work even when external services fail. Like having backup generators in a hospital.
+- **Compliance**: Every action must be traceable and auditable. Think of it as a flight recorder for your AI.
+- **Governance**: Not everyone should be able to do everything. Like having different key cards for different areas in a building.
+- **Operations**: You need to know what's happening in real-time and respond to issues before users notice them.
+
+---
+
+## 74.2 Case Study: Retail - Proactive Shopping Assistant
+
+{/* IMAGE_PLACEHOLDER: Create a flowchart illustration showing a customer's journey through an e-commerce site with the proactive agent intervening at key moments. Show: 1) Customer viewing product (agent observing), 2) Customer hovering over cart button (hesitation detected), 3) Agent offering help with a friendly chat bubble, 4) Either conversion or escalation to human. Use e-commerce UI elements and friendly, modern design. Include metrics/stats overlays showing the 70% abandonment rate problem. */}
+
+### The Problem
+
+High cart abandonment rates (industry average: 70%). Traditional chatbots only respond when asked.
+
+**Real-World Impact:** For a retailer with $10M in monthly traffic, a 70% abandonment rate means $7M in potential lost revenue. Even a 5% improvement in conversion translates to $350K monthly.
+
+### The Agent Strategy
+
+Not just a chatbot—a proactive agent that:
+
+- Tracks user behavior (clicks, dwell time, scroll patterns)
+- Identifies hesitation signals
+- Proactively offers contextual help
+- Escalates to humans when confidence is low
+
+**The Key Insight:** Most customers don't ask for help even when they need it. A proactive agent detects confusion before the customer abandons their cart.
+
+### Architecture
+
+```python
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Literal
+
+class ShopperState(TypedDict):
+    user_id: str
+    session_events: list[dict]
+    hesitation_score: float
+    intervention_type: Literal["none", "nudge", "chat", "human"]
+    outcome: str
+
+class ProactiveShopperAgent:
+    """Proactive shopping assistant that intervenes based on behavior."""
+
+    def analyze_behavior(self, state: ShopperState) -> dict:
+        """Analyze user behavior for hesitation signals."""
+        events = state["session_events"]
+
+        # Hesitation signals
+        signals = {
+            "repeated_product_views": self._count_repeated_views(events),
+            "cart_hover_without_add": self._detect_cart_hover(events),
+            "price_comparison_pattern": self._detect_comparison(events),
+            "long_dwell_time": self._check_dwell_time(events),
+        }
+
+        score = sum(signals.values()) / len(signals)
+
+        return {"hesitation_score": score}
+
+    def decide_intervention(self, state: ShopperState) -> dict:
+        """Decide what type of intervention to make."""
+        score = state["hesitation_score"]
+
+        if score < 0.3:
+            return {"intervention_type": "none"}
+        elif score < 0.5:
+            return {"intervention_type": "nudge"}  # Subtle UI hint
+        elif score < 0.7:
+            return {"intervention_type": "chat"}   # Proactive chat
+        else:
+            return {"intervention_type": "human"}  # Human handoff
+
+    def execute_intervention(self, state: ShopperState) -> dict:
+        """Execute the chosen intervention."""
+        intervention = state["intervention_type"]
+
+        if intervention == "nudge":
+            # Show "X people bought this today" or similar
+            return {"outcome": "nudge_displayed"}
+        elif intervention == "chat":
+            # Open chat with contextual message
+            message = self._generate_contextual_message(state)
+            return {"outcome": f"chat_initiated: {message}"}
+        elif intervention == "human":
+            # Route to human agent with context
+            return {"outcome": "human_handoff"}
+
+        return {"outcome": "no_intervention"}
+```
+
+### Results
+
+{/* IMAGE_PLACEHOLDER: Create a results dashboard visualization showing three key metrics with before/after comparisons: 1) A pie chart showing 70% automated resolution vs 30% human intervention, 2) An upward trending arrow showing 15% conversion increase, 3) A downward trending graph showing 40% reduction in support tickets. Use green for positive metrics and include dollar signs to emphasize ROI. Make it look like a professional business dashboard. */}
+
+- 70% of inquiries resolved without human intervention
+- 15% increase in conversion rate
+- 40% reduction in support ticket volume
+
+**ROI Calculation:** For a mid-size retailer, this translates to:
+- $500K+ annual revenue increase from improved conversion
+- $200K+ savings in support costs
+- Payback period: 3-4 months
+
+### Enterprise Considerations
+
+- **Privacy**: Behavior tracking requires consent and GDPR compliance
+- **Audit**: Every intervention logged with reasoning
+- **A/B Testing**: Gradual rollout with control groups
+- **Fallback**: Human agents always available
+
+**Compliance Note:** This system processes behavioral data, which may be considered personal data under GDPR. Implement cookie consent, data retention policies, and right-to-deletion workflows from day one.
+
+---
+
+## 74.3 Case Study: Logistics - Intelligent Routing
+
+{/* IMAGE_PLACEHOLDER: Create an animated-style illustration of a city map with delivery trucks, showing multiple routes being dynamically adjusted. Include visual indicators for: traffic congestion (red areas), weather conditions (rain clouds), and optimized routes (green lines). Show before/after comparison with original routes in gray and optimized routes in green. Add small agent icons (planner, monitor, optimizer, coordinator) working together around the map. */}
+
+### The Problem
+
+Complex delivery networks with dynamic conditions (traffic, weather, vehicle availability).
+
+**The Challenge:** A logistics company with 500 daily deliveries faces:
+- 50+ route changes per day due to traffic
+- Weather-related delays costing $10K+ weekly
+- Manual route adjustments taking 15-20 minutes each
+- Driver frustration from constant route changes
+
+### The Agent Strategy
+
+Multi-agent system for route optimization:
+
+- **Planner Agent**: Creates initial routes (like a chess player planning opening moves)
+- **Monitor Agent**: Watches real-time conditions (like a weather forecaster + traffic reporter)
+- **Optimizer Agent**: Adjusts routes dynamically (like a GPS that actually thinks ahead)
+- **Coordinator Agent**: Manages driver communication (like an air traffic controller for trucks)
+
+### Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Logistics Agent Swarm"
+        Orders[📦 Orders] --> Planner[🗺️ Planner]
+        Planner --> Routes[Initial Routes]
+        
+        Routes --> Monitor[👁️ Monitor]
+        Traffic[🚗 Traffic API] --> Monitor
+        Weather[🌧️ Weather API] --> Monitor
+        
+        Monitor -->|"Disruption"| Optimizer[⚡ Optimizer]
+        Optimizer --> NewRoutes[Updated Routes]
+        
+        NewRoutes --> Coordinator[📱 Coordinator]
+        Coordinator --> Drivers[🚚 Drivers]
+    end
+    
+    style Planner fill:#f9f,stroke:#333
+    style Monitor fill:#bbf,stroke:#333
+    style Optimizer fill:#bfb,stroke:#333
+`}
+/>
+
+### Key Patterns
+
+```python
+class LogisticsOrchestrator:
+    """Enterprise logistics orchestration with reliability patterns."""
+
+    def __init__(self):
+        self.planner = PlannerAgent()
+        self.monitor = MonitorAgent()
+        self.optimizer = OptimizerAgent()
+
+        # Enterprise patterns
+        self.circuit_breaker = CircuitBreaker(
+            failure_threshold=5,
+            recovery_timeout=60
+        )
+        self.rate_limiter = RateLimiter(
+            requests_per_minute=100
+        )
+
+    async def optimize_route(self, route_id: str) -> dict:
+        """Optimize a route with enterprise reliability patterns."""
+
+        # Circuit breaker prevents cascade failures
+        if self.circuit_breaker.is_open():
+            return self._fallback_route(route_id)
+
+        try:
+            # Rate limiting prevents API exhaustion
+            await self.rate_limiter.acquire()
+
+            # Get current conditions
+            conditions = await self.monitor.get_conditions(route_id)
+
+            # Optimize if needed
+            if conditions["disruption_score"] > 0.5:
+                new_route = await self.optimizer.optimize(
+                    route_id,
+                    conditions
+                )
+
+                # Audit log
+                await self._log_optimization(
+                    route_id,
+                    conditions,
+                    new_route
+                )
+
+                return new_route
+
+            return {"status": "no_change_needed"}
+
+        except Exception as e:
+            self.circuit_breaker.record_failure()
+            return self._fallback_route(route_id)
+```
+
+### Results
+
+{/* IMAGE_PLACEHOLDER: Create a professional metrics dashboard showing three circular progress indicators: 1) Delivery time reduction (12% with a clock icon), 2) Fuel savings (8% with a gas pump icon), 3) On-time delivery rate (99.7% with a checkmark). Include small trend lines showing improvement over time. Use logistics industry colors (blues and greens) and make it look like a real-time operations dashboard. */}
+
+- 12% reduction in delivery times
+- 8% fuel cost savings  
+- 99.7% on-time delivery rate
+
+**Business Impact:** For a fleet of 100 vehicles:
+- **Time savings**: 12% × 8 hours/day × 100 vehicles = 96 hours saved daily
+- **Fuel savings**: 8% × $500/vehicle/day × 100 = $4,000 saved daily ($1.46M annually)
+- **Customer satisfaction**: 99.7% on-time rate vs. industry average of 94%
+
+---
+
+## 74.4 Case Study: Financial Services - Compliance Agent
+
+{/* IMAGE_PLACEHOLDER: Create a professional illustration showing a document review workflow. Show documents flowing through different stages: 1) Document intake with PII redaction, 2) AI analysis with magnifying glass highlighting issues, 3) Risk scoring with color-coded risk levels (green/yellow/red), 4) Human reviewer at desk for high-risk items. Include security and compliance icons (locks, shields, checkmarks). Use financial services color palette (navy, gold, white). */}
+
+### The Problem
+
+Manual compliance review is slow, expensive, and inconsistent.
+
+**The Cost of Manual Review:**
+- Average review time: 2-4 hours per document
+- Compliance team cost: $150-300/hour
+- Inconsistency rate: 15-20% (different reviewers, different conclusions)
+- Backlog: 2-3 weeks for standard reviews
+
+### The Agent Strategy
+
+AI-assisted compliance review with human-in-the-loop:
+
+- **Analyzer Agent**: Reviews documents for compliance issues (like a junior analyst doing the first pass)
+- **Risk Scorer**: Assigns risk levels to findings (like a risk manager prioritizing issues)
+- **Recommender**: Suggests remediation actions (like a senior consultant providing guidance)
+- **Human Review**: Final approval for high-risk items (like a compliance officer signing off)
+
+**Critical Design Decision:** High-risk items (>0.7 risk score) ALWAYS require human approval. This is non-negotiable in regulated industries.
+
+### Critical Enterprise Patterns
+
+```python
+class ComplianceAgent:
+    """Compliance agent with enterprise governance."""
+
+    def __init__(self):
+        self.llm = ChatOpenAI(model="gpt-4o")
+
+        # RBAC: Different users see different data
+        self.rbac = RBACManager()
+
+        # Audit: Every action logged
+        self.audit_log = AuditLogger()
+
+        # PII: Sensitive data handling
+        self.pii_handler = PIIHandler()
+
+    async def review_document(
+        self,
+        document: str,
+        user: User
+    ) -> ComplianceReport:
+        """Review document with full audit trail."""
+
+        # Check permissions
+        if not self.rbac.can_review(user, document):
+            raise PermissionDenied("User lacks review permissions")
+
+        # Redact PII before LLM processing
+        redacted_doc = self.pii_handler.redact(document)
+
+        # Log the review initiation
+        review_id = await self.audit_log.log_event(
+            event_type="review_started",
+            user_id=user.id,
+            document_hash=hash(document),
+            timestamp=datetime.utcnow()
+        )
+
+        try:
+            # Perform analysis
+            findings = await self._analyze(redacted_doc)
+
+            # Score risk
+            risk_score = await self._score_risk(findings)
+
+            # Generate recommendations
+            recommendations = await self._recommend(findings)
+
+            # Log completion
+            await self.audit_log.log_event(
+                event_type="review_completed",
+                review_id=review_id,
+                findings_count=len(findings),
+                risk_score=risk_score
+            )
+
+            # High-risk items require human approval
+            if risk_score > 0.7:
+                return ComplianceReport(
+                    findings=findings,
+                    risk_score=risk_score,
+                    recommendations=recommendations,
+                    status="pending_human_review",
+                    requires_approval=True
+                )
+
+            return ComplianceReport(
+                findings=findings,
+                risk_score=risk_score,
+                recommendations=recommendations,
+                status="auto_approved"
+            )
+
+        except Exception as e:
+            await self.audit_log.log_event(
+                event_type="review_failed",
+                review_id=review_id,
+                error=str(e)
+            )
+            raise
+```
+
+### Audit Log Schema
+
+{/* IMAGE_PLACEHOLDER: Create a database schema diagram showing the compliance_audit_log table structure with all fields, data types, and indexes. Use a professional database diagram style with primary keys highlighted in gold, indexes shown with lightning bolt icons, and relationships indicated with arrows. Include sample data rows to show what actual audit entries look like. Use a clean, technical style suitable for documentation. */}
+
+```sql
+CREATE TABLE compliance_audit_log (
+    id UUID PRIMARY KEY,
+    event_type VARCHAR(50) NOT NULL,
+    user_id UUID NOT NULL,
+    document_hash VARCHAR(64),
+    review_id UUID,
+    findings_count INTEGER,
+    risk_score DECIMAL(3,2),
+    error TEXT,
+    timestamp TIMESTAMP NOT NULL,
+    metadata JSONB
+);
+
+-- Index for compliance queries
+CREATE INDEX idx_audit_user ON compliance_audit_log(user_id);
+CREATE INDEX idx_audit_time ON compliance_audit_log(timestamp);
+CREATE INDEX idx_audit_risk ON compliance_audit_log(risk_score);
+```
+
+**Why This Schema Matters:**
+- **Immutable logs**: Once written, audit logs should never be modified (use append-only storage)
+- **Queryable**: Indexes support common compliance queries ("Show me all high-risk reviews by user X")
+- **Retention**: Plan for 7+ years of retention (regulatory requirement in many industries)
+- **JSONB metadata**: Flexible storage for additional context without schema changes
+
+---
+
+## 74.5 Enterprise Architecture Patterns
+
+{/* IMAGE_PLACEHOLDER: Create an architectural diagram showing the three enterprise patterns as interconnected systems: 1) Fallback Chains (showing GPT-4 → Claude → Local LLM → Rules cascade), 2) Cost Controls (showing budget meter and alert thresholds), 3) Approval Workflows (showing request → notify → wait → approve/reject flow). Use architectural blueprint style with clean lines, icons, and professional color scheme. Show how these patterns work together in an enterprise system. */}
+
+### Pattern 1: Fallback Chains
+
+**The Analogy:** Think of fallback chains like a hospital's power system: primary power from the grid, backup generator if that fails, battery backup if that fails, and manual procedures as the final fallback. Your agent needs the same resilience.
+
+```python
+class FallbackChain:
+    """Chain of fallback options for reliability."""
+
+    def __init__(self, primary, *fallbacks):
+        self.chain = [primary] + list(fallbacks)
+
+    async def execute(self, *args, **kwargs):
+        last_error = None
+
+        for handler in self.chain:
+            try:
+                return await handler(*args, **kwargs)
+            except Exception as e:
+                last_error = e
+                continue
+
+        raise last_error
+
+# Usage
+agent = FallbackChain(
+    GPT4Agent(),      # Primary
+    ClaudeAgent(),    # Fallback 1
+    LocalLLMAgent(),  # Fallback 2
+    RuleBasedAgent()  # Final fallback (no LLM)
+)
+```
+
+### Pattern 2: Cost Controls
+
+{/* IMAGE_PLACEHOLDER: Create an interactive-looking cost control dashboard showing: a daily budget meter (like a fuel gauge), current spend vs. budget, alert threshold line at 80%, and a cost breakdown by API calls. Include visual indicators for "safe" (green), "warning" (yellow), and "exceeded" (red) states. Make it look like a real-time monitoring dashboard that would alert DevOps teams. */}
+
+**Why This Matters:** Without cost controls, a single bug or malicious actor can generate thousands of dollars in API costs overnight. One company reported a $50K bill from a runaway loop that ran for 6 hours.
+
+```python
+class CostController:
+    """Prevent runaway API costs."""
+
+    def __init__(self, daily_budget: float, alert_threshold: float = 0.8):
+        self.daily_budget = daily_budget
+        self.alert_threshold = alert_threshold
+        self.daily_spend = 0.0
+
+    async def check_budget(self, estimated_cost: float) -> bool:
+        if self.daily_spend + estimated_cost > self.daily_budget:
+            await self._alert("Budget exceeded")
+            return False
+
+        if self.daily_spend > self.daily_budget * self.alert_threshold:
+            await self._alert("Approaching budget limit")
+
+        return True
+
+    def record_spend(self, actual_cost: float):
+        self.daily_spend += actual_cost
+```
+
+### Pattern 3: Approval Workflows
+
+{/* IMAGE_PLACEHOLDER: Create a workflow diagram showing the approval process: 1) Agent proposes high-risk action, 2) Approval request created and stored, 3) Notifications sent to approvers (email, Slack, etc.), 4) Approvers review with context, 5) Approve/Reject decision, 6) Action executed or cancelled. Include timeout indicators and escalation paths. Use a professional workflow diagram style with swim lanes for different actors. */}
+
+**Real-World Example:** In financial services, any transaction over $10K typically requires dual approval. Your agent should follow the same principle—high-stakes actions need human oversight.
+
+```python
+class ApprovalWorkflow:
+    """Human approval for high-stakes actions."""
+
+    async def request_approval(
+        self,
+        action: str,
+        context: dict,
+        approvers: list[str]
+    ) -> ApprovalResult:
+
+        # Create approval request
+        request = await self.db.create_approval_request(
+            action=action,
+            context=context,
+            approvers=approvers,
+            expires_at=datetime.utcnow() + timedelta(hours=24)
+        )
+
+        # Notify approvers
+        await self.notify_approvers(request)
+
+        # Wait for approval (with timeout)
+        return await self.wait_for_approval(request.id)
+```
+
+---
+
+<Exercise
+  title="Design an Enterprise Agent"
+  difficulty="advanced"
+  objectives={[
+    "Design an agent system for an enterprise use case",
+    "Include reliability patterns (fallbacks, circuit breakers)",
+    "Add compliance features (audit logs, RBAC)",
+    "Plan for scale and cost control",
+  ]}
+  hints={[
+    "Start with the business problem, not the technology",
+    "Consider what happens when things fail",
+    "Think about who needs to approve what actions",
+  ]}
+>
+
+**Your Task:** Design an enterprise agent system for one of these scenarios:
+
+1. **HR Onboarding**: Automate new employee setup across multiple systems
+2. **IT Support**: Triage and resolve common IT issues
+3. **Sales Assistant**: Help sales reps with proposals and pricing
+
+Include: Architecture diagram, reliability patterns, compliance features, and cost controls.
+
+</Exercise>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Building for demos instead of production",
+      why: "Demo code lacks error handling, audit trails, and scale considerations",
+      correct: "Start with enterprise requirements from day one",
+    },
+    {
+      mistake: "Ignoring compliance until the end",
+      why: "Retrofitting audit logs and RBAC is expensive and error-prone",
+      correct: "Build compliance into the architecture from the start",
+    },
+    {
+      mistake: "No fallback when LLM fails",
+      why: "LLM APIs have outages; users expect 99.9% uptime",
+      correct: "Implement fallback chains with rule-based final fallback",
+    },
+    {
+      mistake: "Unlimited API spending",
+      why: "Runaway loops or attacks can generate massive bills",
+      correct: "Implement cost controls with daily budgets and alerts",
+    },
+  ]}
+/>
+
+---
+
+<ProgressCheckpoint
+  questions={[
+    "What are the four main enterprise requirements for AI agents?",
+    "Why is a fallback chain important for production agents?",
+    "What should happen when an agent action exceeds a risk threshold?",
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Enterprise agents require reliability, compliance, governance, and operations",
+    "Fallback chains ensure availability when primary systems fail",
+    "Audit logs are essential for compliance and debugging",
+    "RBAC controls who can do what with agent systems",
+    "Cost controls prevent runaway API spending",
+  ]}
+/>
+
+---
+
+## Further Reading
+
+- [AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/)
+- [Google SRE Book](https://sre.google/sre-book/table-of-contents/)
+- [OWASP LLM Top 10](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
+- [SOC 2 Compliance for AI](https://www.vanta.com/)
+
+**Tomorrow**: Day 75—Advanced Enterprise Deployment Strategies.
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** Enterprise patterns are essential for the AgentOS
+  capstone. The capstone should include fallback chains, cost controls, audit
+  logging, and RBAC—making it production-ready.
+</Callout>
+
+### Enterprise Features for Capstone
+
+Implement these patterns in your AgentOS capstone:
+
+1. **Reliability**: Fallback chains for LLM providers
+2. **Compliance**: Audit logging for all agent actions
+3. **Governance**: Cost controls with daily budgets
+4. **Operations**: Health checks and monitoring endpoints
+
+### Design Exercise
+
+Before building the capstone, design:
+
+- How will you handle LLM provider outages?
+- What actions require human approval?
+- How will you track and limit costs?
+- What audit trail do you need?
+
+See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.

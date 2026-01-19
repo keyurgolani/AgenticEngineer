@@ -1,0 +1,1417 @@
+---
+title: "Advanced Context Engineering"
+description: "Context is your RAM. Learn to manage it with hierarchies, isolation, and strategic compression."
+week: 2
+day: 9
+---
+
+<ReadingTime minutes={30} />
+
+<SkillLevel
+  level="intermediate"
+  description="Conceptual with practical patterns"
+/>
+
+<Prerequisites
+  items={[
+    "Completed Day 01: The Anatomy of an Agent",
+    "Understand what tokens and context windows are (Day 00 Foundations)",
+    "Familiar with the ReAct pattern (Reason → Act → Observe)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Explain the difference between context engineering and prompt engineering",
+    "Understand the 'attention budget' concept and why context is a finite resource",
+    "Describe the Memory Hierarchy (L1/L2/L3) for agents",
+    "Apply the Context Isolation pattern to prevent 'context poisoning'",
+    "Choose between RAG, Long Context, and Hybrid approaches for different scenarios",
+    "Use Just-in-Time retrieval strategies for efficient context management",
+    "Implement Compaction and Structured Note-Taking for long-running agents",
+    "Design a context budget for production agent systems",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Context Window",
+      definition:
+        "The maximum amount of text an LLM can process at once—includes both input and output tokens",
+    },
+    {
+      term: "Attention Budget",
+      definition:
+        "The LLM's limited capacity to attend to all tokens in context—depletes as context grows due to n² pairwise relationships in transformers",
+    },
+    {
+      term: "Context Rot",
+      definition:
+        "Performance degradation as context fills up, even below the technical token limit",
+    },
+    {
+      term: "Context Pollution",
+      definition:
+        "Irrelevant, redundant, or conflicting information that distracts the LLM",
+    },
+    {
+      term: "Context Distraction",
+      definition:
+        "When context grows so long that the model over-focuses on it, neglecting what it learned during training",
+    },
+    {
+      term: "Context Isolation",
+      definition:
+        "Giving each agent only the minimum information it needs for its specific task",
+    },
+    {
+      term: "Effective Context Window",
+      definition:
+        "The actual usable context size where the model performs well—often much smaller than advertised limits",
+    },
+    {
+      term: "Just-in-Time Retrieval",
+      definition:
+        "A strategy where agents dynamically load data into context at runtime using tools, rather than pre-loading all potentially relevant information",
+    },
+    {
+      term: "Compaction",
+      definition:
+        "The practice of summarizing a conversation nearing the context limit and reinitiating with the summary to maintain coherence",
+    },
+  ]}
+/>
+
+---
+
+## Why Context Engineering Matters
+
+<ConceptVisual
+  image="/images/day_09_01_context_distraction_metaphor_1768860362350.png"
+  alt="Visual metaphor showing the distraction caused by irrelevant context"
+  caption="Irrelevant context acts like noise, drowning out the signal and reducing model performance."
+/>
+
+<ConceptIntro
+  title="Context Engineering"
+  analogy="Imagine trying to solve a math problem while someone reads you random Wikipedia articles. The noise makes it harder to think. LLMs work the same way—if you fill their context window with irrelevant information, their 'IQ' drops. Context Engineering is the art of giving the model exactly what it needs, nothing more."
+  technicalDef="Context Engineering is the set of strategies for curating and maintaining the optimal set of tokens during LLM inference. It goes beyond prompt engineering to include all information that enters the context: system prompts, tools, examples, message history, retrieved data, and runtime state. Building effective agents is less about finding the right words and more about answering: 'What configuration of context is most likely to generate our model's desired behavior?'"
+  whyItMatters="Context is expensive (you pay per token) and limited (even 1M token windows fill up fast). Poor context management is the #1 cause of agent failures in production. Research shows that model performance degrades significantly as context length increases—even well below technical limits. As Anthropic's engineering team puts it: 'Context must be treated as a finite resource with diminishing marginal returns.'"
+/>
+
+<Callout type="tip">
+  **Industry Shift:** As Andrej Karpathy noted: "People associate prompts with
+  short task descriptions you'd give an LLM in your day-to-day use. When in
+  every industrial-strength LLM app, context engineering is the delicate art and
+  science of filling the context window with just the right information for the
+  next step." This marks a fundamental shift from "prompt engineering" to
+  "context engineering" in production AI systems.
+</Callout>
+
+### Context Engineering vs. Prompt Engineering
+
+Understanding the distinction between these two disciplines is crucial:
+
+| Aspect           | Prompt Engineering                 | Context Engineering                                           |
+| :--------------- | :--------------------------------- | :------------------------------------------------------------ |
+| **Focus**        | Writing effective instructions     | Curating the entire information environment                   |
+| **Scope**        | The system prompt and user message | Everything: prompts, tools, examples, history, retrieved data |
+| **Timing**       | One-time design                    | Iterative, every inference step                               |
+| **Metaphor**     | Writing a recipe                   | Managing the kitchen during service                           |
+| **Key Question** | "How do I phrase this?"            | "What information should the model see right now?"            |
+
+<Callout type="info">
+  **The Kitchen Analogy:** Prompt engineering is writing the recipe (static
+  instructions). Context engineering is managing the kitchen during service
+  (dynamic state). Before service starts, a chef has their station set: chopped
+  onions, reduced sauces, and tools ready. During service, they dynamically
+  manage what's on the counter based on incoming orders. Context engineering is
+  that dynamic management—deciding what information is "on the counter" for each
+  inference step.
+</Callout>
+
+<Callout type="info">
+  **From Day 01:** Remember the ReAct loop (Reason → Act → Observe)? Each cycle
+  adds to the context. A 50-step workflow with 20K tokens per call = 1M tokens
+  total. Context accumulates across every LLM call, making management critical.
+</Callout>
+
+### The Attention Budget Problem
+
+<ConceptVisual
+  image="/images/day_09_02_attention_budget_flashlight_1768860382090.png"
+  alt="Flashlight analogy showing attention dilution"
+  caption="The Attention Budget: As context grows (wider beam), the intensity of attention on any single token diminishes."
+/>
+
+Here's a critical insight that surprises many engineers: **LLMs have a finite "attention budget" that gets depleted as context grows**.
+
+<ConceptIntro
+  title="The Attention Budget"
+  analogy="Think of attention like a flashlight beam. A narrow beam illuminates one spot brightly. Spread that same light across a football field, and everything becomes dim. LLMs face the same tradeoff—the more tokens they must attend to, the less 'attention' each token receives."
+  technicalDef="LLMs are based on the transformer architecture, where every token attends to every other token. This creates n² pairwise relationships for n tokens. As context length increases, the model's ability to capture these relationships gets stretched thin, creating a natural tension between context size and attention focus."
+  whyItMatters="Every new token introduced depletes the attention budget. This is why thoughtful context curation—not just bigger context windows—is essential for building capable agents."
+/>
+
+### The Effective Context Window Problem
+
+<ConceptVisual
+  image="/images/day_09_03_context_window_chart_1768860406694.png"
+  alt="Chart showing advertised vs effective context windows"
+  caption="The Effective Context Window: Performance often degrades significantly before reaching the advertised token limit."
+/>
+
+The advertised context window is not the effective context window.
+
+<RealWorldExample
+  title="The NoLiMa Research Finding"
+  scenario="Researchers tested 13 popular LLMs on long-context tasks using the NoLiMa benchmark, which removes literal keyword matching cues from needle-haystack tests."
+  implementation="At 32K tokens, 11 out of 13 models dropped below 50% of their short-context performance. The models could technically process the tokens, but their accuracy plummeted when they couldn't rely on simple keyword matching."
+  takeaway="Just because a model advertises 128K or 1M tokens doesn't mean it performs well at those lengths. The 'effective context window' where quality remains high is often 32K-64K tokens for most tasks."
+/>
+
+| Model Advertised Limit | Effective High-Quality Window | Performance at Full Context |
+| :--------------------- | :---------------------------- | :-------------------------- |
+| 128K tokens            | ~32K-64K tokens               | 40-60% of peak performance  |
+| 200K tokens            | ~64K-100K tokens              | 50-70% of peak performance  |
+| 1M tokens              | ~128K-256K tokens             | Varies significantly        |
+| 2M tokens              | ~256K-512K tokens             | Task-dependent degradation  |
+
+<Callout type="warning">
+  **The "Lost in the Middle" Problem:** LLMs pay more attention to information
+  at the beginning and end of the context. Information buried in the middle is
+  often ignored or poorly recalled—performance can degrade by more than 30% when
+  relevant information shifts from the edges to the middle. This is why
+  strategic placement matters as much as content selection.
+</Callout>
+
+<ConceptVisual
+  image="/images/day_09_04_attention_heatmap_1768860421288.png"
+  alt="Heatmap showing attention distribution across context"
+  caption="Lost in the Middle: Models pay most attention to the start and end of the context, with a significant performance dip in the middle."
+/>
+
+<Callout type="info">
+  **Why This Happens:** Models develop attention patterns from training data
+  where shorter sequences are more common. They have less experience with, and
+  fewer specialized parameters for, context-wide dependencies. Techniques like
+  position encoding interpolation help but introduce some degradation in token
+  position understanding.
+</Callout>
+
+---
+
+## 2.1 The Memory Hierarchy
+
+<ConceptVisual
+  image="/images/day_09_05_memory_hierarchy_diagram_1768860455758.png"
+  alt="Agent Memory Hierarchy Diagram showing L1, L2, and L3 memory tiers"
+  caption="The Agent Memory Hierarchy: Organizing context into hot (L1), warm (L2), and cold (L3) tiers."
+/>
+
+Just like a CPU has L1/L2/L3 cache, an agent needs a memory hierarchy. This maps directly to how you should think about context management.
+
+<MemoryHierarchy />
+
+<ConceptIntro
+  title="The Memory Hierarchy"
+  analogy="Think about how you remember things. Your working memory holds what you're thinking about right now (like a phone number you're about to dial). Your short-term memory holds recent events (what you had for breakfast). Your long-term memory holds facts and experiences (your childhood). Agents need all three types too."
+  technicalDef="Agent memory is typically organized in tiers: L1 (Working Memory) is the current context window—fast but limited. L2 (Episodic Memory) stores past interactions in a vector database for retrieval. L3 (Archival Memory) holds compressed summaries and long-term facts."
+  whyItMatters="You can't fit everything in the context window. A good memory hierarchy lets agents 'remember' relevant information without overwhelming the LLM or burning through your token budget."
+/>
+
+| Tier   | Type            | Technology      | Purpose                   | Speed     | Cost         | Typical Size  |
+| :----- | :-------------- | :-------------- | :------------------------ | :-------- | :----------- | :------------ |
+| **L1** | Working Memory  | Message List    | Immediate task context    | ⚡ Fast   | 💰 Expensive | 4K-32K tokens |
+| **L2** | Episodic Memory | Vector Database | Relevant past experiences | 🔄 Medium | 💵 Moderate  | Unlimited     |
+| **L3** | Archival Memory | Summaries/DB    | Long-term facts and goals | 🐢 Slow   | 💲 Cheap     | Unlimited     |
+
+### How It Works in Practice
+
+```
+User: "What was that bug we fixed last month?"
+
+1. L1 (Working Memory): Check current conversation → Not there
+2. L2 (Episodic Memory): Search vector DB for "bug fix" → Found 3 relevant conversations
+3. L3 (Archival Memory): Check summaries → "March: Fixed authentication timeout bug"
+
+→ Agent retrieves the relevant context and responds accurately
+```
+
+### Context Budget Planning
+
+<ConceptVisual
+  image="/images/day_09_06_context_budget_pie_chart_1768860472126.png"
+  alt="Pie chart showing optimal validation of a 32k context budget"
+  caption="Budgeting Your Context: A typical production allocation reserves significant space for history and retrieved data while keeping the system prompt lean."
+/>
+
+Think of your context window as a budget that must be allocated:
+
+```
+Total Context Budget: 32,000 tokens (effective window)
+├── System Prompt:        2,000 tokens (6%)
+├── Tool Definitions:     3,000 tokens (9%)
+├── Retrieved Context:    8,000 tokens (25%)
+├── Conversation History: 12,000 tokens (38%)
+├── Current User Input:   2,000 tokens (6%)
+└── Reserved for Output:  5,000 tokens (16%)
+```
+
+<Callout type="tip">
+  **Rule of Thumb:** Reserve 15-20% of your context budget for the model's
+  output. If you fill the context completely with input, the model has no room
+  to "think" and generate a quality response.
+</Callout>
+
+---
+
+## 2.2 Pattern: Context Isolation (The "Sandboxing" Pattern)
+
+<ConceptVisual
+  image="/images/day_09_07_context_isolation_comparison_1768860492730.png"
+  alt="Comparison of context pollution vs context isolation"
+  caption="Context Isolation: Instead of sharing a massive, noisy context, give each agent only what it needs."
+/>
+
+<ConceptIntro
+  title="Context Isolation"
+  analogy="Imagine a company where every employee CC's everyone on every email. Soon, no one can find anything important—it's all buried in noise. Smart companies use 'need to know' principles: you only see information relevant to your job. Context Isolation applies the same principle to agents."
+  technicalDef="Context Isolation means passing only the minimum viable context to each agent or sub-agent. In multi-agent systems, worker agents receive only their specific task and relevant results—not the entire conversation history or other agents' work. This follows the principle: 'Share memory by communicating, don't communicate by sharing memory.'"
+  whyItMatters="Without isolation, agents get 'context poisoned'—confused by irrelevant information from other tasks. Isolation keeps each agent focused, reduces costs, and improves accuracy."
+/>
+
+**Problem:** In a multi-agent system, if every agent sees the entire conversation history, they get confused ("Context Pollution").
+
+**Solution:** Pass only the _minimum viable context_ to a worker agent.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Supervisor
+    participant Coder
+    participant Researcher
+
+    User->>Supervisor: "Build a stock app using value investing"
+    Note over Supervisor: Breaks down the task
+
+    Supervisor->>Researcher: [ISOLATED] "Find value investing formulas"
+    Note over Researcher: Only sees this specific task
+    Researcher-->>Supervisor: Returns: Formulas X, Y, Z
+
+    Supervisor->>Coder: [ISOLATED] "Write Python func for Formula X"
+    Note over Coder: Only sees formula, not research logs
+    Coder-->>Supervisor: Returns: code.py
+
+    Note over Supervisor: Combines results for user
+    Supervisor-->>User: "Here's your stock app!"
+
+`}
+/>
+
+### The Isolation Principle
+
+| Aspect           | ❌ Without Isolation                                                                       | ✅ With Isolation                                                               |
+| :--------------- | :----------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------ |
+| **Context Size** | Coder sees: User request + Research logs + All formulas + Previous attempts (2,000 tokens) | Coder sees: "Write a Python function for Formula X: P/E ratio < 15" (50 tokens) |
+| **Performance**  | Confused, slow, expensive                                                                  | Focused, fast, cheap                                                            |
+| **Error Rate**   | High—model distracted by irrelevant info                                                   | Low—model focused on specific task                                              |
+| **Cost**         | 40x more tokens = 40x more cost                                                            | Minimal token usage                                                             |
+
+### When to Share vs. Isolate
+
+| Scenario                                 | Recommendation                                                         |
+| :--------------------------------------- | :--------------------------------------------------------------------- |
+| Discrete task with clear input/output    | **Isolate**: Fresh context with only the specific instruction          |
+| Complex reasoning requiring full history | **Share**: Pass relevant history when agent must understand trajectory |
+| Debugging that needs previous attempts   | **Share**: Include error history so agent doesn't repeat mistakes      |
+| Independent parallel tasks               | **Isolate**: Each sub-agent gets only its task                         |
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Passing the entire conversation to every sub-agent",
+      fix: "Extract only the relevant result or instruction for each agent",
+    },
+    {
+      mistake: "Including debug logs and intermediate steps in context",
+      fix: "Store logs separately; only include final results",
+    },
+    {
+      mistake: "Letting agents see each other's 'thinking' process",
+      fix: "Pass outputs, not reasoning chains, between agents",
+    },
+    {
+      mistake: "Sharing context 'just in case' it might be useful",
+      fix: "Treat shared context as expensive—minimize by default",
+    },
+  ]}
+/>
+
+---
+
+## 2.3 Technique: Recursive Summarization
+
+<ConceptVisual
+  image="/images/day_09_08_recursive_summarization_funnel_1768860510957.png"
+  alt="Process diagram of recursive summarization"
+  caption="Recursive Summarization: Compressing history to maintain long-term context without blowing the budget."
+/>
+
+Don't just delete old messages. Compress them intelligently.
+
+<ConceptIntro
+  title="Recursive Summarization"
+  analogy="Imagine reading a 500-page book and writing a 1-page summary. Then reading 10 such summaries and writing a 1-page summary of those. You've compressed 5,000 pages into 1 page while keeping the key information. Recursive Summarization does this for conversations."
+  technicalDef="Recursive Summarization periodically compresses older messages into summaries. When the conversation exceeds a threshold (e.g., 20 turns), the oldest messages are summarized by an LLM and replaced with a single summary message. This can be applied recursively for very long conversations."
+  whyItMatters="Long conversations fill up the context window. Without summarization, you either lose old context entirely or pay for tokens you don't need. Summarization preserves important information efficiently."
+/>
+
+### The Compression Hierarchy
+
+Modern context engineering uses a hierarchy of compression techniques, preferring reversibility:
+
+```
+Preference Order (most to least preferred):
+1. Raw Content      → Keep as-is (most accurate)
+2. Compaction       → Remove redundant info that exists elsewhere (reversible)
+3. Summarization    → LLM-generated summary (lossy but preserves meaning)
+4. Deletion         → Remove entirely (last resort)
+```
+
+<Callout type="tip">
+  **Compaction vs. Summarization:** Compaction removes information that can be
+  retrieved later (e.g., "See file auth.py" instead of including the full file).
+  Summarization condenses information that can't be easily retrieved. Prefer
+  compaction when possible—it's reversible.
+</Callout>
+
+### How It Works
+
+```
+Before Summarization (20 messages, ~4000 tokens):
+├── Message 1: User asks about project setup
+├── Message 2: Agent explains options
+├── Message 3: User chooses React
+├── ... (messages 4-18)
+├── Message 19: User asks about deployment
+└── Message 20: Current question
+
+After Summarization (11 messages, ~2000 tokens):
+├── [SUMMARY]: "User is building a React app. Chose Tailwind for styling,
+│              PostgreSQL for database. Completed: auth, dashboard.
+│              Current focus: deployment to AWS."
+├── Message 12-18: Recent context (kept in full)
+├── Message 19: User asks about deployment
+└── Message 20: Current question
+```
+
+### Implementation Pattern
+
+```python
+def maybe_summarize(messages: list, threshold: int = 20) -> list:
+    """Summarize old messages if conversation is too long."""
+    if len(messages) <= threshold:
+        return messages
+
+    # Take oldest messages to summarize (keep recent ones intact)
+    to_summarize = messages[:threshold // 2]
+    to_keep = messages[threshold // 2:]
+
+    # Ask LLM to summarize—preserve key decisions and facts
+    summary = llm.invoke(
+        f"Summarize the key decisions, facts, and context from this conversation. "
+        f"Preserve: user preferences, completed tasks, current goals, and any "
+        f"constraints mentioned.\n\n{format_messages(to_summarize)}"
+    )
+
+    # Replace old messages with summary
+    summary_message = {
+        "role": "system",
+        "content": f"[Previous conversation summary]: {summary}"
+    }
+    return [summary_message] + to_keep
+```
+
+<Callout type="warning">
+  **Preserve Recent Tool Calls:** When summarizing, keep the most recent 2-3
+  tool calls in their raw format. This maintains the model's "rhythm" and output
+  formatting style, preventing quality degradation.
+</Callout>
+
+---
+
+## 2.4 The Four Pillars of Context Engineering
+
+<ConceptVisual
+  image="/images/day_09_09_four_pillars_diagram_1768860547586.png"
+  alt="The Four Pillars of Context Engineering"
+  caption="The Context Architecture: Write, Select, Compress, and Isolate."
+/>
+
+Based on industry best practices, here's a comprehensive framework for managing context:
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "The Four Pillars"
+        Write[📝 1. Write<br/>Persist externally] --> Select[🎯 2. Select<br/>Retrieve relevant]
+        Select --> Compress[🗜️ 3. Compress<br/>Reduce tokens]
+        Compress --> Isolate[🔒 4. Isolate<br/>Scope per agent]
+    end
+    
+    Write -.-> |"Scratchpad, artifacts"| DB[(External Storage)]
+    Select -.-> |"Vector search, recency"| DB
+    Compress -.-> |"Summarize, compact"| DB
+    Isolate -.-> |"Filter per task"| Output[✨ Optimized Context]
+`}
+/>
+
+### 1. Write (Persist Outside the Prompt)
+
+Store information externally so you can retrieve it later without keeping it in context:
+
+| What to Write        | Where to Store           | When to Retrieve           |
+| :------------------- | :----------------------- | :------------------------- |
+| **Scratchpad**       | Key-value store          | During current task        |
+| **Artifacts**        | File system/blob storage | When referenced            |
+| **Facts learned**    | Vector database          | When semantically relevant |
+| **User preferences** | User profile DB          | At session start           |
+
+### 2. Select (Retrieve Only What Matters)
+
+Don't include everything—retrieve based on relevance using multiple signals:
+
+```python
+def select_context(query: str, conversation: list, tools: list) -> dict:
+    """Select relevant context using multiple retrieval strategies."""
+    return {
+        # Recency: Last 3-5 turns are almost always relevant
+        "recent_messages": conversation[-5:],
+
+        # Semantic: Vector search for related past experiences
+        "relevant_history": vector_db.search(query, k=3),
+
+        # Task-specific: Only tools likely needed for this query
+        "active_tools": filter_tools_by_relevance(tools, query),
+
+        # User context: Preferences and constraints
+        "user_context": get_user_preferences(user_id),
+    }
+```
+
+### 3. Compress (Fight Token Bloat)
+
+Reduce token usage without losing critical information:
+
+| Technique     | When to Use                                         | Token Savings |
+| :------------ | :-------------------------------------------------- | :------------ |
+| **Prune**     | Remove irrelevant sentences                         | 20-40%        |
+| **Compact**   | Replace outputs with pointers ("See artifact #123") | 50-80%        |
+| **Summarize** | Distill to key points                               | 60-90%        |
+| **Truncate**  | Cut off at token limit (last resort)                | Variable      |
+
+### 4. Isolate (Prevent Collisions)
+
+Keep contexts separate to prevent pollution:
+
+- **Per-agent isolation**: Each sub-agent gets only its task
+- **Per-user isolation**: User-specific context stays with that user
+- **Per-task isolation**: Debug info stays out of production prompts
+- **Temporal isolation**: Old context doesn't pollute new tasks
+
+### The "Right Altitude" for System Prompts
+
+<ConceptVisual
+  image="/images/day_09_10_goldilocks_zone_prompt_altitude_1768860565037.png"
+  alt="Goldilocks zone diagram for prompt specificity"
+  caption="Finding the Right Altitude: Prompts should be specific enough to guide but general enough to allow adaptation."
+/>
+
+Finding the right level of specificity in your prompts is crucial. Anthropic calls this finding the "right altitude"—the Goldilocks zone between two failure modes:
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "❌ Too Low (Brittle)"
+        L1["If user says X,<br/>respond with Y"]
+        L2["Hardcoded logic"]
+        L3["Fragile, high maintenance"]
+    end
+    
+    subgraph "✅ Right Altitude"
+        M1["Clear heuristics"]
+        M2["Flexible guidelines"]
+        M3["Specific enough to guide,<br/>general enough to adapt"]
+    end
+    
+    subgraph "❌ Too High (Vague)"
+        H1["Be helpful"]
+        H2["Do your best"]
+        H3["Assumes shared context"]
+    end
+    
+    L1 --> M1
+    M1 --> H1
+    
+    style M1 fill:#c8e6c9
+    style M2 fill:#c8e6c9
+    style M3 fill:#c8e6c9
+`}
+/>
+
+| Altitude     | Example                                                                           | Problem                          |
+| :----------- | :-------------------------------------------------------------------------------- | :------------------------------- |
+| **Too Low**  | "If the user asks about refunds, say: 'Our refund policy is...'"                  | Brittle, can't handle variations |
+| **Right**    | "Handle refund requests by checking eligibility, then explaining options clearly" | Guides behavior with flexibility |
+| **Too High** | "Be helpful with customer questions"                                              | No concrete guidance             |
+
+<Callout type="tip">
+  **Start Minimal, Then Add:** Test a minimal prompt with the best model
+  available. Add clear instructions and examples based on failure modes found
+  during testing. The goal is the minimal set of information that fully outlines
+  expected behavior—minimal doesn't mean short, but it means no unnecessary
+  content.
+</Callout>
+
+---
+
+## 2.5 Just-in-Time Context Retrieval
+
+<ConceptVisual
+  image="/images/day_09_11_jit_context_analogy_1768860583973.png"
+  alt="Comparison of preloaded vs just-in-time context strategies"
+  caption="Just-in-Time Context: Dynamic retrieval beats trying to memorize everything upfront."
+/>
+
+<ConceptIntro
+  title="Just-in-Time Context"
+  analogy="Imagine a researcher who memorizes entire libraries before answering any question versus one who knows how to quickly find and retrieve exactly what they need. The second researcher is faster, more accurate, and can handle a much wider range of questions. Just-in-Time retrieval gives agents this same capability."
+  technicalDef="Just-in-Time (JIT) context retrieval is a strategy where agents maintain lightweight identifiers (file paths, stored queries, web links) and use tools to dynamically load data into context at runtime, rather than pre-loading all potentially relevant information upfront."
+  whyItMatters="JIT retrieval enables progressive disclosure—agents incrementally discover relevant context through exploration. Each interaction yields context that informs the next decision, keeping the agent focused on relevant subsets rather than drowning in exhaustive but potentially irrelevant information."
+/>
+
+### Preloaded vs. Just-in-Time vs. Hybrid
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Preloaded (Traditional)"
+        P1[User Query] --> P2[Load ALL<br/>Relevant Docs]
+        P2 --> P3[Send to LLM]
+        P3 --> P4[Response]
+    end
+    
+    subgraph "Just-in-Time (Modern)"
+        J1[User Query] --> J2[LLM Decides<br/>What's Needed]
+        J2 --> J3[Retrieve<br/>Specific Data]
+        J3 --> J4[Continue<br/>Reasoning]
+    end
+    
+    subgraph "Hybrid (Best Practice)"
+        H1[User Query] --> H2[Load Minimal<br/>Essential Context]
+        H2 --> H3[LLM Reasons]
+        H3 --> H4[Retrieve<br/>As Needed]
+        H4 --> H5[Continue]
+    end
+`}
+/>
+
+| Approach         | Pros                          | Cons                              | Best For                      |
+| :--------------- | :---------------------------- | :-------------------------------- | :---------------------------- |
+| **Preloaded**    | Simple, everything available  | Wastes tokens, causes pollution   | Small, static knowledge bases |
+| **Just-in-Time** | Efficient, focused, scales    | Slower, requires good tool design | Large, dynamic environments   |
+| **Hybrid**       | Balanced speed and efficiency | More complex to implement         | Most production agents        |
+
+### How Claude Code Uses Hybrid Context
+
+Anthropic's Claude Code demonstrates the hybrid approach effectively:
+
+```python
+# Hybrid context strategy example
+def hybrid_context_approach(query: str, workspace: str) -> dict:
+    """
+    Hybrid approach: minimal preload + just-in-time retrieval.
+    Based on patterns from Claude Code.
+    """
+    # PRELOAD: Essential, always-needed context (loaded upfront)
+    initial_context = {
+        "system_prompt": get_system_prompt(),
+        "project_config": load_file("CLAUDE.md"),  # Project-specific instructions
+        "recent_messages": get_recent_messages(limit=3),
+    }
+
+    # JUST-IN-TIME: Tools for retrieving additional context on demand
+    retrieval_tools = [
+        {
+            "name": "glob",
+            "description": "Find files matching a pattern"
+        },
+        {
+            "name": "grep",
+            "description": "Search file contents for patterns"
+        },
+        {
+            "name": "read_file",
+            "description": "Read specific file contents"
+        },
+        {
+            "name": "head_tail",
+            "description": "Preview start/end of large files"
+        },
+    ]
+
+    return {
+        "context": initial_context,
+        "tools": retrieval_tools,
+        "strategy": "Agent retrieves additional context as needed"
+    }
+```
+
+<Callout type="tip">
+  **Progressive Disclosure:** Let agents navigate and retrieve data
+  autonomously. File sizes suggest complexity, naming conventions hint at
+  purpose, timestamps indicate relevance. Agents can assemble understanding
+  layer by layer, maintaining only what's necessary in working memory.
+</Callout>
+
+### When to Preload vs. Retrieve Just-in-Time
+
+| Information Type      | Strategy | Rationale                          |
+| :-------------------- | :------- | :--------------------------------- |
+| System instructions   | Preload  | Always needed, rarely changes      |
+| User preferences      | Preload  | Essential for personalization      |
+| Project configuration | Preload  | Defines agent behavior             |
+| Recent conversation   | Preload  | Immediate context                  |
+| Large codebases       | JIT      | Too large, retrieve relevant files |
+| Documentation         | JIT      | Search when needed                 |
+| Historical data       | JIT      | Retrieve based on relevance        |
+| Tool outputs          | JIT      | Generate and retrieve on demand    |
+
+---
+
+## 2.6 Detecting and Fixing Context Problems
+
+<ConceptVisual
+  image="/images/day_09_12_context_health_dashboard_1768860603524.png"
+  alt="Dashboard showing metrics for monitoring context health"
+  caption="Monitor Your Context: Watch for token bloat, high repetition, and confusion signals."
+/>
+
+### Signs of Context Rot
+
+<Callout type="warning">
+  **Warning Signs Your Context is Rotting:** - Agent starts forgetting earlier
+  instructions - Responses become generic or off-topic - Agent confuses
+  different users or tasks - Quality degrades as conversations get longer -
+  Agent repeats itself or contradicts earlier statements - Tool calls become
+  less accurate or use wrong parameters
+</Callout>
+
+### The Three Context Failure Modes
+
+| Failure Mode            | Symptoms                                         | Fix                                               |
+| :---------------------- | :----------------------------------------------- | :------------------------------------------------ |
+| **Context Rot**         | Performance degrades with length                 | Summarize, compress, or start fresh               |
+| **Context Pollution**   | Irrelevant info distracts model                  | Filter aggressively, isolate contexts             |
+| **Context Confusion**   | Conflicting instructions                         | Consolidate system prompts, remove contradictions |
+| **Context Distraction** | Model over-focuses on context, ignoring training | Reduce context size, prioritize relevance         |
+
+### Debugging Context Issues
+
+```python
+def debug_context(messages: list) -> dict:
+    """Analyze context for potential issues."""
+    total_tokens = count_tokens(messages)
+
+    issues = []
+
+    # Check for size issues
+    if total_tokens > 50000:
+        issues.append("⚠️ Context very large—consider summarization")
+
+    # Check for repetition (pollution indicator)
+    contents = [m['content'] for m in messages]
+    unique_ratio = len(set(contents)) / len(contents)
+    if unique_ratio < 0.8:
+        issues.append("⚠️ High repetition detected—prune duplicates")
+
+    # Check for multiple system messages (confusion risk)
+    system_msgs = [m for m in messages if m['role'] == 'system']
+    if len(system_msgs) > 3:
+        issues.append("⚠️ Multiple system messages—consolidate to prevent confusion")
+
+    # Check for very old messages (rot indicator)
+    if len(messages) > 30:
+        issues.append("⚠️ Long conversation—consider summarizing older turns")
+
+    return {
+        "total_tokens": total_tokens,
+        "message_count": len(messages),
+        "avg_tokens_per_message": total_tokens // len(messages),
+        "unique_content_ratio": unique_ratio,
+        "system_message_count": len(system_msgs),
+        "issues": issues,
+    }
+```
+
+---
+
+## 2.7 Advanced Technique: Context Caching
+
+<ConceptVisual
+  image="/images/day_09_13_context_caching_comparison_1768860643133.png"
+  alt="Comparison of cost and speed benefits with context caching"
+  caption="Context Caching: Pay the 'context tax' once, then reuse it for 90% savings."
+/>
+
+<ConceptIntro
+  title="Context Caching"
+  analogy="Imagine if every time you went to the library, you had to re-read the entire encyclopedia before answering a question. That's standard LLM inference. Context Caching is like having the encyclopedia open on your desk with sticky notes. You pay to 'load' the context once, and subsequent queries are faster and cheaper."
+  technicalDef="Context Caching allows developers to cache the prefix of a prompt (e.g., system instructions, few-shot examples, large documents) on the provider's server. Subsequent requests that share the same prefix reuse the processed tokens, reducing latency by up to 80% and cost by up to 90%."
+  whyItMatters="For agents that make many calls with the same heavy context (like a coding agent with a large codebase in context), caching drastically reduces the 'context tax'."
+/>
+
+<Callout type="tip">
+  **Pro Tip:** Anthropic and Google both offer context caching. Use it for your
+  static context (system prompts, documentation, codebase summaries) and keeping
+  only the conversation history dynamic.
+</Callout>
+
+---
+
+## 2.8 RAG vs. Long Context: When to Use Each
+
+<ConceptVisual
+  image="/images/day_09_14_rag_vs_long_context_1768860665420.png"
+  alt="Decision matrix comparing RAG vs Long Context"
+  caption="RAG vs. Long Context: Use RAG for precision and scale; use Long Context for deep reasoning."
+/>
+
+With context windows expanding to 1M+ tokens, a common question is: "Is RAG still necessary?" The answer is nuanced.
+
+<ConceptIntro
+  title="RAG vs. Long Context"
+  analogy="Imagine you need to answer questions about a library's entire collection. Long context is like having photographic memory of every book—impressive, but you still get confused with too much information. RAG is like having a skilled librarian who fetches exactly the books you need. Both have their place."
+  technicalDef="RAG (Retrieval-Augmented Generation) retrieves relevant chunks from external storage and injects them into context. Long context approaches load large amounts of data directly into the context window. The choice depends on data size, update frequency, accuracy requirements, and cost constraints."
+  whyItMatters="Choosing the wrong approach can result in 10-80x higher costs, degraded accuracy, or both. Understanding the tradeoffs is essential for production systems."
+/>
+
+### The Tradeoff Matrix
+
+| Factor         | RAG                                 | Long Context                 |
+| :------------- | :---------------------------------- | :--------------------------- |
+| **Cost**       | 8-82x cheaper for typical workloads | Expensive at scale           |
+| **Latency**    | Fast retrieval, smaller inference   | Slower with large contexts   |
+| **Accuracy**   | High precision on retrieved chunks  | Degrades with context length |
+| **Freshness**  | Can update index in real-time       | Requires re-processing       |
+| **Complexity** | Requires retrieval infrastructure   | Simpler architecture         |
+| **Best For**   | Large, dynamic knowledge bases      | Small, static documents      |
+
+### Decision Framework
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    RAG vs. Long Context                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Data Size > 100K tokens?                                    │
+│    YES → Lean toward RAG                                     │
+│    NO  → Long context may work                               │
+│                                                              │
+│  Data updates frequently?                                    │
+│    YES → RAG (easier to update index)                        │
+│    NO  → Either approach works                               │
+│                                                              │
+│  Need high precision on specific facts?                      │
+│    YES → RAG (focused retrieval)                             │
+│    NO  → Long context acceptable                             │
+│                                                              │
+│  Cost-sensitive at scale?                                    │
+│    YES → RAG (much cheaper)                                  │
+│    NO  → Long context for simplicity                         │
+│                                                              │
+│  Need to reason across entire corpus?                        │
+│    YES → Long context or hybrid                              │
+│    NO  → RAG sufficient                                      │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### The Hybrid Approach (Recommended)
+
+Most production systems benefit from combining both approaches:
+
+```python
+def hybrid_retrieval(query: str, corpus: str, config: dict) -> dict:
+    """
+    Hybrid RAG + Long Context approach.
+    Use RAG for precision, long context for reasoning.
+    """
+    # Step 1: Always include essential context (long context)
+    base_context = {
+        "system_prompt": config["system_prompt"],
+        "schema_definitions": config["schemas"],  # Always needed
+        "recent_conversation": get_recent_messages(5),
+    }
+
+    # Step 2: Retrieve relevant chunks (RAG)
+    relevant_chunks = vector_db.search(
+        query=query,
+        k=config.get("retrieval_k", 5),
+        threshold=config.get("similarity_threshold", 0.7)
+    )
+
+    # Step 3: Optionally load full documents for deep reasoning
+    if requires_deep_reasoning(query):
+        # Load full documents for chunks that scored highly
+        full_docs = [load_full_document(chunk.doc_id)
+                     for chunk in relevant_chunks[:2]]
+        base_context["full_documents"] = full_docs
+
+    # Step 4: Assemble final context within budget
+    return assemble_context(
+        base=base_context,
+        retrieved=relevant_chunks,
+        budget=config.get("context_budget", 32000)
+    )
+```
+
+<Callout type="warning">
+  **RAG is Not Dead:** Despite claims that large context windows make RAG
+  obsolete, research shows RAG remains 8-82x cheaper and often more accurate.
+  Bigger windows add cost and noise; retrieval focuses attention where it
+  matters. The question isn't "RAG or long context?" but "How do I combine them
+  effectively?"
+</Callout>
+
+---
+
+## 2.9 Long-Running Agent Context Management
+
+<ConceptVisual
+  image="/images/day_09_15_shift_change_comic_1768860684949.png"
+  alt="Comic showing the 'shift change' problem in long-running agents"
+  caption="The Shift Change Problem: Without structured handoffs, new agent sessions start blind."
+/>
+
+<ConceptIntro
+  title="Long-Running Agents"
+  analogy="Imagine a software project staffed by engineers working in shifts, where each new engineer arrives with no memory of what happened on the previous shift. That's the challenge of long-running agents—they must work in discrete sessions, and each new session begins with no memory of what came before."
+  technicalDef="Long-running agents are AI systems that work on complex tasks spanning hours or days across multiple context windows. The core challenge is bridging the gap between coding sessions when context windows are limited and most complex projects cannot be completed within a single window."
+  whyItMatters="Production agents often need to work on tasks that exceed a single context window. Without proper session management, agents lose progress, repeat work, or declare tasks complete prematurely."
+/>
+
+### The Two Failure Modes of Long-Running Agents
+
+Based on Anthropic's research building the Claude Agent SDK:
+
+| Failure Mode             | Description                           | Consequence                                                         |
+| :----------------------- | :------------------------------------ | :------------------------------------------------------------------ |
+| **One-Shot Overreach**   | Agent tries to do too much at once    | Runs out of context mid-implementation, leaving features half-built |
+| **Premature Completion** | Agent sees progress and declares done | Features incomplete, work abandoned early                           |
+
+### The Solution: Structured Handoffs
+
+The key insight is finding a way for agents to quickly understand the state of work when starting with a fresh context window:
+
+```python
+# Example: Progress tracking file for long-running agents
+PROGRESS_FILE = "agent-progress.md"
+
+def create_progress_entry(session_id: str, work_done: list, next_steps: list) -> str:
+    """Create a structured progress entry for the next session."""
+    return f"""
+## Session {session_id} - {datetime.now().isoformat()}
+
+### Completed This Session
+{chr(10).join(f'- {item}' for item in work_done)}
+
+### State of Codebase
+- All tests passing: Yes/No
+- Open TODOs: [list any]
+- Known issues: [list any]
+
+### Recommended Next Steps
+{chr(10).join(f'{i+1}. {step}' for i, step in enumerate(next_steps))}
+
+### Files Modified
+[List of files changed with brief description]
+"""
+
+def start_session(progress_file: str) -> dict:
+    """Load context for a new agent session."""
+    if os.path.exists(progress_file):
+        with open(progress_file) as f:
+            history = f.read()
+        # Extract last session's next steps as current priorities
+        return {"history": history, "resume_from": extract_next_steps(history)}
+    return {"history": None, "resume_from": []}
+```
+
+<Callout type="info">
+  **Best Practice:** End each agent session by committing clean, working code
+  and updating a progress file. The next session should be able to start
+  immediately on a new feature without first cleaning up an unrelated mess.
+</Callout>
+
+### Compaction: Intelligent Context Compression
+
+Compaction is the practice of summarizing a conversation nearing the context limit and reinitiating with the summary. It's typically the first lever for driving better long-term coherence.
+
+```python
+def compact_context(messages: list, model: str = "claude-sonnet") -> dict:
+    """
+    Compaction strategy based on Anthropic's Claude Code approach.
+    Preserves critical details while discarding redundant information.
+    """
+    # Identify what to preserve vs. discard
+    preserve_categories = [
+        "architectural_decisions",
+        "unresolved_bugs",
+        "implementation_details",
+        "user_preferences",
+        "current_goals"
+    ]
+
+    discard_categories = [
+        "redundant_tool_outputs",
+        "superseded_messages",
+        "verbose_intermediate_steps"
+    ]
+
+    # Generate high-fidelity summary
+    summary = llm.invoke(f"""
+    Summarize this conversation, preserving:
+    - Architectural decisions made
+    - Unresolved bugs or issues
+    - Key implementation details
+    - User preferences and constraints
+    - Current goals and next steps
+
+    Discard:
+    - Redundant tool outputs
+    - Superseded or corrected information
+    - Verbose intermediate reasoning
+
+    Conversation:
+    {format_messages(messages)}
+    """)
+
+    # Get 5 most recently accessed files for continuity
+    recent_files = get_recent_files(limit=5)
+
+    return {
+        "summary": summary,
+        "recent_files": recent_files,
+        "compaction_ratio": len(messages) / estimate_summary_messages(summary)
+    }
+```
+
+<Callout type="tip">
+  **Tool Result Clearing:** One of the safest, lightest-touch forms of
+  compaction is clearing old tool call results. Once a tool has been called deep
+  in the message history, the agent rarely needs to see the raw result again.
+  This technique is now available as a feature on major LLM platforms.
+</Callout>
+
+### Structured Note-Taking (Agentic Memory)
+
+<ConceptVisual
+  image="/images/day_09_16_pokemon_context_analogy_1768860703215.png"
+  alt="Agent playing Pokemon using structured notes for memory"
+  caption="Agentic Memory in Action: Using structured notes to maintain state across thousands of steps."
+/>
+
+Structured note-taking is a technique where the agent regularly writes notes persisted outside the context window, then retrieves them later.
+
+<RealWorldExample
+  title="Claude Playing Pokémon"
+  scenario="Anthropic demonstrated an agent playing Pokémon that maintains coherence across thousands of game steps."
+  implementation="The agent maintains precise tallies like 'for the last 1,234 steps I've been training my Pokémon in Route 1, Pikachu has gained 8 levels toward the target of 10.' It develops maps of explored regions, remembers key achievements, and maintains strategic notes about combat strategies."
+  takeaway="After context resets, the agent reads its own notes and continues multi-hour training sequences. This coherence across summarization steps enables long-horizon strategies impossible when keeping everything in the context window alone."
+/>
+
+```python
+class AgenticMemory:
+    """
+    Structured note-taking system for long-horizon agents.
+    Based on patterns from Anthropic's research.
+    """
+    def __init__(self, memory_file: str = "NOTES.md"):
+        self.memory_file = memory_file
+
+    def write_note(self, category: str, content: str):
+        """Write a structured note to persistent memory."""
+        timestamp = datetime.now().isoformat()
+        note = f"\n## [{category}] {timestamp}\n{content}\n"
+
+        with open(self.memory_file, "a") as f:
+            f.write(note)
+
+    def read_notes(self, category: str = None) -> str:
+        """Retrieve notes, optionally filtered by category."""
+        with open(self.memory_file, "r") as f:
+            notes = f.read()
+
+        if category:
+            # Filter to specific category
+            return self._filter_by_category(notes, category)
+        return notes
+
+    def update_todo(self, completed: list, remaining: list):
+        """Update the running to-do list."""
+        self.write_note("TODO", f"""
+Completed:
+{chr(10).join(f'- [x] {item}' for item in completed)}
+
+Remaining:
+{chr(10).join(f'- [ ] {item}' for item in remaining)}
+        """)
+```
+
+### Sub-Agent Architectures
+
+Sub-agent architectures provide another way around context limitations by delegating focused tasks to specialized agents with clean context windows.
+
+<Mermaid
+  chart={`
+graph TB
+    Lead[Lead Agent<br/>High-level coordination] --> Sub1[Research Sub-Agent<br/>~50K tokens exploration]
+    Lead --> Sub2[Code Sub-Agent<br/>~30K tokens implementation]
+    Lead --> Sub3[Review Sub-Agent<br/>~20K tokens analysis]
+    
+    Sub1 -->|"Summary: 1-2K tokens"| Lead
+    Sub2 -->|"Summary: 1-2K tokens"| Lead
+    Sub3 -->|"Summary: 1-2K tokens"| Lead
+    
+    style Lead fill:#e1f5fe
+    style Sub1 fill:#fff3e0
+    style Sub2 fill:#fff3e0
+    style Sub3 fill:#fff3e0
+`}
+/>
+
+| Approach        | Best For                         | Context Strategy             |
+| :-------------- | :------------------------------- | :--------------------------- |
+| **Compaction**  | Single-agent, continuous tasks   | Summarize and continue       |
+| **Note-Taking** | Tasks requiring persistent state | Write/read external memory   |
+| **Sub-Agents**  | Complex, parallelizable tasks    | Delegate with clean contexts |
+| **Hybrid**      | Production systems               | Combine all three as needed  |
+
+---
+
+## 2.10 Context Engineering for Tool Calling
+
+<ConceptVisual
+  image="/images/day_09_17_tool_management_comparison_1768860724876.png"
+  alt="Comparison of static vs dynamic tool management"
+  caption="Tool Optimization: Don't load 50 tools when you only need 5. Dynamic selection saves tokens and reduces confusion."
+/>
+
+<Callout type="info">
+  **Connection to Day 01:** Remember that tool definitions consume context
+  tokens too. With 50+ tools, you might spend 10K+ tokens just on tool schemas
+  before any conversation happens.
+</Callout>
+
+### Tool Context Optimization
+
+```python
+# ❌ Bad: Include all 50 tools in every call
+tools = get_all_tools()  # 50 tools × 200 tokens = 10,000 tokens
+
+# ✅ Good: Dynamically select relevant tools
+def get_relevant_tools(query: str, all_tools: list, max_tools: int = 10) -> list:
+    """Select only tools likely needed for this query."""
+    # Use embeddings to find semantically relevant tools
+    tool_scores = []
+    query_embedding = embed(query)
+
+    for tool in all_tools:
+        tool_embedding = embed(tool['description'])
+        score = cosine_similarity(query_embedding, tool_embedding)
+        tool_scores.append((tool, score))
+
+    # Return top-k most relevant tools
+    tool_scores.sort(key=lambda x: x[1], reverse=True)
+    return [t[0] for t in tool_scores[:max_tools]]
+```
+
+### Tool Result Compression
+
+```python
+# ❌ Bad: Include full tool output
+tool_result = search_database(query)  # Returns 50KB of data
+
+# ✅ Good: Compress or reference large outputs
+def handle_tool_result(result: dict, max_tokens: int = 2000) -> str:
+    """Compress large tool results."""
+    result_str = json.dumps(result)
+    token_count = count_tokens(result_str)
+
+    if token_count <= max_tokens:
+        return result_str
+
+    # Option 1: Store and reference
+    artifact_id = store_artifact(result)
+    return f"[Large result stored as artifact #{artifact_id}. Key findings: {summarize(result)}]"
+```
+
+---
+
+<ProgressCheckpoint
+  title="Context Engineering Check"
+  questions={[
+    {
+      question:
+        "What is the difference between 'Context Rot' and 'Context Pollution'?",
+      answer:
+        "Context Rot is performance degradation as context length increases, even below technical limits. Context Pollution is when irrelevant, redundant, or conflicting information distracts the model. Rot is about quantity; pollution is about quality.",
+    },
+    {
+      question: "What is the 'Attention Budget' and why does it matter?",
+      answer:
+        "The attention budget refers to the LLM's limited capacity to attend to all tokens in context. Due to the transformer's n² pairwise relationships, as context grows, the model's ability to capture relationships gets stretched thin. Every new token depletes this budget.",
+    },
+    {
+      question:
+        "Why is the 'effective context window' often smaller than the advertised limit?",
+      answer:
+        "Research shows LLM performance degrades significantly as context grows. At 32K tokens, most models drop below 50% of their short-context performance. Models have less experience with long-range dependencies from training data distributions.",
+    },
+    {
+      question:
+        "Explain the difference between Preloaded, Just-in-Time, and Hybrid context strategies.",
+      answer:
+        "Preloaded loads all potentially relevant data upfront (simple but wasteful). Just-in-Time retrieves data on demand using tools (efficient but slower). Hybrid combines both: essential context preloaded, additional context retrieved as needed. Hybrid is recommended for most production agents.",
+    },
+    {
+      question: "What is the 'Right Altitude' for system prompts?",
+      answer:
+        "The Right Altitude is the Goldilocks zone between too-specific (brittle if-else logic) and too-vague (assumes shared context). It means being specific enough to guide behavior effectively, yet flexible enough to provide strong heuristics rather than hardcoded rules.",
+    },
+    {
+      question: "When should you use RAG vs. Long Context?",
+      answer:
+        "Use RAG for large (>100K tokens), frequently updated data where cost matters and you need precision. Use Long Context for smaller, static documents where you need to reason across the entire corpus. Most production systems use a hybrid approach.",
+    },
+  ]}
+/>
+
+---
+
+<Quiz
+  question="You're building an agent that processes customer support tickets. The agent has access to 50 tools and the full ticket history (500 tickets). What's the BEST approach?"
+  options={[
+    "Include all 50 tools and all 500 tickets in every prompt for maximum context",
+    "Use vector search to retrieve relevant tickets and dynamically select tools based on the current query",
+    "Summarize all 500 tickets into one document and include all tools",
+    "Only include the current ticket and no historical context",
+  ]}
+  correctIndex={1}
+  explanation="Option B applies the Four Pillars: Select (retrieve relevant tickets via vector search), Isolate (only relevant tools), and avoids Context Pollution. Option A causes pollution and rot. Option C loses important details. Option D loses valuable historical context."
+/>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Including the entire codebase in every prompt",
+      fix: "Use RAG to retrieve only relevant files/functions based on the current task",
+    },
+    {
+      mistake: "Never clearing or summarizing conversation history",
+      fix: "Implement automatic summarization at thresholds (e.g., every 20 turns)",
+    },
+    {
+      mistake: "Treating all information as equally important",
+      fix: "Prioritize: recent > relevant > comprehensive. Apply the 'need to know' principle.",
+    },
+    {
+      mistake: "Debugging by adding more context",
+      fix: "Debug by removing context and isolating the issue. Less is often more.",
+    },
+    {
+      mistake: "Assuming bigger context windows solve everything",
+      fix: "Remember the effective context window is smaller than advertised. Quality beats quantity.",
+    },
+    {
+      mistake: "Including all tools in every request",
+      fix: "Dynamically select 5-10 relevant tools based on the query to reduce confusion and cost.",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Context engineering is the evolution of prompt engineering—curating the entire information environment, not just the prompt",
+    "LLMs have a finite 'attention budget' that depletes as context grows—treat context as a precious resource",
+    "The effective context window is often 50-75% smaller than advertised limits due to attention degradation",
+    "Use a Memory Hierarchy: Working (L1) → Episodic (L2) → Archival (L3)",
+    "Context Isolation prevents 'poisoning' in multi-agent systems—share by communicating, not by sharing memory",
+    "Just-in-Time retrieval is often better than preloading—let agents fetch what they need",
+    "RAG and Long Context are complementary—use hybrid approaches for production systems",
+    "The Four Pillars: Write → Select → Compress → Isolate",
+    "Find the 'Right Altitude' for prompts: specific enough to guide, flexible enough to adapt",
+    "Long-running agents need compaction, structured note-taking, and sub-agent architectures",
+  ]}
+/>
+
+---
+
+<Exercise
+  title="Context Audit & Design"
+  difficulty="intermediate"
+  objectives={[
+    "Analyze a sample conversation for context issues",
+    "Design a context budget for a production agent",
+    "Create an isolation strategy for a multi-agent task"
+  ]}
+  hints={[
+    "Look for repetitive information that could be deduplicated",
+    "Consider: what would a sub-agent actually need to know?",
+    "Think about what information is 'nice to have' vs. 'need to have'",
+    "Remember to reserve tokens for the model's output"
+  ]}
+>
+
+**Scenario:** You're building a customer support agent that handles billing questions. It has access to:
+
+- User account info (500 tokens)
+- Billing history: 100 transactions (10,000 tokens total)
+- Support ticket history: 50 tickets (25,000 tokens total)
+- Product documentation: 200 pages (100,000 tokens total)
+- 30 available tools (6,000 tokens for definitions)
+
+**Part 1: Context Budget (assume 32K effective window)**
+
+Design a context budget. How would you allocate tokens across:
+
+- System prompt
+- Tool definitions
+- Retrieved context
+- Conversation history
+- Reserved for output
+
+**Part 2: Memory Hierarchy**
+
+1. What should be in L1 (always in context)?
+2. What should be in L2 (retrieved when relevant)?
+3. What should be in L3 (summarized/archived)?
+
+**Part 3: Multi-Agent Isolation**
+
+You're adding a "refund specialist" sub-agent. Design the isolation:
+
+1. What context does the main agent pass to the refund specialist?
+2. What does the refund specialist return?
+3. What should NOT be shared between them?
+
+</Exercise>
+
+---
+
+<DeepDive title="Advanced: Just-in-Time vs. Preloaded Context">
+
+Modern agent architectures increasingly favor **just-in-time retrieval** over preloading context:
+
+**Preloaded Context (Traditional)**
+
+```
+User query → Load all potentially relevant docs → Send to LLM → Response
+```
+
+- Pros: Simple, everything available
+- Cons: Wastes tokens, causes pollution, hits context limits
+
+**Just-in-Time Retrieval (Modern)**
+
+```
+User query → LLM decides what info needed → Retrieve specific docs → Continue reasoning
+```
+
+- Pros: Efficient, focused, scales better
+- Cons: More complex, requires good tool design
+
+**Hybrid Approach (Best Practice)**
+
+```
+User query → Load minimal essential context → LLM reasons → Retrieve as needed → Continue
+```
+
+The key insight: let the agent decide what context it needs rather than front-loading everything "just in case."
+
+**Implementation Pattern:**
+
+```python
+def hybrid_context_approach(query: str, user_context: dict) -> dict:
+    """Hybrid approach: minimal preload + just-in-time retrieval."""
+    # Preload: Only essential, always-needed context
+    initial_context = {
+        "system_prompt": get_system_prompt(),
+        "user_preferences": user_context.get("preferences", {}),
+        "recent_messages": get_recent_messages(limit=3),
+    }
+
+    # Just-in-time: Tools for retrieving additional context
+    retrieval_tools = [
+        {"name": "search_docs", "description": "Search documentation"},
+        {"name": "get_file", "description": "Retrieve specific file contents"},
+        {"name": "query_history", "description": "Search conversation history"},
+    ]
+
+    return {
+        "context": initial_context,
+        "tools": retrieval_tools,
+        "strategy": "Agent retrieves additional context as needed"
+    }
+```
+
+</DeepDive>
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** Context engineering is critical for the AgentOS
+  capstone. Your multi-agent system will need to manage context across
+  supervisor and worker agents, implement the L1/L2/L3 memory hierarchy, and use
+  context isolation to prevent pollution between specialized agents.
+</Callout>
+
+### Recommended Exercises
+
+Complete these exercises to reinforce the concepts from this module:
+
+- **EX-05: Prompt Templates** (20 min) - Build reusable prompt templates with variable injection and context management. Learn to structure prompts that scale across different use cases. See the [Project Hierarchy](/modules/day-00-project-hierarchy) for full details.
+
+### POC Opportunity
+
+If you want to go deeper, try **POC-04: Prompt Engineering Lab** which builds a working prototype of a prompt management system with templates, versioning, and A/B testing capabilities.
+
+---
+
+### Coming Up Next
+
+In **Day 10**, we'll put these concepts into practice by building our first agent loop with **LangGraph**. You'll see how state management and context flow work in real code, and implement the patterns you learned today.
+
+---
+
+## External Resources
+
+- **[Anthropic: Effective Context Engineering for AI Agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)** — Anthropic's comprehensive guide to context engineering strategies
+- **[Anthropic: Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents)** — Patterns for building reliable AI agents
+- **[Anthropic: Effective Harnesses for Long-Running Agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)** — How to build agents that work across multiple context windows
+- **[Anthropic Prompt Caching Guide](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching)** — Official guide to reducing costs and latency
+- **[OpenAI Prompt Engineering Guide](https://platform.openai.com/docs/guides/prompt-engineering)** — Strategies for effective context management
+- **[NoLiMa: Long-Context Evaluation Beyond Literal Matching](https://arxiv.org/abs/2502.05167)** — Research on how LLMs actually perform with long contexts
+- **[Lost in the Middle Paper](https://arxiv.org/abs/2307.03172)** — Research on how LLMs handle information placement in context
+- **[Found in the Middle: Calibrating Positional Attention Bias](https://arxiv.org/abs/2406.16008)** — Techniques to mitigate the lost-in-the-middle problem
+- **[Context Engineering for AI Agents (Weaviate)](https://weaviate.io/blog/context-engineering)** — Comprehensive conceptual guide

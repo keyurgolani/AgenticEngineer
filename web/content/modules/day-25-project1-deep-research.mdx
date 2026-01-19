@@ -1,0 +1,2451 @@
+---
+title: "Project 1: Production Deep Research Agent"
+description: "Extend the Day 07 capstone into a production-grade system with scoping, parallel research, quality loops, cost optimization, and observability."
+week: 4
+day: 25
+---
+
+<ReadingTime minutes={55} />
+
+<SkillLevel level="intermediate" description="Hands-on project building" />
+
+<Prerequisites
+  items={[
+    "Completed Day 07 Capstone (Deep Research Agent foundations)",
+    "OpenAI API key configured",
+    "Tavily API key for web search",
+    "Python 3.10+ environment with LangGraph installed",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Implement a three-phase research architecture (Scope → Research → Write)",
+    "Build parallel research workflows using LangGraph's Send API",
+    "Apply context engineering to prevent token bloat in multi-agent systems",
+    "Create quality feedback loops with structured critique",
+    "Add human-in-the-loop approval gates for production safety",
+    "Optimize costs with intelligent caching, prompt caching, and model selection",
+    "Implement observability with tracing and monitoring",
+    "Evaluate research agent quality with structured metrics",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Scoping Phase",
+      definition:
+        "A pre-research phase that clarifies user intent and generates a structured research brief",
+    },
+    {
+      term: "Research Brief",
+      definition:
+        "A structured document defining scope, sub-topics, and success criteria—the north star for the entire workflow",
+    },
+    {
+      term: "Context Isolation",
+      definition:
+        "Giving each sub-agent only the minimum context needed, preventing pollution and reducing token usage",
+    },
+    {
+      term: "Fan-Out/Fan-In",
+      definition:
+        "A pattern where work is distributed to parallel workers (fan-out) then aggregated (fan-in)",
+    },
+  ]}
+/>
+
+---
+
+## From Capstone to Production
+
+{/* IMAGE_PLACEHOLDER: A side-by-side comparison diagram showing "Day 07 Foundation" (simple flowchart with basic components) on the left and "Day 25 Production System" (complex architecture with parallel processing, quality loops, and monitoring) on the right. Use arrows and visual indicators to show the evolution. Style: Modern, technical diagram with blue/green color scheme. */}
+
+In Day 07, you built a working Deep Research Agent that coordinates multiple agents to produce comprehensive reports. Today, we transform that foundation into a **production-grade system** by addressing the challenges that emerge at scale:
+
+| Day 07 Foundation       | Day 08 Production Enhancement          |
+| :---------------------- | :------------------------------------- |
+| Basic topic input       | Scoping phase with clarification       |
+| Sequential research     | Parallel research with fan-out/fan-in  |
+| Simple state management | Context isolation to prevent bloat     |
+| Single draft output     | Quality loop with structured critique  |
+| No cost controls        | Model selection, caching, and budgets  |
+| No human oversight      | Approval gates at critical decisions   |
+| No visibility           | Observability with tracing and metrics |
+
+<Callout type="info">
+  **Industry Context:** This architecture mirrors production systems at OpenAI,
+  Anthropic, Google, and Perplexity. In February 2025, OpenAI launched Deep
+  Research as an autonomous agent that browses the web for 5-30 minutes to
+  produce analyst-level reports. Perplexity followed with their Deep Research
+  agent using iterative search and reasoning. Google's Gemini Deep Research can
+  operate autonomously for up to 60 minutes. We'll implement the same
+  three-phase pattern these systems use.
+</Callout>
+
+---
+
+## The Deep Research Landscape in 2025
+
+{/* IMAGE_PLACEHOLDER: A timeline visualization showing the evolution of deep research agents from 2023-2025. Include key milestones: GPT-4 launch, LangGraph release, OpenAI Deep Research, Perplexity Deep Research, and Gemini Deep Research. Each milestone should have an icon and brief description. Style: Horizontal timeline with branching paths, modern tech aesthetic. */}
+
+Before diving into implementation, let's understand how production deep research agents have evolved:
+
+### Commercial Deep Research Systems
+
+| System                           | Architecture                             | Key Features                                         | Typical Runtime  |
+| :------------------------------- | :--------------------------------------- | :--------------------------------------------------- | :--------------- |
+| **OpenAI Deep Research**         | o3-based reasoning with iterative search | Self-correcting workflows, "rabbit hole" exploration | 5-30 minutes     |
+| **Perplexity Deep Research**     | DeepSeek R1 + proprietary TTC framework  | Dozens of searches, hundreds of sources              | 2-4 minutes      |
+| **Google Gemini Deep Research**  | Gemini 3 Pro with MoE architecture       | 60-minute autonomous operation, 50+ source synthesis | Up to 60 minutes |
+| **LangChain Open Deep Research** | LangGraph with parallel researchers      | Open-source, customizable, three-phase pattern       | 3-10 minutes     |
+
+<RealWorldExample
+  title="Lessons from Production Deep Research Systems"
+  scenario="OpenAI, Perplexity, and Google all converged on similar architectural patterns for their deep research agents."
+  implementation="All three systems use: (1) A planning/scoping phase to understand the query, (2) Iterative search with multiple queries and source evaluation, (3) Synthesis with citation and fact-checking. The key differentiator is reasoning depth—OpenAI uses o3's extended thinking, Perplexity uses test-time compute, and Google leverages Gemini's 1M+ token context."
+  takeaway="The three-phase architecture (Scope → Research → Write) is now an industry standard. Focus your differentiation on reasoning quality, source verification, and domain-specific optimizations."
+/>
+
+---
+
+## Project Requirements Document
+
+This section provides comprehensive requirements for implementing the Production Deep Research Agent. Use this as a reference for estimation, implementation, and verification.
+
+### User Stories
+
+| ID    | User Story                                                                                                                                                            | Priority |
+| :---- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------- |
+| US-01 | As a **researcher**, I want to submit a topic and receive a comprehensive research report, so that I can quickly understand complex subjects without manual research. | P0       |
+| US-02 | As a **researcher**, I want the system to ask clarifying questions when my topic is vague, so that the research is focused and relevant to my needs.                  | P0       |
+| US-03 | As a **researcher**, I want to review and approve the research brief before research begins, so that I can ensure the scope matches my expectations.                  | P1       |
+| US-04 | As a **researcher**, I want to see progress updates during research, so that I know the system is working and can estimate completion time.                           | P1       |
+| US-05 | As a **team lead**, I want to set cost limits on research runs, so that we don't exceed our API budget.                                                               | P1       |
+| US-06 | As a **researcher**, I want all sources cited inline in the report, so that I can verify claims and explore topics further.                                           | P0       |
+| US-07 | As a **compliance officer**, I want an audit trail of all LLM calls and decisions, so that we can review the research process if needed.                              | P2       |
+| US-08 | As a **researcher**, I want to resume interrupted research sessions, so that I don't lose progress if the system restarts.                                            | P2       |
+
+### Acceptance Criteria
+
+#### US-01: Topic Submission and Report Generation
+
+- **Given** a user submits a well-defined topic
+- **When** the research workflow completes
+- **Then** a markdown report is generated with:
+  - Minimum 1,500 words for standard depth
+  - At least 5 unique sources cited
+  - Executive summary and key takeaways sections
+  - Report saved to `output/` directory with timestamped filename
+
+#### US-02: Clarification Flow
+
+- **Given** a user submits a vague topic (e.g., "AI")
+- **When** the clarification agent evaluates the topic
+- **Then** the system:
+  - Returns 2-3 specific clarifying questions
+  - Pauses execution until user responds
+  - Incorporates responses into the research brief
+
+#### US-03: Brief Approval Gate
+
+- **Given** a research brief is generated
+- **When** the system reaches the approval checkpoint
+- **Then** the user can:
+  - View proposed sub-topics and estimated cost
+  - Approve to continue
+  - Modify sub-topics before proceeding
+  - Cancel the research entirely
+
+#### US-04: Progress Updates
+
+- **Given** research is in progress
+- **When** each phase completes
+- **Then** the system emits status updates including:
+  - Current phase (scoping/research/writing)
+  - Sub-topics completed vs. remaining
+  - Estimated time to completion
+
+#### US-05: Cost Limits
+
+- **Given** a cost limit is configured (e.g., $2.00)
+- **When** estimated cost exceeds the limit
+- **Then** the system:
+  - Pauses before the next expensive operation
+  - Notifies the user of current spend
+  - Allows user to approve additional spend or terminate
+
+#### US-06: Source Citations
+
+- **Given** a completed research report
+- **When** the report is reviewed
+- **Then** every factual claim includes an inline citation in format `[Source: domain.com]`
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Deep Research Agent System                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                     Phase 1: Scoping                              │   │
+│  │  ┌─────────────────┐    ┌─────────────────┐                      │   │
+│  │  │  Clarification  │───▶│ Brief Generator │                      │   │
+│  │  │     Agent       │    │                 │                      │   │
+│  │  └─────────────────┘    └─────────────────┘                      │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                    │                                     │
+│                                    ▼                                     │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                     Phase 2: Research                             │   │
+│  │  ┌─────────────────┐                                             │   │
+│  │  │   Supervisor    │◀──────────────────────────────┐             │   │
+│  │  └────────┬────────┘                               │             │   │
+│  │           │ Send()                                 │             │   │
+│  │     ┌─────┴─────┬─────────────┐                   │             │   │
+│  │     ▼           ▼             ▼                   │             │   │
+│  │  ┌──────┐   ┌──────┐     ┌──────┐                │             │   │
+│  │  │ R-1  │   │ R-2  │ ... │ R-N  │  (Parallel)    │             │   │
+│  │  └──┬───┘   └──┬───┘     └──┬───┘                │             │   │
+│  │     └──────────┴────────────┴────────────────────┘             │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                    │                                     │
+│                                    ▼                                     │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                     Phase 3: Writing                              │   │
+│  │  ┌─────────────────┐    ┌─────────────────┐                      │   │
+│  │  │  Writer Agent   │◀──▶│  Critic Agent   │  (Revision Loop)    │   │
+│  │  └─────────────────┘    └─────────────────┘                      │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Supporting Services                                                     │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐        │
+│  │   Tavily   │  │  LLM APIs  │  │   Cache    │  │   Cost     │        │
+│  │  Search    │  │ (OpenAI/   │  │  Service   │  │  Tracker   │        │
+│  │            │  │  Anthropic)│  │            │  │            │        │
+│  └────────────┘  └────────────┘  └────────────┘  └────────────┘        │
+│  ┌────────────┐  ┌────────────┐                                        │
+│  │ Observabil │  │ Checkpoint │                                        │
+│  │ ity/Traces │  │   Store    │                                        │
+│  └────────────┘  └────────────┘                                        │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+| Component                    | Responsibility                                        | Inputs                 | Outputs                      |
+| :--------------------------- | :---------------------------------------------------- | :--------------------- | :--------------------------- |
+| **Clarification Agent**      | Evaluate topic clarity, generate clarifying questions | Raw topic string       | Clarity decision + questions |
+| **Brief Generator**          | Create structured research plan with sub-topics       | Topic + clarifications | ResearchBrief (JSON)         |
+| **Research Supervisor**      | Coordinate parallel research, evaluate completeness   | Brief + findings       | Routing decisions            |
+| **Researcher (N instances)** | Research single sub-topic with web search             | Sub-topic + questions  | ResearchFindings             |
+| **Writer Agent**             | Synthesize findings into coherent report              | All findings + brief   | Draft markdown               |
+| **Critic Agent**             | Evaluate draft quality, request revisions             | Draft + brief          | CritiqueResult               |
+| **Cost Tracker**             | Monitor token usage, enforce budget limits            | LLM responses          | Cost estimates + alerts      |
+| **Cache Service**            | Store/retrieve research results                       | Query strings          | Cached findings              |
+
+### State Machine Design
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Idle
+    
+    Idle --> Clarifying: submit_topic
+    
+    Clarifying --> NeedsClarification: topic_vague
+    Clarifying --> GeneratingBrief: topic_clear
+    
+    NeedsClarification --> Clarifying: user_responds
+    NeedsClarification --> [*]: user_cancels
+    
+    GeneratingBrief --> AwaitingBriefApproval: brief_ready
+    
+    AwaitingBriefApproval --> Researching: user_approves
+    AwaitingBriefApproval --> GeneratingBrief: user_modifies
+    AwaitingBriefApproval --> [*]: user_cancels
+    
+    Researching --> ResearchComplete: all_topics_done
+    Researching --> Researching: topic_complete
+    Researching --> BudgetExceeded: cost_limit_hit
+    
+    BudgetExceeded --> Researching: user_approves_spend
+    BudgetExceeded --> Writing: user_proceeds_partial
+    BudgetExceeded --> [*]: user_cancels
+    
+    ResearchComplete --> Writing: auto_transition
+    
+    Writing --> Critiquing: draft_complete
+    
+    Critiquing --> Writing: needs_revision
+    Critiquing --> Finalizing: approved
+    Critiquing --> Finalizing: max_revisions_reached
+    
+    Finalizing --> Complete: report_saved
+    
+    Complete --> [*]
+`}
+/>
+
+| State                   | Description                             | Valid Transitions                     |
+| :---------------------- | :-------------------------------------- | :------------------------------------ |
+| `Idle`                  | Initial state, awaiting topic           | → Clarifying                          |
+| `Clarifying`            | Evaluating topic clarity                | → NeedsClarification, GeneratingBrief |
+| `NeedsClarification`    | Waiting for user to answer questions    | → Clarifying, [End]                   |
+| `GeneratingBrief`       | Creating research plan                  | → AwaitingBriefApproval               |
+| `AwaitingBriefApproval` | HITL checkpoint for brief review        | → Researching, GeneratingBrief, [End] |
+| `Researching`           | Parallel sub-topic research in progress | → ResearchComplete, BudgetExceeded    |
+| `BudgetExceeded`        | Cost limit reached, awaiting decision   | → Researching, Writing, [End]         |
+| `ResearchComplete`      | All sub-topics researched               | → Writing                             |
+| `Writing`               | Generating report draft                 | → Critiquing                          |
+| `Critiquing`            | Evaluating draft quality                | → Writing, Finalizing                 |
+| `Finalizing`            | Saving report and metadata              | → Complete                            |
+| `Complete`              | Terminal success state                  | → [End]                               |
+
+### Security Requirements
+
+| Requirement             | Implementation                                                   | Priority |
+| :---------------------- | :--------------------------------------------------------------- | :------- |
+| **API Key Protection**  | Store in environment variables, never log or include in state    | P0       |
+| **Input Sanitization**  | Validate topic length (max 500 chars), strip HTML/scripts        | P0       |
+| **Output Sanitization** | Escape any user-provided content in reports                      | P1       |
+| **Rate Limiting**       | Max 10 research runs per user per hour                           | P1       |
+| **Cost Controls**       | Configurable per-run budget limit with hard stop                 | P0       |
+| **Audit Logging**       | Log all LLM calls with timestamps (exclude full prompts in prod) | P1       |
+| **Data Retention**      | Auto-delete cached research after 30 days                        | P2       |
+| **PII Handling**        | Do not include user identifiers in research queries              | P1       |
+
+### Performance Requirements
+
+| Metric                                  | Target                      | Measurement                             |
+| :-------------------------------------- | :-------------------------- | :-------------------------------------- |
+| **End-to-end latency (standard topic)** | < 5 minutes                 | Time from submission to report delivery |
+| **Clarification response**              | < 3 seconds                 | Time to return clarifying questions     |
+| **Brief generation**                    | < 10 seconds                | Time to generate research brief         |
+| **Per-subtopic research**               | < 45 seconds                | Time for single researcher to complete  |
+| **Parallel efficiency**                 | 3+ subtopics simultaneously | Measured via concurrent API calls       |
+| **Writing phase**                       | < 60 seconds                | Time to generate initial draft          |
+| **Critique phase**                      | < 15 seconds                | Time to evaluate draft                  |
+| **Checkpoint save**                     | < 500ms                     | Time to persist state for resume        |
+| **Memory usage**                        | < 512MB                     | Peak memory during execution            |
+| **Cost per standard report**            | < $1.50                     | Total API costs for 3,000-word report   |
+
+---
+
+## 8.1 The Three-Phase Architecture
+
+Production deep research systems share a common pattern: **Scope → Research → Write**. Each phase has distinct responsibilities and failure modes.
+
+<div className="my-8">
+  <Mermaid
+    chart={`
+graph TD
+    User([User Query]) --> Phase1
+    
+    subgraph Phase1["Phase 1: Scoping"]
+        Clarify[Clarification Agent] --> Brief[Brief Generator]
+    end
+    
+    Phase1 --> Phase2
+    
+    subgraph Phase2["Phase 2: Research"]
+        Supervisor[Research Supervisor]
+        Supervisor -->|"Sub-topic A"| RA[Researcher A]
+        Supervisor -->|"Sub-topic B"| RB[Researcher B]
+        Supervisor -->|"Sub-topic C"| RC[Researcher C]
+        RA -->|"Findings"| Supervisor
+        RB -->|"Findings"| Supervisor
+        RC -->|"Findings"| Supervisor
+        Supervisor -->|"Need more?"| Supervisor
+    end
+    
+    Phase2 --> Phase3
+    
+    subgraph Phase3["Phase 3: Writing"]
+        Writer[Writer Agent] --> Critic[Critic Agent]
+        Critic -->|"Revise"| Writer
+        Critic -->|"Approve"| Final([Final Report])
+    end
+    
+    style Clarify fill:#e1f5fe
+    style Brief fill:#e1f5fe
+    style Supervisor fill:#fff3e0
+    style Writer fill:#e8f5e9
+    style Critic fill:#fce4ec
+`}
+  />
+</div>
+
+### Why Three Phases?
+
+{/* IMAGE_PLACEHOLDER: An infographic showing three phases as connected gears or pipeline stages. Phase 1 (Scoping) shows a funnel narrowing down from vague to specific. Phase 2 (Research) shows multiple parallel arrows branching out and converging. Phase 3 (Writing) shows a single stream with feedback loops. Include time savings and cost reduction metrics for each phase. Style: Clean, modern infographic with icons and data visualization. */}
+
+**Phase 1 (Scoping)** prevents wasted computation. Research from OpenAI and Perplexity shows that users rarely provide sufficient context in their initial request. A 30-second clarification can save 10 minutes of misdirected research and significantly reduce costs.
+
+**Phase 2 (Research)** benefits from parallelization. Independent sub-topics can be researched simultaneously, but the supervisor must coordinate to avoid gaps and redundancy. This is where LangGraph's `Send` API shines.
+
+**Phase 3 (Writing)** requires coherence. LangChain's experiments with Open Deep Research found that parallel section writing produces disjointed reports. A single writer with all context produces better results.
+
+### Comparing Deep Research Architectures
+
+| Aspect              | OpenAI Deep Research       | Perplexity                 | Google Gemini              | Our Implementation     |
+| :------------------ | :------------------------- | :------------------------- | :------------------------- | :--------------------- |
+| **Reasoning Model** | o3 (extended thinking)     | DeepSeek R1 + TTC          | Gemini 3 Pro (MoE)         | GPT-4o / Claude 3.5    |
+| **Search Strategy** | Iterative, self-correcting | Dozens of parallel queries | Multi-step with validation | Parallel per sub-topic |
+| **Source Count**    | 100+ sources               | Hundreds of sources        | 50+ sources                | 15-30 sources          |
+| **Runtime**         | 5-30 minutes               | 2-4 minutes                | Up to 60 minutes           | 3-10 minutes           |
+| **Cost**            | ~$0.10-0.50/query          | Subscription               | Subscription               | $0.50-2.00/report      |
+
+<RealWorldExample
+  title="Lessons from LangChain's Open Deep Research"
+  scenario="LangChain built an open-source deep research agent and discovered key architectural insights."
+  implementation="They found that multi-agent approaches work well for research (isolated context per sub-topic) but poorly for writing (coordination problems). Their solution: parallelize research, serialize writing. They also found that iterative refinement with a critic agent significantly improves output quality."
+  takeaway="Use multi-agent only for easily parallelized tasks. Research sub-topics are independent; report sections are not."
+/>
+
+---
+
+## 8.2 Project Setup
+
+### Directory Structure
+
+```
+deep-research-v2/
+├── .env
+├── main.py
+├── agents/
+│   ├── __init__.py
+│   ├── scoping.py      # Phase 1: Clarification + Brief
+│   ├── research.py     # Phase 2: Supervisor + Researchers
+│   └── writing.py      # Phase 3: Writer + Critic
+├── models/
+│   ├── __init__.py
+│   ├── state.py        # Graph state definition
+│   └── schemas.py      # Pydantic models for structured output
+├── utils/
+│   ├── __init__.py
+│   ├── prompts.py      # Centralized prompt templates
+│   ├── cost_tracker.py # Token usage monitoring
+│   ├── cache.py        # Research result caching
+│   └── tracing.py      # Observability setup
+├── tests/
+│   ├── test_agents.py
+│   └── test_integration.py
+└── output/
+    └── .gitkeep
+```
+
+### Dependencies
+
+```bash
+pip install langgraph langchain langchain-openai langchain-anthropic \
+    tavily-python python-dotenv pydantic langfuse
+```
+
+### Environment Configuration
+
+```bash
+# .env
+OPENAI_API_KEY=sk-your-key-here
+ANTHROPIC_API_KEY=sk-ant-your-key-here  # Optional: for Claude models
+TAVILY_API_KEY=tvly-your-key-here
+
+# Cost controls
+MAX_RESEARCH_COST_USD=2.00
+MAX_ITERATIONS=3
+
+# Observability (optional but recommended)
+LANGFUSE_PUBLIC_KEY=pk-your-key
+LANGFUSE_SECRET_KEY=sk-your-key
+LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+---
+
+## 8.3 State Design with Context Engineering
+
+The state schema is critical for multi-agent coordination. We apply **context engineering principles** from Day 02 to prevent token bloat.
+
+```python
+# models/state.py
+from typing import TypedDict, Annotated, Optional, List
+from datetime import datetime
+import operator
+
+class ResearchState(TypedDict):
+    """Production state for Deep Research Agent.
+
+    Design Principles:
+    1. Separate concerns by phase
+    2. Use reducers for parallel aggregation
+    3. Track metadata for debugging and cost control
+    """
+    # === Phase 1: Scoping ===
+    topic: str
+    clarifying_questions: List[str]
+    user_responses: List[str]
+    research_brief: str  # JSON string of structured brief
+
+    # === Phase 2: Research ===
+    sub_topics: List[str]
+    # operator.ior merges dicts from parallel researchers
+    research_findings: Annotated[dict, operator.ior]
+    # operator.add accumulates sources from all researchers
+    sources: Annotated[List[str], operator.add]
+    research_gaps: List[str]  # Identified by supervisor
+
+    # === Phase 3: Writing ===
+    draft: str
+    critique: Optional[str]
+    revision_count: int
+    final_report: str
+
+    # === Control Flow ===
+    status: str
+    current_phase: str
+
+    # === Metadata (for debugging and cost tracking) ===
+    started_at: Optional[str]
+    completed_at: Optional[str]
+    total_tokens_used: int
+    estimated_cost_usd: float
+    errors: List[str]
+
+    # === Observability ===
+    trace_id: Optional[str]
+    span_ids: List[str]
+```
+
+<Callout type="tip">
+**Why `operator.ior` for findings?** When parallel researchers return `{"topic_a": "findings..."}` and `{"topic_b": "findings..."}`, the `ior` reducer merges them into a single dict. Without this, the last researcher would overwrite all previous findings.
+</Callout>
+
+### Pydantic Models for Structured Output
+
+```python
+# models/schemas.py
+from pydantic import BaseModel, Field
+from typing import List
+from enum import Enum
+
+class ResearchDepth(str, Enum):
+    BRIEF = "brief"           # ~1000 words
+    STANDARD = "standard"     # ~3000 words
+    COMPREHENSIVE = "comprehensive"  # ~5000+ words
+
+class ConfidenceLevel(str, Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+class ResearchBrief(BaseModel):
+    """Structured brief that guides the entire research process."""
+    title: str = Field(description="Clear, specific title for the research")
+    objective: str = Field(description="The core question we're answering")
+    sub_topics: List[str] = Field(
+        description="3-5 independent sub-topics for parallel research",
+        min_length=3,
+        max_length=7
+    )
+    key_questions: dict = Field(
+        description="Mapping of sub-topic to specific questions to answer"
+    )
+    success_criteria: str = Field(
+        description="How we know the research is complete and sufficient"
+    )
+    estimated_depth: ResearchDepth = Field(
+        description="Expected report length based on topic complexity"
+    )
+    target_audience: str = Field(
+        default="technical professionals",
+        description="Who will read this report"
+    )
+
+class ResearchFindings(BaseModel):
+    """Structured output from a researcher."""
+    sub_topic: str
+    key_findings: List[str] = Field(description="3-5 key facts or insights")
+    summary: str = Field(description="300-500 word synthesis")
+    sources: List[str] = Field(description="URLs of sources used")
+    confidence: ConfidenceLevel = Field(description="Confidence in findings")
+    gaps: List[str] = Field(description="Questions that couldn't be answered")
+    contradictions: List[str] = Field(
+        default_factory=list,
+        description="Conflicting information found across sources"
+    )
+
+class CritiqueResult(BaseModel):
+    """Structured critique from the reviewer."""
+    score: int = Field(ge=1, le=10, description="Quality score 1-10")
+    word_count: int
+    meets_brief: bool = Field(description="Does it address the research brief?")
+    source_quality: int = Field(ge=1, le=10, description="Quality of citations")
+    strengths: List[str]
+    issues: List[str]
+    suggestions: List[str]
+    factual_concerns: List[str] = Field(
+        default_factory=list,
+        description="Claims that may need verification"
+    )
+    approved: bool = Field(description="Ready for delivery?")
+```
+
+---
+
+## 8.4 Phase 1: Scoping Implementation
+
+{/* IMAGE_PLACEHOLDER: A flowchart showing the clarification decision tree. Start with "User Query" → "Clarity Check" (diamond decision) → If vague: "Ask 2-3 Questions" → "User Responds" → loop back. If clear: "Generate Brief" → "Brief Ready". Include example queries at each stage (vague: "AI", clear: "Impact of transformers on NLP since 2017"). Style: Clean flowchart with decision diamonds and process rectangles. */}
+
+The scoping phase transforms a vague user query into a precise research brief. This is where we apply the **clarification pattern** used by OpenAI's Deep Research and Perplexity.
+
+```python
+# agents/scoping.py
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from models.schemas import ResearchBrief
+from models.state import ResearchState
+
+CLARIFICATION_PROMPT = """You are a research assistant preparing to conduct deep research.
+
+The user wants to research: {topic}
+
+Your job is to determine if you have enough context to proceed. Consider:
+1. Is the scope clear? (Too broad like "AI" or appropriately focused?)
+2. Is there a specific angle, perspective, or use case?
+3. What time period should we focus on? (Historical, current, future?)
+4. Are there specific aspects to include or exclude?
+5. Who is the target audience for this research?
+
+If the topic is sufficiently clear for comprehensive research, respond exactly with:
+READY TO RESEARCH
+
+Otherwise, ask 2-3 specific clarifying questions. Be concise and friendly.
+Do NOT ask unnecessary questions if the topic is already well-defined."""
+
+BRIEF_GENERATION_PROMPT = """Create a comprehensive research brief for the following topic.
+
+Topic: {topic}
+{clarifications}
+
+Requirements:
+1. Create 3-5 INDEPENDENT sub-topics that can be researched in parallel
+2. Each sub-topic should be self-contained (no dependencies on others)
+3. Define specific questions each sub-topic should answer
+4. Set clear success criteria for when research is complete
+5. Estimate the appropriate depth based on topic complexity
+
+The brief will guide multiple research agents working in parallel."""
+
+class ScopingAgent:
+    def __init__(self, model: str = "gpt-4o-mini"):
+        self.llm = ChatOpenAI(model=model, temperature=0.3)
+        self.structured_llm = ChatOpenAI(model="gpt-4o").with_structured_output(
+            ResearchBrief
+        )
+
+    def check_clarity(self, topic: str) -> tuple[bool, str]:
+        """Check if topic needs clarification."""
+        prompt = ChatPromptTemplate.from_template(CLARIFICATION_PROMPT)
+        chain = prompt | self.llm
+
+        response = chain.invoke({"topic": topic})
+        content = response.content.strip()
+
+        is_ready = "READY TO RESEARCH" in content
+        return is_ready, content
+
+    def generate_brief(self, topic: str, clarifications: str = "") -> ResearchBrief:
+        """Generate structured research brief."""
+        prompt = ChatPromptTemplate.from_template(BRIEF_GENERATION_PROMPT)
+        chain = prompt | self.structured_llm
+
+        clarification_text = f"\nUser clarifications: {clarifications}" if clarifications else ""
+
+        return chain.invoke({
+            "topic": topic,
+            "clarifications": clarification_text
+        })
+
+def clarification_node(state: ResearchState) -> dict:
+    """Node: Check if topic needs clarification."""
+    agent = ScopingAgent()
+    is_ready, response = agent.check_clarity(state["topic"])
+
+    if is_ready:
+        return {
+            "status": "ready_for_brief",
+            "current_phase": "scoping"
+        }
+    else:
+        return {
+            "clarifying_questions": [response],
+            "status": "needs_clarification",
+            "current_phase": "scoping"
+        }
+
+def brief_generation_node(state: ResearchState) -> dict:
+    """Node: Generate the research brief."""
+    agent = ScopingAgent()
+
+    # Combine any user responses
+    clarifications = "\n".join(state.get("user_responses", []))
+
+    brief = agent.generate_brief(state["topic"], clarifications)
+
+    return {
+        "research_brief": brief.model_dump_json(),
+        "sub_topics": brief.sub_topics,
+        "status": "brief_complete",
+        "current_phase": "research"
+    }
+```
+
+<Callout type="warning">
+  **Production Tip:** In a real application, the `needs_clarification` status
+  would trigger a human-in-the-loop interaction. The agent pauses, the user
+  provides answers, and the graph resumes. We'll implement this pattern in
+  Section 8.8.
+</Callout>
+
+---
+
+## 8.5 Phase 2: Parallel Research with Context Isolation
+
+This is where the production architecture shines. We use LangGraph's `Send` API to fan out research to parallel workers, each with **isolated context**.
+
+### The Context Isolation Pattern
+
+{/* IMAGE_PLACEHOLDER: A comparison diagram showing "Context Pollution" vs "Context Isolation". Left side: All researchers receiving full state (messy, overlapping circles with arrows everywhere). Right side: Each researcher receiving only their sub-topic (clean, isolated boxes with minimal connections). Include token count comparison: "Full State: 15,000 tokens" vs "Isolated: 2,000 tokens per researcher". Style: Clean technical diagram with color-coded data flows. */}
+
+```python
+# agents/research.py
+from langchain_openai import ChatOpenAI
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_core.prompts import ChatPromptTemplate
+from langgraph.constants import Send
+from models.schemas import ResearchFindings
+from models.state import ResearchState
+from typing import List
+import json
+
+RESEARCHER_PROMPT = """You are a focused research analyst investigating ONE specific sub-topic.
+
+Sub-topic: {sub_topic}
+Questions to answer: {questions}
+
+Search Results:
+{search_results}
+
+Instructions:
+1. Focus ONLY on your assigned sub-topic
+2. Synthesize information from multiple sources
+3. Note specific facts, statistics, and expert opinions
+4. Cite sources accurately with URLs
+5. Identify any questions you couldn't answer (gaps)
+6. Flag any contradictory information across sources
+
+Do NOT research other topics—that's handled by other agents."""
+
+class ResearcherAgent:
+    def __init__(self, model: str = "gpt-4o-mini"):
+        self.llm = ChatOpenAI(model=model, temperature=0.2)
+        self.structured_llm = self.llm.with_structured_output(ResearchFindings)
+        self.search = TavilySearchResults(max_results=5)
+
+    def _generate_queries(self, sub_topic: str, questions: List[str]) -> List[str]:
+        """Generate targeted search queries."""
+        query_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.5)
+
+        prompt = f"""Generate 3 specific search queries to research:
+Topic: {sub_topic}
+Questions to answer: {questions}
+
+Return only the queries, one per line. Make them specific and searchable.
+Include year "2025" or "2024" for recent information where relevant."""
+
+        response = query_llm.invoke(prompt)
+        return [q.strip() for q in response.content.strip().split('\n') if q.strip()][:3]
+
+    def research(self, sub_topic: str, questions: List[str]) -> ResearchFindings:
+        """Research a single sub-topic with focused context."""
+        # Generate and execute searches
+        queries = self._generate_queries(sub_topic, questions)
+
+        all_results = []
+        for query in queries:
+            try:
+                results = self.search.invoke(query)
+                all_results.extend(results)
+            except Exception as e:
+                print(f"Search error for '{query}': {e}")
+
+        # Deduplicate by URL
+        seen_urls = set()
+        unique_results = []
+        for r in all_results:
+            url = r.get('url', '')
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                unique_results.append(r)
+
+        # Synthesize with structured output
+        prompt = ChatPromptTemplate.from_template(RESEARCHER_PROMPT)
+        chain = prompt | self.structured_llm
+
+        return chain.invoke({
+            "sub_topic": sub_topic,
+            "questions": "\n".join(f"- {q}" for q in questions),
+            "search_results": json.dumps(unique_results[:8], indent=2)
+        })
+```
+
+### Supervisor and Fan-Out Implementation
+
+```python
+# agents/research.py (continued)
+
+def supervisor_node(state: ResearchState) -> dict:
+    """Supervisor: Coordinate research and check completeness."""
+    findings = state.get("research_findings", {})
+    sub_topics = state.get("sub_topics", [])
+
+    # Check what's missing
+    missing = [t for t in sub_topics if t not in findings]
+
+    if missing:
+        return {"status": "researching"}
+
+    # All topics researched—evaluate completeness
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+
+    brief = state.get("research_brief", "{}")
+    findings_summary = "\n".join([
+        f"**{topic}**: {data.get('summary', '')[:300]}..."
+        for topic, data in findings.items()
+        if isinstance(data, dict)
+    ])
+
+    eval_prompt = f"""Research Brief: {brief}
+
+Findings Summary:
+{findings_summary}
+
+Evaluate: Do we have sufficient information to write a comprehensive report?
+
+Respond with either:
+- "SUFFICIENT" if ready to write
+- "GAPS: [list specific missing information]" if more research needed"""
+
+    response = llm.invoke(eval_prompt)
+
+    if "SUFFICIENT" in response.content:
+        return {"status": "research_complete", "current_phase": "writing"}
+    else:
+        # Extract gaps for potential follow-up research
+        gaps = response.content.replace("GAPS:", "").strip()
+        return {
+            "research_gaps": [gaps],
+            "status": "research_complete",  # Proceed anyway to avoid infinite loops
+            "current_phase": "writing"
+        }
+
+def route_to_researchers(state: ResearchState) -> List[Send]:
+    """Fan-out: Send each sub-topic to a parallel researcher.
+
+    KEY PATTERN: Context Isolation
+    Each researcher receives ONLY:
+    - Their assigned sub-topic
+    - Questions specific to that topic
+    - The research brief (for context)
+
+    They do NOT receive:
+    - Other researchers' findings
+    - Full conversation history
+    - Unrelated state
+    """
+    if state["status"] != "researching":
+        return []
+
+    findings = state.get("research_findings", {})
+    sub_topics = state.get("sub_topics", [])
+
+    # Parse brief to get questions per topic
+    try:
+        brief = json.loads(state.get("research_brief", "{}"))
+        key_questions = brief.get("key_questions", {})
+    except json.JSONDecodeError:
+        key_questions = {}
+
+    # Only research topics we don't have findings for
+    missing = [t for t in sub_topics if t not in findings]
+
+    return [
+        Send("researcher", {
+            # ISOLATED CONTEXT: Only what this researcher needs
+            "sub_topic": topic,
+            "questions": key_questions.get(topic, [f"What are the key aspects of {topic}?"]),
+            "brief_objective": brief.get("objective", state["topic"])
+        })
+        for topic in missing
+    ]
+
+def researcher_node(state: dict) -> dict:
+    """Individual researcher node (receives isolated context)."""
+    agent = ResearcherAgent()
+
+    sub_topic = state["sub_topic"]
+    questions = state.get("questions", [])
+
+    print(f"🔍 Researching: {sub_topic}")
+
+    findings = agent.research(sub_topic, questions)
+
+    return {
+        "research_findings": {sub_topic: findings.model_dump()},
+        "sources": findings.sources
+    }
+```
+
+<Callout type="info">
+  **Context Isolation in Action:** Notice how `researcher_node` receives a
+  minimal dict with only `sub_topic`, `questions`, and `brief_objective`. It
+  never sees other researchers' findings or the full state. This prevents
+  context pollution and reduces token usage by ~60% compared to passing full
+  state.
+</Callout>
+
+### Visualizing the Fan-Out/Fan-In Pattern
+
+{/* IMAGE_PLACEHOLDER: An animated visualization showing the fan-out/fan-in pattern in action. Start with a single supervisor node that splits into 3-5 parallel researcher nodes (fan-out), each with a progress indicator. Show data flowing back to the supervisor (fan-in) with a merge operation. Include timing indicators showing parallel execution saves time. Style: Interactive animation with play/pause controls, modern UI with smooth transitions. */}
+
+<div className="my-8">
+  <Mermaid
+    chart={`
+sequenceDiagram
+    participant S as Supervisor
+    participant R1 as Researcher 1
+    participant R2 as Researcher 2
+    participant R3 as Researcher 3
+    
+    S->>S: Check missing topics
+    
+    par Parallel Research
+        S->>R1: Send(sub_topic_1, questions_1)
+        S->>R2: Send(sub_topic_2, questions_2)
+        S->>R3: Send(sub_topic_3, questions_3)
+    end
+    
+    R1-->>S: {findings_1} via reducer
+    R2-->>S: {findings_2} via reducer
+    R3-->>S: {findings_3} via reducer
+    
+    Note over S: operator.ior merges all findings
+    
+    S->>S: Evaluate completeness
+    S->>S: Route to Writer
+`}
+  />
+</div>
+
+### Understanding LangGraph's Super-Steps
+
+{/* IMAGE_PLACEHOLDER: A step-by-step visualization of LangGraph's super-step execution model. Show 3 super-steps as horizontal layers: Step 1 (supervisor runs), Step 2 (multiple researchers run in parallel with sync barrier), Step 3 (supervisor evaluates). Use a timeline view with synchronization points clearly marked. Include the Pregel model reference with a small Google logo. Style: Technical diagram with clear temporal flow, use different colors for each step. */}
+
+LangGraph executes in discrete **super-steps**: nodes scheduled together run in parallel, then the system synchronizes before the next step. This is based on the Pregel model (used by Google for large-scale graph processing).
+
+```python
+# How parallel execution works in LangGraph:
+#
+# Super-step 1: supervisor_node runs
+#   - Returns status="researching"
+#   - route_to_researchers returns [Send("researcher", {...}), Send("researcher", {...}), ...]
+#
+# Super-step 2: All researcher nodes run IN PARALLEL
+#   - Each receives isolated context
+#   - Each returns {"research_findings": {topic: findings}, "sources": [...]}
+#   - Reducers (operator.ior, operator.add) merge results
+#
+# Super-step 3: supervisor_node runs again
+#   - Sees merged findings from all researchers
+#   - Evaluates completeness
+#   - Routes to writer or requests more research
+```
+
+<Callout type="tip">
+  **Performance Insight:** With 5 sub-topics researched in parallel, total
+  research time is ~45 seconds (the slowest researcher) instead of ~225 seconds
+  (5 × 45s sequential). This 5x speedup is why the fan-out pattern is essential
+  for production.
+</Callout>
+
+---
+
+## 8.6 Phase 3: Writing with Quality Loops
+
+{/* IMAGE_PLACEHOLDER: A circular feedback loop diagram showing the Writer-Critic cycle. Show: Writer generates draft → Critic evaluates (with scoring rubric visible) → Decision point (Approve/Revise) → If revise, loop back to Writer with critique. Include a counter showing "Revision 1 of 3" and quality score progression: "6.5 → 7.8 → 8.5". Style: Circular flow diagram with quality metrics visualization. */}
+
+The writing phase uses a **reflection pattern** where a Critic reviews the Writer's output and requests revisions until quality thresholds are met.
+
+```python
+# agents/writing.py
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from models.schemas import CritiqueResult
+from models.state import ResearchState
+import json
+
+WRITER_SYSTEM = """You are an expert technical writer producing research reports.
+
+Writing Guidelines:
+1. Write in a clear, authoritative voice
+2. Use specific data points and examples from the research
+3. Create smooth transitions between sections
+4. Cite sources inline using [Source: domain.com] format
+5. Match the depth specified in the research brief
+6. Include an executive summary and key takeaways
+7. Flag any areas where sources conflicted"""
+
+WRITER_PROMPT = """Write a comprehensive research report.
+
+# Research Brief
+{brief}
+
+# Research Findings
+{findings}
+
+# Previous Critique (if revising)
+{critique}
+
+# Instructions
+{instruction}
+
+Write the complete report now."""
+
+CRITIC_PROMPT = """You are a senior editor reviewing a research report.
+
+# Research Brief (Success Criteria)
+{brief}
+
+# Report to Review
+{report}
+
+Evaluate on:
+1. **Completeness**: Does it address all sub-topics from the brief?
+2. **Accuracy**: Are claims supported by cited sources?
+3. **Depth**: Does it meet the expected word count and detail level?
+4. **Clarity**: Is it well-organized with smooth transitions?
+5. **Citations**: Are sources properly cited inline?
+6. **Factual Concerns**: Are there claims that seem unsupported or questionable?
+
+Scoring:
+- 9-10: Publication ready
+- 7-8: Minor revisions needed
+- 5-6: Significant revisions needed
+- 1-4: Major rewrite required
+
+Approve only if score >= 8."""
+
+class WriterAgent:
+    def __init__(self, model: str = "gpt-4o"):
+        self.llm = ChatOpenAI(model=model, temperature=0.7)
+
+    def write(
+        self,
+        brief: str,
+        findings: dict,
+        critique: str = None,
+        is_revision: bool = False
+    ) -> str:
+        """Write or revise the report."""
+        # Format findings for the prompt
+        findings_text = ""
+        for topic, data in findings.items():
+            if isinstance(data, dict):
+                findings_text += f"\n## {topic}\n"
+                findings_text += f"Summary: {data.get('summary', '')}\n"
+                findings_text += "Key Findings:\n"
+                for finding in data.get('key_findings', []):
+                    findings_text += f"- {finding}\n"
+                findings_text += f"Sources: {', '.join(data.get('sources', []))}\n"
+                if data.get('contradictions'):
+                    findings_text += f"Contradictions: {', '.join(data.get('contradictions', []))}\n"
+
+        instruction = (
+            "Revise the report addressing each issue from the critique."
+            if is_revision else
+            "Write a comprehensive report based on the research findings."
+        )
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", WRITER_SYSTEM),
+            ("human", WRITER_PROMPT)
+        ])
+
+        chain = prompt | self.llm
+
+        response = chain.invoke({
+            "brief": brief,
+            "findings": findings_text,
+            "critique": critique or "N/A - First draft",
+            "instruction": instruction
+        })
+
+        return response.content
+
+class CriticAgent:
+    def __init__(self, model: str = "gpt-4o"):
+        self.llm = ChatOpenAI(model=model, temperature=0.1)
+        self.structured_llm = self.llm.with_structured_output(CritiqueResult)
+
+    def critique(self, brief: str, report: str) -> CritiqueResult:
+        """Provide structured critique of the report."""
+        prompt = ChatPromptTemplate.from_template(CRITIC_PROMPT)
+        chain = prompt | self.structured_llm
+
+        return chain.invoke({
+            "brief": brief,
+            "report": report[:15000]  # Truncate for context limits
+        })
+
+def writer_node(state: ResearchState) -> dict:
+    """Node: Write or revise the report."""
+    agent = WriterAgent()
+
+    is_revision = state.get("critique") is not None
+
+    print(f"✍️ {'Revising' if is_revision else 'Writing'} report...")
+
+    draft = agent.write(
+        brief=state.get("research_brief", ""),
+        findings=state.get("research_findings", {}),
+        critique=state.get("critique"),
+        is_revision=is_revision
+    )
+
+    word_count = len(draft.split())
+    print(f"   Draft complete: {word_count} words")
+
+    return {
+        "draft": draft,
+        "status": "draft_complete"
+    }
+
+def critic_node(state: ResearchState) -> dict:
+    """Node: Review the draft and decide next action."""
+    agent = CriticAgent()
+
+    print("🔍 Reviewing draft...")
+
+    result = agent.critique(
+        brief=state.get("research_brief", ""),
+        report=state.get("draft", "")
+    )
+
+    print(f"   Score: {result.score}/10 | Approved: {result.approved}")
+
+    if result.approved:
+        return {
+            "final_report": state["draft"],
+            "status": "approved",
+            "critique": None
+        }
+    else:
+        # Format critique for the writer
+        critique_text = f"""Score: {result.score}/10
+
+Issues to Address:
+{chr(10).join(f'- {issue}' for issue in result.issues)}
+
+Suggestions:
+{chr(10).join(f'- {s}' for s in result.suggestions)}
+
+Factual Concerns:
+{chr(10).join(f'- {c}' for c in result.factual_concerns) if result.factual_concerns else 'None identified'}"""
+
+        return {
+            "critique": critique_text,
+            "revision_count": state.get("revision_count", 0) + 1,
+            "status": "needs_revision"
+        }
+
+def should_continue_writing(state: ResearchState) -> str:
+    """Routing: Continue revising or finalize?"""
+    if state["status"] == "approved":
+        return "finalize"
+
+    # Prevent infinite loops
+    if state.get("revision_count", 0) >= 3:
+        print("⚠️ Max revisions reached, finalizing current draft")
+        return "finalize"
+
+    return "revise"
+
+def finalize_node(state: ResearchState) -> dict:
+    """Node: Finalize the report."""
+    from datetime import datetime
+
+    final = state.get("final_report") or state.get("draft", "")
+
+    # Add metadata footer
+    final += f"\n\n---\n*Generated by Deep Research Agent on {datetime.now().strftime('%Y-%m-%d')}*"
+    final += f"\n*Sources consulted: {len(set(state.get('sources', [])))}*"
+
+    return {
+        "final_report": final,
+        "status": "complete",
+        "completed_at": datetime.now().isoformat()
+    }
+```
+
+---
+
+## 8.7 Wiring the Complete Graph
+
+Now we assemble all phases into a complete LangGraph workflow with proper routing and checkpointing.
+
+```python
+# main.py
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
+from models.state import ResearchState
+from agents.scoping import clarification_node, brief_generation_node
+from agents.research import supervisor_node, researcher_node, route_to_researchers
+from agents.writing import writer_node, critic_node, finalize_node, should_continue_writing
+from datetime import datetime
+from pathlib import Path
+
+def build_research_graph(use_memory: bool = True):
+    """Build the complete three-phase research graph."""
+
+    workflow = StateGraph(ResearchState)
+
+    # === Phase 1: Scoping ===
+    workflow.add_node("clarify", clarification_node)
+    workflow.add_node("generate_brief", brief_generation_node)
+
+    # === Phase 2: Research ===
+    workflow.add_node("supervisor", supervisor_node)
+    workflow.add_node("researcher", researcher_node)
+
+    # === Phase 3: Writing ===
+    workflow.add_node("writer", writer_node)
+    workflow.add_node("critic", critic_node)
+    workflow.add_node("finalize", finalize_node)
+
+    # === Edges ===
+
+    # Start with clarification
+    workflow.add_edge(START, "clarify")
+
+    # Clarification routing
+    workflow.add_conditional_edges(
+        "clarify",
+        lambda s: "generate_brief" if s["status"] == "ready_for_brief" else END,
+        {"generate_brief": "generate_brief", END: END}
+    )
+
+    # Brief leads to research
+    workflow.add_edge("generate_brief", "supervisor")
+
+    # Supervisor fans out to researchers
+    workflow.add_conditional_edges(
+        "supervisor",
+        route_to_researchers,
+        ["researcher"]
+    )
+
+    # Researchers report back to supervisor
+    workflow.add_edge("researcher", "supervisor")
+
+    # Supervisor routes to writer when complete
+    workflow.add_conditional_edges(
+        "supervisor",
+        lambda s: "writer" if s["status"] == "research_complete" else "supervisor",
+        {"writer": "writer", "supervisor": "supervisor"}
+    )
+
+    # Write-critique loop
+    workflow.add_edge("writer", "critic")
+    workflow.add_conditional_edges(
+        "critic",
+        should_continue_writing,
+        {"revise": "writer", "finalize": "finalize"}
+    )
+
+    workflow.add_edge("finalize", END)
+
+    # Compile with checkpointing
+    checkpointer = MemorySaver() if use_memory else None
+
+    return workflow.compile(checkpointer=checkpointer)
+
+def run_research(topic: str, thread_id: str = None) -> dict:
+    """Execute the research workflow."""
+
+    print("=" * 60)
+    print("🔬 Deep Research Agent v2 (Production)")
+    print("=" * 60)
+    print(f"Topic: {topic}")
+    print("=" * 60 + "\n")
+
+    graph = build_research_graph()
+
+    initial_state = {
+        "topic": topic,
+        "clarifying_questions": [],
+        "user_responses": [],
+        "research_brief": "",
+        "sub_topics": [],
+        "research_findings": {},
+        "sources": [],
+        "research_gaps": [],
+        "draft": "",
+        "critique": None,
+        "revision_count": 0,
+        "final_report": "",
+        "status": "starting",
+        "current_phase": "scoping",
+        "started_at": datetime.now().isoformat(),
+        "completed_at": None,
+        "total_tokens_used": 0,
+        "estimated_cost_usd": 0.0,
+        "errors": [],
+        "trace_id": None,
+        "span_ids": []
+    }
+
+    config = {
+        "configurable": {
+            "thread_id": thread_id or f"research-{datetime.now().timestamp()}"
+        }
+    }
+
+    # Stream execution for visibility
+    for event in graph.stream(initial_state, config):
+        for node_name, output in event.items():
+            status = output.get("status", "")
+            phase = output.get("current_phase", "")
+
+            if node_name == "clarify" and status == "ready_for_brief":
+                print("✅ Topic is clear, generating brief...")
+            elif node_name == "generate_brief":
+                topics = output.get("sub_topics", [])
+                print(f"📋 Brief generated with {len(topics)} sub-topics")
+            elif node_name == "supervisor" and status == "research_complete":
+                print("✅ Research phase complete")
+            elif node_name == "finalize":
+                print("📄 Report finalized!")
+
+    # Get final state
+    final_state = graph.get_state(config)
+    result = final_state.values
+
+    # Save output
+    output_dir = Path("output")
+    output_dir.mkdir(exist_ok=True)
+
+    safe_topic = "".join(c if c.isalnum() or c in " -_" else "" for c in topic)[:50]
+    report_path = output_dir / f"{safe_topic.replace(' ', '_')}.md"
+    report_path.write_text(result.get("final_report", ""))
+
+    print("\n" + "=" * 60)
+    print("✅ Research Complete!")
+    print(f"   Word Count: {len(result.get('final_report', '').split())}")
+    print(f"   Sources: {len(set(result.get('sources', [])))}")
+    print(f"   Revisions: {result.get('revision_count', 0)}")
+    print(f"   Output: {report_path}")
+    print("=" * 60)
+
+    return result
+
+if __name__ == "__main__":
+    import sys
+
+    topic = sys.argv[1] if len(sys.argv) > 1 else "The Impact of AI Agents on Software Engineering in 2025"
+
+    result = run_research(topic)
+```
+
+### Graph Visualization
+
+<div className="my-8">
+  <Mermaid
+    chart={`
+graph TD
+    Start([START]) --> Clarify[clarify]
+    
+    Clarify -->|"ready"| Brief[generate_brief]
+    Clarify -->|"needs input"| End1([END - await user])
+    
+    Brief --> Supervisor[supervisor]
+    
+    Supervisor -->|"researching"| R1[researcher]
+    Supervisor -->|"researching"| R2[researcher]
+    Supervisor -->|"researching"| R3[researcher]
+    
+    R1 --> Supervisor
+    R2 --> Supervisor
+    R3 --> Supervisor
+    
+    Supervisor -->|"complete"| Writer[writer]
+    
+    Writer --> Critic[critic]
+    Critic -->|"needs revision"| Writer
+    Critic -->|"approved"| Finalize[finalize]
+    
+    Finalize --> End2([END])
+    
+    style Clarify fill:#e1f5fe,stroke:#0288d1
+    style Brief fill:#e1f5fe,stroke:#0288d1
+    style Supervisor fill:#fff3e0,stroke:#f57c00
+    style R1 fill:#fff3e0,stroke:#f57c00
+    style R2 fill:#fff3e0,stroke:#f57c00
+    style R3 fill:#fff3e0,stroke:#f57c00
+    style Writer fill:#e8f5e9,stroke:#388e3c
+    style Critic fill:#fce4ec,stroke:#c2185b
+    style Finalize fill:#e8f5e9,stroke:#388e3c
+`}
+  />
+</div>
+
+---
+
+## 8.8 Human-in-the-Loop Approval Gates
+
+{/* IMAGE_PLACEHOLDER: A workflow diagram showing human-in-the-loop checkpoints. Show the agent workflow as a flowchart with three "pause" points marked with hand icons: 1) After clarification questions, 2) After brief generation (with approve/modify/cancel options), 3) Before expensive research phase. Include UI mockups of approval dialogs. Style: User-friendly workflow diagram with interactive UI elements. */}
+
+Production systems need human oversight at critical decision points. LangGraph's `interrupt` feature enables this pattern.
+
+```python
+# agents/scoping.py (enhanced with approval gate)
+from langgraph.types import interrupt
+
+def brief_generation_node_with_approval(state: ResearchState) -> dict:
+    """Generate brief and pause for human approval.
+
+    This implements human-in-the-loop for the critical scoping decision.
+    The agent pauses after generating the brief, allowing the user to:
+    1. Review proposed sub-topics
+    2. Modify the research scope
+    3. Add specific questions
+    4. Cancel if the direction is wrong
+    """
+    agent = ScopingAgent()
+
+    clarifications = "\n".join(state.get("user_responses", []))
+    brief = agent.generate_brief(state["topic"], clarifications)
+
+    # Pause for human approval
+    approval = interrupt({
+        "type": "brief_approval",
+        "message": "Please review the research brief before proceeding.",
+        "brief": brief.model_dump(),
+        "estimated_time": "5-10 minutes",
+        "estimated_cost": "$0.50-$2.00",
+        "options": ["approve", "modify", "cancel"]
+    })
+
+    if approval.get("action") == "cancel":
+        return {"status": "cancelled", "current_phase": "cancelled"}
+
+    if approval.get("action") == "modify":
+        # User provided modifications
+        modified_topics = approval.get("sub_topics", brief.sub_topics)
+        modified_questions = approval.get("key_questions", brief.key_questions)
+
+        brief.sub_topics = modified_topics
+        brief.key_questions = modified_questions
+
+    return {
+        "research_brief": brief.model_dump_json(),
+        "sub_topics": brief.sub_topics,
+        "status": "brief_complete",
+        "current_phase": "research"
+    }
+```
+
+### Resuming After Interruption
+
+{/* IMAGE_PLACEHOLDER: A state diagram showing the interrupt-resume flow. Show: Agent running → Interrupt triggered (pause icon) → State saved to checkpoint → User reviews → User decision (approve/modify/cancel) → Resume from checkpoint → Agent continues. Include visual indicators for state persistence. Style: Technical state machine diagram with clear transitions. */}
+
+```python
+# Example: Handling the interrupt in an application
+from langgraph.types import Command
+
+# Start research - will pause at brief approval
+config = {"configurable": {"thread_id": "research-001"}}
+initial_state = {"topic": "AI Agents in Healthcare", ...}
+
+# Run until interrupt
+for event in graph.stream(initial_state, config):
+    if "__interrupt__" in event:
+        interrupt_data = event["__interrupt__"]
+        print(f"⏸️ Paused: {interrupt_data['message']}")
+        print(f"Brief: {interrupt_data['brief']}")
+        break
+
+# ... User reviews and decides ...
+
+# Resume with approval
+graph.invoke(
+    Command(resume={"action": "approve"}),
+    config
+)
+
+# Or resume with modifications
+graph.invoke(
+    Command(resume={
+        "action": "modify",
+        "sub_topics": ["Modified Topic 1", "Modified Topic 2", "New Topic 3"]
+    }),
+    config
+)
+```
+
+<Callout type="tip">
+  **When to Use Human-in-the-Loop:** - Before expensive operations (research
+  phase can cost $1-5 in API calls) - When scope decisions significantly affect
+  output quality - For sensitive topics requiring editorial judgment - When the
+  agent expresses low confidence - For compliance requirements in regulated
+  industries
+</Callout>
+
+---
+
+## 8.9 Cost Optimization Strategies
+
+{/* IMAGE_PLACEHOLDER: A cost breakdown visualization showing typical research agent expenses. Use a pie chart or stacked bar chart showing: Model API calls (60%), Search API calls (20%), Storage/Caching (10%), Observability (10%). Include a comparison showing costs before and after optimization techniques. Style: Financial dashboard aesthetic with dollar signs and percentage indicators. */}
+
+Production research agents can be expensive. Here are strategies to control costs, updated with 2025 pricing and techniques:
+
+### 2025 Model Pricing Reference
+
+| Model                 | Input (per 1M tokens) | Output (per 1M tokens) | Best For                                   |
+| :-------------------- | :-------------------- | :--------------------- | :----------------------------------------- |
+| **GPT-4o**            | $2.50                 | $10.00                 | Quality-critical tasks (writing, critique) |
+| **GPT-4o-mini**       | $0.15                 | $0.60                  | High-volume tasks (clarification, queries) |
+| **Claude 3.5 Sonnet** | $3.00                 | $15.00                 | Long documents, coding, safety-critical    |
+| **Claude 3.5 Haiku**  | $0.25                 | $1.25                  | Fast, cheap tasks                          |
+| **Gemini 2.0 Flash**  | $0.075                | $0.30                  | Fastest, cheapest for simple tasks         |
+| **Gemini 1.5 Pro**    | $1.25                 | $5.00                  | Extreme context (2M tokens)                |
+
+### 1. Model Selection by Task
+
+```python
+# utils/models.py
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+
+# Task-appropriate model selection
+MODELS = {
+    "clarification": ("openai", "gpt-4o-mini"),      # Simple task, cheap model
+    "brief_generation": ("openai", "gpt-4o"),         # Important, needs quality
+    "query_generation": ("openai", "gpt-4o-mini"),    # Simple task
+    "research_synthesis": ("openai", "gpt-4o-mini"),  # Moderate complexity
+    "writing": ("openai", "gpt-4o"),                  # Quality critical
+    "critique": ("anthropic", "claude-3-5-sonnet-20241022"),  # Judgment required
+}
+
+def get_model(task: str, temperature: float = 0.3):
+    """Get the appropriate model for a task."""
+    provider, model_name = MODELS.get(task, ("openai", "gpt-4o-mini"))
+
+    if provider == "openai":
+        return ChatOpenAI(model=model_name, temperature=temperature)
+    elif provider == "anthropic":
+        return ChatAnthropic(model=model_name, temperature=temperature)
+```
+
+### 2. Prompt Caching (Up to 90% Cost Reduction)
+
+{/* IMAGE_PLACEHOLDER: A before/after comparison showing prompt caching impact. Left side: Traditional approach with full prompt processing on each call (show repeated system prompts being processed). Right side: Cached approach with only dynamic content being processed (show cached prefix in green, new content in blue). Include cost savings calculation: "$2.00 → $0.20 (90% savings)". Style: Split-screen comparison with visual indicators for cached vs. fresh content. */}
+
+Prompt caching is one of the most impactful cost optimizations available in 2025. By structuring prompts so providers can reuse processed prefixes, you can dramatically reduce costs.
+
+```python
+# utils/prompt_cache.py
+"""
+Prompt Caching Strategy:
+- OpenAI: Automatic caching for prompts > 1024 tokens (50% discount)
+- Anthropic: Explicit cache_control blocks (90% discount on cached, 25% write premium)
+- Google: Context caching API for repeated context
+
+Key insight: Structure prompts with STATIC content first, DYNAMIC content last.
+"""
+
+# Example: Optimized prompt structure for caching
+RESEARCH_SYSTEM_PROMPT = """You are a focused research analyst...
+[500+ tokens of detailed instructions that NEVER change]
+[Examples and formatting guidelines]
+[Citation requirements]
+"""  # This prefix gets cached
+
+def create_cacheable_research_prompt(sub_topic: str, search_results: str):
+    """Structure prompt for optimal caching."""
+    return [
+        # STATIC: System prompt (cached after first call)
+        {"role": "system", "content": RESEARCH_SYSTEM_PROMPT},
+
+        # DYNAMIC: Changes per request (not cached)
+        {"role": "user", "content": f"""
+Sub-topic: {sub_topic}
+
+Search Results:
+{search_results}
+
+Synthesize these findings into a structured analysis."""}
+    ]
+
+# For Anthropic with explicit cache control:
+def create_anthropic_cached_prompt(sub_topic: str, search_results: str):
+    """Use Anthropic's cache_control for explicit caching."""
+    return [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": RESEARCH_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"}  # Cache this block
+                },
+                {
+                    "type": "text",
+                    "text": f"Sub-topic: {sub_topic}\n\nSearch Results:\n{search_results}"
+                }
+            ]
+        }
+    ]
+```
+
+<Callout type="info">
+  **Prompt Caching Impact:** For a research agent making 20 LLM calls with
+  similar system prompts, prompt caching can reduce costs from ~$2.00 to
+  ~$0.40—an 80% reduction. The key is structuring prompts with static content
+  first.
+</Callout>
+
+### 3. Token Usage Tracking
+
+```python
+# utils/cost_tracker.py
+from dataclasses import dataclass, field
+from typing import Dict
+import os
+
+# 2025 pricing per 1M tokens
+COSTS = {
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
+    "claude-3-5-haiku-20241022": {"input": 0.25, "output": 1.25},
+    "gemini-2.0-flash": {"input": 0.075, "output": 0.30},
+}
+
+# Cached token discounts
+CACHE_DISCOUNTS = {
+    "openai": 0.50,      # 50% off for cached tokens
+    "anthropic": 0.90,   # 90% off for cached tokens (but 25% write premium)
+    "google": 0.75,      # 75% off for cached context
+}
+
+@dataclass
+class CostTracker:
+    """Track token usage and estimated costs."""
+    usage: Dict[str, int] = field(default_factory=lambda: {"input": 0, "output": 0})
+    cached_tokens: int = 0
+    model_usage: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    budget_limit: float = field(default_factory=lambda: float(os.getenv("MAX_RESEARCH_COST_USD", "2.00")))
+
+    def add_usage(self, model: str, input_tokens: int, output_tokens: int, cached_input: int = 0):
+        self.usage["input"] += input_tokens
+        self.usage["output"] += output_tokens
+        self.cached_tokens += cached_input
+
+        if model not in self.model_usage:
+            self.model_usage[model] = {"input": 0, "output": 0, "cached": 0}
+        self.model_usage[model]["input"] += input_tokens
+        self.model_usage[model]["output"] += output_tokens
+        self.model_usage[model]["cached"] += cached_input
+
+    def estimate_cost(self) -> float:
+        """Estimate total cost in USD."""
+        total = 0.0
+        for model, usage in self.model_usage.items():
+            costs = COSTS.get(model, COSTS["gpt-4o-mini"])
+
+            # Regular tokens
+            regular_input = usage["input"] - usage.get("cached", 0)
+            total += (regular_input / 1_000_000) * costs["input"]
+            total += (usage["output"] / 1_000_000) * costs["output"]
+
+            # Cached tokens (discounted)
+            if usage.get("cached", 0) > 0:
+                provider = "anthropic" if "claude" in model else "openai"
+                discount = CACHE_DISCOUNTS.get(provider, 0.5)
+                total += (usage["cached"] / 1_000_000) * costs["input"] * (1 - discount)
+
+        return total
+
+    def check_budget(self) -> tuple[bool, float]:
+        """Check if we're within budget. Returns (within_budget, remaining)."""
+        current = self.estimate_cost()
+        remaining = self.budget_limit - current
+        return remaining > 0, remaining
+
+    def summary(self) -> str:
+        within_budget, remaining = self.check_budget()
+        status = "✅" if within_budget else "⚠️ OVER BUDGET"
+
+        return f"""
+Token Usage Summary:
+  Total Input: {self.usage['input']:,} tokens
+  Total Output: {self.usage['output']:,} tokens
+  Cached Tokens: {self.cached_tokens:,} (saved ~${self.cached_tokens / 1_000_000 * 2:.4f})
+  Estimated Cost: ${self.estimate_cost():.4f}
+  Budget Remaining: ${remaining:.4f} {status}
+        """
+```
+
+### 4. Research Result Caching
+
+```python
+# utils/cache.py
+import hashlib
+import json
+from pathlib import Path
+from typing import Optional
+from datetime import datetime, timedelta
+
+class ResearchCache:
+    """Cache research results to avoid redundant API calls."""
+
+    def __init__(self, cache_dir: str = ".cache", ttl_days: int = 7):
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(exist_ok=True)
+        self.ttl = timedelta(days=ttl_days)
+
+    def _hash_query(self, query: str) -> str:
+        return hashlib.md5(query.lower().strip().encode()).hexdigest()[:16]
+
+    def _is_expired(self, cache_file: Path) -> bool:
+        if not cache_file.exists():
+            return True
+        mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
+        return datetime.now() - mtime > self.ttl
+
+    def get(self, query: str) -> Optional[dict]:
+        """Retrieve cached results if fresh."""
+        cache_file = self.cache_dir / f"{self._hash_query(query)}.json"
+
+        if self._is_expired(cache_file):
+            return None
+
+        try:
+            data = json.loads(cache_file.read_text())
+            print(f"📦 Cache hit for: {query[:50]}...")
+            return data
+        except (json.JSONDecodeError, IOError):
+            return None
+
+    def set(self, query: str, results: dict):
+        """Cache results with metadata."""
+        cache_file = self.cache_dir / f"{self._hash_query(query)}.json"
+
+        data = {
+            "query": query,
+            "results": results,
+            "cached_at": datetime.now().isoformat()
+        }
+        cache_file.write_text(json.dumps(data, indent=2))
+
+    def clear_expired(self):
+        """Remove expired cache entries."""
+        for cache_file in self.cache_dir.glob("*.json"):
+            if self._is_expired(cache_file):
+                cache_file.unlink()
+```
+
+### 5. Cost-Aware Research Strategy
+
+```python
+# Integrate cost tracking into the research flow
+def researcher_node_with_cost_tracking(state: dict, cost_tracker: CostTracker) -> dict:
+    """Research with cost awareness."""
+
+    # Check budget before expensive operation
+    within_budget, remaining = cost_tracker.check_budget()
+    if not within_budget:
+        return {
+            "status": "budget_exceeded",
+            "error": f"Budget limit reached. Spent: ${cost_tracker.estimate_cost():.2f}"
+        }
+
+    # Check cache first
+    cache = ResearchCache()
+    cache_key = f"{state['sub_topic']}:{state.get('questions', [])}"
+
+    cached = cache.get(cache_key)
+    if cached:
+        return {
+            "research_findings": {state["sub_topic"]: cached["results"]},
+            "sources": cached["results"].get("sources", [])
+        }
+
+    # Proceed with research
+    agent = ResearcherAgent()
+    findings = agent.research(state["sub_topic"], state.get("questions", []))
+
+    # Track costs (would get actual usage from API response)
+    cost_tracker.add_usage("gpt-4o-mini", input_tokens=2000, output_tokens=500)
+
+    # Cache results
+    cache.set(cache_key, findings.model_dump())
+
+    return {
+        "research_findings": {state["sub_topic"]: findings.model_dump()},
+        "sources": findings.sources
+    }
+```
+
+---
+
+## 8.10 Observability: Tracing Research Workflows
+
+{/* IMAGE_PLACEHOLDER: A dashboard mockup showing key observability metrics for a research agent. Include: Real-time trace visualization (waterfall chart), cost tracking graph over time, success/failure rate pie chart, latency distribution histogram, and error log panel. Style: Modern monitoring dashboard with dark theme, similar to Datadog or Grafana. */}
+
+Production agents need observability. You can't debug what you can't see. In 2025, several platforms have emerged as leaders for AI agent observability:
+
+| Platform          | Strengths                                        | Best For                   |
+| :---------------- | :----------------------------------------------- | :------------------------- |
+| **LangSmith**     | Deep LangChain integration, evaluation framework | LangGraph users            |
+| **Langfuse**      | Open-source, self-hostable, cost tracking        | Data sovereignty, startups |
+| **Arize Phoenix** | Enterprise-grade, OTEL-powered                   | Large organizations        |
+| **Helicone**      | Lightweight, proxy-based, cost analytics         | Simple monitoring          |
+
+### Setting Up Langfuse Tracing
+
+```python
+# utils/tracing.py
+from langfuse import Langfuse
+from langfuse.callback import CallbackHandler
+from functools import wraps
+import os
+
+# Initialize Langfuse client
+langfuse = Langfuse(
+    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+    host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+)
+
+def get_langfuse_handler(session_id: str, user_id: str = None):
+    """Get a callback handler for LangChain integration."""
+    return CallbackHandler(
+        session_id=session_id,
+        user_id=user_id,
+        tags=["deep-research", "production"]
+    )
+
+def trace_node(node_name: str):
+    """Decorator to trace individual graph nodes."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(state, *args, **kwargs):
+            trace = langfuse.trace(
+                name=f"node:{node_name}",
+                metadata={
+                    "phase": state.get("current_phase"),
+                    "status": state.get("status")
+                }
+            )
+
+            try:
+                result = func(state, *args, **kwargs)
+                trace.update(
+                    output=result,
+                    level="DEFAULT"
+                )
+                return result
+            except Exception as e:
+                trace.update(
+                    output={"error": str(e)},
+                    level="ERROR"
+                )
+                raise
+            finally:
+                langfuse.flush()
+
+        return wrapper
+    return decorator
+
+# Example: Traced researcher node
+@trace_node("researcher")
+def researcher_node_traced(state: dict) -> dict:
+    """Individual researcher node with tracing."""
+    agent = ResearcherAgent()
+
+    sub_topic = state["sub_topic"]
+    questions = state.get("questions", [])
+
+    # Create a span for the search operation
+    with langfuse.span(name="web_search") as span:
+        span.update(input={"sub_topic": sub_topic, "questions": questions})
+        findings = agent.research(sub_topic, questions)
+        span.update(output={"sources_found": len(findings.sources)})
+
+    return {
+        "research_findings": {sub_topic: findings.model_dump()},
+        "sources": findings.sources
+    }
+```
+
+### What to Monitor
+
+```python
+# Key metrics to track for research agents:
+
+OBSERVABILITY_CHECKLIST = {
+    "latency": {
+        "total_duration": "End-to-end time from query to report",
+        "phase_durations": "Time spent in scoping, research, writing",
+        "llm_latency": "Time waiting for LLM responses",
+        "search_latency": "Time spent on web searches"
+    },
+    "quality": {
+        "critique_scores": "Scores from the critic agent over time",
+        "revision_count": "How many revisions before approval",
+        "source_count": "Number of unique sources cited",
+        "word_count": "Report length vs. target"
+    },
+    "cost": {
+        "tokens_per_report": "Total tokens used per research run",
+        "cost_per_report": "USD cost per completed report",
+        "cache_hit_rate": "Percentage of cached vs. fresh queries",
+        "model_distribution": "Which models used for which tasks"
+    },
+    "errors": {
+        "search_failures": "Failed web searches",
+        "llm_errors": "API errors, rate limits, timeouts",
+        "parsing_errors": "Structured output parsing failures",
+        "budget_exceeded": "Runs that hit cost limits"
+    }
+}
+```
+
+<Callout type="tip">
+  **Debugging Non-Deterministic Behavior:** Research agents are inherently
+  non-deterministic—different search results, LLM variations, etc. Use traces to
+  compare successful vs. failed runs. Look for patterns: Did failures have fewer
+  sources? Lower-quality search results? Specific sub-topics that consistently
+  fail?
+</Callout>
+
+---
+
+## 8.11 Evaluating Research Agent Quality
+
+{/* IMAGE_PLACEHOLDER: A quality evaluation radar chart showing multiple dimensions: Factual Accuracy, Source Quality, Citation Coverage, Topic Coverage, Depth, Organization, Clarity, Actionability, and Audience Fit. Show two overlays: "Baseline Agent" (smaller polygon) and "Optimized Agent" (larger polygon) to demonstrate improvement. Include overall scores. Style: Professional radar/spider chart with clear labels and legend. */}
+
+How do you know if your research agent is actually good? Traditional metrics like accuracy don't capture the nuances of research quality. Here's a framework for evaluation:
+
+### Multi-Dimensional Evaluation
+
+```python
+# utils/evaluation.py
+from pydantic import BaseModel, Field
+from typing import List
+from langchain_openai import ChatOpenAI
+
+class ResearchEvaluation(BaseModel):
+    """Structured evaluation of research output."""
+
+    # Factual Quality
+    factual_accuracy: int = Field(ge=1, le=10, description="Are claims accurate and verifiable?")
+    source_quality: int = Field(ge=1, le=10, description="Are sources authoritative and relevant?")
+    citation_coverage: int = Field(ge=1, le=10, description="Are claims properly cited?")
+
+    # Completeness
+    topic_coverage: int = Field(ge=1, le=10, description="Does it cover all aspects of the topic?")
+    depth: int = Field(ge=1, le=10, description="Is the analysis sufficiently deep?")
+
+    # Coherence
+    organization: int = Field(ge=1, le=10, description="Is it well-structured and logical?")
+    clarity: int = Field(ge=1, le=10, description="Is it clear and readable?")
+
+    # Usefulness
+    actionability: int = Field(ge=1, le=10, description="Does it provide actionable insights?")
+    audience_fit: int = Field(ge=1, le=10, description="Is it appropriate for the target audience?")
+
+    # Issues
+    factual_errors: List[str] = Field(default_factory=list)
+    missing_topics: List[str] = Field(default_factory=list)
+    suggestions: List[str] = Field(default_factory=list)
+
+    @property
+    def overall_score(self) -> float:
+        """Weighted average of all dimensions."""
+        weights = {
+            "factual_accuracy": 0.20,
+            "source_quality": 0.15,
+            "citation_coverage": 0.10,
+            "topic_coverage": 0.15,
+            "depth": 0.10,
+            "organization": 0.10,
+            "clarity": 0.10,
+            "actionability": 0.05,
+            "audience_fit": 0.05
+        }
+
+        total = sum(
+            getattr(self, dim) * weight
+            for dim, weight in weights.items()
+        )
+        return round(total, 2)
+
+class ResearchEvaluator:
+    """Evaluate research reports against quality criteria."""
+
+    def __init__(self, model: str = "gpt-4o"):
+        self.llm = ChatOpenAI(model=model, temperature=0.1)
+        self.structured_llm = self.llm.with_structured_output(ResearchEvaluation)
+
+    def evaluate(self, report: str, brief: str, reference_sources: List[str] = None) -> ResearchEvaluation:
+        """Evaluate a research report."""
+
+        prompt = f"""Evaluate this research report against the original brief.
+
+# Research Brief
+{brief}
+
+# Report to Evaluate
+{report}
+
+# Reference Sources (if available)
+{reference_sources or 'Not provided'}
+
+Provide a detailed evaluation across all dimensions. Be critical but fair.
+Identify specific factual errors, missing topics, and suggestions for improvement."""
+
+        return self.structured_llm.invoke(prompt)
+
+# Example usage in tests
+def test_research_quality():
+    """Automated quality check for research output."""
+    evaluator = ResearchEvaluator()
+
+    # Run research
+    result = run_research("Impact of LangGraph on AI agent development")
+
+    # Evaluate
+    evaluation = evaluator.evaluate(
+        report=result["final_report"],
+        brief=result["research_brief"]
+    )
+
+    # Assert quality thresholds
+    assert evaluation.overall_score >= 7.0, f"Quality too low: {evaluation.overall_score}"
+    assert evaluation.factual_accuracy >= 7, "Factual accuracy below threshold"
+    assert evaluation.source_quality >= 6, "Source quality below threshold"
+    assert len(evaluation.factual_errors) <= 2, f"Too many factual errors: {evaluation.factual_errors}"
+```
+
+### Benchmarking Against Standards
+
+{/* IMAGE_PLACEHOLDER: A comparison matrix showing different agent benchmarks (SWE-bench, WebArena, τ-Bench, AgentBench) with columns for: What it tests, Sample tasks, Relevance score (1-10) for research agents, and Key metrics. Use a heatmap color scheme to show relevance levels. Style: Professional comparison matrix with color-coded cells. */}
+
+For more rigorous evaluation, consider these agent benchmarks:
+
+| Benchmark      | What It Tests                             | Relevance to Research Agents     |
+| :------------- | :---------------------------------------- | :------------------------------- |
+| **SWE-bench**  | Code generation from issues               | Tests multi-step reasoning       |
+| **WebArena**   | Web navigation and information extraction | Tests search and synthesis       |
+| **τ-Bench**    | Real-world task completion                | Tests end-to-end reliability     |
+| **AgentBench** | Multi-agent coordination                  | Tests parallel research patterns |
+
+<Callout type="info">
+  **The "AI Agents That Matter" Insight:** A 2024 paper from Princeton found
+  that many agent benchmarks don't correlate with real-world performance. Focus
+  on evaluations that match your actual use case: Can the agent produce reports
+  that humans find useful? That's the metric that matters.
+</Callout>
+
+---
+
+## 8.12 Testing Your Implementation
+
+### Unit Tests for Individual Agents
+
+```python
+# tests/test_agents.py
+import pytest
+from agents.scoping import ScopingAgent
+from agents.research import ResearcherAgent
+from agents.writing import WriterAgent, CriticAgent
+
+def test_scoping_agent_clarity_check():
+    """Test that clear topics pass, vague topics need clarification."""
+    agent = ScopingAgent()
+
+    # Clear topic should be ready
+    is_ready, _ = agent.check_clarity(
+        "The impact of transformer architecture on NLP since 2017"
+    )
+    assert is_ready, "Specific topic should be ready for research"
+
+    # Vague topic should need clarification
+    is_ready, response = agent.check_clarity("AI")
+    assert not is_ready, "Vague topic should need clarification"
+    assert "?" in response, "Should ask clarifying questions"
+
+def test_brief_generation():
+    """Test that briefs have required structure."""
+    agent = ScopingAgent()
+
+    brief = agent.generate_brief(
+        "How LangGraph enables multi-agent orchestration"
+    )
+
+    assert len(brief.sub_topics) >= 3, "Should have at least 3 sub-topics"
+    assert len(brief.sub_topics) <= 7, "Should have at most 7 sub-topics"
+    assert brief.objective, "Should have an objective"
+    assert brief.success_criteria, "Should have success criteria"
+
+@pytest.mark.slow
+def test_researcher_produces_findings():
+    """Test that researcher returns structured findings."""
+    agent = ResearcherAgent()
+
+    findings = agent.research(
+        sub_topic="LangGraph state management",
+        questions=["How does LangGraph handle state?"]
+    )
+
+    assert findings.sub_topic == "LangGraph state management"
+    assert len(findings.key_findings) > 0
+    assert len(findings.sources) > 0
+    assert findings.confidence in ["high", "medium", "low"]
+
+def test_critic_scoring():
+    """Test that critic provides valid scores."""
+    agent = CriticAgent()
+
+    # Minimal report should score low
+    result = agent.critique(
+        brief='{"objective": "Comprehensive AI analysis"}',
+        report="AI is interesting. The end."
+    )
+
+    assert 1 <= result.score <= 10
+    assert not result.approved, "Minimal report should not be approved"
+    assert len(result.issues) > 0, "Should identify issues"
+
+def test_cost_tracker():
+    """Test cost tracking accuracy."""
+    from utils.cost_tracker import CostTracker
+
+    tracker = CostTracker()
+    tracker.budget_limit = 1.00
+
+    # Add some usage
+    tracker.add_usage("gpt-4o-mini", input_tokens=100000, output_tokens=50000)
+
+    cost = tracker.estimate_cost()
+    # 100k input @ $0.15/1M = $0.015
+    # 50k output @ $0.60/1M = $0.03
+    # Total = $0.045
+    assert 0.04 < cost < 0.05, f"Cost calculation incorrect: {cost}"
+
+    within_budget, remaining = tracker.check_budget()
+    assert within_budget, "Should be within budget"
+    assert remaining > 0.9, "Should have most budget remaining"
+```
+
+### Integration Test
+
+```python
+# tests/test_integration.py
+import pytest
+from main import build_research_graph, run_research
+
+def test_graph_compiles():
+    """Verify the graph compiles without errors."""
+    graph = build_research_graph(use_memory=False)
+    assert graph is not None
+
+@pytest.mark.slow
+def test_end_to_end_short_topic():
+    """Test complete workflow with a focused topic."""
+    result = run_research(
+        topic="What is LangGraph and how does it differ from LangChain?",
+        thread_id="test-001"
+    )
+
+    assert result["status"] == "complete"
+    assert len(result["final_report"].split()) > 500
+    assert len(result["sources"]) > 0
+    assert result["revision_count"] <= 3
+
+@pytest.mark.slow
+def test_parallel_research_execution():
+    """Verify that research happens in parallel."""
+    import time
+
+    start = time.time()
+    result = run_research(
+        topic="Compare Python, JavaScript, and Rust for systems programming",
+        thread_id="test-parallel"
+    )
+    elapsed = time.time() - start
+
+    # With 3 sub-topics researched in parallel, should be faster than sequential
+    # Sequential would be ~30s per topic = 90s
+    # Parallel should be ~30-40s total
+    assert elapsed < 90, f"Research took {elapsed}s, expected parallel execution"
+
+@pytest.mark.slow
+def test_quality_threshold():
+    """Test that output meets quality standards."""
+    from utils.evaluation import ResearchEvaluator
+
+    result = run_research(
+        topic="Best practices for AI agent observability in 2025",
+        thread_id="test-quality"
+    )
+
+    evaluator = ResearchEvaluator()
+    evaluation = evaluator.evaluate(
+        report=result["final_report"],
+        brief=result["research_brief"]
+    )
+
+    assert evaluation.overall_score >= 6.5, f"Quality score too low: {evaluation.overall_score}"
+    assert evaluation.factual_accuracy >= 6, "Factual accuracy below threshold"
+```
+
+---
+
+<Exercise
+  title="Production Deep Research Lab"
+  difficulty="intermediate"
+  objectives={[
+    "Run the complete three-phase research pipeline",
+    "Observe parallel execution in the console output",
+    "Implement cost tracking and set budget limits",
+    "Add observability with Langfuse or LangSmith",
+    "Evaluate output quality with the evaluation framework"
+  ]}
+  hints={[
+    "Start with a focused topic to reduce API costs during testing",
+    "Use the CostTracker to monitor spending",
+    "The interrupt pattern requires checkpointing to be enabled",
+    "Set up Langfuse with their free tier for observability"
+  ]}
+>
+
+**Part 1: Basic Execution**
+
+1. Set up the project structure and install dependencies
+2. Run the agent with topic: "How LangGraph enables multi-agent orchestration"
+3. Observe the three phases in the console output
+4. Review the generated report in the `output/` directory
+
+**Part 2: Cost Optimization**
+
+1. Implement the `CostTracker` class
+2. Add token tracking to each agent
+3. Set a budget limit of $1.00 and implement early termination if exceeded
+4. Compare costs between gpt-4o and gpt-4o-mini for the research phase
+5. Implement prompt caching and measure the cost reduction
+
+**Part 3: Observability**
+
+1. Sign up for Langfuse (free tier) or use LangSmith
+2. Add tracing to all graph nodes
+3. Run several research queries and analyze the traces
+4. Identify bottlenecks and optimization opportunities
+
+**Part 4: Human-in-the-Loop**
+
+1. Modify `brief_generation_node` to use the interrupt pattern
+2. Run the agent and observe the pause at brief approval
+3. Resume with modifications to the sub-topics
+4. Verify the modified topics are used in research
+
+**Part 5: Quality Evaluation**
+
+1. Implement the `ResearchEvaluator` class
+2. Run the agent on 3 different topics
+3. Evaluate each output and compare scores
+4. Identify patterns in what makes high-quality vs. low-quality outputs
+
+**Bonus Challenge:**
+Add a "fact-checker" node after the writer that verifies claims against the original sources. If a claim can't be verified, flag it for removal or revision.
+
+</Exercise>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Passing full state to parallel researchers",
+      why: "Causes context pollution and token bloat—each researcher sees irrelevant findings from others",
+      correct:
+        "Use Send() with isolated context containing only the sub-topic and relevant questions",
+    },
+    {
+      mistake: "Writing sections in parallel",
+      why: "Produces disjointed reports with inconsistent tone and redundant content",
+      correct:
+        "Parallelize research, serialize writing. One writer with all context produces coherent output",
+    },
+    {
+      mistake: "No iteration limit on the critique loop",
+      why: "Can create infinite revision cycles if the critic is too strict",
+      correct:
+        "Set max_revisions (typically 2-3) and accept the best draft after limit",
+    },
+    {
+      mistake: "Skipping the scoping phase",
+      why: "Vague topics lead to unfocused research and wasted API calls",
+      correct:
+        "Always clarify scope before research. A 30-second clarification saves 10 minutes of misdirected work",
+    },
+    {
+      mistake: "Not tracking costs",
+      why: "Research agents can easily spend $5-10 per run without monitoring",
+      correct:
+        "Implement cost tracking and set budget limits, especially during development",
+    },
+    {
+      mistake: "Ignoring prompt caching opportunities",
+      why: "Repeated system prompts cost full price on every call",
+      correct:
+        "Structure prompts with static content first to enable automatic caching (50-90% savings)",
+    },
+    {
+      mistake: "No observability in production",
+      why: "Can't debug failures or optimize performance without visibility",
+      correct:
+        "Add tracing from day one. Use Langfuse, LangSmith, or similar for production monitoring",
+    },
+  ]}
+/>
+
+---
+
+<ProgressCheckpoint
+  title="Production Deep Research Check"
+  questions={[
+    {
+      question:
+        "Why do we use operator.ior for research_findings in the state?",
+      answer:
+        "operator.ior merges dictionaries from parallel researchers. When Researcher A returns {'topic_a': findings} and Researcher B returns {'topic_b': findings}, the reducer combines them into {'topic_a': ..., 'topic_b': ...}. Without this, the last researcher would overwrite all previous findings.",
+    },
+    {
+      question:
+        "What is context isolation and why is it important for multi-agent research?",
+      answer:
+        "Context isolation means giving each sub-agent only the minimum context needed for its task. In research, each researcher receives only their sub-topic and questions—not other researchers' findings or full conversation history. This prevents context pollution (irrelevant information affecting output), reduces token usage by ~60%, and allows true parallel execution.",
+    },
+    {
+      question:
+        "Why does LangChain recommend parallelizing research but serializing writing?",
+      answer:
+        "Research sub-topics are independent—findings about 'Topic A' don't depend on 'Topic B'. But report sections must flow coherently, reference each other, and maintain consistent tone. Parallel section writing produces disjointed reports. A single writer with all research context produces better coherence.",
+    },
+    {
+      question:
+        "How does prompt caching reduce costs, and what's the key implementation detail?",
+      answer:
+        "Prompt caching allows LLM providers to reuse processed prompt prefixes across calls, reducing costs by 50-90%. The key implementation detail is structuring prompts with STATIC content (system prompts, instructions) FIRST and DYNAMIC content (user input, search results) LAST. This maximizes the cacheable prefix.",
+    },
+    {
+      question:
+        "What are the key metrics to monitor for a production research agent?",
+      answer:
+        "Key metrics include: (1) Latency - total duration, phase durations, LLM/search latency; (2) Quality - critique scores, revision count, source count; (3) Cost - tokens per report, cost per report, cache hit rate; (4) Errors - search failures, LLM errors, parsing errors, budget exceeded events.",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Production deep research uses three phases: Scope → Research → Write",
+    "The scoping phase prevents wasted computation by clarifying intent upfront",
+    "Context isolation gives each researcher only their sub-topic, preventing pollution",
+    "LangGraph's Send API enables parallel fan-out to multiple researchers",
+    "The operator.ior reducer merges findings from parallel workers",
+    "Quality loops with structured critique ensure output meets standards",
+    "Human-in-the-loop gates provide oversight at critical decision points",
+    "Prompt caching can reduce costs by 50-90% with proper prompt structure",
+    "Model selection by task optimizes the cost/quality tradeoff",
+    "Observability with tracing is essential for debugging and optimization",
+    "Multi-dimensional evaluation captures research quality beyond simple accuracy",
+  ]}
+/>
+
+---
+
+## Deployment Checklist
+
+{/* IMAGE_PLACEHOLDER: A deployment pipeline visualization showing stages: Pre-Deployment (environment setup, dependencies) → Smoke Tests (4 test scenarios with pass/fail indicators) → Production Deployment → Post-Deployment Monitoring (metrics dashboard) → Rollback Plan (emergency procedures). Use a horizontal pipeline with checkpoints and status indicators. Style: DevOps pipeline diagram with green/red status lights. */}
+
+Before deploying your research agent to production:
+
+### Pre-Deployment
+
+- [ ] Environment variables configured:
+  - [ ] `OPENAI_API_KEY` - Valid OpenAI API key with GPT-4 access
+  - [ ] `TAVILY_API_KEY` - Valid Tavily API key
+  - [ ] `MAX_RESEARCH_COST_USD` - Budget limit (default: 2.00)
+  - [ ] `MAX_REVISIONS` - Critique loop limit (default: 3)
+  - [ ] `LANGFUSE_*` - Observability credentials (optional but recommended)
+- [ ] Dependencies installed: `langgraph`, `langchain`, `langchain-openai`, `tavily-python`, `pydantic`, `langfuse`
+- [ ] Output directory exists and is writable: `./output/`
+- [ ] Cache directory exists: `./.cache/`
+
+### Smoke Tests
+
+- [ ] **Test 1: Clear Topic** - Submit "Impact of transformer architecture on NLP" → Report generated in < 5 min
+- [ ] **Test 2: Vague Topic** - Submit "AI" → Clarifying questions returned
+- [ ] **Test 3: Cost Limit** - Set limit to $0.10, submit complex topic → Budget exceeded notification
+- [ ] **Test 4: Resume** - Start research, kill process, restart → Research resumes from checkpoint
+
+### Post-Deployment Verification
+
+- [ ] Monitor first 10 production runs for:
+  - [ ] Completion rate > 95%
+  - [ ] Average cost within budget
+  - [ ] No API errors in logs
+- [ ] Verify traces are being recorded in observability platform
+- [ ] Confirm cache is reducing redundant API calls
+
+### Rollback Plan
+
+1. Revert to previous container image
+2. Clear any corrupted checkpoint data: `rm -rf ./.checkpoints/*`
+3. Notify users of temporary unavailability
+4. Investigate logs and traces for root cause
+
+---
+
+## Further Reading
+
+- [LangChain Open Deep Research](https://blog.langchain.com/open-deep-research/) - Production architecture insights
+- [OpenAI Deep Research API Cookbook](https://cookbook.openai.com/examples/deep_research_api/introduction_to_deep_research_api_agents) - Official patterns
+- [LangGraph Map-Reduce Tutorial](https://langchain-ai.github.io/langgraph/how-tos/map-reduce/) - Parallel execution patterns
+- [Anthropic's Building Effective Agents](https://www.anthropic.com/research/building-effective-agents) - Multi-agent best practices
+- [Prompt Caching with Claude](https://www.anthropic.com/news/prompt-caching) - Cost optimization techniques
+- [Langfuse Documentation](https://langfuse.com/docs) - Open-source observability
+- [AI Agents That Matter (arXiv)](https://arxiv.org/abs/2407.01502) - Agent evaluation insights
+- [Tavily API Documentation](https://docs.tavily.com/) - Search tool reference
+- [Perplexity Deep Research](https://www.perplexity.ai/hub/blog/introducing-perplexity-deep-research) - Commercial implementation insights
+
+---
+
+**Tomorrow**: Day 09—LangGraph Deep Dive, where we explore advanced state machines, checkpointing strategies, and durable execution patterns for long-running agent workflows.

@@ -1,0 +1,1367 @@
+---
+title: "Day 31: Multi-Agent Orchestration with LangGraph"
+description: "Building production-grade agent workflows with state machines, checkpointing, and the new Functional API."
+week: 5
+day: 31
+---
+
+{/* IMAGE_PLACEHOLDER: Hero illustration showing a state machine diagram with nodes and edges, representing the transition from linear chains to graph-based orchestration. Should include visual elements like: interconnected nodes with arrows, a control flow diagram, and icons representing different agent tasks (research, analysis, writing). Place at the top of the module after the frontmatter. Style: Modern, technical, with a color scheme matching the course theme (blues and purples). */}
+
+<ReadingTime minutes={55} />
+
+<SkillLevel level="intermediate" description="Core framework concepts" />
+
+<Prerequisites
+  items={[
+    "Completed Day 03 (LangGraph basics)",
+    "Understanding of Python TypedDict and type hints",
+    "Familiarity with state machine concepts",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Understand LangGraph's state machine architecture and the new Functional API",
+    "Implement persistent checkpointing with PostgreSQL and Redis for production",
+    "Build human-in-the-loop approval patterns using the Command primitive",
+    "Use the Send API for parallel execution and fan-out patterns",
+    "Compose complex workflows with subgraphs and state management",
+    "Implement error handling with retry policies and fallbacks",
+    "Stream real-time updates to users with multiple streaming modes",
+    "Compare LangGraph with CrewAI, AutoGen, and Swarm frameworks",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "State Machine",
+      definition:
+        "A computational model where the system can be in one of a finite number of states, with transitions triggered by events",
+    },
+    {
+      term: "Checkpointer",
+      definition:
+        "A persistence layer that saves graph state at each step, enabling resume, replay, and time-travel debugging",
+    },
+    {
+      term: "Interrupt",
+      definition:
+        "A pause point in the workflow where execution stops until external input (like human approval) is received",
+    },
+    {
+      term: "Command Primitive",
+      definition:
+        "LangGraph's mechanism for resuming interrupted workflows with user input, enabling sophisticated human-in-the-loop patterns",
+    },
+    {
+      term: "Send API",
+      definition:
+        "LangGraph's mechanism for fan-out parallel execution, dispatching work to multiple nodes simultaneously",
+    },
+    {
+      term: "Functional API",
+      definition:
+        "A decorator-based approach (@entrypoint, @task) for building LangGraph workflows using traditional programming patterns",
+    },
+  ]}
+/>
+
+---
+
+## From Loops to Graphs
+
+Our hand-built agent loops work, but they lack the robustness needed for production: no state persistence, no human-in-the-loop, no parallel execution. **LangGraph** solves all of this.
+
+<Callout type="info" title="LangGraph in 2025">
+  LangGraph has evolved significantly since its initial release. Version 0.3+
+  introduced the **Functional API** for simpler workflows, the **Command
+  primitive** for advanced human-in-the-loop patterns, and **LangGraph
+  Platform** (now LangSmith Deployment) for production deployments. This module
+  covers both the classic Graph API and these new capabilities. As we enter
+  Month 2 of our 90-day journey, we're shifting from foundational concepts to
+  production-grade multi-agent systems.
+</Callout>
+
+{/* IMAGE_PLACEHOLDER: Comparison infographic showing "Traditional Linear Chain" vs "LangGraph State Machine". Left side: simple linear flow A→B→C→D. Right side: complex graph with conditional branches, loops, and parallel execution paths. Include annotations highlighting key differences: "No cycles" vs "Native loops", "In-memory state" vs "Persistent checkpoints", "Manual HITL" vs "Built-in interrupts". Place immediately after the callout. Style: Side-by-side comparison with clear visual distinction. */}
+
+---
+
+## 31.1 Why LangGraph?
+
+LangGraph treats agent workflows as **state machines**, not linear chains:
+
+![Agentic Architecture Abstract](/images/agentic_architecture.png)
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph Traditional Chain
+        A1[Step 1] --> A2[Step 2] --> A3[Step 3] --> A4[Done]
+    end
+    
+    subgraph LangGraph State Machine
+        B1[Node A] --> B2{Conditional}
+        B2 -->|Path 1| B3[Node B]
+        B2 -->|Path 2| B4[Node C]
+        B3 --> B5[Node D]
+        B4 --> B5
+        B5 -->|Loop| B1
+        B5 -->|Done| B6[END]
+    end
+    
+    style B2 fill:#f9f,stroke:#333
+    style B5 fill:#bbf,stroke:#333
+`}
+/>
+
+### Key Advantages
+
+| Feature                | Traditional           | LangGraph               |
+| :--------------------- | :-------------------- | :---------------------- |
+| **Cycles**             | Manual implementation | Native support          |
+| **State**              | In-memory only        | Persistent checkpoints  |
+| **Human-in-the-Loop**  | Custom code           | Built-in interrupts     |
+| **Parallel Execution** | Complex threading     | Native `Send` API       |
+| **Debugging**          | Print statements      | LangSmith + Studio      |
+| **Streaming**          | Manual implementation | Multiple stream modes   |
+| **Error Handling**     | Try/catch everywhere  | Built-in retry policies |
+
+### Framework Comparison: LangGraph vs Alternatives
+
+Choosing the right orchestration framework is critical for production systems. Here's how LangGraph compares to other popular options:
+
+{/* IMAGE_PLACEHOLDER: Framework comparison matrix visualization showing LangGraph, CrewAI, AutoGen, and OpenAI Swarm. Use a radar chart or comparison grid showing dimensions like: Control Granularity, Persistence, HITL Support, Learning Curve, Production Readiness, and Ecosystem Integration. Each framework should have a distinct color. Place above the comparison table. Style: Clean, data-driven visualization with clear legends. */}
+
+| Framework        | Architecture                                 | Best For                                                            | Trade-offs                                                            |
+| :--------------- | :------------------------------------------- | :------------------------------------------------------------------ | :-------------------------------------------------------------------- |
+| **LangGraph**    | Stateful graphs with explicit state machines | Complex workflows requiring fine-grained control, persistence, HITL | Steeper learning curve, explicit path definition                      |
+| **CrewAI**       | Role-based agent teams with backstories      | Multi-agent collaboration, content creation pipelines               | Less control over execution flow, agent routing can be unpredictable  |
+| **AutoGen**      | Conversational multi-agent patterns          | Research applications, Microsoft ecosystem integration              | Now in maintenance mode (consolidated into Microsoft Agent Framework) |
+| **OpenAI Swarm** | Lightweight, stateless handoffs              | Simple agent routing, quick prototypes                              | No built-in persistence, limited production features                  |
+
+<Callout type="tip" title="When to Choose LangGraph">
+  Choose LangGraph when you need: (1) **Durable execution** with checkpointing,
+  (2) **Human-in-the-loop** approval workflows, (3) **Fine-grained control**
+  over agent behavior, or (4) **Production observability** with LangSmith
+  integration. For simpler multi-agent scenarios, CrewAI or Swarm may be faster
+  to prototype.
+</Callout>
+
+### Architecture Comparison: Patterns of Coordination
+
+Beyond frameworks, you must choose the right _coordination architecture_ for your multi-agent system. Here is how four common patterns compare:
+
+| Pattern               | Distributed Dev | Parallelization | Multihop Conversational | Direct User Interaction | Connects Best With...    |
+| :-------------------- | :-------------- | :-------------- | :---------------------- | :---------------------- | :----------------------- |
+| **Supervisor**        | ⭐⭐⭐⭐⭐      | ⭐⭐⭐⭐        | ⭐⭐⭐⭐⭐              | ⭐                      | Tool-based Specialists   |
+| **Handoffs**          | ⭐⭐            | ⭐              | ⭐⭐⭐⭐⭐              | ⭐⭐⭐⭐⭐              | Customer Support Flows   |
+| **Skills (Standard)** | ⭐⭐⭐⭐⭐      | ⭐⭐⭐          | ⭐⭐⭐⭐⭐              | ⭐⭐⭐⭐⭐              | Enterprise/Generic Tools |
+| **Router**            | ⭐⭐⭐          | ⭐⭐⭐⭐⭐      | ❌ (0/5)                | ⭐⭐⭐                  | RAG/Q&A Systems          |
+
+<Callout type="insight" title="Trade-offs Explained">
+  **Supervisor** excels when you have many specialized tools but want a single
+  control point. **Handoffs** are best for "call center" style flows where
+  different specialists talk to the user. **Skills** offer the best balance of
+  distributed development and user interaction. **Router** is fast and parallel
+  but lacks stateful conversation flow.
+</Callout>
+
+---
+
+## 31.2 Two APIs: Graph and Functional
+
+LangGraph now offers two complementary approaches to building workflows:
+
+{/* IMAGE_PLACEHOLDER: Split-screen code comparison showing the same workflow implemented in both Graph API and Functional API. Left side: Graph API with StateGraph, add_node, add_edge calls. Right side: Functional API with @entrypoint and @task decorators. Use syntax highlighting and arrows to show equivalent concepts. Place immediately after the section heading. Style: Code-focused, with clear visual separation and annotations. */}
+
+### The Graph API (Classic)
+
+The original approach using `StateGraph`, explicit nodes, and edges:
+
+```python
+from langgraph.graph import StateGraph, START, END
+
+workflow = StateGraph(AgentState)
+workflow.add_node("research", researcher_node)
+workflow.add_node("write", writer_node)
+workflow.add_edge(START, "research")
+workflow.add_edge("research", "write")
+workflow.add_edge("write", END)
+
+app = workflow.compile()
+```
+
+### The Functional API (New in 0.3+)
+
+A decorator-based approach using `@entrypoint` and `@task`:
+
+```python
+from langgraph.func import entrypoint, task
+from langgraph.checkpoint.memory import InMemorySaver
+
+@task
+def research(topic: str) -> str:
+    """Research the given topic."""
+    return f"Research findings for: {topic}"
+
+@task
+def write(findings: str) -> str:
+    """Write based on research findings."""
+    return f"Article based on: {findings}"
+
+@entrypoint(checkpointer=InMemorySaver())
+def workflow(topic: str) -> str:
+    """Main workflow combining research and writing."""
+    findings = research(topic).result()
+    article = write(findings).result()
+    return article
+```
+
+### When to Use Each API
+
+| Use Case                              | Recommended API  |
+| :------------------------------------ | :--------------- |
+| Complex branching with multiple paths | Graph API        |
+| Simple linear workflows               | Functional API   |
+| Existing codebase integration         | Functional API   |
+| Visual debugging in LangGraph Studio  | Graph API        |
+| Parallel fan-out patterns             | Graph API (Send) |
+| Quick prototyping                     | Functional API   |
+
+<Callout type="info" title="Same Runtime, Different Syntax">
+  Both APIs share the same underlying Pregel runtime. You can even mix them—use
+  a compiled StateGraph as a node within a Functional API workflow, or call
+  `@task` functions from Graph API nodes.
+</Callout>
+
+---
+
+## 31.3 Core Concepts
+
+{/* IMAGE_PLACEHOLDER: Interactive diagram showing the three core concepts of LangGraph: State (represented as a flowing data structure), Nodes (as processing units with function icons), and Edges (as directional arrows with conditional/unconditional variants). Use animation indicators to show data flow through the system. Place at the section start. Style: Educational, with clear labels and color-coding for each concept. */}
+
+### State
+
+State is a TypedDict that flows through the graph:
+
+```python
+from typing import TypedDict, Annotated, List
+import operator
+
+class AgentState(TypedDict):
+    # Messages accumulate (using operator.add)
+    messages: Annotated[List[dict], operator.add]
+
+    # Current step in the workflow
+    current_step: str
+
+    # Results from tools
+    tool_results: Annotated[dict, operator.ior]  # Merge dicts
+
+    # Final output
+    final_answer: str
+```
+
+### Nodes
+
+Nodes are functions that transform state:
+
+```python
+def researcher_node(state: AgentState) -> dict:
+    """Research node - searches for information."""
+    query = state["messages"][-1]["content"]
+
+    # Do research...
+    results = search_web(query)
+
+    # Return state updates (partial)
+    return {
+        "tool_results": {"research": results},
+        "current_step": "analyze"
+    }
+```
+
+### Edges
+
+Edges define control flow:
+
+```python
+from langgraph.graph import StateGraph, END
+
+workflow = StateGraph(AgentState)
+
+# Add nodes
+workflow.add_node("research", researcher_node)
+workflow.add_node("analyze", analyzer_node)
+workflow.add_node("write", writer_node)
+
+# Add edges
+workflow.add_edge("research", "analyze")  # Always go research -> analyze
+
+# Conditional edge
+def should_continue(state: AgentState) -> str:
+    if state.get("needs_more_research"):
+        return "research"  # Loop back
+    return "write"  # Move forward
+
+workflow.add_conditional_edges(
+    "analyze",
+    should_continue,
+    {
+        "research": "research",
+        "write": "write"
+    }
+)
+
+workflow.add_edge("write", END)
+```
+
+---
+
+## 31.4 Building a Complete Agent
+
+Let's build a research agent with LangGraph:
+
+```python
+from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, AIMessage
+from typing import TypedDict, Annotated, List
+import operator
+
+# 1. Define State
+class ResearchState(TypedDict):
+    messages: Annotated[List, operator.add]
+    research_results: str
+    draft: str
+    feedback: str
+    iteration: int
+
+# 2. Define Nodes
+def planner_node(state: ResearchState) -> dict:
+    """Plan the research approach."""
+    llm = ChatOpenAI(model="gpt-4o-mini")
+
+    response = llm.invoke([
+        {"role": "system", "content": "You are a research planner. Create a research plan."},
+        {"role": "user", "content": state["messages"][-1].content}
+    ])
+
+    return {
+        "messages": [AIMessage(content=f"Plan: {response.content}")],
+        "iteration": 0
+    }
+
+def researcher_node(state: ResearchState) -> dict:
+    """Execute research based on the plan."""
+    # Simulate research (in production, use Tavily/SerpAPI)
+    topic = state["messages"][0].content
+
+    results = f"Research findings for '{topic}':\n"
+    results += "- Finding 1: Important fact\n"
+    results += "- Finding 2: Key statistic\n"
+    results += "- Finding 3: Expert opinion\n"
+
+    return {
+        "research_results": results,
+        "messages": [AIMessage(content=f"Research complete: {results[:100]}...")]
+    }
+
+def writer_node(state: ResearchState) -> dict:
+    """Write a draft based on research."""
+    llm = ChatOpenAI(model="gpt-4o-mini")
+
+    response = llm.invoke([
+        {"role": "system", "content": "Write a concise summary based on the research."},
+        {"role": "user", "content": state["research_results"]}
+    ])
+
+    return {
+        "draft": response.content,
+        "messages": [AIMessage(content="Draft written.")]
+    }
+
+def reviewer_node(state: ResearchState) -> dict:
+    """Review the draft and provide feedback."""
+    llm = ChatOpenAI(model="gpt-4o-mini")
+
+    response = llm.invoke([
+        {"role": "system", "content": "Review this draft. If it's good, say 'APPROVED'. Otherwise, provide specific feedback."},
+        {"role": "user", "content": state["draft"]}
+    ])
+
+    return {
+        "feedback": response.content,
+        "iteration": state["iteration"] + 1,
+        "messages": [AIMessage(content=f"Review: {response.content[:50]}...")]
+    }
+
+# 3. Define Routing Logic
+def should_revise(state: ResearchState) -> str:
+    """Decide whether to revise or finish."""
+    if "APPROVED" in state["feedback"]:
+        return "end"
+    if state["iteration"] >= 3:
+        return "end"  # Max iterations
+    return "revise"
+
+# 4. Build the Graph
+workflow = StateGraph(ResearchState)
+
+workflow.add_node("planner", planner_node)
+workflow.add_node("researcher", researcher_node)
+workflow.add_node("writer", writer_node)
+workflow.add_node("reviewer", reviewer_node)
+
+workflow.add_edge(START, "planner")
+workflow.add_edge("planner", "researcher")
+workflow.add_edge("researcher", "writer")
+workflow.add_edge("writer", "reviewer")
+
+workflow.add_conditional_edges(
+    "reviewer",
+    should_revise,
+    {
+        "revise": "writer",  # Loop back to writer
+        "end": END
+    }
+)
+
+# 5. Compile
+app = workflow.compile()
+
+# 6. Run
+result = app.invoke({
+    "messages": [HumanMessage(content="Research the impact of AI on software engineering")]
+})
+
+print(result["draft"])
+```
+
+---
+
+## 31.5 Production Checkpointing
+
+For production, you need robust state persistence. LangGraph supports multiple checkpointer backends:
+
+### Development: In-Memory and SQLite
+
+```python
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+# In-memory (development only - state lost on restart)
+checkpointer = InMemorySaver()
+
+# SQLite (local development with persistence)
+checkpointer = SqliteSaver.from_conn_string("checkpoints.db")
+
+app = workflow.compile(checkpointer=checkpointer)
+```
+
+### Production: PostgreSQL
+
+PostgreSQL is the recommended choice for production deployments:
+
+{/* IMAGE_PLACEHOLDER: Architecture diagram showing PostgreSQL checkpointing flow. Illustrate: (1) Agent execution with state changes, (2) Checkpoint writes to PostgreSQL with ACID guarantees, (3) State recovery on restart, (4) Time-travel debugging accessing historical checkpoints. Include database icon, transaction logs, and recovery arrows. Place above the code block. Style: Technical architecture diagram with clear data flow. */}
+
+```python
+from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg_pool import ConnectionPool
+
+# Create a connection pool for better performance
+pool = ConnectionPool(
+    conninfo="postgresql://user:password@localhost:5432/langgraph",
+    min_size=5,
+    max_size=20
+)
+
+# Use the pool with PostgresSaver
+with PostgresSaver.from_conn_string(
+    "postgresql://user:password@localhost:5432/langgraph"
+) as checkpointer:
+    app = workflow.compile(checkpointer=checkpointer)
+
+    # Run with thread_id for persistence
+    config = {"configurable": {"thread_id": "user-123-session-1"}}
+    result = app.invoke({"messages": [HumanMessage(content="Research AI")]}, config)
+```
+
+### Production: Redis
+
+Redis offers ultra-fast persistence with sub-millisecond latency:
+
+```python
+from langgraph_checkpoint_redis import RedisSaver, AsyncRedisSaver
+
+# Synchronous Redis checkpointer
+checkpointer = RedisSaver.from_conn_string("redis://localhost:6379")
+
+# Async Redis checkpointer (for async workflows)
+async_checkpointer = AsyncRedisSaver.from_conn_string("redis://localhost:6379")
+
+# Shallow saver (stores only latest checkpoint - lower memory)
+from langgraph_checkpoint_redis import ShallowRedisSaver
+shallow_checkpointer = ShallowRedisSaver.from_conn_string("redis://localhost:6379")
+
+app = workflow.compile(checkpointer=checkpointer)
+```
+
+<Callout type="tip" title="Redis for Cross-Thread Memory">
+  Redis also supports `RedisStore` for cross-thread memory—letting agents
+  remember information about users across different conversation threads. This
+  is ideal for building agents that maintain long-term user profiles.
+</Callout>
+
+### Checkpointer Comparison
+
+| Backend           | Latency   | Durability   | Best For                   |
+| :---------------- | :-------- | :----------- | :------------------------- |
+| **InMemorySaver** | ~0ms      | None         | Unit tests, prototyping    |
+| **SqliteSaver**   | ~1-5ms    | Local file   | Local development          |
+| **PostgresSaver** | ~5-20ms   | Full ACID    | Production, compliance     |
+| **RedisSaver**    | under 1ms | Configurable | High-throughput, real-time |
+
+### Time-Travel Debugging
+
+```python
+# Get all states for a thread
+states = list(app.get_state_history(config))
+
+# Inspect a previous state
+for state in states:
+    print(f"Step: {state.metadata.get('step')}")
+    print(f"State: {state.values}")
+
+# Replay from a specific checkpoint
+checkpoint_id = states[2].config["configurable"]["checkpoint_id"]
+replay_config = {
+    "configurable": {
+        "thread_id": "user-123-session-1",
+        "checkpoint_id": checkpoint_id
+    }
+}
+result = app.invoke({"messages": [HumanMessage(content="Try again")]}, replay_config)
+```
+
+---
+
+## 31.6 Human-in-the-Loop with Command Primitive
+
+LangGraph provides sophisticated patterns for human oversight using the `interrupt()` function and `Command` primitive:
+
+{/* IMAGE_PLACEHOLDER: Workflow diagram showing human-in-the-loop pattern. Visualize: (1) Agent proposes action, (2) Execution pauses with interrupt(), (3) Human reviews in UI, (4) Human approves/rejects, (5) Agent resumes with Command(resume=decision), (6) Workflow continues or terminates. Use icons for human, agent, and decision points. Place at section start. Style: Process flow with clear pause/resume indicators. */}
+
+### Basic Approval Pattern
+
+```python
+from langgraph.graph import StateGraph, END
+from langgraph.types import interrupt, Command
+
+def propose_action(state: AgentState) -> dict:
+    """Propose an action and wait for approval."""
+    proposed = analyze_and_propose(state)
+
+    # Pause execution and surface the proposal to the user
+    approval = interrupt({
+        "proposed_action": proposed,
+        "reason": "This action requires human approval",
+        "options": ["approve", "reject", "modify"]
+    })
+
+    return {
+        "approved": approval == "approve",
+        "user_response": approval
+    }
+
+workflow = StateGraph(AgentState)
+workflow.add_node("analyze", analyze_node)
+workflow.add_node("propose", propose_action)
+workflow.add_node("execute", execute_node)
+
+workflow.add_edge("analyze", "propose")
+workflow.add_conditional_edges(
+    "propose",
+    lambda s: "execute" if s["approved"] else END,
+    {"execute": "execute", END: END}
+)
+workflow.add_edge("execute", END)
+
+app = workflow.compile(checkpointer=checkpointer)
+```
+
+### Resuming with Command
+
+```python
+from langgraph.types import Command
+
+# Run until interrupt
+config = {"configurable": {"thread_id": "approval-flow-123"}}
+result = app.invoke({"messages": [HumanMessage(content="Delete old files")]}, config)
+
+# Check for interrupt
+if "__interrupt__" in result:
+    interrupt_info = result["__interrupt__"]
+    print(f"Proposed action: {interrupt_info[0].value['proposed_action']}")
+    print("Waiting for human approval...")
+
+    # Human reviews and decides
+    user_decision = input("Approve? (approve/reject/modify): ")
+
+    # Resume with Command primitive
+    final_result = app.invoke(
+        Command(resume=user_decision),
+        config
+    )
+    print("Workflow completed:", final_result)
+```
+
+### Multiple Interrupts Pattern
+
+For workflows requiring multiple approval points:
+
+```python
+from langgraph.types import interrupt
+
+def multi_step_approval(state: AgentState) -> dict:
+    """Workflow with multiple human checkpoints."""
+
+    # First approval: confirm understanding
+    understanding = interrupt({
+        "step": "confirm_understanding",
+        "summary": state["analysis_summary"],
+        "question": "Is this understanding correct?"
+    })
+
+    if understanding != "yes":
+        return {"status": "cancelled", "reason": "Understanding rejected"}
+
+    # Second approval: confirm action plan
+    plan_approval = interrupt({
+        "step": "confirm_plan",
+        "plan": state["action_plan"],
+        "question": "Proceed with this plan?"
+    })
+
+    if plan_approval != "yes":
+        return {"status": "cancelled", "reason": "Plan rejected"}
+
+    return {"status": "approved", "proceed": True}
+```
+
+### Resuming Multiple Interrupts
+
+```python
+# Resume multiple interrupts at once with a dict
+result = app.invoke(
+    Command(resume={
+        "interrupt_id_1": "yes",
+        "interrupt_id_2": "approved"
+    }),
+    config
+)
+```
+
+<Callout type="warning" title="Interrupt Best Practices">
+  1. Always provide clear context in the interrupt payload 2. Include actionable
+  options for the human reviewer 3. Store enough state to resume meaningfully 4.
+  Consider timeout handling for production systems
+</Callout>
+
+---
+
+## 31.7 Parallel Execution with Send
+
+Execute multiple nodes in parallel using the Send API:
+
+{/* IMAGE_PLACEHOLDER: Fan-out/fan-in pattern visualization. Show: (1) Single input node, (2) Fan-out to multiple parallel researcher nodes (3-5 nodes running simultaneously), (3) Synchronization barrier collecting results, (4) Single synthesizer node combining outputs. Use parallel arrows and a merge point. Include timing indicators showing parallel execution. Place at section start. Style: Clear parallel processing diagram with synchronization emphasis. */}
+
+```python
+from langgraph.constants import Send
+from typing import List
+
+class ParallelState(TypedDict):
+    topics: List[str]
+    research_results: Annotated[dict, operator.ior]
+
+def fan_out(state: ParallelState) -> List[Send]:
+    """Fan out to multiple researcher nodes."""
+    return [
+        Send("researcher", {"topic": topic})
+        for topic in state["topics"]
+    ]
+
+def researcher_node(state: dict) -> dict:
+    """Research a single topic."""
+    topic = state["topic"]
+    result = search_web(topic)
+    return {"research_results": {topic: result}}
+
+def synthesizer_node(state: ParallelState) -> dict:
+    """Combine all research results."""
+    all_results = state["research_results"]
+    summary = "\n".join([f"- {k}: {v[:100]}" for k, v in all_results.items()])
+    return {"summary": summary}
+
+workflow = StateGraph(ParallelState)
+workflow.add_node("researcher", researcher_node)
+workflow.add_node("synthesizer", synthesizer_node)
+
+# Fan-out edge
+workflow.add_conditional_edges(
+    START,
+    fan_out  # Returns list of Send objects
+)
+
+# All researchers converge to synthesizer
+workflow.add_edge("researcher", "synthesizer")
+workflow.add_edge("synthesizer", END)
+
+app = workflow.compile()
+
+# Run with multiple topics - all researched in parallel!
+result = app.invoke({
+    "topics": ["AI agents", "LangGraph", "MCP protocol"]
+})
+```
+
+### Advanced Parallel Patterns
+
+<Mermaid
+  chart={`
+graph TD
+    START --> FanOut{Fan-Out}
+    FanOut -->|Topic 1| R1[Researcher 1]
+    FanOut -->|Topic 2| R2[Researcher 2]
+    FanOut -->|Topic 3| R3[Researcher 3]
+    R1 --> Sync[Synchronization Barrier]
+    R2 --> Sync
+    R3 --> Sync
+    Sync --> Synthesize[Synthesizer]
+    Synthesize --> END
+    
+    style FanOut fill:#f9f,stroke:#333
+    style Sync fill:#bbf,stroke:#333
+`}
+/>
+
+---
+
+## 31.8 Error Handling and Retry Policies
+
+Production agents need robust error handling. LangGraph provides built-in retry policies:
+
+{/* IMAGE_PLACEHOLDER: Retry policy visualization showing exponential backoff. Display: (1) Initial API call fails, (2) Wait 1s → retry, (3) Wait 2s → retry, (4) Wait 4s → retry, (5) Wait 8s → retry, (6) Success or max attempts reached. Use timeline with increasing wait intervals and jitter randomization. Include success/failure indicators. Place at section start. Style: Timeline diagram with clear exponential growth visualization. */}
+
+### Node Retry Policies
+
+```python
+from langgraph.pregel import RetryPolicy
+
+# Default retry policy
+default_policy = RetryPolicy()
+# RetryPolicy(initial_interval=0.5, backoff_factor=2.0,
+#             max_interval=128.0, max_attempts=3, jitter=True)
+
+# Custom retry policy for flaky APIs
+api_retry_policy = RetryPolicy(
+    initial_interval=1.0,      # Start with 1 second delay
+    backoff_factor=2.0,        # Double the delay each retry
+    max_interval=60.0,         # Cap at 60 seconds
+    max_attempts=5,            # Try up to 5 times
+    jitter=True,               # Add randomness to prevent thundering herd
+    retry_on=lambda e: isinstance(e, (TimeoutError, ConnectionError))
+)
+
+# Apply retry policy to specific nodes
+workflow.add_node("api_call", api_node, retry=api_retry_policy)
+workflow.add_node("llm_call", llm_node, retry=RetryPolicy(max_attempts=3))
+```
+
+### Custom Retry Logic
+
+```python
+def retry_on_specific_errors(error: Exception) -> bool:
+    """Determine if an error should trigger a retry."""
+    # Retry on rate limits and transient errors
+    if isinstance(error, RateLimitError):
+        return True
+    if isinstance(error, APIError) and error.status_code >= 500:
+        return True
+    # Don't retry on validation errors
+    if isinstance(error, ValidationError):
+        return False
+    return False
+
+custom_policy = RetryPolicy(
+    max_attempts=5,
+    retry_on=retry_on_specific_errors
+)
+```
+
+### Error Routing Pattern
+
+Route to different nodes based on error type:
+
+```python
+class ErrorState(TypedDict):
+    messages: Annotated[List, operator.add]
+    error: str | None
+    error_count: int
+
+def risky_operation(state: ErrorState) -> dict:
+    """Operation that might fail."""
+    try:
+        result = call_external_api(state)
+        return {"result": result, "error": None}
+    except Exception as e:
+        return {
+            "error": str(e),
+            "error_count": state.get("error_count", 0) + 1
+        }
+
+def route_on_error(state: ErrorState) -> str:
+    """Route based on error state."""
+    if state.get("error") is None:
+        return "success"
+    if state.get("error_count", 0) >= 3:
+        return "fallback"
+    return "retry"
+
+workflow.add_conditional_edges(
+    "risky_operation",
+    route_on_error,
+    {
+        "success": "process_result",
+        "retry": "risky_operation",
+        "fallback": "fallback_handler"
+    }
+)
+```
+
+### Fallback Patterns
+
+```python
+def llm_with_fallback(state: AgentState) -> dict:
+    """LLM call with automatic fallback to cheaper model."""
+    try:
+        # Try primary model
+        llm = ChatOpenAI(model="gpt-4o")
+        response = llm.invoke(state["messages"])
+        return {"response": response, "model_used": "gpt-4o"}
+    except (RateLimitError, APIError):
+        # Fallback to cheaper model
+        llm = ChatOpenAI(model="gpt-4o-mini")
+        response = llm.invoke(state["messages"])
+        return {"response": response, "model_used": "gpt-4o-mini (fallback)"}
+```
+
+---
+
+## 31.9 Streaming for Real-Time Updates
+
+LangGraph supports multiple streaming modes for responsive UIs:
+
+{/* IMAGE_PLACEHOLDER: Streaming modes comparison showing four panels: (1) "values" mode - full state snapshots, (2) "updates" mode - delta changes only, (3) "messages" mode - token-by-token LLM output, (4) "custom" mode - progress bars and status updates. Each panel shows example UI output. Place at section start. Style: Multi-panel comparison with UI mockups. */}
+
+### Stream Modes
+
+| Mode       | Description                  | Use Case                     |
+| :--------- | :--------------------------- | :--------------------------- |
+| `values`   | Full state after each step   | Debugging, state inspection  |
+| `updates`  | State deltas after each step | Efficient UI updates         |
+| `messages` | LLM tokens + metadata        | Chatbots, real-time typing   |
+| `custom`   | User-defined data            | Progress indicators          |
+| `debug`    | Detailed execution traces    | Development, troubleshooting |
+
+### Basic Streaming
+
+```python
+# Stream state updates
+for chunk in app.stream(
+    {"messages": [HumanMessage(content="Research AI agents")]},
+    config,
+    stream_mode="updates"
+):
+    print(f"Node: {list(chunk.keys())[0]}")
+    print(f"Update: {chunk}")
+```
+
+### Streaming LLM Tokens
+
+```python
+# Stream individual tokens from LLM calls
+for chunk in app.stream(
+    {"messages": [HumanMessage(content="Write an essay")]},
+    config,
+    stream_mode="messages"
+):
+    message_chunk, metadata = chunk
+    print(message_chunk.content, end="", flush=True)
+```
+
+### Multiple Stream Modes
+
+```python
+# Stream multiple modes simultaneously
+for mode, chunk in app.stream(
+    {"messages": [HumanMessage(content="Analyze this")]},
+    config,
+    stream_mode=["updates", "messages"]
+):
+    if mode == "updates":
+        print(f"State update: {chunk}")
+    elif mode == "messages":
+        msg, meta = chunk
+        print(f"Token: {msg.content}", end="")
+```
+
+### Streaming from Subgraphs
+
+```python
+# Include subgraph outputs in stream
+for namespace, chunk in app.stream(
+    {"messages": [HumanMessage(content="Complex task")]},
+    config,
+    stream_mode="updates",
+    subgraphs=True  # Include subgraph outputs
+):
+    if namespace:
+        print(f"Subgraph {namespace}: {chunk}")
+    else:
+        print(f"Main graph: {chunk}")
+```
+
+### Custom Streaming for Progress Updates
+
+```python
+from langgraph.types import StreamWriter
+
+def long_running_node(state: AgentState, writer: StreamWriter) -> dict:
+    """Node that streams progress updates."""
+    writer({"progress": 0, "status": "Starting..."})
+
+    for i, item in enumerate(state["items"]):
+        process_item(item)
+        writer({
+            "progress": (i + 1) / len(state["items"]) * 100,
+            "status": f"Processed {i + 1}/{len(state['items'])}"
+        })
+
+    writer({"progress": 100, "status": "Complete!"})
+    return {"processed": True}
+
+# Consume custom stream
+for chunk in app.stream(input_data, config, stream_mode="custom"):
+    print(f"Progress: {chunk.get('progress', 0)}% - {chunk.get('status', '')}")
+```
+
+---
+
+## 31.10 Subgraphs for Modularity
+
+Compose complex workflows from reusable subgraphs:
+
+{/* IMAGE_PLACEHOLDER: Nested graph architecture showing main workflow containing multiple subgraphs. Visualize: (1) Main graph with high-level nodes, (2) One node expanded to show internal subgraph structure, (3) State transformation at boundaries, (4) Isolated state management within subgraph. Use nested boxes and clear boundary indicators. Place at section start. Style: Hierarchical architecture diagram with encapsulation emphasis. */}
+
+### Creating Reusable Subgraphs
+
+```python
+from langgraph.graph import StateGraph, START, END
+
+# Define a reusable research subgraph
+class ResearchSubgraphState(TypedDict):
+    query: str
+    sources: List[str]
+    findings: str
+
+def create_research_subgraph():
+    """Create a reusable research workflow."""
+    subgraph = StateGraph(ResearchSubgraphState)
+
+    subgraph.add_node("search", search_node)
+    subgraph.add_node("extract", extract_node)
+    subgraph.add_node("summarize", summarize_node)
+
+    subgraph.add_edge(START, "search")
+    subgraph.add_edge("search", "extract")
+    subgraph.add_edge("extract", "summarize")
+    subgraph.add_edge("summarize", END)
+
+    return subgraph.compile()
+
+# Use in main graph
+class MainState(TypedDict):
+    topic: str
+    research_findings: str
+    final_report: str
+
+main_workflow = StateGraph(MainState)
+main_workflow.add_node("plan", planner_node)
+main_workflow.add_node("research", create_research_subgraph())  # Subgraph as node!
+main_workflow.add_node("write", writer_node)
+
+main_workflow.add_edge(START, "plan")
+main_workflow.add_edge("plan", "research")
+main_workflow.add_edge("research", "write")
+main_workflow.add_edge("write", END)
+```
+
+### State Mapping Between Graphs
+
+```python
+def transform_state_for_subgraph(state: MainState) -> ResearchSubgraphState:
+    """Map main state to subgraph state."""
+    return {
+        "query": state["topic"],
+        "sources": [],
+        "findings": ""
+    }
+
+def transform_state_from_subgraph(
+    main_state: MainState,
+    subgraph_result: ResearchSubgraphState
+) -> dict:
+    """Map subgraph result back to main state."""
+    return {
+        "research_findings": subgraph_result["findings"]
+    }
+
+# Use with state transformation
+main_workflow.add_node(
+    "research",
+    create_research_subgraph(),
+    input=transform_state_for_subgraph,
+    output=transform_state_from_subgraph
+)
+```
+
+### Subgraph State Isolation
+
+<Callout type="info" title="State Isolation">
+  Each subgraph maintains its own isolated state. The parent graph only sees the
+  final output of the subgraph, not intermediate states. This provides clean
+  encapsulation and prevents state pollution between components.
+</Callout>
+
+---
+
+## 31.11 Advanced Architecture: The Filesystem & Bash Agent
+
+While LangGraph manages _flow_, how you structure _context_ is equally critical. A powerful emerging pattern is the **Filesystem Agent**.
+
+### The Concept
+
+Instead of creating custom tools for every API or database method, you map your domain entities to a **virtual filesystem** and give the agent standard Unix tools (`ls`, `grep`, `cat`).
+
+### Why It Works
+
+1.  **LLMs are Unix Natives**: Models have seen billions of lines of bash scripts and filesystem operations. They intuitively understand how to navigate directory trees.
+2.  **Efficient Context Browsing**:
+    - `ls -R`: "Give me a high-level map of what's available" (Cheap: few tokens)
+    - `grep "error" logs/`: "Find specific relevant info" (Targeted: medium tokens)
+    - `cat logs/error.log`: "Load this exact file into context" (Specific: high efficiency)
+3.  **No "Tool Bloat"**: You don't need 50 tools (`get_customer`, `search_orders`, `list_products`). You just need a filesystem structure:
+    ```text
+    /customers/cust_001.json
+    /orders/ord_123.json
+    /products/widget.json
+    ```
+
+### Example: Sales Call Summary Agent
+
+Instead of a RAG pipeline, Vercel engineers built a sales agent by dumping call transcripts and CRM data into a folder structure:
+
+```bash
+/
+├── calls/
+│   ├── 2023-10-01-acme-corp.txt
+│   └── 2023-10-05-globex.txt
+├── crm/
+│   └── acme-corp.json
+└── playbooks/
+    └── qualification-framework.md
+```
+
+The agent uses `grep` to find "budget" or "objections" across transcripts, then `cat` to read the relevant segments. This approach often outperforms vector search for explicit retrieval tasks because it eliminates the "embedding approximation" step—the agent sees the actual keywords.
+
+---
+
+## 31.12 LangGraph Platform and Deployment
+
+LangGraph Platform (now **LangSmith Deployment**) provides production infrastructure for deploying agents:
+
+### Deployment Options
+
+| Option               | Description                               | Best For                                       |
+| :------------------- | :---------------------------------------- | :--------------------------------------------- |
+| **Cloud SaaS**       | Fully managed by LangChain                | Quick deployment, no infrastructure management |
+| **Hybrid**           | Your infrastructure, LangChain management | Data residency requirements                    |
+| **Self-Hosted**      | Full control on your infrastructure       | Enterprise, compliance requirements            |
+| **Developer (Free)** | Self-hosted, up to 1M nodes/month         | Hobbyist projects, learning                    |
+
+### LangGraph Studio for Visual Debugging
+
+LangGraph Studio is a desktop IDE for developing and debugging agents:
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph LangGraph Studio
+        A[Visual Graph Editor] --> B[Real-time Execution]
+        B --> C[State Inspector]
+        C --> D[Time-Travel Debug]
+        D --> E[LangSmith Integration]
+    end
+    
+    style A fill:#e1f5fe
+    style B fill:#e1f5fe
+    style C fill:#e1f5fe
+    style D fill:#e1f5fe
+    style E fill:#e1f5fe
+`}
+/>
+
+**Key Features:**
+
+- **Visual graph rendering** - See your workflow structure
+- **Real-time execution monitoring** - Watch state changes as they happen
+- **State editing** - Modify state mid-execution for testing
+- **Hot reloading** - Changes reflect immediately
+- **LangSmith integration** - Trace and debug in production
+
+### Deploying to LangGraph Platform
+
+```python
+# langgraph.json - Configuration file for deployment
+{
+    "graphs": {
+        "research_agent": {
+            "path": "./agent.py:app",
+            "checkpointer": {
+                "type": "postgres",
+                "connection_string": "${POSTGRES_URL}"
+            }
+        }
+    },
+    "env": {
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}"
+    }
+}
+```
+
+```bash
+# Deploy using LangGraph CLI
+langgraph build -t my-agent:latest
+langgraph deploy --app my-agent:latest
+```
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Forgetting to pass thread_id in config",
+      why: "Without thread_id, checkpointing won't work and state won't persist across invocations",
+      correct:
+        "Always include config={'configurable': {'thread_id': 'unique-id'}} in invoke calls",
+    },
+    {
+      mistake: "Modifying state directly instead of returning updates",
+      why: "LangGraph expects nodes to return partial state updates, not mutate state in place",
+      correct:
+        "Return a dict with only the keys you want to update: return {'messages': [new_msg]}",
+    },
+    {
+      mistake:
+        "Using interrupt_after instead of interrupt_before for approvals",
+      why: "interrupt_after runs the node first, which may execute unwanted actions before pausing",
+      correct:
+        "Use interrupt_before=['dangerous_node'] to pause BEFORE execution, or use interrupt() inside the node",
+    },
+    {
+      mistake:
+        "Not handling the Command primitive when resuming from interrupt",
+      why: "After an interrupt, you must use Command(resume=value) to continue execution",
+      correct:
+        "Call app.invoke(Command(resume='approved'), config) to resume with user input",
+    },
+    {
+      mistake: "Ignoring retry policies for external API calls",
+      why: "External APIs fail transiently; without retries, your agent fails unnecessarily",
+      correct:
+        "Add retry=RetryPolicy(max_attempts=3) when adding nodes that call external services",
+    },
+    {
+      mistake: "Using InMemorySaver in production",
+      why: "In-memory state is lost on restart, breaking long-running workflows",
+      correct: "Use PostgresSaver or RedisSaver for production deployments",
+    },
+  ]}
+/>
+
+---
+
+<ProgressCheckpoint
+  title="LangGraph Mastery Check"
+  questions={[
+    {
+      question:
+        "What's the difference between the Graph API and Functional API?",
+      answer:
+        "The Graph API uses StateGraph with explicit nodes and edges for complex workflows with visual debugging. The Functional API uses @entrypoint and @task decorators for simpler workflows that integrate easily with existing code. Both share the same Pregel runtime.",
+    },
+    {
+      question:
+        "How does the Command primitive improve human-in-the-loop patterns?",
+      answer:
+        "Command(resume=value) allows you to resume interrupted workflows with user input. Unlike the old pattern of invoking with None, Command explicitly passes the human's decision back to the interrupt() call, enabling more sophisticated approval flows.",
+    },
+    {
+      question: "When should you use Redis vs PostgreSQL for checkpointing?",
+      answer:
+        "Use Redis for high-throughput, real-time applications requiring sub-millisecond latency. Use PostgreSQL for workflows requiring full ACID compliance, audit trails, or complex queries on checkpoint history.",
+    },
+    {
+      question: "How does the Send API enable parallel execution?",
+      answer:
+        "Send creates multiple parallel invocations of a node with different inputs. The routing function returns a list of Send objects, each dispatching work to a node. Results are merged back using state reducers (like operator.ior for dicts).",
+    },
+    {
+      question: "Why use subgraphs instead of more nodes in the main graph?",
+      answer:
+        "Subgraphs encapsulate reusable workflows with isolated state management. They improve modularity, enable testing in isolation, prevent state pollution, and can be composed into larger systems. Each subgraph can have its own checkpointer and error handling.",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "LangGraph models agents as state machines with nodes, edges, and persistent state",
+    "The Functional API (@entrypoint, @task) offers a simpler alternative to StateGraph for linear workflows",
+    "Production checkpointing with PostgreSQL or Redis enables durable, resumable workflows",
+    "The Command primitive and interrupt() function enable sophisticated human-in-the-loop patterns",
+    "RetryPolicy provides built-in error handling with exponential backoff and custom retry logic",
+    "Multiple streaming modes (values, updates, messages, custom) enable responsive real-time UIs",
+    "The Send API enables fan-out parallel execution with automatic result aggregation",
+    "Subgraphs provide modularity for composing complex multi-agent workflows with state isolation",
+    "LangGraph Platform (LangSmith Deployment) offers managed infrastructure for production agents",
+    "LangGraph Studio provides visual debugging with real-time execution monitoring and time-travel",
+  ]}
+/>
+
+---
+
+<Exercise
+  title="Build a Code Review Agent with Human Approval"
+  difficulty="intermediate"
+  objectives={[
+    "Create a LangGraph workflow with parallel analysis nodes using Send API",
+    "Implement human-in-the-loop approval using interrupt() and Command",
+    "Use production checkpointing with PostgreSQL or Redis",
+    "Add retry policies for external API calls",
+    "Stream progress updates to the user"
+  ]}
+  hints={[
+    "Use Send to fan out to security_check, style_check, and logic_check nodes",
+    "The synthesize node should aggregate findings using Annotated[dict, operator.ior]",
+    "Use interrupt() inside the review node to pause for human approval",
+    "Resume with Command(resume='approved') or Command(resume='rejected')",
+    "Add RetryPolicy to nodes that call external APIs like GitHub"
+  ]}
+>
+
+**Task:** Create a LangGraph workflow that reviews pull requests with human oversight.
+
+**Requirements:**
+
+1. **Fetch PR** - Get PR diff from GitHub (with retry policy)
+2. **Parallel Analysis** - Fan out to security, style, and logic checkers
+3. **Synthesize** - Combine findings with severity scores
+4. **Human Review** - Use `interrupt()` to pause for approval
+5. **Post Comment** - Post review to GitHub (only if approved)
+
+**Graph Structure:**
+
+```
+START → fetch_pr → [security_check, style_check, logic_check] → synthesize → interrupt() → post_comment → END
+                                                                              ↓
+                                                                         (if rejected) → END
+```
+
+**Bonus Challenges:**
+
+- Add streaming to show analysis progress in real-time
+- Implement a subgraph for each analysis type
+- Use Redis checkpointing for fast state recovery
+- Add a fallback to a simpler analysis if the main one times out
+
+</Exercise>
+
+---
+
+<Exercise
+  title="Migrate to the Functional API"
+  difficulty="beginner"
+  objectives={[
+    "Convert a StateGraph workflow to use @entrypoint and @task decorators",
+    "Understand when each API is more appropriate",
+    "Maintain the same functionality with cleaner code"
+  ]}
+  hints={[
+    "Each node becomes a @task decorated function",
+    "The main workflow becomes an @entrypoint decorated function",
+    "Use .result() to get the output of a task",
+    "Conditional logic uses regular Python if/else instead of add_conditional_edges"
+  ]}
+>
+
+**Task:** Convert the research agent from Section 31.4 to use the Functional API.
+
+**Starting Point (Graph API):**
+
+```python
+workflow = StateGraph(ResearchState)
+workflow.add_node("planner", planner_node)
+workflow.add_node("researcher", researcher_node)
+workflow.add_node("writer", writer_node)
+workflow.add_edge(START, "planner")
+# ... etc
+```
+
+**Target (Functional API):**
+
+```python
+@task
+def plan(topic: str) -> str:
+    # ...
+
+@task
+def research(plan: str) -> str:
+    # ...
+
+@entrypoint(checkpointer=InMemorySaver())
+def research_workflow(topic: str) -> str:
+    # Orchestrate tasks with regular Python
+    # ...
+```
+
+</Exercise>
+
+---
+
+## 🔗 Further Reading
+
+- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/) - Official docs with latest API reference
+- [Functional API Guide](https://docs.langchain.com/oss/python/langgraph/functional-api) - Deep dive into @entrypoint and @task
+- [LangGraph Examples](https://github.com/langchain-ai/langgraph/tree/main/examples) - Production-ready example implementations
+- [LangSmith for Debugging](https://smith.langchain.com/) - Tracing and observability platform
+- [LangGraph Studio](https://github.com/langchain-ai/langgraph-studio) - Visual debugging IDE
+- [langgraph-checkpoint-redis](https://github.com/redis-developer/langgraph-redis) - Redis integration for high-performance checkpointing
+- [Choosing Between Graph and Functional APIs](https://docs.langchain.com/oss/python/langgraph/choosing-apis) - Decision guide
+
+**Tomorrow**: Project 2—The Self-Healing Kubernetes Operator, where we'll apply these LangGraph patterns to build an event-driven agent that monitors and repairs Kubernetes clusters.

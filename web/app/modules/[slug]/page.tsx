@@ -10,6 +10,8 @@ import { BookmarkButton } from "@/components/custom/BookmarkButton"
 import { ScrollToTop } from "@/components/custom/ScrollToTop"
 import { TimeTracker } from "@/components/custom/TimeTracker"
 import { RelatedModules } from "@/components/custom/RelatedModules"
+import { ModuleLayout } from "@/components/features/module/ModuleLayout"
+import { ModuleSidebar } from "@/components/features/module/ModuleSidebar"
 
 export async function generateStaticParams() {
   const modules = getAllModules()
@@ -17,9 +19,6 @@ export async function generateStaticParams() {
     slug: m.slug,
   }))
 }
-
-import { ModuleLayout } from "@/components/features/module/ModuleLayout"
-import { ModuleSidebar } from "@/components/features/module/ModuleSidebar"
 
 export default async function ModulePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params

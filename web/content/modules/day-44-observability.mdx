@@ -1,0 +1,1314 @@
+---
+title: "Day 44: Observability & Debugging"
+description: "Seeing inside the black box—tracing, logging, and visualizing agent behavior."
+week: 6
+day: 44
+---
+
+<ReadingTime minutes={45} />
+
+<SkillLevel level="intermediate" description="Production monitoring" />
+
+<Prerequisites
+  items={[
+    "Understanding of agent architectures (Days 01-03)",
+    "Experience with LangGraph (Day 09)",
+    "Basic familiarity with logging and metrics",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Set up LangSmith for deep tracing of LangChain applications",
+    "Use AgentPrism for visual debugging of agent traces",
+    "Implement OpenTelemetry instrumentation with GenAI semantic conventions",
+    "Build cost tracking and budget management for LLM usage",
+    "Set up real-time monitoring with alerting for production agents",
+    "Implement structured logging for searchable agent logs",
+    "Debug common agent issues: loops, context overflow, tool failures",
+  ]}
+/>
+
+## The Debugging Nightmare
+
+Debugging agentic systems is uniquely challenging. Agents fail silently, loop endlessly, or produce subtly incorrect outputs. The only clue is often buried in massive, nested JSON logs.
+
+{/* IMAGE_PLACEHOLDER: Create an illustration showing the "debugging nightmare":
+
+- Left side: A confused developer looking at a massive wall of nested JSON logs on multiple monitors
+- Right side: The same developer smiling while viewing a clean, visual trace diagram with clear step-by-step flow
+- Visual metaphor: Chaos vs. Clarity
+- Style: Modern tech illustration with a touch of humor
+- Color scheme: Dark background with syntax highlighting colors
+- Placement: Between the opening paragraph and the Key Insight callout
+  */}
+
+> **Key Insight**: Traditional logging is insufficient. You need specialized observability tools designed for multi-step, non-deterministic workflows.
+
+> **Analogy**: Debugging an agent without observability is like trying to fix a car engine while blindfolded. You hear strange noises (errors), feel vibrations (performance issues), but can't see which part is failing. Observability tools are like X-ray vision—they let you see inside the "black box" and watch each component in action.
+
+---
+
+## 44.1 The Observability Stack
+
+{/* IMAGE_PLACEHOLDER: Create a modern observability dashboard screenshot showing:
+
+- Top row: Key metrics cards (Request Rate, Error Rate, P95 Latency, Daily Cost)
+- Middle section: Real-time trace timeline with color-coded spans (LLM calls in blue, tool calls in green, errors in red)
+- Bottom section: Token usage graph over time and cost breakdown by model
+- Dark theme with vibrant accent colors
+- Style: Modern SaaS dashboard aesthetic similar to Datadog/Grafana
+- Placement: Full-width image above the Mermaid diagram
+  */}
+
+![Observability Dashboard](/images/observability_dashboard.png)
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Agent Execution"
+        A[Agent] --> T1[Tool Call 1]
+        T1 --> T2[Tool Call 2]
+        T2 --> T3[LLM Call]
+        T3 --> T4[Tool Call 3]
+    end
+    
+    subgraph "Observability Layer"
+        Trace[Distributed Tracing]
+        Metrics[Metrics Collection]
+        Logs[Structured Logging]
+    end
+    
+    subgraph "Visualization"
+        Dashboard[Dashboards]
+        Alerts[Alerting]
+        Debug[Debug UI]
+    end
+    
+    A -.-> Trace
+    A -.-> Metrics
+    A -.-> Logs
+    
+    Trace --> Dashboard
+    Metrics --> Dashboard
+    Logs --> Debug
+    Metrics --> Alerts
+`}
+/>
+
+### Key Metrics for Agents
+
+| Metric                      | What It Measures                | Why It Matters                  |
+| :-------------------------- | :------------------------------ | :------------------------------ |
+| **Latency (p50, p95, p99)** | Response time distribution      | User experience, SLA compliance |
+| **Token Usage**             | Input/output tokens per request | Cost control                    |
+| **Tool Call Success Rate**  | % of tool calls that succeed    | Reliability                     |
+| **Loop Detection**          | Iterations before completion    | Infinite loop prevention        |
+| **Error Rate**              | % of requests that fail         | System health                   |
+
+---
+
+## 44.2 LangSmith: The LangChain Solution
+
+LangSmith provides deep observability for LangChain/LangGraph applications. In 2024-2025, LangSmith has evolved from a tracing tool into a comprehensive LLMOps platform with datasets, evaluations, and prompt management.
+
+### Setup
+
+```python
+import os
+
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = "ls_..."
+os.environ["LANGCHAIN_PROJECT"] = "my-agent-project"
+
+# All LangChain operations are now automatically traced!
+```
+
+### LangSmith 2024-2025 Features
+
+| Feature               | Description                                | Use Case                              |
+| :-------------------- | :----------------------------------------- | :------------------------------------ |
+| **Datasets**          | Version-controlled test datasets           | Regression testing, golden examples   |
+| **Evaluations**       | Automated eval pipelines with LLM-as-judge | CI/CD quality gates                   |
+| **Hub**               | Shared prompt repository                   | Team collaboration, prompt versioning |
+| **Annotations**       | Human feedback collection                  | RLHF data, quality labeling           |
+| **Online Evaluation** | Real-time production scoring               | Live quality monitoring               |
+
+### Pricing Tiers (2025)
+
+| Tier           | Price       | Traces/Month | Key Features                      |
+| :------------- | :---------- | :----------- | :-------------------------------- |
+| **Developer**  | Free        | 5,000        | Basic tracing, 14-day retention   |
+| **Plus**       | $39/seat/mo | 50,000       | Datasets, evals, 90-day retention |
+| **Enterprise** | Custom      | Unlimited    | SSO, SLA, dedicated support       |
+
+### LangSmith vs Langfuse: When to Choose
+
+<Callout type="info">
+  **Decision Guide**: Use **LangSmith** if you're deep in the LangChain
+  ecosystem and want seamless integration. Choose **Langfuse** if you need
+  self-hosting, multi-framework support, or want to avoid vendor lock-in.
+</Callout>
+
+| Criteria                  | LangSmith         | Langfuse             |
+| :------------------------ | :---------------- | :------------------- |
+| **Hosting**               | Cloud only        | Self-hosted or cloud |
+| **Open Source**           | No                | Yes (MIT)            |
+| **LangChain Integration** | Native, automatic | Manual decorator     |
+| **Multi-Framework**       | LangChain-focused | Framework-agnostic   |
+| **Cost**                  | Per-seat pricing  | Free self-hosted     |
+| **Evaluations**           | Built-in          | Built-in             |
+
+### What LangSmith Shows
+
+{/* IMAGE_PLACEHOLDER: Create a LangSmith trace visualization showing:
+
+- Tree-style hierarchical view of a research agent execution
+- Parent span: "research_agent_invoke" (2.5s total)
+- Child spans with indentation showing iterations, LLM calls, and tool calls
+- Each span shows: name, duration, token count, and status icon (✓ or ✗)
+- Color coding: Blue for LLM calls, green for tool calls, purple for agent loops
+- Expandable sections showing input/output previews
+- Style: Clean, professional UI similar to LangSmith's actual interface
+- Placement: Replace or supplement the ASCII tree diagram
+  */}
+
+```
+Trace: research_agent_invoke
+├── Agent Loop (iteration 1)
+│   ├── LLM Call (gpt-4o) - 1.2s, 450 tokens
+│   │   └── Output: "I need to search for information..."
+│   └── Tool Call (web_search) - 0.8s
+│       └── Output: [3 results]
+├── Agent Loop (iteration 2)
+│   ├── LLM Call (gpt-4o) - 0.9s, 380 tokens
+│   │   └── Output: "Based on the search results..."
+│   └── Tool Call (summarize) - 0.3s
+└── Final Output - 2.5s total
+```
+
+> **Real-World Example**: Imagine you're debugging why your research agent sometimes returns incomplete answers. With LangSmith, you can see that in iteration 3, the web_search tool returned empty results (timeout), causing the agent to skip summarization and return early. Without tracing, you'd only see "incomplete answer" with no clue why.
+
+### Custom Tracing
+
+```python
+from langsmith import traceable
+
+@traceable(name="custom_processing")
+def process_data(data: dict) -> dict:
+    """This function will appear in LangSmith traces."""
+    # Your processing logic
+    return processed_data
+
+@traceable(run_type="tool")
+def my_custom_tool(query: str) -> str:
+    """Traced as a tool call."""
+    return f"Result for {query}"
+```
+
+---
+
+## 44.3 AgentPrism: Visual Debugging
+
+{/* IMAGE_PLACEHOLDER: Create a split-screen comparison showing AgentPrism's three views:
+
+- Left panel: Tree View showing hierarchical structure with expand/collapse nodes
+- Center panel: Timeline View showing Gantt-style bars with duration and overlap
+- Right panel: Sequence Diagram showing message flow between Agent, LLM, and Tools
+- All three views showing the same trace data for consistency
+- Modern React component styling with smooth animations
+- Style: Clean, developer-friendly UI with syntax highlighting
+- Placement: Right after the section heading, before the description
+  */}
+
+[AgentPrism](https://github.com/evilmartians/agent-prism) is an open-source React component library from Evil Martians for visualizing agent traces. It transforms complex trace data into clear, visual diagrams for faster debugging.
+
+> **Why Visual Debugging Matters**: The human brain processes visual information 60,000x faster than text. A timeline view instantly reveals that your "slow" agent spends 80% of its time waiting for a single API call—something that would take minutes to discover by reading logs.
+
+### Installation
+
+```bash
+npm install @evilmartians/agent-prism
+```
+
+### React Integration
+
+```tsx
+import {
+  AgentPrism,
+  TreeView,
+  TimelineView,
+  SequenceView,
+} from "@evilmartians/agent-prism";
+
+function AgentDebugger({ trace }) {
+  return (
+    <AgentPrism trace={trace}>
+      {/* Tree view shows hierarchical structure */}
+      <TreeView />
+
+      {/* Timeline shows duration of each step */}
+      <TimelineView />
+
+      {/* Sequence diagram shows message flow */}
+      <SequenceView />
+    </AgentPrism>
+  );
+}
+```
+
+### Key Views
+
+| View                 | Purpose                                 | Best For                |
+| :------------------- | :-------------------------------------- | :---------------------- |
+| **Tree View**        | Hierarchical parent-child relationships | Understanding structure |
+| **Timeline View**    | Gantt-style duration chart              | Finding bottlenecks     |
+| **Sequence Diagram** | Message flow between components         | Debugging loops         |
+| **Details Panel**    | Full input/output for each step         | Deep inspection         |
+
+---
+
+## 44.4 Alternative Observability Tools
+
+Beyond LangSmith and AgentPrism, several other observability tools are popular in the LLM ecosystem:
+
+### Langfuse (Open Source)
+
+[Langfuse](https://langfuse.com/) is an open-source LLM observability platform based on OpenTelemetry. It can be self-hosted and provides tracing, prompt management, and evaluation capabilities.
+
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse()
+
+# Create a trace
+trace = langfuse.trace(name="agent-run")
+
+# Add spans for each step
+span = trace.span(name="llm-call")
+# ... your LLM call
+span.end()
+```
+
+### Phoenix by Arize AI (Open Source)
+
+[Phoenix](https://github.com/Arize-ai/phoenix) is an open-source observability tool focused on fast, local debugging. It runs in notebooks or Docker and provides LLM-as-judge evaluations.
+
+```python
+import phoenix as px
+
+# Launch Phoenix
+session = px.launch_app()
+
+# Traces are automatically captured with OpenTelemetry
+```
+
+### AgentOps
+
+[AgentOps](https://github.com/AgentOps-AI/agentops) provides AI agent monitoring, LLM cost tracking, and benchmarking with integrations for CrewAI, LangChain, and other frameworks.
+
+```python
+import agentops
+
+agentops.init(api_key="...")
+
+# Automatic tracing for supported frameworks
+```
+
+### Helicone (LLM Proxy)
+
+[Helicone](https://helicone.ai/) is an LLM proxy that provides observability without code changes. Route your API calls through Helicone to get automatic logging, caching, and rate limiting.
+
+```python
+from openai import OpenAI
+
+# Just change the base URL - no other code changes needed
+client = OpenAI(
+    api_key="sk-...",
+    base_url="https://oai.helicone.ai/v1",
+    default_headers={
+        "Helicone-Auth": "Bearer hlc_..."
+    }
+)
+
+# All calls are now logged with latency, cost, and token usage
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+### Weights & Biases Prompts
+
+[W&B Prompts](https://wandb.ai/site/prompts) extends the popular ML experiment tracking platform to LLMs. Great if you're already using W&B for model training.
+
+```python
+import wandb
+
+wandb.init(project="my-agent")
+
+# Log LLM calls with full context
+wandb.log({
+    "prompt": prompt,
+    "response": response,
+    "tokens": token_count,
+    "latency": latency_ms
+})
+```
+
+### Braintrust (Evals-Focused)
+
+[Braintrust](https://braintrust.dev/) specializes in LLM evaluations with a focus on prompt engineering workflows. It provides A/B testing for prompts and automated regression detection.
+
+```python
+from braintrust import Eval
+
+# Define evaluation criteria
+Eval(
+    "my-agent",
+    data=test_dataset,
+    task=lambda input: agent.invoke(input),
+    scores=[
+        # Built-in scorers
+        "Factuality",
+        "Relevance",
+        # Custom scorers
+        lambda output, expected: similarity(output, expected)
+    ]
+)
+```
+
+### Tool Comparison Matrix
+
+| Tool            | Type     | Self-Host | Auto-Instrument | Cost Tracking | Evals | Best For                     |
+| :-------------- | :------- | :-------- | :-------------- | :------------ | :---- | :--------------------------- |
+| **LangSmith**   | Platform | ❌        | ✅ (LangChain)  | ✅            | ✅    | LangChain users              |
+| **Langfuse**    | Platform | ✅        | ✅              | ✅            | ✅    | Self-hosted, multi-framework |
+| **Phoenix**     | Local    | ✅        | ✅              | ❌            | ✅    | Local debugging, notebooks   |
+| **AgentOps**    | Platform | ❌        | ✅              | ✅            | ❌    | Agent-specific monitoring    |
+| **Helicone**    | Proxy    | ❌        | ✅              | ✅            | ❌    | Zero-code integration        |
+| **W&B Prompts** | Platform | ❌        | ❌              | ❌            | ✅    | ML teams using W&B           |
+| **Braintrust**  | Platform | ❌        | ❌              | ❌            | ✅    | Eval-heavy workflows         |
+
+---
+
+## 44.5 OpenTelemetry for LLM Observability
+
+OpenTelemetry (OTel) has emerged as the industry standard for observability, and in 2024-2025, the GenAI semantic conventions have matured to provide consistent instrumentation across LLM providers.
+
+### Why OpenTelemetry?
+
+<Callout type="tip">
+  **Vendor Neutrality**: OpenTelemetry lets you instrument once and export to
+  any backend—Jaeger, Grafana Tempo, Datadog, or your own stack. No vendor
+  lock-in.
+</Callout>
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Your Application"
+        Agent[Agent Code]
+        OTel[OpenTelemetry SDK]
+    end
+    
+    subgraph "Backends"
+        Jaeger[Jaeger]
+        Tempo[Grafana Tempo]
+        SigNoz[SigNoz]
+        DD[Datadog]
+    end
+    
+    Agent --> OTel
+    OTel --> Jaeger
+    OTel --> Tempo
+    OTel --> SigNoz
+    OTel --> DD
+`}
+/>
+
+### OpenLLMetry: GenAI Semantic Conventions
+
+[OpenLLMetry](https://github.com/traceloop/openllmetry) by Traceloop implements the OpenTelemetry GenAI semantic conventions, providing automatic instrumentation for popular LLM libraries.
+
+```bash
+pip install traceloop-sdk opentelemetry-exporter-otlp
+```
+
+### Basic Setup
+
+```python
+from traceloop.sdk import Traceloop
+
+# Initialize with your preferred backend
+Traceloop.init(
+    app_name="my-agent",
+    api_endpoint="http://localhost:4318",  # OTLP endpoint
+    disable_batch=False  # Batch spans for efficiency
+)
+
+# That's it! LLM calls are now automatically traced
+from openai import OpenAI
+
+client = OpenAI()
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+# Span automatically created with model, tokens, latency
+```
+
+### GenAI Semantic Attributes
+
+OpenTelemetry defines standard attributes for LLM operations:
+
+```python
+from opentelemetry import trace
+from opentelemetry.semconv.ai import SpanAttributes
+
+tracer = trace.get_tracer("my-agent")
+
+with tracer.start_as_current_span("llm.chat") as span:
+    # Standard GenAI attributes
+    span.set_attribute(SpanAttributes.LLM_SYSTEM, "openai")
+    span.set_attribute(SpanAttributes.LLM_REQUEST_MODEL, "gpt-4o")
+    span.set_attribute(SpanAttributes.LLM_REQUEST_MAX_TOKENS, 1000)
+    span.set_attribute(SpanAttributes.LLM_RESPONSE_MODEL, "gpt-4o-2024-08-06")
+    span.set_attribute(SpanAttributes.LLM_USAGE_PROMPT_TOKENS, 150)
+    span.set_attribute(SpanAttributes.LLM_USAGE_COMPLETION_TOKENS, 89)
+    span.set_attribute(SpanAttributes.LLM_USAGE_TOTAL_TOKENS, 239)
+
+    # Make your LLM call
+    response = llm.invoke(messages)
+```
+
+### Exporting to Backends
+
+#### Jaeger (Local Development)
+
+```bash
+# Run Jaeger with Docker
+docker run -d --name jaeger \
+  -p 16686:16686 \
+  -p 4318:4318 \
+  jaegertracing/all-in-one:latest
+```
+
+```python
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace import TracerProvider
+
+# Set up the tracer provider
+provider = TracerProvider()
+trace.set_tracer_provider(provider)
+
+# Export to Jaeger
+exporter = OTLPSpanExporter(endpoint="http://localhost:4318/v1/traces")
+provider.add_span_processor(BatchSpanProcessor(exporter))
+```
+
+#### Grafana Tempo (Production)
+
+```python
+# Export to Grafana Cloud or self-hosted Tempo
+exporter = OTLPSpanExporter(
+    endpoint="https://tempo-us-central1.grafana.net/tempo",
+    headers={"Authorization": "Basic <base64-credentials>"}
+)
+```
+
+### Custom Instrumentation with Decorators
+
+```python
+from traceloop.sdk.decorators import workflow, task, agent
+
+@workflow(name="research_workflow")
+def research_topic(topic: str) -> str:
+    """Top-level workflow span."""
+    results = search_web(topic)
+    summary = summarize_results(results)
+    return summary
+
+@task(name="web_search")
+def search_web(query: str) -> list:
+    """Task span for tool calls."""
+    return search_api.search(query)
+
+@agent(name="summarizer")
+def summarize_results(results: list) -> str:
+    """Agent span for LLM-powered operations."""
+    return llm.invoke(f"Summarize: {results}")
+```
+
+---
+
+## 44.6 Cost Tracking & Budget Management
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing LLM cost escalation:
+
+- Left: Small startup icon with "$50/day" label
+- Center: Growth arrow with "3 months later" text
+- Right: Same company icon with "$5,000/day" label and shocked emoji
+- Bottom: Breakdown showing: "10x users + 2x queries/user + 2.5x avg tokens = 50x cost"
+- Visual warning signs and dollar symbols
+- Style: Clean infographic with bold numbers and icons
+- Color scheme: Green (good) transitioning to red (danger)
+- Placement: At the start of section 44.6 to emphasize the importance
+  */}
+
+LLM costs can spiral quickly in production. Effective cost tracking requires per-request attribution, tenant-level budgets, and proactive alerting.
+
+> **Real-World Horror Story**: A startup left their AI chatbot running without cost monitoring. A single user discovered they could ask the bot to "write a novel" and triggered 50,000+ token responses. Their daily OpenAI bill jumped from $200 to $8,000 overnight. Budget alerts would have caught this in the first hour.
+
+### Token-Based Cost Calculation
+
+<CostCalculator defaultModel="gpt-4o" showComparison={false} />
+
+```python
+from dataclasses import dataclass
+from typing import Optional
+import time
+
+# Pricing per 1M tokens (as of early 2025)
+MODEL_PRICING = {
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
+    "claude-3-5-sonnet": {"input": 3.00, "output": 15.00},
+    "claude-3-5-haiku": {"input": 0.80, "output": 4.00},
+}
+
+@dataclass
+class UsageMetrics:
+    model: str
+    input_tokens: int
+    output_tokens: int
+    latency_ms: int
+    user_id: Optional[str] = None
+    tenant_id: Optional[str] = None
+
+    @property
+    def cost_usd(self) -> float:
+        pricing = MODEL_PRICING.get(self.model, {"input": 0, "output": 0})
+        input_cost = (self.input_tokens / 1_000_000) * pricing["input"]
+        output_cost = (self.output_tokens / 1_000_000) * pricing["output"]
+        return input_cost + output_cost
+
+class CostTracker:
+    def __init__(self, db_connection):
+        self.db = db_connection
+
+    def track(self, metrics: UsageMetrics):
+        """Record usage for cost attribution."""
+        self.db.execute("""
+            INSERT INTO llm_usage
+            (timestamp, model, input_tokens, output_tokens,
+             cost_usd, user_id, tenant_id, latency_ms)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            time.time(), metrics.model, metrics.input_tokens,
+            metrics.output_tokens, metrics.cost_usd,
+            metrics.user_id, metrics.tenant_id, metrics.latency_ms
+        ))
+```
+
+### Cost-Tracking Wrapper
+
+```python
+from functools import wraps
+from openai import OpenAI
+
+client = OpenAI()
+cost_tracker = CostTracker(db)
+
+def track_cost(user_id: str = None, tenant_id: str = None):
+    """Decorator to track LLM costs per request."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            start = time.time()
+            response = func(*args, **kwargs)
+            latency_ms = int((time.time() - start) * 1000)
+
+            # Extract usage from response
+            usage = response.usage
+            metrics = UsageMetrics(
+                model=response.model,
+                input_tokens=usage.prompt_tokens,
+                output_tokens=usage.completion_tokens,
+                latency_ms=latency_ms,
+                user_id=user_id,
+                tenant_id=tenant_id
+            )
+
+            cost_tracker.track(metrics)
+            logger.info(
+                "llm_cost_tracked",
+                cost_usd=metrics.cost_usd,
+                model=metrics.model,
+                tokens=usage.total_tokens
+            )
+
+            return response
+        return wrapper
+    return decorator
+
+# Usage
+@track_cost(user_id="user_123", tenant_id="acme_corp")
+def generate_response(messages: list):
+    return client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages
+    )
+```
+
+### Budget Alerts and Quotas
+
+```python
+from prometheus_client import Gauge
+
+# Prometheus metrics for cost monitoring
+daily_cost = Gauge('llm_daily_cost_usd', 'Daily LLM cost', ['tenant_id'])
+budget_remaining = Gauge('llm_budget_remaining_pct', 'Budget remaining %', ['tenant_id'])
+
+class BudgetManager:
+    def __init__(self, db, alert_service):
+        self.db = db
+        self.alerts = alert_service
+
+    def check_budget(self, tenant_id: str) -> bool:
+        """Check if tenant is within budget. Returns False if over limit."""
+        tenant = self.db.get_tenant(tenant_id)
+        daily_spend = self.db.get_daily_spend(tenant_id)
+
+        # Update metrics
+        daily_cost.labels(tenant_id=tenant_id).set(daily_spend)
+        remaining_pct = (1 - daily_spend / tenant.daily_limit) * 100
+        budget_remaining.labels(tenant_id=tenant_id).set(remaining_pct)
+
+        # Alert at 80% threshold
+        if daily_spend > tenant.daily_limit * 0.8:
+            self.alerts.send(
+                channel="slack",
+                message=f"⚠️ Tenant {tenant_id} at {remaining_pct:.0f}% of daily budget"
+            )
+
+        # Hard stop at 100%
+        if daily_spend >= tenant.daily_limit:
+            self.alerts.send(
+                channel="pagerduty",
+                message=f"🚨 Tenant {tenant_id} exceeded daily budget"
+            )
+            return False
+
+        return True
+```
+
+### Cost Dashboard Queries
+
+{/* IMAGE_PLACEHOLDER: Create a cost dashboard mockup showing:
+
+- Top: Date range selector and total cost for period ($1,247.83)
+- Chart 1: Line graph of daily costs over 30 days with trend line
+- Chart 2: Pie chart showing cost breakdown by model (GPT-4o: 65%, Claude: 25%, GPT-4o-mini: 10%)
+- Chart 3: Bar chart showing top 5 tenants by cost
+- Table: Recent high-cost requests with model, tokens, cost, and timestamp
+- Style: Modern analytics dashboard with interactive elements
+- Color scheme: Professional blues and greens with red highlights for anomalies
+- Placement: Above the SQL queries to show what the queries produce
+  */}
+
+```sql
+-- Daily cost by tenant
+SELECT
+    tenant_id,
+    DATE(timestamp) as date,
+    SUM(cost_usd) as total_cost,
+    SUM(input_tokens) as total_input_tokens,
+    SUM(output_tokens) as total_output_tokens
+FROM llm_usage
+WHERE timestamp > NOW() - INTERVAL '30 days'
+GROUP BY tenant_id, DATE(timestamp)
+ORDER BY date DESC;
+
+-- Cost by model (identify expensive models)
+SELECT
+    model,
+    COUNT(*) as requests,
+    AVG(cost_usd) as avg_cost,
+    SUM(cost_usd) as total_cost
+FROM llm_usage
+WHERE timestamp > NOW() - INTERVAL '7 days'
+GROUP BY model
+ORDER BY total_cost DESC;
+```
+
+---
+
+## 44.7 Real-Time Monitoring & Alerting
+
+Production agents need real-time visibility and proactive alerting to catch issues before users notice.
+
+### Streaming Trace Visualization
+
+```python
+import asyncio
+from collections import deque
+from fastapi import FastAPI, WebSocket
+
+app = FastAPI()
+
+# In-memory trace buffer for real-time streaming
+trace_buffer = deque(maxlen=1000)
+
+async def emit_trace(trace_data: dict):
+    """Emit trace to all connected WebSocket clients."""
+    trace_buffer.append(trace_data)
+    # Broadcast to connected clients (implementation depends on your setup)
+
+@app.websocket("/ws/traces")
+async def trace_stream(websocket: WebSocket):
+    """WebSocket endpoint for real-time trace streaming."""
+    await websocket.accept()
+
+    # Send recent traces
+    for trace in trace_buffer:
+        await websocket.send_json(trace)
+
+    # Stream new traces
+    last_idx = len(trace_buffer)
+    while True:
+        await asyncio.sleep(0.1)
+        current_idx = len(trace_buffer)
+        if current_idx > last_idx:
+            for trace in list(trace_buffer)[last_idx:current_idx]:
+                await websocket.send_json(trace)
+            last_idx = current_idx
+```
+
+### Health Check Endpoint
+
+```python
+from datetime import datetime, timedelta
+from fastapi import FastAPI, HTTPException
+
+@app.get("/health/agents")
+async def agent_health():
+    """Real-time health check for agent fleet."""
+    now = datetime.utcnow()
+    window = now - timedelta(minutes=5)
+
+    metrics = db.query("""
+        SELECT
+            COUNT(*) as total_requests,
+            SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as errors,
+            AVG(latency_ms) as avg_latency,
+            PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) as p95_latency
+        FROM agent_requests
+        WHERE timestamp > %s
+    """, (window,))
+
+    error_rate = metrics.errors / max(metrics.total_requests, 1)
+
+    health = {
+        "status": "healthy",
+        "timestamp": now.isoformat(),
+        "metrics": {
+            "requests_5m": metrics.total_requests,
+            "error_rate": error_rate,
+            "avg_latency_ms": metrics.avg_latency,
+            "p95_latency_ms": metrics.p95_latency
+        }
+    }
+
+    # Determine health status
+    if error_rate > 0.1:
+        health["status"] = "degraded"
+    if error_rate > 0.25 or metrics.p95_latency > 30000:
+        health["status"] = "unhealthy"
+
+    return health
+```
+
+### Alerting Rules with Prometheus
+
+```yaml
+# prometheus-alerts.yml
+groups:
+  - name: agent_alerts
+    rules:
+      # High error rate
+      - alert: AgentHighErrorRate
+        expr: |
+          sum(rate(agent_requests_total{status="error"}[5m])) 
+          / sum(rate(agent_requests_total[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent error rate above 10%"
+          description: "Error rate is {'{{'} $value | humanizePercentage {'}}'}"
+
+      # Latency spike
+      - alert: AgentHighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            rate(agent_request_latency_seconds_bucket[5m])
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent p95 latency above 10s"
+
+      # Cost spike
+      - alert: AgentCostSpike
+        expr: |
+          increase(llm_daily_cost_usd[1h]) > 100
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM cost increased by $100+ in the last hour"
+
+      # Loop detection
+      - alert: AgentLoopDetected
+        expr: |
+          increase(agent_loop_detected_total[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Agent loop detected"
+```
+
+### PagerDuty/Slack Integration
+
+```python
+import httpx
+from enum import Enum
+
+class AlertSeverity(Enum):
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+
+class AlertService:
+    def __init__(self, slack_webhook: str, pagerduty_key: str):
+        self.slack_webhook = slack_webhook
+        self.pagerduty_key = pagerduty_key
+
+    async def send_slack(self, message: str, severity: AlertSeverity):
+        """Send alert to Slack channel."""
+        emoji = {"info": "ℹ️", "warning": "⚠️", "critical": "🚨"}
+
+        async with httpx.AsyncClient() as client:
+            await client.post(self.slack_webhook, json={
+                "text": f"{emoji[severity.value]} {message}",
+                "attachments": [{
+                    "color": {"info": "#36a64f", "warning": "#ff9800", "critical": "#f44336"}[severity.value]
+                }]
+            })
+
+    async def send_pagerduty(self, message: str, severity: AlertSeverity):
+        """Create PagerDuty incident for critical alerts."""
+        if severity != AlertSeverity.CRITICAL:
+            return
+
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                "https://events.pagerduty.com/v2/enqueue",
+                json={
+                    "routing_key": self.pagerduty_key,
+                    "event_action": "trigger",
+                    "payload": {
+                        "summary": message,
+                        "severity": "critical",
+                        "source": "agent-monitoring"
+                    }
+                }
+            )
+
+    async def alert(self, message: str, severity: AlertSeverity = AlertSeverity.WARNING):
+        """Send alert to appropriate channels based on severity."""
+        await self.send_slack(message, severity)
+        if severity == AlertSeverity.CRITICAL:
+            await self.send_pagerduty(message, severity)
+```
+
+---
+
+## 44.8 Structured Logging
+
+### JSON Logging for Agents
+
+```python
+import structlog
+import json
+
+# Configure structured logging
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer()
+    ]
+)
+
+logger = structlog.get_logger()
+
+def agent_node(state: dict) -> dict:
+    logger.info(
+        "agent_step_started",
+        step="reasoning",
+        iteration=state.get("iteration", 0),
+        context_tokens=count_tokens(state["messages"])
+    )
+
+    try:
+        result = llm.invoke(state["messages"])
+
+        logger.info(
+            "agent_step_completed",
+            step="reasoning",
+            output_tokens=count_tokens(result),
+            tool_calls=len(result.tool_calls) if result.tool_calls else 0
+        )
+
+        return {"messages": [result]}
+
+    except Exception as e:
+        logger.error(
+            "agent_step_failed",
+            step="reasoning",
+            error=str(e),
+            error_type=type(e).__name__
+        )
+        raise
+```
+
+### Log Output
+
+```json
+{"event": "agent_step_started", "step": "reasoning", "iteration": 0, "context_tokens": 1250, "timestamp": "2026-01-07T10:30:00Z"}
+{"event": "agent_step_completed", "step": "reasoning", "output_tokens": 150, "tool_calls": 2, "timestamp": "2026-01-07T10:30:02Z"}
+```
+
+---
+
+## 44.9 Debugging Common Issues
+
+{/* IMAGE_PLACEHOLDER: Create a diagnostic flowchart showing:
+
+- Three branches for common issues: "Infinite Loops", "Context Overflow", "Tool Failures"
+- Each branch shows: Symptoms → Detection → Solution
+- Visual icons: Loop symbol, overflowing container, broken tool
+- Color-coded severity: Yellow (warning), Orange (degraded), Red (critical)
+- Style: Clean flowchart with icons and short text labels
+- Placement: At the start of section 44.9 as an overview
+  */}
+
+### Issue 1: Infinite Loops
+
+**Symptoms**: Agent never completes, token usage spikes
+
+{/* IMAGE_PLACEHOLDER: Create an animated visualization concept showing:
+
+- Circular diagram with agent repeatedly calling the same tool
+- Iteration counter incrementing: 1, 2, 3... 15, 16, 17...
+- Red warning indicator appearing at iteration 20
+- "LOOP DETECTED - TERMINATING" message
+- Style: Simple animation frames or storyboard
+- Purpose: Visual representation of loop detection in action
+- Placement: Between symptoms and detection code
+  */}
+
+**Detection**:
+
+```python
+def agent_with_loop_detection(state: dict) -> dict:
+    iteration = state.get("iteration", 0)
+
+    if iteration > 20:
+        logger.error("loop_detected", iteration=iteration)
+        return {"status": "error", "reason": "max_iterations_exceeded"}
+
+    # Check for repeated actions
+    recent_actions = state.get("action_history", [])[-5:]
+    if len(set(recent_actions)) == 1 and len(recent_actions) == 5:
+        logger.error("repetitive_action_detected", action=recent_actions[0])
+        return {"status": "error", "reason": "repetitive_action"}
+
+    return {"iteration": iteration + 1}
+```
+
+### Issue 2: Context Overflow
+
+**Symptoms**: Quality degrades, model ignores instructions
+
+{/* IMAGE_PLACEHOLDER: Create a visual metaphor for context overflow:
+
+- Container/bucket representing context window (128K tokens)
+- Water/liquid filling up representing messages being added
+- System prompt at bottom (5%) getting "diluted" as container fills
+- Overflow indicator at 100K+ tokens showing quality degradation
+- Visual markers at 50%, 75%, 90%, 100% capacity
+- Style: Clean infographic with percentage indicators
+- Color gradient: Green → Yellow → Orange → Red as it fills
+- Placement: Between symptoms and detection code
+  */}
+
+> **Analogy**: Context overflow is like trying to have a conversation in a crowded, noisy room. At first, you can hear clearly (low token count). As more people join (more messages), the important instructions (system prompt) get drowned out by the noise. Eventually, the model can't "hear" what you originally asked it to do.
+
+**Detection**:
+
+```python
+def check_context_health(messages: list) -> dict:
+    total_tokens = count_tokens(messages)
+    system_tokens = count_tokens([m for m in messages if m["role"] == "system"])
+
+    metrics = {
+        "total_tokens": total_tokens,
+        "system_ratio": system_tokens / total_tokens,
+        "message_count": len(messages)
+    }
+
+    if total_tokens > 100000:
+        logger.warning("context_overflow_risk", **metrics)
+
+    if metrics["system_ratio"] < 0.05:
+        logger.warning("system_prompt_diluted", **metrics)
+
+    return metrics
+```
+
+### Issue 3: Tool Failures
+
+**Symptoms**: Agent retries same tool, gives up
+
+**Detection**:
+
+```python
+def tool_with_diagnostics(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        tool_name = func.__name__
+
+        try:
+            result = func(*args, **kwargs)
+
+            logger.info(
+                "tool_success",
+                tool=tool_name,
+                latency_ms=int((time.time() - start) * 1000),
+                result_size=len(str(result))
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(
+                "tool_failure",
+                tool=tool_name,
+                error=str(e),
+                args=str(args)[:200],
+                latency_ms=int((time.time() - start) * 1000)
+            )
+            raise
+
+    return wrapper
+```
+
+---
+
+## 44.10 Building a Debug Dashboard
+
+{/* IMAGE_PLACEHOLDER: Create a comprehensive debug dashboard mockup showing:
+
+- Top row: Real-time metrics (Active Sessions: 47, Requests/min: 234, Error Rate: 2.3%, Avg Latency: 1.2s)
+- Second row: Time-series graphs (Request volume, Latency percentiles, Token usage)
+- Third row: Recent errors table with timestamp, error type, trace link
+- Fourth row: Tool call success rates as horizontal bar chart
+- Bottom: Live trace feed showing recent requests scrolling
+- Style: Dark theme, professional monitoring dashboard
+- Inspired by: Grafana, Datadog, New Relic aesthetics
+- Placement: At the start of section 44.10 to show the end goal
+  */}
+
+### Metrics to Display
+
+```python
+from prometheus_client import Counter, Histogram, Gauge
+
+# Counters
+agent_requests = Counter('agent_requests_total', 'Total agent requests', ['status'])
+tool_calls = Counter('tool_calls_total', 'Total tool calls', ['tool', 'status'])
+
+# Histograms
+request_latency = Histogram('agent_request_latency_seconds', 'Request latency')
+token_usage = Histogram('agent_token_usage', 'Tokens per request', ['type'])
+
+# Gauges
+active_sessions = Gauge('agent_active_sessions', 'Currently active sessions')
+
+# Usage
+@request_latency.time()
+def process_request(request):
+    agent_requests.labels(status='started').inc()
+
+    try:
+        result = agent.invoke(request)
+        agent_requests.labels(status='success').inc()
+        token_usage.labels(type='output').observe(result.token_count)
+        return result
+    except Exception:
+        agent_requests.labels(status='error').inc()
+        raise
+```
+
+---
+
+## 🧪 Lab Exercise: Instrument Your Agent
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Build a "Trace Visualizer Playground"
+
+- Left panel: Code editor where users can define a simple agent with steps
+- Right panel: Live visualization showing the trace as it executes
+- Features:
+  - Step-by-step execution with play/pause controls
+  - Real-time metrics: latency, tokens, cost
+  - Simulated delays to show timing
+  - Toggle between Tree View, Timeline View, and Sequence Diagram
+  - Inject errors to see how they appear in traces
+- Example agents: Simple Q&A, Web Search + Summarize, Multi-tool Research
+- Educational value: Hands-on understanding of how traces work
+- Tech stack: React + Monaco Editor + D3.js/Mermaid for visualization
+- Placement: Replace or supplement the static lab exercise
+  */}
+
+**Objective**: Add comprehensive observability to an existing agent.
+
+### Requirements
+
+1. Structured JSON logging for all steps
+2. Metrics collection (latency, tokens, errors)
+3. Loop detection with automatic termination
+4. Context health monitoring
+5. Tool call diagnostics
+
+### Starter Code
+
+```python
+import structlog
+from prometheus_client import Counter, Histogram
+
+# TODO: Configure structured logging
+logger = structlog.get_logger()
+
+# TODO: Define metrics
+request_latency = Histogram(...)
+token_usage = Histogram(...)
+
+class ObservableAgent:
+    def __init__(self, agent):
+        self.agent = agent
+        self.max_iterations = 20
+
+    def invoke(self, input: dict) -> dict:
+        # TODO: Add request tracking
+        # TODO: Add loop detection
+        # TODO: Add context monitoring
+        # TODO: Add error handling with logging
+        pass
+
+    def _check_loop(self, state: dict) -> bool:
+        # TODO: Implement loop detection
+        pass
+
+    def _check_context_health(self, messages: list) -> dict:
+        # TODO: Implement context health check
+        pass
+```
+
+### Evaluation
+
+After instrumentation, you should be able to answer:
+
+1. What's the p95 latency of your agent?
+2. How many tokens does a typical request use?
+3. What's the tool call success rate?
+4. How often do loops occur?
+
+---
+
+## 📚 Key Takeaways
+
+1. **LangSmith** provides deep tracing for LangChain apps with datasets, evaluations, and prompt management
+2. **AgentPrism** offers visual debugging with tree, timeline, and sequence views
+3. **OpenTelemetry** is the vendor-neutral standard—instrument once, export anywhere
+4. **Cost tracking** is essential—track per-request, per-tenant, and set budget alerts
+5. **Real-time monitoring** with alerting catches issues before users notice
+6. **Alternative tools** like Langfuse, Helicone, and Braintrust provide different tradeoffs
+7. **Structured logging** enables searchable, parseable logs for production debugging
+8. **Loop detection** and **context monitoring** prevent runaway agents
+
+---
+
+<ModuleSummary
+  points={[
+    "Observability is essential for debugging non-deterministic agent behavior",
+    "LangSmith provides automatic tracing for LangChain/LangGraph applications",
+    "OpenTelemetry with GenAI semantic conventions enables vendor-neutral instrumentation",
+    "Cost tracking per request and tenant prevents budget overruns",
+    "Real-time monitoring with PagerDuty/Slack alerts catches production issues early",
+    "Visual tools like AgentPrism help identify bottlenecks and loops quickly",
+    "Structured JSON logging enables powerful search and analysis",
+    "Common issues (loops, context overflow, tool failures) have specific detection patterns",
+  ]}
+/>
+
+---
+
+## 🔗 Further Reading
+
+- [LangSmith Documentation](https://docs.smith.langchain.com/)
+- [AgentPrism GitHub](https://github.com/evilmartians/agent-prism)
+- [OpenLLMetry by Traceloop](https://github.com/traceloop/openllmetry)
+- [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/)
+- [Langfuse Documentation](https://langfuse.com/docs)
+- [Phoenix by Arize AI](https://github.com/Arize-ai/phoenix)
+- [Helicone Documentation](https://docs.helicone.ai/)
+- [Prometheus Alerting Best Practices](https://prometheus.io/docs/practices/alerting/)
+- [Grafana Tempo for Distributed Tracing](https://grafana.com/docs/tempo/latest/)
+
+**Tomorrow**: Project 4—The Automated Refactorer (Legacy Code Agent).
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** Observability is critical for the AgentOS
+  capstone. The tracing, logging, and metrics patterns you learn here will help
+  you debug the Smart Orchestrator and monitor your fleet of agents in
+  production.
+</Callout>
+
+### Recommended Exercises
+
+- **EX-01**: First LLM Call (15 min) - Add basic logging to your first agent
+- **EX-06**: ReAct Loop (30 min) - Instrument the loop with iteration tracking
+
+### Related POCs
+
+- **POC-01**: LangGraph State Machine (1-2 hours) - Add LangSmith tracing to your state machine
+- **POC-06**: Request Classification (1-2 hours) - Monitor classification accuracy
+
+### Capstone Connection
+
+In the capstone, you'll implement:
+
+- Centralized logging across all agents
+- Cost tracking per agent and per request
+- Performance dashboards for the orchestrator
+
+See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.

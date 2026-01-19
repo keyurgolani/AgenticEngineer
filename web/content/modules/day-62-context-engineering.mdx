@@ -1,0 +1,1630 @@
+---
+title: "Day 62: Context Engineering"
+description: "From vibe coding to structured, reliable context delivery for production agentic systems."
+week: 9
+day: 62
+---
+
+<ReadingTime minutes={45} />
+
+<SkillLevel level="advanced" description="Production architecture" />
+
+<Prerequisites
+  items={[
+    "Understanding of RAG fundamentals (Day 05)",
+    "Experience with API integrations and error handling",
+    "Familiarity with async programming patterns",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Distinguish context engineering from prompt engineering",
+    "Manage large context windows (200K+ tokens) effectively",
+    "Implement hybrid RAG with reranking and query expansion",
+    "Design caching strategies for context pipelines",
+    "Build parallel data fetching with rate limiting and backpressure",
+    "Apply context compression techniques to fit token budgets",
+    "Structure context delivery for reliable agent reasoning",
+  ]}
+/>
+
+---
+
+## Beyond Prompt Engineering
+
+Prompt engineering is about crafting the right words. **Context engineering** is about building reliable systems that deliver the right information to those prompts.
+
+<ConceptIntro
+  title="Context Engineering"
+  analogy="Prompt engineering is like writing a good exam question. Context engineering is like building the entire educational system that prepares students to answer it—textbooks, lectures, study materials, all delivered reliably and on time."
+  technicalDef="Context engineering is a structured, systematic methodology for gathering, processing, and delivering reliable context to AI systems. It transforms messy, long-running data workflows into predictable, reproducible reasoning pipelines."
+  whyItMatters="The difference between 'vibe coding' and production systems. Vibe coding hopes the agent figures it out. Context engineering guarantees the agent has what it needs."
+/>
+
+<Callout type="tip">
+  **Industry Shift**: Research from Anthropic and others shows that modern agent
+  quality depends heavily on curating the entire context stack—not just clever
+  prompt text. Context engineering encompasses four key strategies: **writing**
+  (external memory), **selecting** (relevant retrieval), **compressing**
+  (summarization), and **isolating** (compartmentalized workflows).
+</Callout>
+
+{/* IMAGE_PLACEHOLDER: Context Refinery Illustration - A visual metaphor showing raw, unstructured data (documents, APIs, databases) flowing through a multi-stage refinery pipeline. The pipeline should show 5 distinct stages: (1) Fetch stage with parallel streams from multiple sources, (2) Process stage with data transformation symbols, (3) Validate stage with quality check icons, (4) Compress stage showing data reduction, (5) Structure stage organizing data into neat sections. The output should flow into an AI agent icon. Use industrial refinery aesthetics with modern tech styling. Color scheme: blues and purples for data flow, gold/amber for the refinery process. Place this image prominently after the ConceptIntro section to establish the mental model. */}
+
+![Context Refinery](/images/context_refinery.png)
+
+---
+
+## 21.1 The Context Engineering Stack
+
+{/* IMAGE_PLACEHOLDER: Context Engineering Stack Layers - A detailed architectural diagram showing the complete context engineering stack as interconnected layers. Bottom layer: Context Sources (icons for documents, web search, APIs, databases, file systems). Middle layers: The five-stage pipeline (Fetch, Process, Validate, Compress, Structure) with specific tools/techniques labeled in each stage. Top layer: Agent consumption with different agent types (research, analysis, coding). Add data flow arrows showing how information transforms through each stage. Include metrics like "10s → 2s latency" and "100K → 8K tokens". Use a modern tech stack visualization style. Place at the beginning of section 21.1. */}
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Context Sources"
+        S1[📄 Documents]
+        S2[🔍 Web Search]
+        S3[📊 APIs]
+        S4[🗄️ Databases]
+        S5[📁 File System]
+    end
+    
+    subgraph "Context Pipeline"
+        F[Parallel Fetcher] --> P[Processor]
+        P --> V[Validator]
+        V --> C[Compressor]
+        C --> S[Structurer]
+    end
+    
+    subgraph "Delivery"
+        S --> Agent[🤖 Agent]
+    end
+    
+    S1 --> F
+    S2 --> F
+    S3 --> F
+    S4 --> F
+    S5 --> F
+    
+    style F fill:#f9f,stroke:#333
+    style Agent fill:#bbf,stroke:#333
+`}
+/>
+
+### The Five Stages
+
+| Stage         | Purpose                         | Example                             |
+| :------------ | :------------------------------ | :---------------------------------- |
+| **Fetch**     | Gather raw data from sources    | Query APIs, search web, read files  |
+| **Process**   | Transform into usable format    | Parse HTML, extract text, normalize |
+| **Validate**  | Ensure data quality             | Check freshness, verify sources     |
+| **Compress**  | Reduce to essential information | Summarize, deduplicate, truncate    |
+| **Structure** | Format for agent consumption    | JSON schema, markdown sections      |
+
+---
+
+## 21.2 Context Window Management
+
+{/* IMAGE_PLACEHOLDER: Context Window Visualization - An infographic showing the "Lost in the Middle" problem. Display a horizontal bar representing a 200K token context window, divided into three zones: Beginning (green, high attention), Middle (red, low attention), and End (green, high attention). Show a heat map overlay indicating LLM attention levels across the context. Include a small graph showing recall accuracy dropping from 90% at positions 0-25% and 75-100%, down to 40% at positions 25-75%. Add annotations explaining the "sandwich strategy" for optimal placement. This should be placed right before the "Context Window Strategies" code section. */}
+
+Modern LLMs offer massive context windows—Claude 3.5 supports 200K tokens, Gemini 1.5 Pro handles up to 2M tokens. But bigger isn't always better. Effective context window management is critical for both cost and quality.
+
+<Callout type="warning">
+  **The "Lost in the Middle" Problem**: Research from Stanford (2024) confirms
+  that LLMs struggle to use information placed in the middle of long contexts.
+  Key facts at positions 25-75% of the context are recalled significantly less
+  accurately than those at the beginning or end.
+</Callout>
+
+### Context Window Strategies
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+@dataclass
+class ContextWindowConfig:
+    """Configuration for context window management."""
+    max_tokens: int = 128000
+    reserved_for_output: int = 4096
+    reserved_for_system: int = 2000
+    placement_strategy: Literal["primacy", "recency", "sandwich"] = "sandwich"
+
+class ContextWindowManager:
+    """Manage context placement to maximize LLM attention."""
+
+    def __init__(self, config: ContextWindowConfig):
+        self.config = config
+        self.available_tokens = (
+            config.max_tokens -
+            config.reserved_for_output -
+            config.reserved_for_system
+        )
+
+    def arrange_context(
+        self,
+        sections: list[dict],
+        query: str
+    ) -> list[dict]:
+        """Arrange context sections to optimize attention.
+
+        Sandwich strategy: Most important at start and end,
+        less critical in the middle.
+        """
+        # Sort by relevance score
+        sorted_sections = sorted(
+            sections,
+            key=lambda x: x.get("relevance", 0),
+            reverse=True
+        )
+
+        if self.config.placement_strategy == "sandwich":
+            # Split into high/medium/low priority
+            n = len(sorted_sections)
+            high_priority = sorted_sections[:n//3]
+            medium_priority = sorted_sections[n//3:2*n//3]
+            low_priority = sorted_sections[2*n//3:]
+
+            # Sandwich: high -> low -> medium -> high
+            return (
+                high_priority[:len(high_priority)//2] +  # Start
+                low_priority +                            # Middle
+                medium_priority +                         # Middle
+                high_priority[len(high_priority)//2:]    # End
+            )
+
+        elif self.config.placement_strategy == "primacy":
+            # Most important first
+            return sorted_sections
+
+        else:  # recency
+            # Most important last (for chat-style interactions)
+            return sorted_sections[::-1]
+
+    def chunk_document(
+        self,
+        text: str,
+        chunk_size: int = 1000,
+        overlap: int = 200
+    ) -> list[str]:
+        """Chunk long documents with semantic boundaries."""
+        # Prefer splitting at paragraph boundaries
+        paragraphs = text.split('\n\n')
+
+        chunks = []
+        current_chunk = []
+        current_size = 0
+
+        for para in paragraphs:
+            para_tokens = len(para.split()) * 1.3  # Rough token estimate
+
+            if current_size + para_tokens > chunk_size:
+                if current_chunk:
+                    chunks.append('\n\n'.join(current_chunk))
+                # Start new chunk with overlap
+                overlap_text = current_chunk[-1] if current_chunk else ""
+                current_chunk = [overlap_text, para] if overlap_text else [para]
+                current_size = para_tokens + (len(overlap_text.split()) * 1.3)
+            else:
+                current_chunk.append(para)
+                current_size += para_tokens
+
+        if current_chunk:
+            chunks.append('\n\n'.join(current_chunk))
+
+        return chunks
+```
+
+### Token Budget Allocation
+
+<TokenBudgetAllocator />
+
+<Mermaid
+  chart={`
+pie title Token Budget Allocation (128K Context)
+    "System Prompt" : 2000
+    "User Query + History" : 4000
+    "Primary Context (RAG)" : 60000
+    "Secondary Context" : 40000
+    "Tool Results" : 18000
+    "Reserved for Output" : 4000
+`}
+/>
+
+<Callout type="tip">
+  **2024 Best Practice**: Use tiered context loading. Start with compressed
+  summaries, then expand specific sections on-demand. This "zoom in" pattern
+  reduces costs while maintaining access to full detail when needed.
+</Callout>
+
+---
+
+## 21.3 RAG Optimization
+
+{/* IMAGE_PLACEHOLDER: Hybrid RAG Architecture Diagram - A flowchart showing the two-stage retrieval process. Top section: Query input splits into two parallel paths: (1) Vector Search path with embedding model and vector database, (2) Keyword Search path with BM25 index. Both paths retrieve top-20 candidates. Middle section: Reciprocal Rank Fusion (RRF) combines results with a visual representation of score merging. Bottom section: Neural Reranker (Cohere) refines to top-5 results. Use arrows to show data flow, include small icons for each component. Color code: purple for vector path, orange for keyword path, green for fusion. Place before "Hybrid Search: Vector + Keyword" section. */}
+
+Basic RAG (retrieve top-k by vector similarity) leaves significant accuracy on the table. Modern RAG pipelines combine multiple retrieval strategies.
+
+### Hybrid Search: Vector + Keyword
+
+<HybridSearchVisualizer />
+
+```python
+from typing import Optional
+import numpy as np
+
+class HybridRetriever:
+    """Combine dense (vector) and sparse (BM25) retrieval."""
+
+    def __init__(
+        self,
+        vector_store,
+        bm25_index,
+        alpha: float = 0.7  # Weight for vector vs keyword
+    ):
+        self.vector_store = vector_store
+        self.bm25_index = bm25_index
+        self.alpha = alpha
+
+    def retrieve(
+        self,
+        query: str,
+        k: int = 10,
+        filter_metadata: Optional[dict] = None
+    ) -> list[dict]:
+        """Hybrid retrieval with reciprocal rank fusion."""
+
+        # Dense retrieval (semantic similarity)
+        vector_results = self.vector_store.similarity_search(
+            query, k=k*2, filter=filter_metadata
+        )
+
+        # Sparse retrieval (keyword matching)
+        bm25_results = self.bm25_index.search(query, k=k*2)
+
+        # Reciprocal Rank Fusion (RRF)
+        scores = {}
+        k_rrf = 60  # RRF constant
+
+        for rank, doc in enumerate(vector_results):
+            doc_id = doc["id"]
+            scores[doc_id] = scores.get(doc_id, 0) + self.alpha / (k_rrf + rank)
+
+        for rank, doc in enumerate(bm25_results):
+            doc_id = doc["id"]
+            scores[doc_id] = scores.get(doc_id, 0) + (1 - self.alpha) / (k_rrf + rank)
+
+        # Sort by combined score
+        ranked_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+
+        return self._fetch_documents(ranked_ids[:k])
+```
+
+### Reranking for Precision
+
+```python
+from cohere import Client as CohereClient
+
+class RerankedRetriever:
+    """Two-stage retrieval: fast recall + precise reranking."""
+
+    def __init__(self, base_retriever, cohere_api_key: str):
+        self.base_retriever = base_retriever
+        self.cohere = CohereClient(api_key=cohere_api_key)
+
+    def retrieve(self, query: str, k: int = 5, initial_k: int = 20) -> list[dict]:
+        """Retrieve with reranking for higher precision."""
+
+        # Stage 1: Fast retrieval (high recall)
+        candidates = self.base_retriever.retrieve(query, k=initial_k)
+
+        # Stage 2: Neural reranking (high precision)
+        if not candidates:
+            return []
+
+        rerank_response = self.cohere.rerank(
+            model="rerank-english-v3.0",
+            query=query,
+            documents=[doc["content"] for doc in candidates],
+            top_n=k
+        )
+
+        # Return reranked results
+        return [
+            {**candidates[r.index], "rerank_score": r.relevance_score}
+            for r in rerank_response.results
+        ]
+```
+
+### Query Expansion with HyDE
+
+{/* IMAGE_PLACEHOLDER: HyDE Process Flow - A three-step visual showing: (1) User query "How do I implement rate limiting?" in a speech bubble, (2) LLM generates hypothetical answer shown as a document with technical content about rate limiting implementation, (3) The hypothetical answer's embedding is used to search a vector database, retrieving actual relevant documents. Use a bridge metaphor to show how HyDE "bridges the gap" between question-style and document-style content. Include before-and-after comparison showing better retrieval results. Place immediately after the HyDE callout. */}
+
+<Callout type="info">
+  **HyDE (Hypothetical Document Embeddings)**: Generate a hypothetical answer to
+  the query, then use that answer's embedding for retrieval. This bridges the
+  gap between question-style queries and document-style content.
+</Callout>
+
+```python
+class HyDERetriever:
+    """Hypothetical Document Embeddings for better retrieval."""
+
+    def __init__(self, llm, vector_store, embedder):
+        self.llm = llm
+        self.vector_store = vector_store
+        self.embedder = embedder
+
+    async def retrieve(self, query: str, k: int = 5) -> list[dict]:
+        """Generate hypothetical answer, then retrieve similar docs."""
+
+        # Generate hypothetical document
+        hyde_prompt = f"""Write a detailed paragraph that would answer this question:
+
+Question: {query}
+
+Write as if you're an expert explaining this topic. Be specific and technical."""
+
+        hypothetical_doc = await self.llm.ainvoke(hyde_prompt)
+
+        # Embed the hypothetical document
+        hyde_embedding = self.embedder.embed(hypothetical_doc.content)
+
+        # Retrieve using hypothetical doc embedding
+        results = self.vector_store.similarity_search_by_vector(
+            hyde_embedding, k=k
+        )
+
+        return results
+
+class MultiQueryRetriever:
+    """Generate multiple query variations for broader recall."""
+
+    def __init__(self, llm, base_retriever):
+        self.llm = llm
+        self.base_retriever = base_retriever
+
+    async def retrieve(self, query: str, k: int = 5) -> list[dict]:
+        """Generate query variations and merge results."""
+
+        # Generate alternative queries
+        expansion_prompt = f"""Generate 3 alternative versions of this search query.
+Each should capture a different aspect or phrasing.
+
+Original query: {query}
+
+Return only the 3 queries, one per line."""
+
+        response = await self.llm.ainvoke(expansion_prompt)
+        queries = [query] + response.content.strip().split('\n')[:3]
+
+        # Retrieve for each query
+        all_results = {}
+        for q in queries:
+            results = self.base_retriever.retrieve(q, k=k)
+            for doc in results:
+                if doc["id"] not in all_results:
+                    all_results[doc["id"]] = doc
+                    all_results[doc["id"]]["query_matches"] = 1
+                else:
+                    all_results[doc["id"]]["query_matches"] += 1
+
+        # Rank by number of query matches
+        ranked = sorted(
+            all_results.values(),
+            key=lambda x: x["query_matches"],
+            reverse=True
+        )
+
+        return ranked[:k]
+```
+
+---
+
+## 21.4 Caching Strategies
+
+{/* IMAGE_PLACEHOLDER: Multi-Tier Caching Architecture - A layered pyramid diagram showing three caching tiers: Top tier (fastest): In-Memory Cache with LRU eviction, showing ~1ms latency. Middle tier: Redis Cache with TTL, showing ~10ms latency. Bottom tier: Recompute/Fetch from source, showing ~1000ms latency. Add arrows showing cache hit/miss flow between tiers. Include a sidebar showing cost savings: 90% cost reduction with prompt caching, 50% with semantic caching. Use green for cache hits, red for misses. Place at the start of section 21.4. */}
+
+Context fetching is expensive—both in latency and API costs. Strategic caching dramatically improves both.
+
+### Semantic Caching
+
+```python
+import hashlib
+import json
+from datetime import datetime, timedelta
+from typing import Optional
+import numpy as np
+
+class SemanticCache:
+    """Cache based on semantic similarity, not exact match."""
+
+    def __init__(
+        self,
+        embedder,
+        similarity_threshold: float = 0.95,
+        ttl_hours: int = 24
+    ):
+        self.embedder = embedder
+        self.threshold = similarity_threshold
+        self.ttl = timedelta(hours=ttl_hours)
+        self.cache = {}  # {embedding_key: (embedding, result, timestamp)}
+
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+    def get(self, query: str) -> Optional[dict]:
+        """Find semantically similar cached result."""
+        query_embedding = self.embedder.embed(query)
+
+        best_match = None
+        best_similarity = 0
+
+        for key, (embedding, result, timestamp) in self.cache.items():
+            # Check TTL
+            if datetime.now() - timestamp > self.ttl:
+                continue
+
+            similarity = self._cosine_similarity(query_embedding, embedding)
+            if similarity > self.threshold and similarity > best_similarity:
+                best_similarity = similarity
+                best_match = result
+
+        return best_match
+
+    def set(self, query: str, result: dict):
+        """Cache result with query embedding."""
+        embedding = self.embedder.embed(query)
+        key = hashlib.md5(query.encode()).hexdigest()
+        self.cache[key] = (embedding, result, datetime.now())
+
+    def invalidate_by_topic(self, topic_embedding: np.ndarray, threshold: float = 0.8):
+        """Invalidate cache entries related to a topic."""
+        keys_to_remove = []
+        for key, (embedding, _, _) in self.cache.items():
+            if self._cosine_similarity(embedding, topic_embedding) > threshold:
+                keys_to_remove.append(key)
+
+        for key in keys_to_remove:
+            del self.cache[key]
+```
+
+### Prompt Caching (Anthropic/OpenAI)
+
+<Callout type="tip">
+  **2024 Feature**: Both Anthropic and OpenAI now offer prompt caching.
+  Anthropic's cache can reduce costs by up to 90% for repeated system prompts.
+  OpenAI's cached prompts get 50% discount on input tokens.
+</Callout>
+
+```python
+from anthropic import Anthropic
+
+class CachedContextClient:
+    """Leverage Anthropic's prompt caching for repeated context."""
+
+    def __init__(self, api_key: str):
+        self.client = Anthropic(api_key=api_key)
+        self.cached_context = None
+
+    def query_with_cached_context(
+        self,
+        static_context: str,
+        user_query: str
+    ) -> str:
+        """Use prompt caching for static context portions.
+
+        The static_context (e.g., documentation, guidelines) is cached
+        and reused across multiple queries, reducing costs significantly.
+        """
+        response = self.client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4096,
+            system=[
+                {
+                    "type": "text",
+                    "text": "You are a helpful assistant with access to the following context.",
+                },
+                {
+                    "type": "text",
+                    "text": static_context,
+                    "cache_control": {"type": "ephemeral"}  # Enable caching
+                }
+            ],
+            messages=[
+                {"role": "user", "content": user_query}
+            ]
+        )
+
+        # Log cache performance
+        usage = response.usage
+        print(f"Cache read tokens: {usage.cache_read_input_tokens}")
+        print(f"Cache creation tokens: {usage.cache_creation_input_tokens}")
+
+        return response.content[0].text
+```
+
+### Response Caching Patterns
+
+```python
+from functools import lru_cache
+import hashlib
+import json
+
+class TieredCache:
+    """Multi-tier caching: memory -> Redis -> recompute."""
+
+    def __init__(self, redis_client, memory_size: int = 1000):
+        self.redis = redis_client
+        self.memory_cache = {}
+        self.memory_size = memory_size
+        self.access_order = []
+
+    def _cache_key(self, query: str, params: dict) -> str:
+        """Generate deterministic cache key."""
+        key_data = json.dumps({"query": query, **params}, sort_keys=True)
+        return hashlib.sha256(key_data.encode()).hexdigest()
+
+    async def get_or_compute(
+        self,
+        query: str,
+        params: dict,
+        compute_fn,
+        ttl_seconds: int = 3600
+    ):
+        """Check caches, compute if miss."""
+        key = self._cache_key(query, params)
+
+        # Tier 1: Memory cache
+        if key in self.memory_cache:
+            return self.memory_cache[key]
+
+        # Tier 2: Redis cache
+        cached = await self.redis.get(key)
+        if cached:
+            result = json.loads(cached)
+            self._add_to_memory(key, result)
+            return result
+
+        # Tier 3: Compute
+        result = await compute_fn(query, **params)
+
+        # Store in both tiers
+        await self.redis.setex(key, ttl_seconds, json.dumps(result))
+        self._add_to_memory(key, result)
+
+        return result
+
+    def _add_to_memory(self, key: str, value):
+        """LRU eviction for memory cache."""
+        if len(self.memory_cache) >= self.memory_size:
+            oldest = self.access_order.pop(0)
+            del self.memory_cache[oldest]
+
+        self.memory_cache[key] = value
+        self.access_order.append(key)
+```
+
+---
+
+## 21.5 Parallel Data Fetching
+
+{/* IMAGE_PLACEHOLDER: Sequential vs Parallel Fetching Comparison - A side-by-side comparison showing: Left side "Sequential Fetching": 5 API calls stacked vertically, each taking 2 seconds, total 10 seconds with a sad face emoji. Right side "Parallel Fetching": 5 API calls shown horizontally at the same level, all completing in 2 seconds total with a happy face emoji. Use timeline bars to show duration. Add annotations for "Latency Bottleneck" vs "Optimized Performance". Include small icons for different sources (database, API, web, file system). Place right before the ProductionPattern component. */}
+
+<ProductionPattern
+  type="performance"
+  title="Parallel Context Gathering"
+  problem="Sequential data fetching creates latency bottlenecks. Fetching from 5 sources at 2 seconds each = 10 seconds total. Users won't wait."
+  solution="Fetch from all sources in parallel using async/await. 5 sources at 2 seconds each = 2 seconds total (plus overhead)."
+  implementation={`Use asyncio.gather() or Promise.all() to parallelize fetches.
+Implement per-source timeouts to prevent slow sources from blocking.
+Use circuit breakers to skip consistently failing sources.
+Cache results to avoid redundant fetches.`}
+  antiPatterns={[
+    "Sequential fetching from multiple sources",
+    "No timeouts on external API calls",
+    "Failing the entire pipeline if one source fails",
+    "Re-fetching unchanged data on every request",
+  ]}
+  bestPractices={[
+    "Parallel fetch with individual timeouts",
+    "Graceful degradation when sources fail",
+    "Aggressive caching with TTL",
+    "Circuit breakers for flaky sources",
+  ]}
+/>
+
+### Advanced Async Patterns
+
+```python
+import asyncio
+from typing import Optional
+from dataclasses import dataclass, field
+from contextlib import asynccontextmanager
+import aiohttp
+from asyncio import Semaphore
+
+@dataclass
+class ContextSource:
+    name: str
+    fetcher: callable
+    timeout: float = 5.0
+    required: bool = False
+    rate_limit: int = 10  # requests per second
+    priority: int = 1  # Higher = more important
+
+@dataclass
+class FetcherConfig:
+    """Configuration for production-grade fetching."""
+    max_concurrent: int = 20
+    connection_pool_size: int = 100
+    rate_limit_window: float = 1.0
+    backpressure_threshold: int = 50
+    retry_budget: int = 3
+
+class ProductionContextFetcher:
+    """Production-grade parallel fetcher with connection pooling and backpressure."""
+
+    def __init__(self, sources: list[ContextSource], config: FetcherConfig = None):
+        self.sources = sources
+        self.config = config or FetcherConfig()
+        self.cache = {}
+        self._session: Optional[aiohttp.ClientSession] = None
+        self._semaphore = Semaphore(self.config.max_concurrent)
+        self._rate_limiters: dict[str, Semaphore] = {}
+        self._pending_count = 0
+
+    @asynccontextmanager
+    async def _get_session(self):
+        """Connection pooling with proper lifecycle management."""
+        if self._session is None or self._session.closed:
+            connector = aiohttp.TCPConnector(
+                limit=self.config.connection_pool_size,
+                limit_per_host=20,
+                ttl_dns_cache=300,
+                enable_cleanup_closed=True
+            )
+            self._session = aiohttp.ClientSession(connector=connector)
+
+        try:
+            yield self._session
+        finally:
+            pass  # Session reused across requests
+
+    async def _rate_limited_fetch(
+        self,
+        source: ContextSource,
+        query: str
+    ) -> Optional[dict]:
+        """Fetch with per-source rate limiting."""
+        # Initialize rate limiter for source
+        if source.name not in self._rate_limiters:
+            self._rate_limiters[source.name] = Semaphore(source.rate_limit)
+
+        rate_limiter = self._rate_limiters[source.name]
+
+        async with rate_limiter:
+            async with self._semaphore:  # Global concurrency limit
+                return await self._fetch_with_backpressure(source, query)
+
+    async def _fetch_with_backpressure(
+        self,
+        source: ContextSource,
+        query: str
+    ) -> Optional[dict]:
+        """Apply backpressure when system is overloaded."""
+        self._pending_count += 1
+
+        try:
+            # Backpressure: slow down if too many pending requests
+            if self._pending_count > self.config.backpressure_threshold:
+                delay = (self._pending_count - self.config.backpressure_threshold) * 0.1
+                await asyncio.sleep(min(delay, 2.0))
+
+            return await self._do_fetch(source, query)
+        finally:
+            self._pending_count -= 1
+
+    async def _do_fetch(self, source: ContextSource, query: str) -> Optional[dict]:
+        """Execute fetch with timeout and error handling."""
+        cache_key = f"{source.name}:{query}"
+
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+
+        try:
+            result = await asyncio.wait_for(
+                source.fetcher(query),
+                timeout=source.timeout
+            )
+            self.cache[cache_key] = result
+            return result
+        except asyncio.TimeoutError:
+            print(f"⏱️ Timeout fetching from {source.name}")
+            return None
+        except Exception as e:
+            print(f"❌ Error fetching from {source.name}: {e}")
+            if source.required:
+                raise
+            return None
+
+    async def fetch_all(self, query: str) -> dict:
+        """Fetch from all sources with priority ordering."""
+        # Sort by priority (higher first)
+        sorted_sources = sorted(
+            self.sources,
+            key=lambda s: s.priority,
+            reverse=True
+        )
+
+        tasks = [
+            self._rate_limited_fetch(source, query)
+            for source in sorted_sources
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        context = {}
+        for source, result in zip(sorted_sources, results):
+            if result and not isinstance(result, Exception):
+                context[source.name] = result
+
+        return context
+
+    async def close(self):
+        """Clean up resources."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+```
+
+### Rate Limit Handling
+
+{/* IMAGE_PLACEHOLDER: Adaptive Rate Limiting Visualization - A timeline graph showing adaptive rate limiting in action. X-axis: time, Y-axis: requests per second. Show the rate starting at 10 req/s, then: (1) A rate limit error occurs (marked with red X), rate drops to 5 req/s and enters backoff period, (2) After successful requests, rate gradually increases back up (shown as green checkmarks), (3) Another rate limit hit, rate drops again. Include annotations for "Exponential Backoff", "Gradual Recovery", and "Circuit Breaker Open" states. Add a small table showing the adaptive algorithm's decision logic. Place before the AdaptiveRateLimiter code. */}
+
+```python
+import asyncio
+from datetime import datetime, timedelta
+from collections import deque
+
+class AdaptiveRateLimiter:
+    """Rate limiter that adapts to API responses."""
+
+    def __init__(self, initial_rate: int = 10, window: float = 1.0):
+        self.rate = initial_rate
+        self.window = window
+        self.requests: deque = deque()
+        self.backoff_until: Optional[datetime] = None
+
+    async def acquire(self):
+        """Wait until rate limit allows another request."""
+        now = datetime.now()
+
+        # Check if in backoff period
+        if self.backoff_until and now < self.backoff_until:
+            wait_time = (self.backoff_until - now).total_seconds()
+            await asyncio.sleep(wait_time)
+
+        # Clean old requests outside window
+        cutoff = now - timedelta(seconds=self.window)
+        while self.requests and self.requests[0] < cutoff:
+            self.requests.popleft()
+
+        # Wait if at rate limit
+        if len(self.requests) >= self.rate:
+            oldest = self.requests[0]
+            wait_time = (oldest + timedelta(seconds=self.window) - now).total_seconds()
+            if wait_time > 0:
+                await asyncio.sleep(wait_time)
+
+        self.requests.append(datetime.now())
+
+    def handle_rate_limit_response(self, retry_after: Optional[int] = None):
+        """Adapt to rate limit responses from API."""
+        if retry_after:
+            self.backoff_until = datetime.now() + timedelta(seconds=retry_after)
+        else:
+            # Exponential backoff
+            self.backoff_until = datetime.now() + timedelta(seconds=min(60, self.rate * 2))
+
+        # Reduce rate for future requests
+        self.rate = max(1, self.rate // 2)
+
+    def handle_success(self):
+        """Gradually increase rate after successes."""
+        self.rate = min(100, self.rate + 1)
+```
+
+### Streaming Results
+
+<ContextFetcherSimulator />
+
+```python
+from typing import AsyncIterator
+
+class StreamingContextFetcher:
+    """Stream results as they arrive instead of waiting for all."""
+
+    def __init__(self, sources: list[ContextSource]):
+        self.sources = sources
+
+    async def fetch_streaming(
+        self,
+        query: str
+    ) -> AsyncIterator[tuple[str, dict]]:
+        """Yield results as each source completes."""
+
+        async def fetch_one(source: ContextSource):
+            try:
+                result = await asyncio.wait_for(
+                    source.fetcher(query),
+                    timeout=source.timeout
+                )
+                return (source.name, result)
+            except Exception as e:
+                return (source.name, None)
+
+        # Create tasks for all sources
+        tasks = [
+            asyncio.create_task(fetch_one(source))
+            for source in self.sources
+        ]
+
+        # Yield results as they complete
+        for coro in asyncio.as_completed(tasks):
+            source_name, result = await coro
+            if result:
+                yield source_name, result
+
+# Usage: Process results as they arrive
+async def process_streaming():
+    fetcher = StreamingContextFetcher(sources)
+
+    async for source_name, result in fetcher.fetch_streaming("AI agents"):
+        print(f"✅ Got result from {source_name}")
+        # Process immediately, don't wait for others
+        await process_result(source_name, result)
+```
+
+---
+
+## 21.6 Automated Resilience
+
+{/* IMAGE_PLACEHOLDER: Circuit Breaker State Machine - A state diagram showing the three states of a circuit breaker: (1) CLOSED state (green): Normal operation, requests flow through, failure counter increments on errors. (2) OPEN state (red): Circuit trips after threshold failures, all requests immediately fail fast, timer starts. (3) HALF-OPEN state (yellow): After timeout, allows one test request, success returns to CLOSED, failure returns to OPEN. Show transitions between states with labeled arrows and conditions. Include a timeline example showing a service failing, circuit opening, timeout period, test request, and recovery. Place at the beginning of section 21.6. */}
+
+Real-world data sources fail. Context engineering builds resilience into the pipeline.
+
+```python
+import asyncio
+from functools import wraps
+from typing import TypeVar, Callable
+
+T = TypeVar('T')
+
+def with_retry(
+    max_attempts: int = 3,
+    backoff_factor: float = 2.0,
+    exceptions: tuple = (Exception,)
+):
+    """Decorator for exponential backoff retry."""
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        async def wrapper(*args, **kwargs) -> T:
+            last_exception = None
+
+            for attempt in range(max_attempts):
+                try:
+                    return await func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    if attempt < max_attempts - 1:
+                        wait_time = backoff_factor ** attempt
+                        print(f"Retry {attempt + 1}/{max_attempts} in {wait_time}s")
+                        await asyncio.sleep(wait_time)
+
+            raise last_exception
+        return wrapper
+    return decorator
+
+class CircuitBreaker:
+    """Prevent repeated calls to failing services."""
+
+    def __init__(self, failure_threshold: int = 5, reset_timeout: float = 60.0):
+        self.failure_threshold = failure_threshold
+        self.reset_timeout = reset_timeout
+        self.failures = 0
+        self.last_failure_time = 0
+        self.state = "closed"  # closed, open, half-open
+
+    async def call(self, func: Callable, *args, **kwargs):
+        if self.state == "open":
+            if time.time() - self.last_failure_time > self.reset_timeout:
+                self.state = "half-open"
+            else:
+                raise CircuitBreakerOpen("Circuit breaker is open")
+
+        try:
+            result = await func(*args, **kwargs)
+            if self.state == "half-open":
+                self.state = "closed"
+                self.failures = 0
+            return result
+        except Exception as e:
+            self.failures += 1
+            self.last_failure_time = time.time()
+            if self.failures >= self.failure_threshold:
+                self.state = "open"
+            raise
+
+# Resilient fetcher with retry and circuit breaker
+class ResilientFetcher:
+    def __init__(self):
+        self.circuit_breakers = {}
+
+    @with_retry(max_attempts=3, backoff_factor=2.0)
+    async def fetch_with_retry(self, source: str, url: str) -> dict:
+        """Fetch with automatic retry on failure."""
+        if source not in self.circuit_breakers:
+            self.circuit_breakers[source] = CircuitBreaker()
+
+        return await self.circuit_breakers[source].call(
+            self._do_fetch, url
+        )
+```
+
+---
+
+## 21.7 Structured Context Delivery
+
+{/* IMAGE_PLACEHOLDER: Structured vs Unstructured Context Comparison - A before/after comparison showing: Left side "Unstructured": A messy blob of text with no organization, an agent icon looking confused with question marks. Right side "Structured": The same content organized into clear sections with metadata (source, confidence, relevance, timestamp), the agent icon looking confident with a checkmark. Include callouts highlighting key differences: metadata presence, section organization, relevance scoring, source attribution. Use contrasting colors (gray/chaotic for unstructured, organized blue/green for structured). Place at the beginning of section 21.7. */}
+
+Raw data isn't useful. Context must be structured for reliable agent consumption.
+
+```python
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
+
+class SourceMetadata(BaseModel):
+    """Metadata about a context source."""
+    name: str
+    url: Optional[str] = None
+    fetched_at: datetime
+    freshness: str = Field(description="fresh, stale, or unknown")
+    confidence: float = Field(ge=0, le=1, description="Source reliability")
+
+class ContextSection(BaseModel):
+    """A structured section of context."""
+    title: str
+    content: str
+    source: SourceMetadata
+    relevance_score: float = Field(ge=0, le=1)
+    token_count: int
+
+class StructuredContext(BaseModel):
+    """Complete structured context for agent consumption."""
+    query: str
+    sections: list[ContextSection]
+    total_tokens: int
+    sources_used: int
+    sources_failed: list[str]
+    generated_at: datetime
+
+    def to_prompt_format(self, max_tokens: int = 8000) -> str:
+        """Convert to agent-consumable format."""
+        lines = [
+            f"# Context for: {self.query}",
+            f"_Generated: {self.generated_at.isoformat()}_",
+            f"_Sources: {self.sources_used} used, {len(self.sources_failed)} failed_",
+            ""
+        ]
+
+        # Sort by relevance, include until token budget exhausted
+        sorted_sections = sorted(
+            self.sections,
+            key=lambda s: s.relevance_score,
+            reverse=True
+        )
+
+        current_tokens = 0
+        for section in sorted_sections:
+            if current_tokens + section.token_count > max_tokens:
+                lines.append(f"\n_[{len(sorted_sections) - len(lines) + 4} sections truncated due to token limit]_")
+                break
+
+            lines.extend([
+                f"## {section.title}",
+                f"_Source: {section.source.name} | Confidence: {section.source.confidence:.0%}_",
+                "",
+                section.content,
+                ""
+            ])
+            current_tokens += section.token_count
+
+        return "\n".join(lines)
+
+# Context builder
+class ContextBuilder:
+    def __init__(self, fetcher: ParallelContextFetcher):
+        self.fetcher = fetcher
+
+    async def build(self, query: str, max_tokens: int = 8000) -> StructuredContext:
+        """Build structured context from raw sources."""
+        raw_context = await self.fetcher.fetch_all(query)
+
+        sections = []
+        failed_sources = []
+
+        for source_name, data in raw_context.items():
+            if data is None:
+                failed_sources.append(source_name)
+                continue
+
+            # Process and structure each source
+            section = self.process_source(source_name, data, query)
+            sections.append(section)
+
+        return StructuredContext(
+            query=query,
+            sections=sections,
+            total_tokens=sum(s.token_count for s in sections),
+            sources_used=len(sections),
+            sources_failed=failed_sources,
+            generated_at=datetime.now()
+        )
+```
+
+---
+
+## 21.8 Context Compression
+
+{/* IMAGE_PLACEHOLDER: Context Compression Strategies Comparison - A three-panel infographic showing: Panel 1 "Extractive": Original document with sentences highlighted in different colors by relevance score, arrows pointing to selected sentences being extracted and reassembled. Panel 2 "Abstractive": Original document flowing through an LLM icon, emerging as a condensed summary. Panel 3 "Hybrid": Two-stage process combining both approaches. Show compression ratios (2-10x) and token counts before/after. Use visual metaphors like a compressor or funnel. Place at the beginning of section 21.8. */}
+
+When context exceeds token budgets, intelligent compression preserves the most valuable information.
+
+### LLMLingua-Style Compression
+
+<ContextCompressionPlayground />
+
+<Callout type="info">
+  **LLMLingua (Microsoft, 2024)**: A family of prompt compression techniques
+  that can reduce context by 2-10x while preserving task performance. The key
+  insight: not all tokens contribute equally to LLM understanding.
+</Callout>
+
+```python
+from typing import Literal
+import tiktoken
+
+class ContextCompressor:
+    """Compress context while preserving key information."""
+
+    def __init__(
+        self,
+        llm,
+        target_ratio: float = 0.5,
+        strategy: Literal["extractive", "abstractive", "hybrid"] = "hybrid"
+    ):
+        self.llm = llm
+        self.target_ratio = target_ratio
+        self.strategy = strategy
+        self.encoder = tiktoken.get_encoding("cl100k_base")
+
+    def count_tokens(self, text: str) -> int:
+        return len(self.encoder.encode(text))
+
+    async def compress(
+        self,
+        context: str,
+        query: str,
+        max_tokens: int
+    ) -> str:
+        """Compress context to fit within token budget."""
+        current_tokens = self.count_tokens(context)
+
+        if current_tokens <= max_tokens:
+            return context
+
+        if self.strategy == "extractive":
+            return await self._extractive_compress(context, query, max_tokens)
+        elif self.strategy == "abstractive":
+            return await self._abstractive_compress(context, query, max_tokens)
+        else:
+            return await self._hybrid_compress(context, query, max_tokens)
+
+    async def _extractive_compress(
+        self,
+        context: str,
+        query: str,
+        max_tokens: int
+    ) -> str:
+        """Extract most relevant sentences."""
+        sentences = self._split_sentences(context)
+
+        # Score sentences by relevance to query
+        scored = await self._score_sentences(sentences, query)
+
+        # Select top sentences until budget exhausted
+        selected = []
+        current_tokens = 0
+
+        for sentence, score in sorted(scored, key=lambda x: x[1], reverse=True):
+            sentence_tokens = self.count_tokens(sentence)
+            if current_tokens + sentence_tokens <= max_tokens:
+                selected.append((sentence, score))
+                current_tokens += sentence_tokens
+
+        # Restore original order
+        original_order = {s: i for i, s in enumerate(sentences)}
+        selected.sort(key=lambda x: original_order.get(x[0], 0))
+
+        return " ".join(s for s, _ in selected)
+
+    async def _abstractive_compress(
+        self,
+        context: str,
+        query: str,
+        max_tokens: int
+    ) -> str:
+        """Generate compressed summary."""
+        prompt = f"""Compress the following context to approximately {max_tokens} tokens.
+Preserve all information relevant to this query: {query}
+
+Focus on:
+- Key facts and data points
+- Relevant technical details
+- Important relationships and dependencies
+
+Context to compress:
+{context}
+
+Compressed version:"""
+
+        response = await self.llm.ainvoke(prompt)
+        return response.content
+
+    async def _hybrid_compress(
+        self,
+        context: str,
+        query: str,
+        max_tokens: int
+    ) -> str:
+        """Combine extractive and abstractive approaches."""
+        # First pass: extractive to reduce by 50%
+        intermediate_budget = max_tokens * 2
+        extracted = await self._extractive_compress(
+            context, query, intermediate_budget
+        )
+
+        # Second pass: abstractive to hit target
+        if self.count_tokens(extracted) > max_tokens:
+            return await self._abstractive_compress(
+                extracted, query, max_tokens
+            )
+
+        return extracted
+
+    async def _score_sentences(
+        self,
+        sentences: list[str],
+        query: str
+    ) -> list[tuple[str, float]]:
+        """Score sentences by relevance to query."""
+        # Batch scoring for efficiency
+        prompt = f"""Rate each sentence's relevance to the query on a scale of 0-10.
+Query: {query}
+
+Sentences:
+{chr(10).join(f'{i+1}. {s}' for i, s in enumerate(sentences))}
+
+Return only numbers separated by commas (e.g., "8,3,9,5"):"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        try:
+            scores = [float(s.strip()) for s in response.content.split(',')]
+            return list(zip(sentences, scores))
+        except:
+            # Fallback: equal scores
+            return [(s, 5.0) for s in sentences]
+
+    def _split_sentences(self, text: str) -> list[str]:
+        """Split text into sentences."""
+        import re
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        return [s.strip() for s in sentences if s.strip()]
+```
+
+### Summarization Chains
+
+```python
+class HierarchicalSummarizer:
+    """Summarize long documents through hierarchical chunking."""
+
+    def __init__(self, llm, chunk_size: int = 4000, overlap: int = 200):
+        self.llm = llm
+        self.chunk_size = chunk_size
+        self.overlap = overlap
+
+    async def summarize(
+        self,
+        document: str,
+        target_length: int = 1000,
+        focus_query: str = None
+    ) -> str:
+        """Hierarchically summarize a long document."""
+        chunks = self._chunk_document(document)
+
+        if len(chunks) == 1:
+            return await self._summarize_chunk(
+                chunks[0], target_length, focus_query
+            )
+
+        # Level 1: Summarize each chunk
+        chunk_summaries = await asyncio.gather(*[
+            self._summarize_chunk(chunk, self.chunk_size // 2, focus_query)
+            for chunk in chunks
+        ])
+
+        # Combine summaries
+        combined = "\n\n".join(chunk_summaries)
+
+        # Level 2: Summarize the summaries (recursive if needed)
+        if self.count_tokens(combined) > target_length * 2:
+            return await self.summarize(combined, target_length, focus_query)
+
+        return await self._summarize_chunk(combined, target_length, focus_query)
+
+    async def _summarize_chunk(
+        self,
+        chunk: str,
+        target_length: int,
+        focus_query: str = None
+    ) -> str:
+        """Summarize a single chunk."""
+        focus_instruction = ""
+        if focus_query:
+            focus_instruction = f"\nFocus on information relevant to: {focus_query}"
+
+        prompt = f"""Summarize the following text in approximately {target_length} tokens.
+Preserve key facts, data, and technical details.{focus_instruction}
+
+Text:
+{chunk}
+
+Summary:"""
+
+        response = await self.llm.ainvoke(prompt)
+        return response.content
+```
+
+### Token Budget Allocation
+
+```python
+from dataclasses import dataclass
+from typing import Dict
+
+@dataclass
+class TokenBudget:
+    """Manage token allocation across context sections."""
+    total: int
+    system_prompt: int = 1500
+    output_reserve: int = 4000
+
+    @property
+    def available(self) -> int:
+        return self.total - self.system_prompt - self.output_reserve
+
+class BudgetAllocator:
+    """Allocate token budget across context sources."""
+
+    def __init__(self, budget: TokenBudget):
+        self.budget = budget
+
+    def allocate(
+        self,
+        sources: Dict[str, dict],
+        priorities: Dict[str, float] = None
+    ) -> Dict[str, int]:
+        """Allocate tokens to sources based on priority."""
+        if priorities is None:
+            # Equal allocation
+            priorities = {name: 1.0 for name in sources}
+
+        total_priority = sum(priorities.values())
+        available = self.budget.available
+
+        allocations = {}
+        for name, priority in priorities.items():
+            allocations[name] = int(available * (priority / total_priority))
+
+        return allocations
+
+    def allocate_dynamic(
+        self,
+        sources: Dict[str, dict],
+        query: str
+    ) -> Dict[str, int]:
+        """Dynamically allocate based on source relevance to query."""
+        # Score each source's relevance
+        relevance_scores = {}
+        for name, data in sources.items():
+            # Simple heuristic: keyword overlap
+            query_words = set(query.lower().split())
+            content = str(data).lower()
+            overlap = sum(1 for w in query_words if w in content)
+            relevance_scores[name] = max(0.1, overlap / len(query_words))
+
+        return self.allocate(sources, relevance_scores)
+```
+
+### Selective Context Inclusion
+
+```python
+class SelectiveContextBuilder:
+    """Include only the most relevant context sections."""
+
+    def __init__(self, llm, embedder):
+        self.llm = llm
+        self.embedder = embedder
+
+    async def build_selective_context(
+        self,
+        query: str,
+        available_sections: list[dict],
+        max_tokens: int
+    ) -> str:
+        """Select and order sections by relevance."""
+
+        # Embed query
+        query_embedding = self.embedder.embed(query)
+
+        # Score sections
+        scored_sections = []
+        for section in available_sections:
+            section_embedding = self.embedder.embed(section["content"])
+            similarity = self._cosine_similarity(query_embedding, section_embedding)
+            scored_sections.append({
+                **section,
+                "relevance": similarity
+            })
+
+        # Sort by relevance
+        scored_sections.sort(key=lambda x: x["relevance"], reverse=True)
+
+        # Select until budget exhausted
+        selected = []
+        current_tokens = 0
+
+        for section in scored_sections:
+            section_tokens = section.get("token_count", len(section["content"].split()))
+
+            if current_tokens + section_tokens > max_tokens:
+                # Try to fit a compressed version
+                remaining = max_tokens - current_tokens
+                if remaining > 200:  # Worth compressing
+                    compressed = await self._compress_section(
+                        section, remaining, query
+                    )
+                    selected.append(compressed)
+                break
+
+            selected.append(section)
+            current_tokens += section_tokens
+
+        # Format for prompt
+        return self._format_sections(selected)
+
+    def _format_sections(self, sections: list[dict]) -> str:
+        """Format selected sections for prompt inclusion."""
+        lines = []
+        for section in sections:
+            lines.append(f"### {section.get('title', 'Context')}")
+            lines.append(f"_Relevance: {section['relevance']:.0%}_")
+            lines.append("")
+            lines.append(section["content"])
+            lines.append("")
+
+        return "\n".join(lines)
+```
+
+---
+
+## 21.9 Complete Pipeline Example
+
+{/* IMAGE_PLACEHOLDER: End-to-End Context Pipeline Flow - A comprehensive workflow diagram showing a complete research agent pipeline using LangGraph. Show four sequential stages as connected nodes: (1) Gather Context node with parallel fetching from arxiv, github, and web sources, (2) Process Context node transforming raw data into structured sections, (3) Analyze Context node with LLM analyzing the structured data, (4) Generate Report node producing final output. Include state transitions between nodes, show example data flowing through each stage (getting progressively more refined), and add timing annotations (Stage 1: 2s, Stage 2: 0.5s, Stage 3: 3s, Stage 4: 2s, Total: 7.5s). Use LangGraph visual style with rounded rectangles for nodes and arrows for edges. Place at the beginning of section 21.9. */}
+
+```python
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict
+
+class ResearchState(TypedDict):
+    query: str
+    raw_context: dict
+    structured_context: str
+    analysis: str
+    final_report: str
+
+async def gather_context(state: ResearchState) -> dict:
+    """Stage 1: Parallel context gathering."""
+    fetcher = ParallelContextFetcher([
+        ContextSource("arxiv", fetch_arxiv, timeout=10),
+        ContextSource("github", fetch_github, timeout=5),
+        ContextSource("web", fetch_web, timeout=8),
+    ])
+
+    raw = await fetcher.fetch_all(state["query"])
+    return {"raw_context": raw}
+
+def process_context(state: ResearchState) -> dict:
+    """Stage 2: Process and structure context."""
+    builder = ContextBuilder()
+    structured = builder.build_sync(
+        state["query"],
+        state["raw_context"],
+        max_tokens=8000
+    )
+    return {"structured_context": structured.to_prompt_format()}
+
+def analyze_context(state: ResearchState) -> dict:
+    """Stage 3: Agent analyzes structured context."""
+    response = llm.invoke([
+        {"role": "system", "content": "You are a research analyst. Analyze the provided context and extract key insights."},
+        {"role": "user", "content": f"Query: {state['query']}\n\n{state['structured_context']}"}
+    ])
+    return {"analysis": response.content}
+
+def generate_report(state: ResearchState) -> dict:
+    """Stage 4: Generate final report."""
+    response = llm.invoke([
+        {"role": "system", "content": "Generate a comprehensive research report based on the analysis."},
+        {"role": "user", "content": state["analysis"]}
+    ])
+    return {"final_report": response.content}
+
+# Build pipeline
+workflow = StateGraph(ResearchState)
+workflow.add_node("gather", gather_context)
+workflow.add_node("process", process_context)
+workflow.add_node("analyze", analyze_context)
+workflow.add_node("report", generate_report)
+
+workflow.add_edge(START, "gather")
+workflow.add_edge("gather", "process")
+workflow.add_edge("process", "analyze")
+workflow.add_edge("analyze", "report")
+workflow.add_edge("report", END)
+
+app = workflow.compile()
+
+# Run
+result = await app.ainvoke({
+    "query": "Latest advances in multi-agent AI systems"
+})
+print(result["final_report"])
+```
+
+---
+
+<RealWorldExample
+  title="Production Research Agent"
+  scenario="A financial analyst needs to research a company before an earnings call. They need data from SEC filings, news articles, analyst reports, and social sentiment—all within 30 seconds."
+  implementation="Context engineering pipeline: (1) Parallel fetch from 6 sources with 5s timeouts each, (2) Circuit breakers skip sources that failed recently, (3) Results processed into structured sections with confidence scores, (4) Compressed to 8000 tokens prioritizing high-confidence recent sources, (5) Delivered to agent in consistent markdown format."
+  takeaway="Without context engineering, this would take 30+ seconds and fail unpredictably. With it, reliable results in under 10 seconds with graceful degradation when sources fail."
+/>
+
+---
+
+<ProgressCheckpoint
+  title="Context Engineering Check"
+  questions={[
+    {
+      question:
+        "What's the difference between prompt engineering and context engineering?",
+      answer:
+        "Prompt engineering crafts the right words. Context engineering builds reliable systems that deliver the right information to those prompts—handling fetching, processing, validation, and structured delivery.",
+    },
+    {
+      question:
+        "What is the 'lost in the middle' problem and how do you address it?",
+      answer:
+        "LLMs struggle to recall information placed in the middle of long contexts. Address it with the 'sandwich' strategy: place most important content at the beginning and end, less critical content in the middle.",
+    },
+    {
+      question: "Why combine vector search with keyword search (hybrid RAG)?",
+      answer:
+        "Vector search captures semantic similarity but can miss exact matches. Keyword search (BM25) finds exact terms but misses synonyms. Hybrid search with reciprocal rank fusion combines both for better recall and precision.",
+    },
+    {
+      question: "What are the three types of caching in context pipelines?",
+      answer:
+        "Semantic caching (similar queries return cached results), prompt caching (Anthropic/OpenAI cache repeated system prompts), and response caching (store computed results with TTL).",
+    },
+    {
+      question: "What are the five stages of a context pipeline?",
+      answer:
+        "Fetch (gather raw data), Process (transform to usable format), Validate (ensure quality), Compress (reduce to essentials), Structure (format for agent consumption).",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Context engineering is systematic, reliable context delivery—not vibe coding",
+    "Large context windows require strategic placement to avoid 'lost in the middle' issues",
+    "Hybrid RAG (vector + keyword) with reranking dramatically improves retrieval quality",
+    "Multi-tier caching (semantic, prompt, response) reduces latency and costs",
+    "Parallel fetching with rate limiting and backpressure handles production scale",
+    "Context compression (extractive, abstractive, hybrid) fits content to token budgets",
+    "Structured context with metadata enables reliable agent reasoning",
+  ]}
+/>
+
+---
+
+## 🔗 Further Reading
+
+### Context Engineering Fundamentals
+
+- [Context Engineering Best Practices (Kubiya)](https://www.kubiya.ai/blog/context-engineering-best-practices)
+- [Context Engineering for AI Agents (Phil Schmid)](https://www.philschmid.de/context-engineering-part-2)
+- [Fighting Context Rot (Inkeep)](https://inkeep.com/blog/fighting-context-rot)
+
+### Context Window Research (2024)
+
+- [Lost in the Middle: How Language Models Use Long Contexts (Stanford, 2024)](https://arxiv.org/abs/2307.03172)
+- [LLMLingua: Compressing Prompts for Accelerated Inference (Microsoft, 2024)](https://arxiv.org/abs/2310.05736)
+- [Anthropic Prompt Caching Documentation](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching)
+
+### RAG Optimization
+
+- [Hybrid Search with Reciprocal Rank Fusion](https://www.pinecone.io/learn/hybrid-search/)
+- [Cohere Rerank API Documentation](https://docs.cohere.com/docs/rerank)
+- [HyDE: Hypothetical Document Embeddings (2023)](https://arxiv.org/abs/2212.10496)
+
+### Async & Resilience Patterns
+
+- [The Tenacity Python Library](https://tenacity.readthedocs.io/)
+- [AsyncIO Documentation](https://docs.python.org/3/library/asyncio.html)
+- [Circuit Breaker Pattern](https://martinfowler.com/bliki/CircuitBreaker.html)
+- [aiohttp Connection Pooling](https://docs.aiohttp.org/en/stable/client_advanced.html)
+
+**Tomorrow**: Project 5—The Forensics Swarm (Multi-Agent Security Analysis).
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** Context engineering is the backbone of the AgentOS
+  capstone. The Smart Orchestrator uses these patterns to gather context from
+  multiple sources before routing requests. The RAG Service implements the full
+  context pipeline.
+</Callout>
+
+### Recommended Exercises
+
+- **EX-04**: RAG Basics (25 min) - Foundation for context retrieval
+- **EX-09**: Async Patterns (25 min) - Parallel data fetching
+
+### Related POCs
+
+- **POC-05**: Web Search Integration (1-2 hours) - External context sources
+- **POC-06**: Request Classification (1-2 hours) - Context-aware routing
+
+### Mini Project Connection
+
+- **MP-03**: RAG Service (2-4 hours) - Full context pipeline implementation
+
+### Capstone Connection
+
+In the capstone, context engineering enables:
+
+- Smart Orchestrator: Multi-source context gathering
+- Research Agent: Parallel web and document search
+- RAG Service: Structured context delivery
+
+See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.

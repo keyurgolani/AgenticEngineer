@@ -1,0 +1,1224 @@
+---
+title: "The Tooling Standard (MCP)"
+description: "The 'USB-C' of AI: Standardizing how agents connect to data and tools."
+week: 3
+day: 15
+---
+
+<ReadingTime minutes={32} />
+
+<SkillLevel level="intermediate" description="Conceptual with code examples" />
+
+<Prerequisites
+  items={[
+    "Completed Day 01: The Anatomy of an Agent",
+    "Understand tool calling concepts",
+    "Basic familiarity with client-server architecture",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Explain what MCP is and why it was created",
+    "Understand the client-server architecture of MCP",
+    "Distinguish between Resources, Tools, and Prompts",
+    "Know how MCP connects to LangGraph agents",
+    "Identify when to use MCP vs. direct tool integration",
+    "Understand MCP's role in the broader AI ecosystem",
+    "Learn about MCP's security model including OAuth 2.1 authorization",
+    "Understand the Elicitation feature for interactive workflows",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "MCP",
+      definition:
+        "Model Context Protocol—an open standard for connecting AI systems to external tools and data, governed by the Linux Foundation's Agentic AI Foundation (AAIF)",
+    },
+    {
+      term: "MCP Client",
+      definition:
+        "The agent or application that consumes tools (e.g., Claude Desktop, ChatGPT, Gemini, your LangGraph agent)",
+    },
+    {
+      term: "MCP Server",
+      definition:
+        "A service that exposes tools, resources, and prompts via the MCP protocol",
+    },
+    {
+      term: "Resource",
+      definition:
+        "Read-only data exposed by an MCP server (files, database schemas, logs)",
+    },
+    {
+      term: "Tool",
+      definition:
+        "An executable function exposed by an MCP server (query_db, send_email)",
+    },
+    {
+      term: "Prompt",
+      definition:
+        "A reusable template for LLM interactions stored on an MCP server",
+    },
+    {
+      term: "Transport",
+      definition:
+        "The communication layer between client and server (stdio for local, Streamable HTTP for remote)",
+    },
+    {
+      term: "Elicitation",
+      definition:
+        "A feature allowing MCP servers to request additional information from users during tool execution",
+    },
+  ]}
+/>
+
+---
+
+## 3.1 The "USB-C" of AI
+
+Before MCP, every tool integration was custom and fragmented.
+
+{/* IMAGE_PLACEHOLDER: Create an illustration showing the evolution from fragmented tool integrations to unified MCP standard. Left side: tangled mess of different connectors/cables labeled with various tools (Slack, Postgres, GitHub, etc.) each with custom integration code. Right side: clean, organized single MCP connector/port with all tools connecting through it. Style: modern, technical diagram with a before/after comparison. Use blue/purple gradient for MCP side to show the unified standard. Include small icons for each tool/service. */}
+
+<SideBySide
+  left={{
+    title: "The Old Way",
+    icon: "❌",
+    items: [
+      "Import `langchain_postgres` for Postgres",
+      "Import `slack_sdk` for Slack",
+      "Write custom code for each tool",
+      "Tools tied to specific frameworks",
+      "Rebuild integrations for each project",
+    ],
+  }}
+  right={{
+    title: "The MCP Way",
+    icon: "✅",
+    items: [
+      "Connect to any database MCP server",
+      "Connect to Slack MCP server",
+      "Use standardized protocol for all tools",
+      "Tools work with any MCP client",
+      "Reuse servers across projects",
+    ],
+  }}
+/>
+
+<ConceptIntro
+  title="Model Context Protocol (MCP)"
+  analogy="Before USB, every device had its own connector—printers, cameras, phones all needed different cables. USB standardized this: one port, many devices. MCP does the same for AI tools. Instead of writing custom code to connect each tool to each AI system, MCP provides one standard that works everywhere."
+  technicalDef="MCP (Model Context Protocol) is an open standard introduced by Anthropic in November 2024 that defines how AI systems connect to external tools and data sources. It uses JSON-RPC 2.0 for communication and specifies a client-server architecture where servers expose capabilities and clients consume them. In December 2025, Anthropic donated MCP to the Linux Foundation under the newly established Agentic AI Foundation (AAIF), ensuring vendor-neutral governance."
+  whyItMatters="MCP means you can write a tool once and use it with Claude, ChatGPT, Gemini, Cursor, VS Code, or any MCP-compatible agent. The ecosystem now includes over 10,000 active public servers, with official SDKs in all major programming languages."
+/>
+
+<Callout type="success">
+  **Industry Standard:** MCP has been adopted by OpenAI (ChatGPT, September
+  2025), Google (Gemini, April 2025), Microsoft (Copilot, VS Code), Cursor,
+  Windsurf, Sourcegraph Cody, and many others. The December 2025 donation to the
+  Linux Foundation—co-founded by Anthropic, Block, and OpenAI with support from
+  Google, Microsoft, AWS, Cloudflare, and Bloomberg—ensures MCP will remain
+  open, community-driven, and vendor-neutral. Official SDKs are now available in
+  **12 languages**: TypeScript, Python, Java, Kotlin, C#, Go, PHP, Perl, Ruby,
+  Rust, Swift, and Elixir.
+</Callout>
+
+---
+
+## 3.2 The Architecture
+
+MCP uses a client-server architecture with clear separation of concerns:
+
+{/* IMAGE_PLACEHOLDER: Create an interactive architecture diagram showing MCP client-server flow. Center: MCP Client (glowing hub). Top: User and Agent/LLM connected to client. Bottom: Four MCP servers (Filesystem, Database, API, Custom) each in a card with their icon. Show bidirectional JSON-RPC arrows between client and servers with animated data packets flowing. Include labels for each component. Style: modern tech diagram with dark background, neon accents (purple/blue), isometric or 2.5D perspective. Make it feel like a living system with subtle animations. */}
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Your Application"
+        User([👤 User])
+        Agent[🤖 Agent / LLM]
+        Client[📡 MCP Client]
+    end
+    
+    subgraph "MCP Servers"
+        FS[📁 Filesystem Server]
+        DB[🗄️ Database Server]
+        API[🌐 API Server]
+        Custom[🔧 Your Custom Server]
+    end
+    
+    User --> Agent
+    Agent <--> Client
+    Client <-->|JSON-RPC| FS
+    Client <-->|JSON-RPC| DB
+    Client <-->|JSON-RPC| API
+    Client <-->|JSON-RPC| Custom
+    
+    style Client fill:#f9f,stroke:#333
+    style Agent fill:#bbf,stroke:#333
+`}
+/>
+
+### Key Components
+
+| Component     | Role                                          | Examples                                         |
+| :------------ | :-------------------------------------------- | :----------------------------------------------- |
+| **Host**      | The application that runs the MCP client      | Claude Desktop, ChatGPT, Gemini, Cursor, VS Code |
+| **Client**    | Connects to servers, routes requests          | Built into host applications                     |
+| **Server**    | Exposes tools, resources, and prompts         | `@modelcontextprotocol/server-filesystem`        |
+| **Transport** | Communication layer between client and server | stdio (local), Streamable HTTP (remote)          |
+
+### Transport Options
+
+MCP supports two primary transport mechanisms:
+
+| Transport           | Use Case                     | How It Works                                             |
+| :------------------ | :--------------------------- | :------------------------------------------------------- |
+| **stdio**           | Local development, CLI tools | Server runs as subprocess, communicates via stdin/stdout |
+| **Streamable HTTP** | Remote servers, production   | Single HTTP endpoint for bidirectional messaging         |
+
+<Callout type="info">
+  **Streamable HTTP (March 2025):** This transport replaced the older SSE
+  (Server-Sent Events) approach. It uses a single HTTP endpoint for all
+  communication, simplifying deployment and enabling better scalability. SSE is
+  now deprecated—use Streamable HTTP for all new remote servers.
+</Callout>
+
+### The Protocol Flow
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Host Application                      │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │              MCP Client                          │    │
+│  │  • Discovers available servers                   │    │
+│  │  • Lists tools/resources from each server        │    │
+│  │  • Routes tool calls to correct server           │    │
+│  │  • Returns results to the LLM                    │    │
+│  └─────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
+                           │
+                    JSON-RPC 2.0
+                           │
+     ┌─────────────────────┼─────────────────────┐
+     ▼                     ▼                     ▼
+┌─────────┐          ┌─────────┐          ┌─────────┐
+│ Server  │          │ Server  │          │ Server  │
+│ (Files) │          │ (DB)    │          │ (Slack) │
+│         │          │         │          │         │
+│ Tools:  │          │ Tools:  │          │ Tools:  │
+│ • read  │          │ • query │          │ • send  │
+│ • write │          │ • list  │          │ • read  │
+└─────────┘          └─────────┘          └─────────┘
+```
+
+---
+
+## 3.3 The Three Primitives
+
+MCP servers can expose three types of capabilities:
+
+{/* IMAGE_PLACEHOLDER: Create a visual comparison of the three MCP primitives. Three columns: 1) Resources (read-only data) - show a document/file icon with "GET" label, examples: PDF, logs, schemas. 2) Tools (executable functions) - show a gear/wrench icon with "POST" label, examples: query_db, send_email, execute_code. 3) Prompts (reusable templates) - show a template/clipboard icon, examples: code_review, analyze_data. Each column should have distinct color coding (blue for Resources, green for Tools, purple for Prompts). Include small example code snippets or JSON structures below each. Style: clean, educational infographic with icons and clear visual hierarchy. */}
+
+### 1. Resources (Read-Only Data)
+
+Resources are passive data that the LLM can read. Think of them as GET requests.
+
+```python
+# Conceptual example - what a resource looks like
+resource = {
+    "uri": "file:///home/user/documents/report.pdf",
+    "name": "Q4 Report",
+    "description": "Quarterly financial report",
+    "mimeType": "application/pdf"
+}
+```
+
+**Use cases:**
+
+- File contents
+- Database schemas
+- Log files
+- Configuration data
+- Documentation
+
+### 2. Tools (Executable Functions)
+
+Tools are active functions that perform actions. Think of them as POST requests.
+
+```python
+# Conceptual example - what a tool definition looks like
+tool = {
+    "name": "query_database",
+    "description": "Execute a SQL query against the database",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "sql": {
+                "type": "string",
+                "description": "The SQL query to execute"
+            }
+        },
+        "required": ["sql"]
+    }
+}
+```
+
+**Use cases:**
+
+- Database queries
+- API calls
+- File operations
+- Sending messages
+- Code execution
+
+### 3. Prompts (Reusable Templates)
+
+Prompts are pre-defined templates for common LLM interactions.
+
+```python
+# Conceptual example - what a prompt looks like
+prompt = {
+    "name": "analyze_code",
+    "description": "Analyze code for bugs and improvements",
+    "arguments": [
+        {
+            "name": "code",
+            "description": "The code to analyze",
+            "required": True
+        },
+        {
+            "name": "language",
+            "description": "Programming language",
+            "required": False
+        }
+    ]
+}
+```
+
+**Use cases:**
+
+- Code review templates
+- Data analysis workflows
+- Report generation
+- Standardized queries
+
+<Callout type="tip">
+  **Most Common:** Tools are by far the most commonly used primitive. Resources
+  and Prompts are useful for specific scenarios but you'll spend most of your
+  time working with Tools.
+</Callout>
+
+---
+
+## 3.4 Building an MCP Server (Python)
+
+Let's build a simple MCP server that exposes tools for an e-commerce system. This demonstrates the core concepts you'll use in production.
+
+{/* INTERACTIVE_COMPONENT: MCP Tool Builder */}
+
+### Installation
+
+```bash
+pip install mcp
+```
+
+### Basic Server Structure
+
+```python
+"""ecommerce_server.py - A simple MCP server"""
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import Tool, TextContent
+import json
+
+# Create the server
+server = Server("ecommerce-tools")
+
+# Simulated database
+CUSTOMERS = {
+    "CUST001": {"name": "Alice Johnson", "email": "alice@example.com"},
+    "CUST002": {"name": "Bob Smith", "email": "bob@example.com"},
+}
+
+ORDERS = {
+    "ORD001": {"customer_id": "CUST001", "items": ["Widget", "Gadget"], "total": 99.99},
+    "ORD002": {"customer_id": "CUST002", "items": ["Gizmo"], "total": 49.99},
+}
+
+
+@server.list_tools()
+async def list_tools() -> list[Tool]:
+    """List all available tools."""
+    return [
+        Tool(
+            name="get_customer",
+            description="Get customer information by ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "customer_id": {
+                        "type": "string",
+                        "description": "The customer ID (e.g., CUST001)"
+                    }
+                },
+                "required": ["customer_id"]
+            }
+        ),
+        Tool(
+            name="get_orders",
+            description="Get all orders for a customer",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "customer_id": {
+                        "type": "string",
+                        "description": "The customer ID"
+                    }
+                },
+                "required": ["customer_id"]
+            }
+        ),
+    ]
+
+
+@server.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    """Handle tool calls."""
+    if name == "get_customer":
+        customer_id = arguments["customer_id"]
+        customer = CUSTOMERS.get(customer_id)
+        if customer:
+            return [TextContent(type="text", text=json.dumps(customer))]
+        return [TextContent(type="text", text=f"Customer {customer_id} not found")]
+
+    elif name == "get_orders":
+        customer_id = arguments["customer_id"]
+        customer_orders = [
+            {"order_id": oid, **order}
+            for oid, order in ORDERS.items()
+            if order["customer_id"] == customer_id
+        ]
+        return [TextContent(type="text", text=json.dumps(customer_orders))]
+
+    return [TextContent(type="text", text=f"Unknown tool: {name}")]
+
+
+async def main():
+    """Run the server."""
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(read_stream, write_stream)
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+```
+
+<Callout type="info">
+**Transport: stdio vs Streamable HTTP**
+
+This example uses `stdio` (standard input/output) transport, which is ideal for local development and testing. For production deployments, use **Streamable HTTP** transport (introduced in March 2025), which provides bidirectional communication through a single HTTP endpoint. The older SSE transport is now deprecated.
+
+</Callout>
+
+---
+
+## 3.5 Using FastMCP (Simplified API)
+
+The `mcp` package includes `FastMCP`, a higher-level API that simplifies server creation:
+
+```python
+"""ecommerce_fastmcp.py - Using FastMCP for cleaner code"""
+from mcp.server.fastmcp import FastMCP
+
+# Create server with FastMCP
+mcp = FastMCP("ecommerce-tools")
+
+# Simulated data
+CUSTOMERS = {
+    "CUST001": {"name": "Alice Johnson", "email": "alice@example.com"},
+    "CUST002": {"name": "Bob Smith", "email": "bob@example.com"},
+}
+
+
+@mcp.tool()
+def get_customer(customer_id: str) -> dict:
+    """
+    Get customer information by ID.
+
+    Args:
+        customer_id: The customer ID (e.g., CUST001)
+
+    Returns:
+        Customer information including name and email
+    """
+    customer = CUSTOMERS.get(customer_id)
+    if customer:
+        return customer
+    return {"error": f"Customer {customer_id} not found"}
+
+
+@mcp.tool()
+def search_customers(name_query: str) -> list[dict]:
+    """
+    Search for customers by name.
+
+    Args:
+        name_query: Partial name to search for
+
+    Returns:
+        List of matching customers
+    """
+    results = []
+    for cid, customer in CUSTOMERS.items():
+        if name_query.lower() in customer["name"].lower():
+            results.append({"id": cid, **customer})
+    return results
+
+
+if __name__ == "__main__":
+    mcp.run(transport="stdio")
+```
+
+<Callout type="tip">
+**FastMCP Magic:** Notice how the `@mcp.tool()` decorator automatically:
+- Extracts the function name as the tool name
+- Uses the docstring as the description
+- Generates the input schema from type hints
+- Handles serialization of return values
+
+This is the recommended approach for most use cases.
+
+</Callout>
+
+---
+
+## 3.6 Connecting MCP to Your Agent
+
+The real power comes when you connect MCP servers to your LangGraph agents. Here's the mental model:
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant LangGraph as LangGraph Agent
+    participant MCP as MCP Client
+    participant Server as MCP Server
+    
+    User->>LangGraph: "Get Alice's orders"
+    LangGraph->>LangGraph: Reason: Need customer lookup
+    LangGraph->>MCP: list_tools()
+    MCP->>Server: List available tools
+    Server-->>MCP: [get_customer, get_orders, ...]
+    MCP-->>LangGraph: Tool definitions
+    
+    LangGraph->>LangGraph: Decide: Use get_customer
+    LangGraph->>MCP: call_tool("get_customer", {id: "CUST001"})
+    MCP->>Server: Execute tool
+    Server-->>MCP: {"name": "Alice", ...}
+    MCP-->>LangGraph: Tool result
+    
+    LangGraph->>LangGraph: Reason with result
+    LangGraph-->>User: "Alice has 2 orders..."
+`}
+/>
+
+### Conceptual Integration
+
+```python
+# Pseudocode showing the integration pattern
+from langgraph.graph import StateGraph, MessagesState
+
+# MCP client would be initialized here
+# mcp_client = MCPClient(servers=["ecommerce-server"])
+
+def call_tools(state: MessagesState) -> dict:
+    """Node that calls MCP tools based on LLM decisions."""
+    # 1. Get available tools from MCP
+    # tools = mcp_client.list_tools()
+
+    # 2. LLM decides which tool to call
+    # tool_call = llm.invoke(state["messages"], tools=tools)
+
+    # 3. Execute via MCP
+    # result = mcp_client.call_tool(tool_call.name, tool_call.args)
+
+    # 4. Return result to state
+    # return {"messages": [ToolMessage(content=result)]}
+    pass
+
+# Build graph with MCP-powered tool node
+builder = StateGraph(MessagesState)
+builder.add_node("tools", call_tools)
+# ... rest of graph
+```
+
+<Callout type="warning">
+  **Coming in Project 1 (Days 31-40):** We'll build a complete LangGraph + MCP
+  integration in the Deep Research Agent project. For now, focus on
+  understanding the concepts and architecture.
+</Callout>
+
+---
+
+## 3.7 The MCP Ecosystem
+
+One of MCP's biggest advantages is the growing ecosystem of pre-built servers. With over 10,000 active public servers and 97M+ monthly SDK downloads, you can find tools for almost any use case.
+
+{/* IMAGE_PLACEHOLDER: Create an ecosystem visualization showing the MCP landscape. Center: MCP logo/hub. Radiating outward in organized sections: 1) Official Servers (Anthropic/AAIF) with their logos, 2) Community Servers organized by category (Databases, Cloud, Dev Tools, Productivity, Communication). Each category should be a distinct color-coded section with representative icons. Show connection lines from center to all servers. Include statistics: "10,000+ servers", "97M+ monthly downloads", "12 languages". Style: modern tech ecosystem map, use a circular/radial layout, vibrant colors for different categories, make it feel like a thriving community. Add small badges for "Official" vs "Community" servers. */}
+
+### Official Servers (by Anthropic/AAIF)
+
+| Server                                    | Purpose            | Tools Provided                  |
+| :---------------------------------------- | :----------------- | :------------------------------ |
+| `@modelcontextprotocol/server-filesystem` | File operations    | read, write, list, search       |
+| `@modelcontextprotocol/server-github`     | GitHub integration | repos, issues, PRs, code search |
+| `@modelcontextprotocol/server-postgres`   | PostgreSQL         | query, schema inspection        |
+| `@modelcontextprotocol/server-slack`      | Slack messaging    | send, read, search channels     |
+| `@modelcontextprotocol/server-memory`     | Persistent memory  | store, retrieve, search         |
+
+### Community Servers
+
+The community has built thousands of servers for:
+
+- **Databases:** MySQL, MongoDB, Redis, SQLite, Supabase
+- **Cloud:** AWS, GCP, Azure services, Cloudflare
+- **Dev Tools:** Docker, Kubernetes, Git, Terraform
+- **Productivity:** Notion, Linear, Jira, Confluence, Asana
+- **Communication:** Discord, Email, SMS, Teams
+
+<Callout type="tip">
+  **Finding Servers:** The official [MCP
+  Registry](https://modelcontextprotocol.io) provides a community-driven
+  directory for discovering available servers. You can also browse [GitHub
+  topics](https://github.com/topics/mcp-server) for community contributions.
+</Callout>
+
+---
+
+## 3.8 Elicitation: Interactive Workflows
+
+One of the most powerful features added in 2025 is **Elicitation**—the ability for MCP servers to request additional information from users mid-execution. This enables truly interactive workflows.
+
+{/* IMAGE_PLACEHOLDER: Create an interactive workflow diagram showing elicitation in action. Show a conversation flow: User asks "Book a flight to Paris" → MCP Server pauses and asks "What dates?" (show a calendar popup/form) → User responds "March 15-22" → Server completes booking. Use speech bubbles for user/server communication, and highlight the elicitation pause point with a glowing effect. Include both Form mode (showing a form UI) and URL mode (showing a browser redirect) as two parallel examples. Style: modern UI mockup with actual form elements, conversational design, use purple/blue gradient for MCP components. */}
+
+### How Elicitation Works
+
+Instead of failing when information is missing, a server can pause and ask the user:
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Client as MCP Client
+    participant Server as MCP Server
+    
+    User->>Client: "Book a flight to Paris"
+    Client->>Server: call_tool("book_flight", {destination: "Paris"})
+    Server->>Client: elicitation/create (need travel dates)
+    Client->>User: "What dates do you want to travel?"
+    User->>Client: "March 15-22"
+    Client->>Server: elicitation response
+    Server->>Client: Tool result (flight booked!)
+    Client->>User: "Flight booked for March 15-22"
+`}
+/>
+
+### Elicitation Modes
+
+MCP supports two elicitation modes:
+
+| Mode     | Use Case                   | How It Works                                     |
+| :------- | :------------------------- | :----------------------------------------------- |
+| **Form** | Structured data collection | Server sends JSON Schema, client renders form    |
+| **URL**  | OAuth flows, external auth | Server sends URL, user completes flow in browser |
+
+### Form Mode Example
+
+```python
+# Server-side: requesting user information
+@mcp.tool()
+async def book_appointment(service: str) -> dict:
+    """Book an appointment for a service."""
+    # Request additional info via elicitation
+    user_info = await mcp.elicit(
+        message="Please provide your contact details",
+        schema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Your full name"},
+                "email": {"type": "string", "format": "email"},
+                "preferred_date": {"type": "string", "format": "date"},
+                "notes": {"type": "string", "description": "Any special requests"}
+            },
+            "required": ["name", "email", "preferred_date"]
+        }
+    )
+
+    # Now we have the user's info
+    return {
+        "status": "booked",
+        "service": service,
+        "customer": user_info["name"],
+        "date": user_info["preferred_date"]
+    }
+```
+
+### URL Mode for OAuth
+
+URL elicitation is essential for secure authentication flows:
+
+```python
+@mcp.tool()
+async def connect_github() -> dict:
+    """Connect your GitHub account."""
+    # Redirect user to OAuth flow
+    auth_result = await mcp.elicit(
+        mode="url",
+        message="Please authorize access to your GitHub account",
+        url="https://github.com/login/oauth/authorize?client_id=..."
+    )
+
+    # User completed OAuth, we have the token
+    return {"status": "connected", "username": auth_result["username"]}
+```
+
+<Callout type="tip">
+**When to Use Elicitation:**
+- Collecting missing required information
+- OAuth/authentication flows
+- User confirmation before destructive actions
+- Multi-step wizards within a single tool call
+
+Elicitation keeps the user in control while enabling richer interactions.
+
+</Callout>
+
+---
+
+## 3.9 OAuth 2.1 Authorization
+
+The June 2025 specification update introduced comprehensive **OAuth 2.1 authorization** for MCP, making it enterprise-ready. This is critical for production deployments where servers access sensitive resources.
+
+{/* IMAGE_PLACEHOLDER: Create a security-focused diagram showing OAuth 2.1 flow for MCP. Show the complete authorization flow: 1) MCP Client discovers auth endpoint, 2) Generates PKCE challenge, 3) User redirects to IdP (show login screen), 4) User grants permissions (show consent screen), 5) Auth code returned, 6) Client exchanges code+verifier for token, 7) Token used to authenticate with MCP server. Use lock/shield icons for security elements, show PKCE code_verifier and code_challenge as encrypted keys. Include visual indicators for "secure" steps (HTTPS, token binding). Style: professional security diagram with green checkmarks for secure steps, use gradients and modern iconography. Make it feel enterprise-grade and trustworthy. */}
+
+### Key Security Features
+
+| Feature                 | Purpose                                          |
+| :---------------------- | :----------------------------------------------- |
+| **Mandatory PKCE**      | Prevents authorization code interception attacks |
+| **OAuth 2.1 Base**      | Modern security defaults, no implicit flow       |
+| **Resource Indicators** | Specify which resources a token can access       |
+| **Token Binding**       | Tokens tied to specific client instances         |
+
+### Authorization Flow
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    MCP Client                            │
+│  1. Discovers server's authorization endpoint            │
+│  2. Generates PKCE code_verifier and code_challenge      │
+│  3. Redirects user to authorization server               │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│              Authorization Server (IdP)                  │
+│  4. User authenticates and grants permissions            │
+│  5. Returns authorization code to client                 │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                    MCP Client                            │
+│  6. Exchanges code + code_verifier for access token      │
+│  7. Uses token to authenticate with MCP server           │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Server-Side Authorization
+
+```python
+from mcp.server.fastmcp import FastMCP
+from mcp.server.auth import OAuth2Config
+
+mcp = FastMCP(
+    "secure-server",
+    auth=OAuth2Config(
+        issuer="https://auth.example.com",
+        audience="https://api.example.com",
+        scopes=["read:data", "write:data"]
+    )
+)
+
+@mcp.tool()
+async def get_sensitive_data(query: str) -> dict:
+    """Access sensitive data (requires authentication)."""
+    # Token is automatically validated by the framework
+    # Access user info from the request context
+    user = mcp.get_current_user()
+
+    # Check scopes
+    if "read:data" not in user.scopes:
+        return {"error": "Insufficient permissions"}
+
+    return {"data": f"Sensitive results for {query}"}
+```
+
+<Callout type="warning">
+  **Security Best Practices:** - Always use HTTPS for remote MCP servers -
+  Implement proper scope validation - Use short-lived access tokens with refresh
+  tokens - Log all tool invocations for audit trails - Consider rate limiting to
+  prevent abuse
+</Callout>
+
+---
+
+## 3.10 Recent Protocol Updates (November 2025)
+
+The MCP specification continues to evolve. The November 2025 release introduced several important features for production deployments:
+
+### Asynchronous Operations (Tasks)
+
+Long-running operations like report generation or data analysis can now run asynchronously:
+
+```python
+# Conceptual example - async task pattern
+@mcp.tool()
+async def generate_report(data_source: str) -> dict:
+    """
+    Generate a comprehensive report (may take several minutes).
+    Returns a task ID for polling.
+    """
+    task_id = await start_background_task(data_source)
+    return {"task_id": task_id, "status": "processing"}
+
+@mcp.tool()
+async def get_task_status(task_id: str) -> dict:
+    """Check the status of a long-running task."""
+    return await check_task(task_id)
+```
+
+### Stateless Mode
+
+Servers can now operate in stateless mode, enabling horizontal scaling and serverless deployments:
+
+```python
+# Stateless server configuration
+mcp = FastMCP("stateless-server", stateless=True)
+```
+
+### Server Identity
+
+Servers can now declare their identity, enabling better security and audit trails:
+
+```python
+server = Server(
+    "my-server",
+    identity={
+        "name": "Production Database Server",
+        "version": "1.2.0",
+        "vendor": "MyCompany"
+    }
+)
+```
+
+### Client ID Metadata Documents
+
+Enterprise deployments can now use metadata documents to describe client capabilities and requirements, improving interoperability in complex environments.
+
+<Callout type="info">
+  **Specification Versions:** MCP uses dated specification versions (e.g.,
+  `2025-11-25`). When building production systems, specify the version you're
+  targeting to ensure compatibility. Key versions: March 2025 (Streamable HTTP),
+  June 2025 (OAuth 2.1, Elicitation), November 2025 (Tasks, Stateless mode).
+</Callout>
+
+---
+
+## 3.11 When to Use MCP vs. Direct Integration
+
+MCP isn't always the right choice. Here's a decision framework:
+
+{/* IMAGE_PLACEHOLDER: Create a decision tree or comparison flowchart for choosing between MCP and direct integration. Start with a question diamond "Building reusable tools?" branching to MCP (Yes) or Direct (No). Include other decision points: "Multiple AI clients?", "Need OAuth/auth?", "Performance critical?", "Quick prototype?". Each path should lead to either "Use MCP" (blue/purple box with checkmarks) or "Use Direct Integration" (orange box with checkmarks). Include small icons for each decision point. Style: clean flowchart with modern design, use color coding to guide the decision path, make it practical and easy to follow. Add a "Hybrid Approach" box at the bottom showing both can coexist. */}
+
+<SideBySide
+  left={{
+    title: "Use MCP When...",
+    icon: "🔌",
+    color: "border-blue-500/20 bg-blue-500/5",
+    items: [
+      "Building reusable tools across projects",
+      "Need to support multiple AI clients",
+      "Want to leverage existing MCP servers",
+      "Building tools for team/organization use",
+      "Security isolation is important",
+      "Need OAuth/authentication for external services",
+    ],
+  }}
+  right={{
+    title: "Use Direct Integration When...",
+    icon: "⚡",
+    color: "border-amber-500/20 bg-amber-500/5",
+    items: [
+      "One-off, project-specific tools",
+      "Only using one framework (e.g., LangChain)",
+      "Need maximum performance/minimal overhead",
+      "Prototyping quickly",
+      "Tools need deep framework integration",
+      "Internal tools with no auth requirements",
+    ],
+  }}
+/>
+
+### The Hybrid Approach
+
+In practice, most production systems use both:
+
+```
+Your Agent System
+├── MCP Servers (standardized, reusable)
+│   ├── Database access
+│   ├── File operations
+│   └── External APIs
+│
+└── Direct Tools (framework-specific)
+    ├── Custom business logic
+    ├── Performance-critical operations
+    └── Tightly coupled features
+```
+
+---
+
+## 3.12 Security Considerations
+
+MCP provides a security boundary between your agent and external systems:
+
+<Callout type="warning">
+  **Security Principles:** User Consent (MCP clients should get user approval
+  before executing tools), Least Privilege (servers should expose only necessary
+  capabilities), Input Validation (always validate tool inputs on the server
+  side), Audit Logging (log all tool calls for security review), Sandboxing (run
+  servers with minimal permissions), and OAuth 2.1 (use proper authentication
+  for sensitive operations).
+</Callout>
+
+### Example: Safe Tool Design
+
+{/* IMAGE_PLACEHOLDER: Create a code security visualization showing input validation flow. Show a funnel/filter diagram: Top: "User Input" (SQL query) → Middle: "Validation Layers" (3 filters: 1. Check for SELECT only, 2. Block dangerous keywords, 3. Sanitize input) → Bottom: "Safe Execution" (database with shield icon). Use red X marks for blocked queries and green checkmarks for safe queries. Include example queries flowing through the system with their validation results. Style: security-focused diagram with shields, locks, and filter icons. Use red for dangerous patterns, green for safe execution, yellow for validation steps. Make it educational and clear about security best practices. */}
+
+```python
+@mcp.tool()
+def query_database(sql: str) -> dict:
+    """
+    Execute a READ-ONLY SQL query.
+
+    Args:
+        sql: SELECT query to execute (no modifications allowed)
+    """
+    # Validate: only allow SELECT statements
+    if not sql.strip().upper().startswith("SELECT"):
+        return {"error": "Only SELECT queries are allowed"}
+
+    # Validate: prevent dangerous patterns
+    dangerous_patterns = ["DROP", "DELETE", "UPDATE", "INSERT", "TRUNCATE"]
+    for pattern in dangerous_patterns:
+        if pattern in sql.upper():
+            return {"error": f"Query contains forbidden keyword: {pattern}"}
+
+    # Execute safely
+    try:
+        result = db.execute(sql)
+        return {"data": result, "row_count": len(result)}
+    except Exception as e:
+        return {"error": str(e)}
+```
+
+---
+
+## 3.13 Advanced Patterns: Optimization & Deployment
+
+As your MCP usage scales, you'll need advanced patterns for management and debugging.
+
+### Master-MCP: The Proxy Pattern
+
+In enterprise environments, connecting every agent directly to every server is unmanageable. The **Master-MCP** (or MCP Proxy) pattern introduces a central gateway:
+
+<Mermaid
+  chart={`
+graph LR
+    Agent[🤖 Agent] --> Proxy[🛡️ Master-MCP Proxy]
+    Proxy --> DB[🗄️ Database]
+    Proxy --> API[🌐 External API]
+    Proxy --> Int[🔐 Internal Tool]
+    
+    style Proxy fill:#f9f,stroke:#333
+`}
+/>
+
+**Key Benefits:**
+
+1.  **Parameter Hiding**: The proxy can inject secrets (API keys, customer IDs) so the LLM never sees them.
+2.  **Adjustable Descriptions**: Dynamically rewrite tool descriptions based on the user's role or context.
+3.  **Access Control**: Enforce policy checks at a single choke point.
+
+### Debugging with `mcp-cli`
+
+For testing servers without spinning up a full agent, use the **mcp-cli** tool (by Phil Schmid):
+
+```bash
+# Install
+curl -fSSL https://raw.githubusercontent.com/philschmid/mcp-cli/main/install.sh | bash
+
+# List all tools on a server
+mcp-cli list --server usage-mcp
+
+# Inspect a specific tool schema
+mcp-cli inspect --server usage-mcp --tool get-usage
+
+# Call a tool directly
+mcp-cli call --server usage-mcp --tool get-usage --args '{"customer_id": "123"}'
+```
+
+This is invaluable for debugging server implementations before integrating them into your agent graph.
+
+---
+
+<ProgressCheckpoint
+  title="MCP Knowledge Check"
+  questions={[
+    {
+      question: "What problem does MCP solve?",
+      answer:
+        "MCP standardizes how AI systems connect to external tools and data. Instead of writing custom integrations for each tool and each AI framework, you write one MCP server that works with any MCP client.",
+    },
+    {
+      question: "What are the three primitives that MCP servers can expose?",
+      answer:
+        "Resources (read-only data like files and schemas), Tools (executable functions like queries and API calls), and Prompts (reusable templates for LLM interactions).",
+    },
+    {
+      question: "What's the difference between an MCP Client and Server?",
+      answer:
+        "The Client is part of the AI application (like Claude Desktop or your agent) that consumes tools. The Server is a separate service that exposes tools, resources, and prompts via the MCP protocol.",
+    },
+    {
+      question: "When should you use MCP vs. direct tool integration?",
+      answer:
+        "Use MCP for reusable tools, multi-client support, and leveraging the ecosystem. Use direct integration for one-off tools, maximum performance, or deep framework integration.",
+    },
+    {
+      question: "What is the Agentic AI Foundation (AAIF)?",
+      answer:
+        "AAIF is a directed fund under the Linux Foundation, co-founded by Anthropic, Block, and OpenAI, that now governs MCP. It ensures the protocol remains open, vendor-neutral, and community-driven.",
+    },
+    {
+      question: "What is Elicitation and when would you use it?",
+      answer:
+        "Elicitation allows MCP servers to request additional information from users mid-execution. Use it for collecting missing data, OAuth flows, user confirmations, or multi-step wizards within a tool call.",
+    },
+    {
+      question: "What transport should you use for remote MCP servers?",
+      answer:
+        "Use Streamable HTTP (introduced March 2025) for remote servers. It provides bidirectional communication through a single HTTP endpoint. SSE is deprecated.",
+    },
+  ]}
+/>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Exposing too many tools in one server",
+      fix: "Keep servers focused. One server per domain (database, files, API). This improves security and maintainability.",
+    },
+    {
+      mistake: "Not validating tool inputs",
+      fix: "Always validate inputs on the server side. Never trust that the LLM will send valid data.",
+    },
+    {
+      mistake: "Skipping tool descriptions",
+      fix: "Write detailed descriptions and docstrings. The LLM uses these to decide when and how to use your tools.",
+    },
+    {
+      mistake: "Using MCP for everything",
+      fix: "MCP adds overhead. For simple, project-specific tools, direct integration may be simpler and faster.",
+    },
+    {
+      mistake: "Using SSE transport for new servers",
+      fix: "SSE is deprecated. Use Streamable HTTP for remote servers—it's simpler and more scalable.",
+    },
+    {
+      mistake: "Ignoring OAuth for sensitive operations",
+      fix: "Use OAuth 2.1 with PKCE for any server accessing user data or external services. Don't store secrets in MCP clients.",
+    },
+  ]}
+/>
+
+---
+
+<Exercise
+  title="Design an MCP Server"
+  difficulty="intermediate"
+  objectives={[
+    "Identify the tools needed for a specific use case",
+    "Design tool schemas with proper input validation",
+    "Consider security implications",
+    "Plan for elicitation where user input is needed"
+  ]}
+>
+
+**Scenario:** You're building an MCP server for a code review assistant. Design the server specification:
+
+1. **List 3-5 tools** the server should expose (e.g., `get_file_contents`, `list_pull_requests`)
+2. **For each tool**, define:
+   - Name and description
+   - Input parameters with types
+   - Expected output format
+3. **Identify security concerns** and how you'd address them
+4. **Plan elicitation points** - where might you need to ask the user for additional information?
+
+**Deliverable:** A design document (markdown or comments) describing your server. You don't need to implement it yet—focus on the design.
+
+**Bonus:** What resources (read-only data) might this server expose? How would you handle OAuth for GitHub integration?
+
+</Exercise>
+
+---
+
+<Exercise
+  title="Implement Elicitation Flow"
+  difficulty="advanced"
+  objectives={[
+    "Understand when elicitation is appropriate",
+    "Design a multi-step workflow with user interaction",
+    "Handle both form and URL elicitation modes"
+  ]}
+>
+
+**Scenario:** Build an MCP server for a travel booking assistant that:
+
+1. Takes a destination as input
+2. Uses **form elicitation** to collect travel dates and preferences
+3. Uses **URL elicitation** for payment authorization
+4. Returns a booking confirmation
+
+**Design Questions:**
+
+- What JSON Schema would you use for the travel preferences form?
+- How would you handle the OAuth flow for payment?
+- What happens if the user cancels mid-elicitation?
+
+**Starter Structure:**
+
+```python
+@mcp.tool()
+async def book_travel(destination: str) -> dict:
+    """Book travel to a destination."""
+    # Step 1: Elicit travel dates and preferences (form mode)
+    preferences = await mcp.elicit(
+        message="Please provide your travel details",
+        schema={
+            # Design your schema here
+        }
+    )
+
+    # Step 2: Calculate price and elicit payment (URL mode)
+    payment = await mcp.elicit(
+        mode="url",
+        message="Please complete payment",
+        url=f"https://payment.example.com/checkout?amount={price}"
+    )
+
+    # Step 3: Return confirmation
+    return {"booking_id": "...", "status": "confirmed"}
+```
+
+</Exercise>
+
+---
+
+<ModuleSummary
+  points={[
+    "MCP is the 'USB-C of AI'—a standard protocol for connecting tools to AI systems",
+    "Now governed by the Linux Foundation's Agentic AI Foundation (AAIF) for vendor neutrality",
+    "Architecture: Hosts run Clients that connect to Servers exposing Tools/Resources/Prompts",
+    "Tools are executable functions; Resources are read-only data; Prompts are templates",
+    "FastMCP simplifies server creation with decorators and automatic schema generation",
+    "The ecosystem includes 10,000+ servers with 97M+ monthly SDK downloads across 12 languages",
+    "Use stdio transport for local development, Streamable HTTP for production (SSE is deprecated)",
+    "Elicitation enables interactive workflows—servers can request user input mid-execution",
+    "OAuth 2.1 with mandatory PKCE provides enterprise-grade security for sensitive operations",
+    "November 2025 spec added async operations, stateless mode, and server identity",
+    "Security: validate inputs, use least privilege, get user consent for tool execution",
+    "Major AI providers (OpenAI, Google, Microsoft) have adopted MCP as the standard",
+  ]}
+/>
+
+---
+
+## Connection to LangGraph
+
+MCP and LangGraph are complementary:
+
+- **LangGraph** handles orchestration—the flow of reasoning, decisions, and loops
+- **MCP** handles tool integration—connecting to external systems
+
+Together, they provide a production-ready foundation:
+
+```
+User Request
+    │
+    ▼
+┌─────────────────────────────────────┐
+│         LangGraph Agent             │
+│  ┌─────────────────────────────┐    │
+│  │  Reason → Act → Observe     │    │
+│  │         (The Loop)          │    │
+│  └─────────────────────────────┘    │
+│              │                      │
+│              ▼                      │
+│  ┌─────────────────────────────┐    │
+│  │       MCP Client            │    │
+│  │   (Tool Execution Layer)    │    │
+│  └─────────────────────────────┘    │
+└─────────────────────────────────────┘
+              │
+              ▼
+    ┌─────────┴─────────┐
+    │   MCP Servers     │
+    │  (External Tools) │
+    └───────────────────┘
+```
+
+See **[Day 03: LangGraph Basics](/modules/day-03-langgraph-basics)** for the orchestration side.
+
+---
+
+### Coming Up Next
+
+In **Day 04**, we'll dive deeper into tool calling patterns:
+
+- Defining tool schemas for LLMs
+- Handling tool errors gracefully
+- Parallel tool execution
+- Tool result formatting
+
+---
+
+## Additional Resources
+
+- **[MCP Specification](https://modelcontextprotocol.io/specification/2025-11-25)** — Latest protocol specification (November 2025)
+- **[MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)** — Official Python implementation
+- **[MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)** — Official TypeScript implementation
+- **[MCP Server Registry](https://modelcontextprotocol.io)** — Browse available servers
+- **[Agentic AI Foundation](https://www.linuxfoundation.org/press/anthropic-donates-model-context-protocol)** — Linux Foundation governance
+- **[Anthropic MCP Announcement](https://www.anthropic.com/news/model-context-protocol)** — Original announcement and vision
+- **[MCP Blog](https://blog.modelcontextprotocol.io/)** — Official updates and tutorials
+- **[MCP Authorization Guide](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)** — OAuth 2.1 implementation details
+- **[Cloudflare MCP Guide](https://developers.cloudflare.com/agents/model-context-protocol/)** — Deploying MCP servers on Cloudflare

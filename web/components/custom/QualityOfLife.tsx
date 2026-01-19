@@ -77,7 +77,7 @@ export function LearningObjectives({ objectives }: { objectives: string[] }) {
 }
 
 // Skill Level Indicator
-export function SkillLevel({ level, description }: { level: "beginner" | "intermediate" | "advanced" | "expert"; description?: string }) {
+export function SkillLevel({ level = "beginner", description }: { level?: "beginner" | "intermediate" | "advanced" | "expert"; description?: string }) {
   const levels = {
     beginner: { color: "bg-green-500", label: "Beginner Friendly", icon: Sparkles, filled: 1 },
     intermediate: { color: "bg-yellow-500", label: "Intermediate", icon: Brain, filled: 2 },
@@ -85,7 +85,7 @@ export function SkillLevel({ level, description }: { level: "beginner" | "interm
     expert: { color: "bg-red-500", label: "Expert Level", icon: Award, filled: 4 }
   }
   
-  const config = levels[level]
+  const config = levels[level] || levels.beginner
   const Icon = config.icon
   
   return (

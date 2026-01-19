@@ -1,0 +1,772 @@
+---
+title: "Mini Project 3: Document RAG Service"
+description: "Build a document embedding and retrieval service for RAG-powered agents."
+week: 12
+day: 84
+---
+
+<ReadingTime minutes={40} />
+
+<SkillLevel level="advanced" description="RAG systems" />
+
+<Prerequisites
+  items={[
+    "Completed Day 83 (Memory Service)",
+    "Understanding of vector embeddings",
+    "Familiarity with document processing concepts",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Build a document ingestion pipeline for PDF, Markdown, and text files",
+    "Implement intelligent document chunking strategies",
+    "Set up ChromaDB for vector storage and retrieval",
+    "Create hybrid search combining semantic and keyword matching",
+    "Design citation tracking for source attribution",
+  ]}
+/>
+
+<Callout type="info">
+  **Series Context:** Mini-project 3 of 5 in our 90-day curriculum. This service enables your agents to
+  answer questions from uploaded documents—the knowledge layer of your
+  ecosystem. Part of Month 3's advanced architectures focus.
+</Callout>
+
+<KeyTerms
+  terms={[
+    {
+      term: "RAG",
+      definition:
+        "Retrieval-Augmented Generation—connecting LLMs to external knowledge by retrieving relevant documents before generating responses",
+    },
+    {
+      term: "Document Chunking",
+      definition:
+        "Splitting documents into smaller pieces optimized for embedding and retrieval",
+    },
+    {
+      term: "Vector Database",
+      definition:
+        "Database optimized for storing and searching high-dimensional embeddings (e.g., ChromaDB)",
+    },
+    {
+      term: "Hybrid Search",
+      definition:
+        "Combining semantic (vector) search with keyword (BM25) search for better retrieval accuracy",
+    },
+    {
+      term: "BM25",
+      definition:
+        "Best Match 25—a ranking function for keyword-based document retrieval",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build a document processing pipeline that chunks, embeds, and stores documents for semantic retrieval. Supports PDF, Markdown, and text files with citation tracking.
+
+**Why This Matters**: RAG (Retrieval-Augmented Generation) is the standard for connecting LLMs to private data. A dedicated service allows multiple agents to share a common knowledge base.
+
+**Skills Showcased**:
+
+- Document chunking strategies
+- Vector database integration (ChromaDB)
+- Hybrid search (Semantic + Keyword)
+- Citation and source tracking
+- File parsing pipelines
+
+## Module Summary
+
+In this mini-project, we created a specialized RAG service that handles the "knowledge" aspect of our agent ecosystem—a critical component in the 90-day journey toward production-grade AI systems.
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing "The RAG Pipeline Journey" with four connected stages:
+1. "Ingestion" - Icon of documents entering a funnel, with labels for PDF/MD/TXT support
+2. "Chunking" - Visual of a document being intelligently split with overlapping sections highlighted
+3. "Embedding" - Transformation visualization showing text converting to vector space (perhaps a 3D scatter plot representation)
+4. "Retrieval" - Two parallel paths merging (semantic + keyword) leading to ranked results with citation badges
+Style: Use a horizontal timeline/pipeline layout with icons and brief annotations. Color-code each stage. Include small "pro tip" callouts like "Overlap prevents context loss" and "Hybrid search = best of both worlds"
+This infographic should be placed right after the Module Summary heading to provide a visual overview of what students built. */}
+
+1. **Ingestion Pipeline**: We built a robust parser that handles PDFs, Markdowns, and Text files, intelligently chunking them for optimal retrieval.
+2. **Vector Storage**: We integrated ChromaDB to store high-dimensional embeddings of our document chunks.
+3. **Hybrid Search**: We implemented a retriever that combines dense vector search (semantic) with sparse keyword search (BM25) to maximize recall and precision.
+4. **Agent Integration**: We demonstrated how an agent can query this service to answer questions with citations, grounding its responses in truth.
+
+## Architecture
+
+{/* IMAGE_PLACEHOLDER: Create an architectural diagram showing the RAG service pipeline. The image should illustrate:
+1. Left side: Three document types (PDF, Markdown, Text) with icons
+2. Center: Processing pipeline with stages:
+   - Document Parser (with file format icons)
+   - Smart Chunker (showing a document being split into overlapping chunks)
+   - Embedding Model (showing text transforming into vector representations)
+   - Vector Database (ChromaDB logo/icon with storage symbol)
+3. Right side: Query flow showing:
+   - Query input
+   - Hybrid Retriever (split into two paths: semantic search and BM25 keyword search)
+   - Score combination/ranking
+   - Ranked results with citations
+4. Visual style: Modern, clean design with a tech aesthetic. Use arrows to show data flow. Include small annotations for key concepts like "1000 char chunks", "200 char overlap", "384-dim vectors", "cosine similarity"
+5. Color scheme: Use blues/purples for the pipeline, green for successful operations, and highlight the vector database as a central component
+Place this image at the top of the Architecture section to give learners a visual overview before diving into the Mermaid diagram details. */}
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "RAG Service"
+        Upload[Upload API] --> Parser[Document Parser]
+        Parser --> Chunker[Smart Chunker]
+        Chunker --> Embedder[Embedding Model]
+        Embedder --> VectorDB[(Vector DB)]
+        
+        Query[Query API] --> Retriever[Hybrid Retriever]
+        Retriever --> VectorDB
+        Retriever --> Results[Ranked Results]
+    end
+    
+    subgraph "Document Types"
+        PDF[PDF Files]
+        MD[Markdown]
+        TXT[Text Files]
+    end
+    
+    PDF --> Upload
+    MD --> Upload
+    TXT --> Upload
+    
+    style VectorDB fill:#f9f,stroke:#333
+`}
+/>
+
+---
+
+## Detailed Requirements Specification
+
+### Functional Requirements (FR)
+
+| ID    | Requirement                     | Description                                                                                                                                 | Priority |
+| ----- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| FR-01 | Multi-Format Document Ingestion | The system shall accept and parse PDF, Markdown (.md), and plain text (.txt) files                                                          | P0       |
+| FR-02 | Intelligent Document Chunking   | The system shall split documents using RecursiveCharacterTextSplitter with configurable chunk size (default 1000) and overlap (default 200) | P0       |
+| FR-03 | Vector Embedding Storage        | The system shall generate embeddings using sentence-transformers and store them in ChromaDB with cosine similarity metric                   | P0       |
+| FR-04 | Semantic Search                 | The system shall retrieve document chunks based on semantic similarity to a query with configurable top_k results                           | P0       |
+| FR-05 | Hybrid Search                   | The system shall combine semantic (vector) search with BM25 keyword search using configurable alpha weighting (default 0.7 semantic)        | P1       |
+| FR-06 | Metadata Filtering              | The system shall support filtering search results by user_id and custom metadata fields                                                     | P1       |
+| FR-07 | Document Deletion               | The system shall support deleting all chunks associated with a document by doc_id                                                           | P1       |
+| FR-08 | Citation Tracking               | Each chunk shall maintain source attribution including filename, page number, and chunk index                                               | P0       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement          | Target                                                                               | Measurement              |
+| ------ | -------------------- | ------------------------------------------------------------------------------------ | ------------------------ |
+| NFR-01 | Ingestion Throughput | Document processing shall handle files up to 50MB within 60 seconds                  | Processing time logging  |
+| NFR-02 | Query Latency        | Semantic search shall return results in < 100ms for collections up to 100,000 chunks | Query timing             |
+| NFR-03 | Storage Efficiency   | ChromaDB shall persist to disk, surviving service restarts                           | Persistence verification |
+| NFR-04 | Chunk Quality        | Chunks shall not split mid-sentence when possible (use sentence boundaries)          | Manual review            |
+| NFR-05 | Concurrent Queries   | Service shall handle 50+ concurrent search requests                                  | Load testing             |
+
+### API Contract
+
+#### POST /rag/USER_ID/documents - Upload Document
+
+**Request:** `multipart/form-data`
+
+- `file` (required): Document file (PDF, MD, or TXT)
+
+**Response (200 OK):**
+
+```json
+{
+  "doc_id": "string (USER_ID_CONTENT_HASH)",
+  "chunks": "integer (number of chunks created)",
+  "source": "string (original filename)"
+}
+```
+
+**Error Response (400):**
+
+```json
+{
+  "detail": "Unsupported file type: extension"
+}
+```
+
+#### POST /rag/USER_ID/query - Query Documents
+
+**Request Body:**
+
+```json
+{
+  "query": "string (required)",
+  "top_k": "integer (default: 5)",
+  "hybrid": "boolean (default: true)"
+}
+```
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "string (chunk_id)",
+    "content": "string (chunk text)",
+    "metadata": {
+      "doc_id": "string",
+      "user_id": "string",
+      "source": "string (filename)",
+      "chunk_index": "integer",
+      "page": "integer"
+    },
+    "score": "number (0.0-1.0, similarity score)",
+    "combined_score": "number (hybrid score, if hybrid=true)"
+  }
+]
+```
+
+#### DELETE /rag/USER_ID/documents/DOC_ID - Delete Document
+
+**Response (200 OK):**
+
+```json
+{
+  "status": "deleted"
+}
+```
+
+#### GET /rag/USER_ID/documents - List Documents (Optional Enhancement)
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "doc_id": "string",
+    "source": "string",
+    "chunk_count": "integer",
+    "created_at": "ISO8601 datetime"
+  }
+]
+```
+
+### Data Models
+
+```
+ChromaDB Collection: "documents"
+─────────────────────────────────────────────────────────────
+Configuration:
+  - hnsw:space: "cosine"
+  - Persistence: ./chroma_db/
+
+Document Structure (per chunk):
+┌─────────────────────────────────────────────────────────────┐
+│ id: STRING                                                   │
+│   Format: "USER_ID_CONTENT_HASH_chunk_INDEX"                │
+│                                                              │
+│ document: STRING                                             │
+│   The actual chunk text content                             │
+│                                                              │
+│ embedding: FLOAT[384]                                        │
+│   all-MiniLM-L6-v2 embedding vector                         │
+│                                                              │
+│ metadata: OBJECT                                             │
+│   ├── doc_id: STRING (parent document identifier)           │
+│   ├── user_id: STRING (owner identifier)                    │
+│   ├── source: STRING (original filename)                    │
+│   ├── chunk_index: INTEGER (0-based position)               │
+│   ├── page: INTEGER (source page, 0 if N/A)                 │
+│   └── [custom fields]: ANY (user-provided metadata)         │
+└─────────────────────────────────────────────────────────────┘
+
+Chunking Configuration:
+─────────────────────────────────────────────────────────────
+CHUNK_SIZE: 1000 characters
+CHUNK_OVERLAP: 200 characters
+SEPARATORS: ["\n\n", "\n", ". ", " ", ""]
+  → Prioritizes paragraph breaks, then sentences, then words
+```
+
+### Error Handling Matrix
+
+| Error Code       | HTTP Status | Cause                            | Response Body                                      | Recovery Action                        |
+| ---------------- | ----------- | -------------------------------- | -------------------------------------------------- | -------------------------------------- |
+| UNSUPPORTED_FILE | 400         | File extension not PDF/MD/TXT    | `{"detail": "Unsupported file type: {ext}"}`       | Convert to supported format            |
+| FILE_TOO_LARGE   | 413         | File exceeds 50MB limit          | `{"detail": "File too large. Maximum: 50MB"}`      | Split document or compress             |
+| PARSE_ERROR      | 400         | Document parsing failed          | `{"detail": "Failed to parse document: {reason}"}` | Check file integrity                   |
+| CHROMADB_ERROR   | 500         | Vector database operation failed | `{"detail": "Vector storage error"}`               | Retry, check ChromaDB health           |
+| EMBEDDING_ERROR  | 500         | Embedding generation failed      | `{"detail": "Failed to generate embeddings"}`      | Retry, check model availability        |
+| DOC_NOT_FOUND    | 404         | Document ID not found            | `{"detail": "Document {doc_id} not found"}`        | Verify doc_id                          |
+| NO_RESULTS       | 200         | Query returned no matches        | `[]`                                               | Broaden query or check documents exist |
+
+### Integration Points
+
+| Service                     | Integration Type | Purpose                                 | Data Flow                                       |
+| --------------------------- | ---------------- | --------------------------------------- | ----------------------------------------------- |
+| **ChromaDB**                | Vector Store     | Persistent vector storage with metadata | Chunks + Embeddings → ChromaDB → Query results  |
+| **sentence-transformers**   | Embedding Model  | Generate 384-dim embeddings             | Text → all-MiniLM-L6-v2 → Vector                |
+| **LangChain Loaders**       | Document Parsing | Parse PDF, Markdown, Text files         | File → PyPDFLoader/TextLoader → Documents       |
+| **rank_bm25**               | Keyword Search   | BM25 scoring for hybrid search          | Tokenized docs → BM25Okapi → Keyword scores     |
+| **Agent Services**          | HTTP Client      | Query documents for RAG context         | Agent → POST /query → Relevant chunks           |
+| **Research Agent (Day 86)** | Downstream       | May use RAG for local document search   | Research Agent → RAG Service → Document context |
+
+### Testing Requirements
+
+#### Unit Test Coverage (Minimum 85%)
+
+| Component           | Test Cases                                                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DocumentProcessor` | PDF parsing, Markdown parsing, Text parsing, chunking with overlap, embedding generation, ChromaDB storage, query with filters, document deletion |
+| `HybridRetriever`   | Semantic-only search, BM25-only search, hybrid combination, alpha weighting, score normalization, empty results handling                          |
+| `Chunking Logic`    | Respects chunk size, maintains overlap, handles short documents, preserves sentence boundaries                                                    |
+
+#### Integration Test Scenarios
+
+| Scenario                | Steps                                                                                | Expected Outcome                                                |
+| ----------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Full Document Lifecycle | Upload PDF → Query → Delete → Query again                                            | Document indexed, results returned, deletion removes all chunks |
+| Multi-User Isolation    | User A uploads doc → User B queries                                                  | User B gets no results from User A's documents                  |
+| Hybrid vs Semantic      | Upload doc with specific keywords → Query with keywords → Compare hybrid vs semantic | Hybrid returns better results for keyword-heavy queries         |
+| Large Document          | Upload 100-page PDF → Query                                                          | All pages chunked and searchable                                |
+| Citation Accuracy       | Upload multi-page PDF → Query → Check page numbers                                   | Correct page numbers in metadata                                |
+| Duplicate Detection     | Upload same document twice                                                           | Same doc_id generated (content hash)                            |
+
+#### Load Test Targets
+
+| Metric            | Target                                  | Test Duration   |
+| ----------------- | --------------------------------------- | --------------- |
+| Query throughput  | 100 queries/second                      | 5 minutes       |
+| P99 query latency | < 200ms                                 | Under load      |
+| Ingestion rate    | 10 documents/minute (avg 20 pages each) | 10 minutes      |
+| Collection size   | 100,000 chunks                          | Functional test |
+
+---
+
+## Core Implementation
+
+### Document Processing Pipeline
+
+{/* IMAGE_PLACEHOLDER: Create a detailed visualization of "Document Chunking Strategies" showing:
+1. A sample document page on the left
+2. Three different chunking approaches side-by-side:
+   - Fixed-size chunking (showing rigid blocks, some cutting mid-sentence) - marked with a caution icon
+   - Sentence-based chunking (showing clean sentence boundaries) - marked with a checkmark
+   - Recursive chunking with overlap (showing intelligent splits with highlighted overlap regions) - marked with a star as "best practice"
+3. For the recursive approach, annotate with:
+   - "1000 char chunks" label
+   - "200 char overlap" with arrows showing the overlap region
+   - "Preserves context across boundaries" callout
+4. Visual style: Use a side-by-side comparison layout. Color-code the overlap regions in the recursive approach. Show text snippets to make it concrete.
+5. Include a small "Why Overlap Matters" box explaining how it prevents losing context when a key concept spans chunk boundaries
+Place this image right before the code block to help learners understand the chunking strategy before seeing the implementation. */}
+
+```python
+# services/document_processor.py
+from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredMarkdownLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from sentence_transformers import SentenceTransformer
+import chromadb
+from pathlib import Path
+from typing import List, Dict
+import hashlib
+import uuid
+
+# Note: For LangChain integration with ChromaDB, install langchain-chroma:
+# pip install langchain-chroma
+# Then use: from langchain_chroma import Chroma
+
+class DocumentProcessor:
+    """Process and store documents for RAG."""
+
+    CHUNK_SIZE = 1000
+    CHUNK_OVERLAP = 200
+
+    def __init__(self, collection_name: str = "documents"):
+        self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        self.client = chromadb.PersistentClient(path="./chroma_db")
+        self.collection = self.client.get_or_create_collection(
+            name=collection_name,
+            metadata={"hnsw:space": "cosine"}
+        )
+
+        self.splitter = RecursiveCharacterTextSplitter(
+            chunk_size=self.CHUNK_SIZE,
+            chunk_overlap=self.CHUNK_OVERLAP,
+            separators=["\n\n", "\n", ". ", " ", ""]
+        )
+
+    def process_document(
+        self,
+        file_path: str,
+        user_id: str,
+        metadata: Dict = None
+    ) -> Dict:
+        """Process and store a document."""
+        path = Path(file_path)
+
+        # Load document
+        if path.suffix == ".pdf":
+            loader = PyPDFLoader(str(path))
+        elif path.suffix == ".md":
+            loader = UnstructuredMarkdownLoader(str(path))
+        else:
+            loader = TextLoader(str(path))
+
+        documents = loader.load()
+
+        # Generate document ID
+        content_hash = hashlib.md5(
+            "".join(d.page_content for d in documents).encode()
+        ).hexdigest()[:12]
+        doc_id = f"{user_id}_{content_hash}"
+
+        # Chunk documents
+        chunks = self.splitter.split_documents(documents)
+
+        # Prepare for storage
+        ids = []
+        texts = []
+        metadatas = []
+        embeddings = []
+
+        for i, chunk in enumerate(chunks):
+            chunk_id = f"{doc_id}_chunk_{i}"
+            ids.append(chunk_id)
+            texts.append(chunk.page_content)
+
+            chunk_metadata = {
+                "doc_id": doc_id,
+                "user_id": user_id,
+                "source": path.name,
+                "chunk_index": i,
+                "page": chunk.metadata.get("page", 0),
+                **(metadata or {})
+            }
+            metadatas.append(chunk_metadata)
+
+            embedding = self.embedder.encode(chunk.page_content).tolist()
+            embeddings.append(embedding)
+
+        # Store in ChromaDB
+        self.collection.add(
+            ids=ids,
+            documents=texts,
+            metadatas=metadatas,
+            embeddings=embeddings
+        )
+
+        return {
+            "doc_id": doc_id,
+            "chunks": len(chunks),
+            "source": path.name
+        }
+
+    def query(
+        self,
+        query: str,
+        user_id: str = None,
+        top_k: int = 5,
+        filter_metadata: Dict = None
+    ) -> List[Dict]:
+        """Query documents with semantic search."""
+
+        # Build filter
+        where_filter = {}
+        if user_id:
+            where_filter["user_id"] = user_id
+        if filter_metadata:
+            where_filter.update(filter_metadata)
+
+        # Generate query embedding
+        query_embedding = self.embedder.encode(query).tolist()
+
+        # Search
+        results = self.collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k,
+            where=where_filter if where_filter else None,
+            include=["documents", "metadatas", "distances"]
+        )
+
+        # Format results
+        formatted = []
+        for i in range(len(results["ids"][0])):
+            formatted.append({
+                "id": results["ids"][0][i],
+                "content": results["documents"][0][i],
+                "metadata": results["metadatas"][0][i],
+                "score": 1 - results["distances"][0][i]  # Convert distance to similarity
+            })
+
+        return formatted
+
+    def delete_document(self, doc_id: str):
+        """Delete all chunks of a document."""
+        self.collection.delete(where={"doc_id": doc_id})
+```
+
+### Hybrid Search (Semantic + Keyword)
+
+{/* IMAGE_PLACEHOLDER: Create an educational diagram titled "Hybrid Search: Best of Both Worlds" showing:
+1. Top section: Split view comparing two search approaches:
+   - Left: "Semantic Search" with an illustration of vector space (3D scatter plot with query vector and document vectors, showing cosine similarity)
+   - Right: "Keyword Search (BM25)" with an illustration of term matching (showing query terms highlighted in documents)
+2. Middle section: "The Hybrid Advantage" showing:
+   - Two parallel scoring paths converging
+   - Alpha weighting visualization (slider showing 0.7 semantic, 0.3 keyword)
+   - Score normalization step
+   - Final combined ranking
+3. Bottom section: "When Each Shines" comparison table:
+   - Semantic: "What is machine learning?" → finds conceptually similar content even without exact terms
+   - Keyword: "Python 3.11 release date" → finds exact matches for specific terms
+   - Hybrid: Gets the best of both approaches
+4. Visual style: Use contrasting colors for semantic (blue/purple gradient) vs keyword (orange/red). Show actual example queries and results.
+5. Include a "Pro Tip" callout: "Tune alpha based on your use case: Higher for conceptual queries, lower for fact-finding"
+Place this image before the code to help learners understand why hybrid search outperforms either approach alone. */}
+
+```python
+# services/hybrid_search.py
+from rank_bm25 import BM25Okapi
+import numpy as np
+from typing import List, Dict
+
+class HybridRetriever:
+    """Combine semantic and keyword search."""
+
+    def __init__(self, processor: DocumentProcessor, alpha: float = 0.7):
+        self.processor = processor
+        self.alpha = alpha  # Weight for semantic search
+
+    def search(
+        self,
+        query: str,
+        user_id: str,
+        top_k: int = 5
+    ) -> List[Dict]:
+        """Hybrid search combining semantic and BM25."""
+
+        # Semantic search
+        semantic_results = self.processor.query(query, user_id, top_k=top_k * 2)
+
+        # BM25 keyword search
+        documents = [r["content"] for r in semantic_results]
+        tokenized_docs = [doc.lower().split() for doc in documents]
+        bm25 = BM25Okapi(tokenized_docs)
+
+        tokenized_query = query.lower().split()
+        bm25_scores = bm25.get_scores(tokenized_query)
+
+        # Normalize scores
+        semantic_scores = np.array([r["score"] for r in semantic_results])
+        semantic_scores = (semantic_scores - semantic_scores.min()) / (semantic_scores.max() - semantic_scores.min() + 1e-6)
+
+        bm25_scores = (bm25_scores - bm25_scores.min()) / (bm25_scores.max() - bm25_scores.min() + 1e-6)
+
+        # Combine scores
+        combined_scores = self.alpha * semantic_scores + (1 - self.alpha) * bm25_scores
+
+        # Re-rank
+        ranked_indices = np.argsort(combined_scores)[::-1][:top_k]
+
+        return [
+            {**semantic_results[i], "combined_score": float(combined_scores[i])}
+            for i in ranked_indices
+        ]
+```
+
+### API Endpoints
+
+```python
+# routers/rag.py
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from services.document_processor import DocumentProcessor
+from services.hybrid_search import HybridRetriever
+import tempfile
+import os
+
+router = APIRouter(prefix="/rag", tags=["rag"])
+processor = DocumentProcessor()
+retriever = HybridRetriever(processor)
+
+@router.post("/{user_id}/documents")
+async def upload_document(
+    user_id: str,
+    file: UploadFile = File(...)
+):
+    """Upload and process a document."""
+    # Save temporarily
+    with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        result = processor.process_document(tmp_path, user_id)
+        return result
+    finally:
+        os.unlink(tmp_path)
+
+@router.post("/{user_id}/query")
+def query_documents(
+    user_id: str,
+    query: str,
+    top_k: int = 5,
+    hybrid: bool = True
+):
+    """Query documents."""
+    if hybrid:
+        return retriever.search(query, user_id, top_k)
+    return processor.query(query, user_id, top_k)
+
+@router.delete("/{user_id}/documents/{doc_id}")
+def delete_document(user_id: str, doc_id: str):
+    """Delete a document."""
+    processor.delete_document(doc_id)
+    return {"status": "deleted"}
+```
+
+---
+
+## Integration with Agents
+
+{/* IMAGE_PLACEHOLDER: Create a workflow diagram titled "RAG-Powered Agent in Action" showing:
+1. User asks a question (speech bubble: "What are the key features of our Q3 product release?")
+2. Agent receives question and initiates RAG workflow:
+   - Step 1: Query RAG service (API call visualization)
+   - Step 2: Retrieve top 5 relevant chunks (showing document snippets with metadata badges)
+   - Step 3: Build context with citations (showing formatted context with [1], [2], [3] markers)
+   - Step 4: LLM generates answer (showing GPT-4 processing the context + question)
+   - Step 5: Return cited answer (response with inline citations)
+3. Show the data flow with arrows and include sample data at each step
+4. Highlight the "grounding" concept - show how the agent's answer is anchored to actual document content
+5. Include a side panel showing "Why This Matters":
+   - Reduces hallucinations
+   - Provides verifiable sources
+   - Enables knowledge updates without retraining
+   - Maintains user trust through transparency
+6. Visual style: Use a vertical flow diagram with clear step numbers. Color-code the different stages (query=blue, retrieval=green, generation=purple, response=gold)
+Place this diagram before the code example to show learners the complete RAG agent workflow. */}
+
+```python
+# Example: RAG-powered agent
+class RAGAgent:
+    def __init__(self, user_id: str):
+        self.user_id = user_id
+        self.retriever = HybridRetriever(DocumentProcessor())
+        self.llm = ChatOpenAI(model="gpt-4o-mini")
+
+    async def answer(self, question: str) -> str:
+        # Retrieve relevant chunks
+        chunks = self.retriever.search(question, self.user_id, top_k=5)
+
+        # Build context with citations
+        context = "\n\n".join([
+            f"[{i+1}] {c['content']}\nSource: {c['metadata']['source']}, Page {c['metadata']['page']}"
+            for i, c in enumerate(chunks)
+        ])
+
+        prompt = f"""Answer based on the provided context. Cite sources using [1], [2], etc.
+
+Context:
+{context}
+
+Question: {question}
+
+If the context doesn't contain the answer, say so."""
+
+        response = await self.llm.ainvoke(prompt)
+        return response.content
+```
+
+---
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "RAG Pipeline Simulator" interactive component that allows learners to:
+1. Upload a sample document (or use pre-loaded examples)
+2. Adjust chunking parameters (chunk size slider: 500-2000, overlap slider: 0-500)
+3. See the document split into chunks in real-time with visual boundaries
+4. Enter a query and see:
+   - Semantic search results with similarity scores
+   - BM25 keyword search results with scores
+   - Hybrid results with adjustable alpha slider (0.0-1.0)
+5. Compare results side-by-side to understand how different strategies perform
+6. View chunk metadata (source, page, index) for each result
+7. See highlighted matching terms for keyword search
+8. Visualize embeddings in 2D space (using dimensionality reduction) showing query vector and document vectors
+
+This interactive tool would help learners:
+- Understand the impact of chunking parameters
+- See hybrid search in action
+- Experiment with alpha weighting
+- Visualize semantic similarity
+
+Technical implementation: React component with state management for parameters, mock embedding generation (or use actual sentence-transformers via API), BM25 implementation in JavaScript, and visualization using D3.js or Recharts.
+
+Place this component in the "Core Implementation" section after the code examples, or create a dedicated "Interactive Lab" section. */}
+
+<Exercise title="RAG Service Lab">
+  **Core Challenges:**
+  
+  1. **Web Page Ingestion**: Add support for URL → chunks pipeline (hint: use BeautifulSoup or newspaper3k for HTML parsing)
+  
+  2. **Document Versioning**: Implement document versioning so updates don't lose history (hint: add version field to metadata, keep old versions)
+  
+  3. **Advanced Metadata Filtering**: Add filtering by date ranges, source types, custom tags (hint: extend ChromaDB where clauses)
+  
+  4. **Query Expansion Challenge**: Use an LLM to expand queries before retrieval to improve recall
+     - Example: "ML" → "machine learning, artificial intelligence, neural networks"
+     - Implement and measure impact on retrieval quality
+  
+  **Bonus Challenges:**
+  
+  5. **Semantic Caching**: Cache embeddings for frequently queried terms to reduce latency
+  
+  6. **Multi-modal RAG**: Extend to support images (extract text via OCR, generate image embeddings)
+  
+  7. **Reranking Pipeline**: Add a cross-encoder reranker after initial retrieval for better precision
+  
+  8. **Chunk Optimization**: Implement automatic chunk size tuning based on document type and query patterns
+</Exercise>
+
+---
+
+## Key Takeaways
+
+{/* IMAGE_PLACEHOLDER: Create an infographic titled "RAG Service: Production Best Practices" with four key sections:
+1. "Hybrid Retrieval Wins" - Visual comparison showing:
+   - Semantic-only: 65% accuracy (icon with partial checkmark)
+   - Keyword-only: 60% accuracy (icon with partial checkmark)
+   - Hybrid: 85% accuracy (icon with full checkmark and star)
+   - Include a bar chart visualization
+2. "Chunking Strategy Matters" - Show impact visualization:
+   - Too small (100 chars): "Lost context" with broken puzzle pieces
+   - Too large (5000 chars): "Noisy retrieval" with cluttered icon
+   - Just right (1000 chars): "Optimal balance" with perfect fit icon
+   - Include overlap illustration showing 200-char overlap preventing context loss
+3. "Citations Build Trust" - Show before/after:
+   - Without citations: Generic answer with question mark and low trust indicator
+   - With citations: Answer with [1], [2], [3] markers, source badges, and high trust indicator
+4. "Service Architecture Benefits" - Show ecosystem view:
+   - Central RAG service connected to multiple agents (Research Agent, Support Agent, Analysis Agent)
+   - "Share knowledge across all agents" callout
+   - "Update once, benefit everywhere" callout
+Visual style: Use a 2x2 grid layout. Each section should have an icon, title, and visual representation. Use green checkmarks for good practices, red X for anti-patterns. Include specific metrics where shown.
+Place this infographic before the text key takeaways to provide a visual summary of the main lessons. */}
+
+1. **Hybrid Retrieval**: Combining keywords + vectors usually outperforms either alone.
+2. **Chunking Matters**: The Chunk size and overlap directly impact answer quality—tune these!
+3. **Citations Build Trust**: Always tracking source metadata allows agents to cite their work.
+4. **Service Isolation**: By moving RAG to a service, any agent can become "knowledgeable" instantly.
+
+---
+
+<ModuleSummary
+  points={[
+    "Hybrid retrieval combining semantic vectors and BM25 keywords outperforms either alone",
+    "Chunk size and overlap directly impact retrieval quality—tune these for your use case",
+    "Citation tracking with source metadata enables agents to cite their work",
+    "Service isolation allows any agent to become 'knowledgeable' by querying the RAG service",
+    "ChromaDB provides efficient vector storage with metadata filtering",
+  ]}
+/>
+
+**Tomorrow**: Day 85—Mini-Project: The LLM Router.

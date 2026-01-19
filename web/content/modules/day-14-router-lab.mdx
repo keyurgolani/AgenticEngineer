@@ -1,0 +1,791 @@
+---
+title: "Day 14: Lab - Hello World Router"
+description: "Building your first LangGraph router agent with conditional edges."
+week: 2
+day: 14
+---
+
+<ReadingTime minutes={15} />
+
+<SkillLevel level="beginner" description="Hands-on LangGraph practice" />
+
+<Prerequisites
+  items={[
+    "Completed Day 10: LangGraph Basics",
+    "Python environment with langgraph installed",
+    "Understanding of nodes, edges, and state",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Build a simple router agent using LangGraph",
+    "Implement conditional edges for decision-making",
+    "Understand how state flows through the graph",
+    "Connect routing logic to different handler nodes",
+    "Learn when to use keyword vs LLM-based routing",
+  ]}
+/>
+
+---
+
+## What is a Router Agent?
+
+A **router agent** is like a traffic controller for your AI workflows. It examines the input and routes execution to different specialized nodes based on the content. This is one of the most common patterns in production agent systems.
+
+{/* IMAGE_PLACEHOLDER: Create an illustration showing a traffic controller directing cars (representing user queries) to different lanes/destinations (representing specialized handlers). The traffic controller should be at a central intersection with multiple paths leading to different specialized areas labeled "Search", "Chat", "Calculate", etc. Use a clean, modern style with icons and arrows to show the flow. This visual metaphor helps learners understand the router's role in directing requests. */}
+
+<Mermaid
+  chart={`
+graph TD
+    Start([User Input]) --> Router{🔀 Router}
+    Router -->|"contains 'search'"| Search[🔍 Search Handler]
+    Router -->|"contains 'hello'"| Chat[💬 Chat Handler]
+    Router -->|"default"| Default[❓ Default Handler]
+    Search --> End([Response])
+    Chat --> End
+    Default --> End
+    
+    style Router fill:#f9f,stroke:#333
+    style Search fill:#bbf,stroke:#333
+    style Chat fill:#bfb,stroke:#333
+`}
+/>
+
+<Callout type="info">
+  **Connection to Day 10:** In LangGraph Basics, we learned about conditional
+  edges. Today we put them into practice by building a router that directs
+  traffic based on user intent.
+</Callout>
+
+---
+
+## The Router Pattern
+
+The router pattern has three key components:
+
+{/* IMAGE_PLACEHOLDER: Create a diagram showing the three components of the router pattern as interconnected gears or puzzle pieces. Show: 1) Router Node (analyzing/examining icon), 2) Routing Function (decision/branching icon), 3) Handler Nodes (specialized tools/workers icon). Use arrows to show the flow from input → router node → routing function → handler nodes → output. Include small example labels for each component. */}
+
+| Component            | Purpose                                  | Example                           |
+| :------------------- | :--------------------------------------- | :-------------------------------- |
+| **Router Node**      | Analyzes input and sets routing decision | Checks if input contains "search" |
+| **Routing Function** | Reads state and returns next node name   | Returns "search" or "chat"        |
+| **Handler Nodes**    | Specialized processors for each route    | SearchHandler, ChatHandler        |
+
+<RealWorldExample
+  title="Customer Support Router"
+  scenario="A support chatbot needs to route queries to different specialists."
+  implementation="The router examines the query: billing questions go to BillingAgent, technical issues go to TechAgent, and general questions go to GeneralAgent. Each agent has specialized knowledge and tools."
+  takeaway="Routers enable specialization. Instead of one agent trying to do everything, you route to experts."
+/>
+
+{/* IMAGE_PLACEHOLDER: Create a customer support scenario illustration showing a customer query "My payment failed" entering a router system. The router analyzes the query and shows thought bubbles with keywords detected ("payment", "failed"). Three specialist agents are shown as characters/avatars: 1) Billing Agent (calculator icon, handles payments), 2) Tech Agent (wrench icon, handles technical issues), 3) General Agent (info icon, handles FAQs). An arrow shows the query being routed to the Billing Agent. Include a success indicator showing the specialized agent providing a relevant solution. This concrete example helps learners visualize real-world router applications. */}
+
+---
+
+## Building the Router
+
+Let's build a simple router step by step. First, install LangGraph if you haven't:
+
+```bash
+pip install langgraph
+```
+
+### Step 1: Define the State
+
+```python
+from typing import TypedDict, Literal
+from langgraph.graph import StateGraph, START, END
+
+class AgentState(TypedDict):
+    """State schema for our router agent."""
+    input: str           # User's input message
+    decision: str        # Routing decision or final response
+```
+
+### Step 2: Create the Router Node
+
+The router examines the input and sets a routing decision:
+
+```python
+def router_node(state: AgentState) -> dict:
+    """Analyze input and decide which handler to use."""
+    user_input = state["input"].lower()
+
+    if "search" in user_input or "find" in user_input:
+        return {"decision": "search"}
+    elif "hello" in user_input or "hi" in user_input:
+        return {"decision": "chat"}
+    else:
+        return {"decision": "default"}
+```
+
+<Callout type="tip">
+  **Production Tip:** In real applications, you'd use an LLM to classify intent
+  instead of keyword matching. This simple example demonstrates the pattern
+  without API costs.
+</Callout>
+
+### Step 3: Create Handler Nodes
+
+Each handler processes its specific type of request:
+
+```python
+def search_node(state: AgentState) -> dict:
+    """Handle search requests."""
+    query = state["input"]
+    # In production, this would call a search API
+    return {"decision": f"🔍 Searching for: {query}"}
+
+def chat_node(state: AgentState) -> dict:
+    """Handle chat/greeting requests."""
+    return {"decision": "👋 Hello! How can I help you today?"}
+
+def default_node(state: AgentState) -> dict:
+    """Handle unrecognized requests."""
+    return {"decision": "🤔 I'm not sure how to help with that. Try asking me to search for something!"}
+```
+
+### Step 4: Create the Routing Function
+
+This function reads the state and returns the name of the next node:
+
+```python
+def route_decision(state: AgentState) -> Literal["search", "chat", "default"]:
+    """Determine which handler to route to based on the decision."""
+    decision = state.get("decision", "default")
+
+    if decision == "search":
+        return "search"
+    elif decision == "chat":
+        return "chat"
+    else:
+        return "default"
+```
+
+### Step 5: Build the Graph
+
+Now we wire everything together:
+
+```python
+# Initialize the graph
+workflow = StateGraph(AgentState)
+
+# Add all nodes
+workflow.add_node("router", router_node)
+workflow.add_node("search", search_node)
+workflow.add_node("chat", chat_node)
+workflow.add_node("default", default_node)
+
+# Set entry point: START -> router
+workflow.add_edge(START, "router")
+
+# Add conditional edges from router to handlers
+workflow.add_conditional_edges(
+    "router",           # Source node
+    route_decision,     # Routing function
+    {                   # Mapping of return values to node names
+        "search": "search",
+        "chat": "chat",
+        "default": "default"
+    }
+)
+
+# All handlers lead to END
+workflow.add_edge("search", END)
+workflow.add_edge("chat", END)
+workflow.add_edge("default", END)
+
+# Compile the graph
+app = workflow.compile()
+```
+
+---
+
+## Running the Router
+
+Let's test our router with different inputs:
+
+```python
+# Test 1: Search request
+result = app.invoke({"input": "I want to search for cats"})
+print(result)
+# {'input': 'I want to search for cats', 'decision': '🔍 Searching for: I want to search for cats'}
+
+# Test 2: Greeting
+result = app.invoke({"input": "Hello there!"})
+print(result)
+# {'input': 'Hello there!', 'decision': '👋 Hello! How can I help you today?'}
+
+# Test 3: Unknown request
+result = app.invoke({"input": "What's the meaning of life?"})
+print(result)
+# {'input': "What's the meaning of life?", 'decision': "🤔 I'm not sure how to help..."}
+```
+
+<Terminal
+  command="python router.py"
+  output={`Testing router with different inputs...
+
+Input: "I want to search for cats"
+→ Routed to: search
+→ Response: 🔍 Searching for: I want to search for cats
+
+Input: "Hello there!"
+→ Routed to: chat
+→ Response: 👋 Hello! How can I help you today?
+
+Input: "What's the meaning of life?"
+→ Routed to: default
+→ Response: 🤔 I'm not sure how to help with that.`}
+/>
+
+---
+
+## Visualizing the Graph
+
+Generate a Mermaid diagram to see your graph structure:
+
+```python
+print(app.get_graph().draw_mermaid())
+```
+
+<Mermaid
+  chart={`
+graph TD
+    __start__([▶️ Start]) --> router[🔀 router]
+    router -->|"search"| search[🔍 search]
+    router -->|"chat"| chat[💬 chat]
+    router -->|"default"| default[❓ default]
+    search --> __end__([🏁 End])
+    chat --> __end__
+    default --> __end__
+    
+    style router fill:#f9f,stroke:#333
+`}
+/>
+
+---
+
+## Complete Working Code
+
+Here's the full implementation you can run:
+
+```python
+"""router.py - A simple LangGraph router agent"""
+from typing import TypedDict, Literal
+from langgraph.graph import StateGraph, START, END
+
+
+class AgentState(TypedDict):
+    """State schema for our router agent."""
+    input: str
+    decision: str
+
+
+def router_node(state: AgentState) -> dict:
+    """Analyze input and decide which handler to use."""
+    user_input = state["input"].lower()
+
+    if "search" in user_input or "find" in user_input:
+        return {"decision": "search"}
+    elif "hello" in user_input or "hi" in user_input:
+        return {"decision": "chat"}
+    else:
+        return {"decision": "default"}
+
+
+def search_node(state: AgentState) -> dict:
+    """Handle search requests."""
+    return {"decision": f"🔍 Searching for: {state['input']}"}
+
+
+def chat_node(state: AgentState) -> dict:
+    """Handle chat/greeting requests."""
+    return {"decision": "👋 Hello! How can I help you today?"}
+
+
+def default_node(state: AgentState) -> dict:
+    """Handle unrecognized requests."""
+    return {"decision": "🤔 I'm not sure how to help with that."}
+
+
+def route_decision(state: AgentState) -> Literal["search", "chat", "default"]:
+    """Determine which handler to route to."""
+    decision = state.get("decision", "default")
+    if decision == "search":
+        return "search"
+    elif decision == "chat":
+        return "chat"
+    return "default"
+
+
+# Build the graph
+workflow = StateGraph(AgentState)
+
+workflow.add_node("router", router_node)
+workflow.add_node("search", search_node)
+workflow.add_node("chat", chat_node)
+workflow.add_node("default", default_node)
+
+workflow.add_edge(START, "router")
+workflow.add_conditional_edges("router", route_decision, {
+    "search": "search",
+    "chat": "chat",
+    "default": "default"
+})
+workflow.add_edge("search", END)
+workflow.add_edge("chat", END)
+workflow.add_edge("default", END)
+
+app = workflow.compile()
+
+
+if __name__ == "__main__":
+    test_inputs = [
+        "I want to search for cats",
+        "Hello there!",
+        "Find me some Python tutorials",
+        "What's the weather like?",
+    ]
+
+    for test_input in test_inputs:
+        result = app.invoke({"input": test_input})
+        print(f"Input: {test_input!r}")
+        print(f"Response: {result['decision']}")
+        print("---")
+```
+
+---
+
+## Adding LLM-Based Routing
+
+For production, use an LLM to classify intent:
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+def llm_router_node(state: AgentState) -> dict:
+    """Use LLM to classify user intent."""
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": """Classify the user's intent into one of these categories:
+- search: User wants to find or look up information
+- chat: User is greeting or making small talk
+- default: Anything else
+
+Respond with only the category name."""
+            },
+            {"role": "user", "content": state["input"]}
+        ],
+        temperature=0
+    )
+
+    decision = response.choices[0].message.content.strip().lower()
+    return {"decision": decision}
+```
+
+<Callout type="warning">
+  **Cost Consideration:** LLM-based routing adds latency and cost. For
+  high-volume applications, consider: - Caching common classifications - Using
+  smaller/faster models for routing (e.g., `gpt-4o-mini`) - Hybrid approach:
+  keyword matching first, LLM for ambiguous cases - Embedding-based semantic
+  routing (see below)
+</Callout>
+
+---
+
+## Semantic Routing with Embeddings
+
+For production systems with many routes, **embedding-based routing** offers the best balance of accuracy and speed:
+
+{/* IMAGE_PLACEHOLDER: Create a visual comparison showing three routing approaches side by side: 1) Keyword Matching (simple, fast but limited - show keywords with exact matches), 2) LLM Classification (accurate but slow/expensive - show brain/AI icon with dollar signs), 3) Semantic Routing (best of both - show vector embeddings as dots in space with similarity lines). Use a performance/cost matrix or comparison chart to highlight that semantic routing is the sweet spot. */}
+
+```python
+from openai import OpenAI
+import numpy as np
+from typing import Literal
+
+client = OpenAI()
+
+# Define route descriptions (embed these once at startup)
+ROUTES = {
+    "search": "User wants to find information, look up data, or search for something",
+    "chat": "User is greeting, making small talk, or having a casual conversation",
+    "calculate": "User wants to perform math, compute numbers, or do calculations",
+    "code": "User wants help with programming, debugging, or writing code",
+}
+
+def get_embedding(text: str) -> list[float]:
+    """Get embedding for text."""
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=text
+    )
+    return response.data[0].embedding
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Calculate cosine similarity between two vectors."""
+    a, b = np.array(a), np.array(b)
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+# Pre-compute route embeddings (do this once at startup)
+route_embeddings = {
+    route: get_embedding(description)
+    for route, description in ROUTES.items()
+}
+
+def semantic_router(user_input: str) -> str:
+    """Route based on semantic similarity."""
+    input_embedding = get_embedding(user_input)
+
+    similarities = {
+        route: cosine_similarity(input_embedding, emb)
+        for route, emb in route_embeddings.items()
+    }
+
+    best_route = max(similarities, key=similarities.get)
+    confidence = similarities[best_route]
+
+    # Fall back to default if confidence is low
+    if confidence < 0.3:
+        return "default"
+
+    return best_route
+
+
+# Use in LangGraph
+def semantic_router_node(state: AgentState) -> dict:
+    """Route using embeddings."""
+    route = semantic_router(state["input"])
+    return {"decision": route}
+```
+
+<Callout type="success">
+  **Semantic Routing Benefits:** - **Fast**: Single embedding call vs full LLM
+  inference - **Accurate**: Understands meaning, not just keywords -
+  **Scalable**: Add new routes by adding descriptions - **Cost-effective**:
+  Embedding API is ~100x cheaper than chat completions
+</Callout>
+
+{/* INTERACTIVE_COMPONENT_OPPORTUNITY: Create a "Routing Method Comparison Calculator" that lets users input:
+1. Number of requests per day
+2. Average query complexity distribution (simple/medium/complex %)
+3. Select routing method (keyword/LLM/semantic/cost-aware)
+
+The calculator would show:
+- Total daily cost
+- Average latency per request
+- Accuracy estimate
+- Cost savings vs baseline (LLM-only approach)
+
+This would help learners understand the practical trade-offs between different routing strategies and see real-world cost implications. Could be built as a React component with sliders and real-time calculations. */}
+
+---
+
+## Cost-Aware Model Routing
+
+One of the most powerful applications of routing is **cost optimization**. Route simple queries to cheaper models and complex ones to more capable (expensive) models:
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing a decision tree for cost-aware routing. At the top, show an incoming query being analyzed for complexity. Three branches lead to different model tiers: "Fast Lane" (gpt-4o-mini, $0.00015/1k tokens, simple queries like greetings), "Balanced Lane" (gpt-4o, $0.0025/1k tokens, medium complexity like summaries), and "Power Lane" (Claude Sonnet, $0.003/1k tokens, complex tasks like analysis). Include icons showing cost savings (piggy bank) and a stat showing "40-63% cost reduction". Use color coding: green for cheap, yellow for medium, red for expensive. */}
+
+```python
+from openai import OpenAI
+from typing import Literal
+
+# Define model tiers with costs
+MODEL_TIERS = {
+    "fast": {"model": "gpt-4o-mini", "cost_per_1k": 0.00015},
+    "balanced": {"model": "gpt-4o", "cost_per_1k": 0.0025},
+    "powerful": {"model": "claude-sonnet-4-20250514", "cost_per_1k": 0.003},
+}
+
+def classify_complexity(query: str) -> Literal["fast", "balanced", "powerful"]:
+    """Classify query complexity for model routing."""
+    # Simple heuristics - in production, use an embedding classifier
+    query_lower = query.lower()
+
+    # Complex indicators
+    complex_keywords = ["analyze", "compare", "explain why", "debug", "architect"]
+    if any(kw in query_lower for kw in complex_keywords):
+        return "powerful"
+
+    # Medium complexity
+    medium_keywords = ["summarize", "write", "create", "help me"]
+    if any(kw in query_lower for kw in medium_keywords):
+        return "balanced"
+
+    # Simple queries
+    return "fast"
+
+
+class CostAwareRouter:
+    """Router that optimizes for cost while maintaining quality."""
+
+    def __init__(self):
+        self.client = OpenAI()
+        self.total_cost = 0.0
+
+    def route_and_execute(self, query: str) -> dict:
+        tier = classify_complexity(query)
+        model_config = MODEL_TIERS[tier]
+
+        response = self.client.chat.completions.create(
+            model=model_config["model"],
+            messages=[{"role": "user", "content": query}]
+        )
+
+        # Track costs
+        tokens_used = response.usage.total_tokens
+        cost = (tokens_used / 1000) * model_config["cost_per_1k"]
+        self.total_cost += cost
+
+        return {
+            "response": response.choices[0].message.content,
+            "model_used": model_config["model"],
+            "tier": tier,
+            "cost": cost
+        }
+```
+
+<Callout type="success">
+  **Real-World Impact:** Organizations implementing intelligent model routing
+  report **40-63% cost reductions** while maintaining quality. The key is
+  routing ~70% of simple queries to fast/cheap models.
+</Callout>
+
+---
+
+## Multi-Model Routing with Fallbacks
+
+Production systems need fallback logic when primary models fail:
+
+{/* IMAGE_PLACEHOLDER: Create a flowchart showing a resilient multi-model routing system. Show: Primary Model (OpenAI GPT-4o) at the top with a checkmark for success path and an X for failure path. On failure, arrow points to Fallback Model (GPT-4o-mini or Anthropic Claude). Include retry logic (attempt counter 1/3, 2/3, 3/3) and final fallback to cached response or error message. Use traffic light colors: green for success, yellow for fallback, red for final failure. Add icons for different providers (OpenAI, Anthropic, local Ollama) to show provider diversity strategy. */}
+
+```python
+from typing import TypedDict
+from langgraph.graph import StateGraph, START, END
+
+class MultiModelState(TypedDict):
+    input: str
+    response: str
+    model_used: str
+    attempts: int
+    error: str | None
+
+def primary_model_node(state: MultiModelState) -> dict:
+    """Try the primary (preferred) model first."""
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": state["input"]}],
+            timeout=10
+        )
+        return {
+            "response": response.choices[0].message.content,
+            "model_used": "gpt-4o",
+            "error": None
+        }
+    except Exception as e:
+        return {"error": str(e), "attempts": state.get("attempts", 0) + 1}
+
+def fallback_model_node(state: MultiModelState) -> dict:
+    """Fallback to a different model/provider."""
+    try:
+        # Could be a different provider (Anthropic, local Ollama, etc.)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": state["input"]}]
+        )
+        return {
+            "response": response.choices[0].message.content,
+            "model_used": "gpt-4o-mini (fallback)",
+            "error": None
+        }
+    except Exception as e:
+        return {"error": str(e), "response": "All models failed."}
+
+def should_fallback(state: MultiModelState) -> str:
+    """Decide whether to use fallback based on error state."""
+    if state.get("error") and state.get("attempts", 0) < 3:
+        return "fallback"
+    return "end"
+
+# Build fallback graph
+workflow = StateGraph(MultiModelState)
+workflow.add_node("primary", primary_model_node)
+workflow.add_node("fallback", fallback_model_node)
+
+workflow.add_edge(START, "primary")
+workflow.add_conditional_edges("primary", should_fallback, {
+    "fallback": "fallback",
+    "end": END
+})
+workflow.add_edge("fallback", END)
+
+app = workflow.compile()
+```
+
+<Callout type="tip">
+  **Production Fallback Strategies:** - **Provider diversity**: Primary on
+  OpenAI, fallback on Anthropic - **Local fallback**: Cloud primary, Ollama
+  fallback for resilience - **Graceful degradation**: Powerful model → smaller
+  model → cached response
+</Callout>
+
+---
+
+<Exercise
+  title="Extend the Router"
+  difficulty="beginner"
+  objectives={[
+    "Add a new route for 'calculate' requests",
+    "Implement a calculator handler node",
+    "Test with mathematical queries",
+    "Add confidence-based fallback logic"
+  ]}
+  hints={[
+    "Add 'calculate' to the router_node conditions",
+    "Create a calculate_node that parses simple math",
+    "Update route_decision to handle the new route",
+    "Don't forget to add edges for the new node",
+    "Consider using Python's ast.literal_eval for safe math evaluation"
+  ]}
+>
+
+**Task:** Extend the router to handle calculation requests.
+
+1. Add detection for words like "calculate", "compute", "math"
+2. Create a `calculate_node` that handles math queries
+3. Wire up the new node in the graph
+
+**Bonus:** Use Python's `eval()` (carefully!) or a math library to actually compute results.
+
+```python
+def calculate_node(state: AgentState) -> dict:
+    """Handle calculation requests."""
+    import re
+    import ast
+
+    # Extract numbers and operators from input
+    user_input = state["input"]
+
+    # Find mathematical expression (simple pattern)
+    # In production, use a proper math parser
+    match = re.search(r'[\d\+\-\*\/\.\(\)\s]+', user_input)
+    if match:
+        expr = match.group().strip()
+        try:
+            # Safe evaluation using ast.literal_eval for simple cases
+            # For complex math, consider using sympy
+            result = eval(expr)  # Note: Use ast.literal_eval in production
+            return {"decision": f"🔢 {expr} = {result}"}
+        except:
+            pass
+
+    return {"decision": "🔢 I couldn't parse that math expression. Try something like '2 + 2' or '15 * 3'."}
+```
+
+</Exercise>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Forgetting to add edges from new nodes to END",
+      fix: "Every handler node needs an edge to END, or the graph won't terminate",
+    },
+    {
+      mistake: "Routing function returns value not in the mapping",
+      fix: "Ensure all possible return values from route_decision are keys in the conditional_edges mapping",
+    },
+    {
+      mistake: "Using set_entry_point() instead of START",
+      fix: "Modern LangGraph uses workflow.add_edge(START, 'first_node')",
+    },
+    {
+      mistake: "Not compiling the graph before invoking",
+      fix: "Always call app = workflow.compile() before app.invoke()",
+    },
+  ]}
+/>
+
+---
+
+<ProgressCheckpoint
+  title="Router Lab Check"
+  questions={[
+    {
+      question: "What is the purpose of a router agent?",
+      answer:
+        "A router agent examines input and directs execution to different specialized handler nodes based on the content or intent.",
+    },
+    {
+      question: "What does add_conditional_edges do?",
+      answer:
+        "It creates edges that route to different nodes based on a routing function's return value. The function examines state and returns the name of the next node.",
+    },
+    {
+      question: "Why use LLM-based routing instead of keyword matching?",
+      answer:
+        "LLM-based routing understands semantic meaning and handles variations in phrasing. 'Find info about cats' and 'Look up feline data' would both route to search, even without exact keyword matches.",
+    },
+    {
+      question: "How does cost-aware model routing reduce expenses?",
+      answer:
+        "By classifying query complexity and routing simple queries to cheaper/faster models while reserving expensive models for complex tasks. This can reduce costs by 40-63% while maintaining quality.",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Router agents direct traffic to specialized handlers based on input",
+    "The pattern has three parts: router node, routing function, handler nodes",
+    "Use add_conditional_edges to create decision-based routing",
+    "Keyword matching works for simple cases; LLM classification for complex intent",
+    "Semantic routing with embeddings offers the best accuracy/cost tradeoff",
+    "Cost-aware routing can reduce LLM expenses by 40-63%",
+    "Multi-model fallbacks ensure resilience when primary models fail",
+    "Always ensure all routes lead to END to prevent hanging graphs",
+    "Visualize your graph with get_graph().draw_mermaid()",
+  ]}
+/>
+
+---
+
+## Related Modules
+
+This lab builds on and connects to other modules in the course:
+
+- **[Day 10: LangGraph Basics](/modules/day-10-langgraph-basics)** — Foundation concepts for building graphs with LangGraph
+- **[Day 11: Building Agent Loops](/modules/day-11-loops)** — The ReAct pattern and autonomous agent implementation
+
+---
+
+## What's Next?
+
+In **Day 15**, we'll explore **The Model Context Protocol (MCP)**—the emerging standard for tool integration. You'll learn:
+
+- How MCP standardizes tool definitions
+- Building MCP-compatible tools
+- Integrating MCP servers with your agents
+
+---
+
+## Additional Resources
+
+- **[LangGraph Conditional Edges](https://langchain-ai.github.io/langgraph/concepts/low_level/#conditional-edges)** — Official documentation
+- **[Router Patterns](https://langchain-ai.github.io/langgraph/tutorials/)** — More routing examples
+- **[LangGraph Cheatsheet](https://sumanmichael.github.io/langgraph-cheatsheet/)** — Quick reference guide
+- **[Semantic Router Library](https://github.com/aurelio-labs/semantic-router)** — Production-ready semantic routing
+- **[LangGraph Best Practices](https://www.swarnendu.de/blog/langgraph-best-practices/)** — Production patterns and tips
+- **[Multi-Agent Orchestration Guide](https://jangwook.net/en/blog/en/langgraph-multi-agent/)** — Supervisor and routing patterns

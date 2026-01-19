@@ -23,9 +23,28 @@ day: 0
 
 Before we build agents, we need to understand what powers them. This module is designed for complete beginners—if you've never studied AI or machine learning, start here.
 
+<Callout type="info">
+  **Welcome to the 90-Day Journey!** This course spans 3 months (12 weeks) of
+  structured learning. Day 0 modules like this one provide foundational
+  knowledge you'll build upon throughout the entire 90-day curriculum. Take your
+  time here—these concepts are the bedrock of everything that follows.
+</Callout>
+
+<ConceptVisual
+  src="/images/foundations_hero_journey.png"
+  alt="AI Agent Journey"
+  caption="From basic foundations to advanced multi-agent architectures: your 90-day path to mastery."
+/>
+
 ---
 
 ## Part 1: The AI Family Tree
+
+<ConceptVisual
+  src="/images/ai_family_tree.png"
+  alt="AI Family Tree"
+  caption="The hierarchy of AI: Deep Learning and LLMs are specialized branches of the broader Machine Learning field."
+/>
 
 <ConceptIntro
   title="Artificial Intelligence (AI)"
@@ -46,6 +65,12 @@ Before we build agents, we need to understand what powers them. This module is d
   analogy="Deep Learning is like ML with a supercharged brain. Instead of learning simple patterns, it uses 'neural networks'—layers upon layers of mathematical functions inspired by how our brains work. Each layer learns increasingly complex features. The first layer might learn to detect edges, the next learns shapes, then faces, then emotions."
   technicalDef="Deep Learning uses artificial neural networks with multiple layers (hence 'deep') to progressively extract higher-level features from raw input. A face recognition system might learn edges → shapes → facial features → identities."
   whyItMatters="Deep Learning is what made modern AI possible. ChatGPT, image generators, and voice assistants all use deep learning."
+/>
+
+<ConceptVisual
+  src="/images/neural_network_layers.png"
+  alt="Neural Network Layers"
+  caption="Deep Learning models learn hierarchical features, from simple edges to complex objects."
 />
 
 <Mermaid
@@ -103,8 +128,39 @@ graph TB
       definition:
         "When the model generates a response (as opposed to training)",
     },
+    {
+      term: "Temperature",
+      definition:
+        "A parameter (0-2) controlling randomness in outputs—lower is more deterministic, higher is more creative",
+    },
   ]}
 />
+
+### The Transformer: The Architecture Behind LLMs
+
+Before diving into LLMs, it's worth understanding the breakthrough that made them possible: the **Transformer architecture**, introduced in the landmark 2017 paper "Attention Is All You Need."
+
+<ConceptVisual
+  src="/images/transformer_architecture.png"
+  alt="Transformer Architecture"
+  caption="The Transformer architecture uses attention mechanisms to process entire sequences in parallel."
+/>
+
+<ConceptIntro
+  title="Transformer Architecture"
+  analogy="Imagine reading a book where you can instantly flip to any page to understand context, rather than reading strictly from start to finish. Traditional AI had to process text sequentially—word by word. Transformers use 'attention' to look at all words simultaneously and figure out which ones are most relevant to each other. When processing 'The cat sat on the mat because it was tired,' the transformer can instantly connect 'it' to 'cat' rather than guessing based on position."
+  technicalDef="Transformers use self-attention mechanisms to weigh the importance of different parts of the input when processing each element. This allows parallel processing and captures long-range dependencies in text. The architecture consists of encoder and decoder stacks, each with multi-head attention layers and feed-forward networks."
+  whyItMatters="Transformers enabled training on unprecedented amounts of data by parallelizing computation. This is why we went from models with millions of parameters to billions—and why LLMs became possible."
+/>
+
+<Callout type="info">
+  **Want to go deeper?** The [3Blue1Brown video series on
+  transformers](https://www.3blue1brown.com/lessons/attention) provides
+  excellent visual explanations of how attention mechanisms work. It's optional
+  but highly recommended for visual learners.
+</Callout>
+
+<TransformerArchitecture />
 
 ### What is a Large Language Model?
 
@@ -115,7 +171,28 @@ graph TB
   whyItMatters="Understanding that LLMs are 'prediction machines' helps explain both their capabilities (fluent text generation) and limitations (they can confidently predict wrong answers)."
 />
 
+<Callout type="info">
+  **Did You Know?** GPT-4 was trained on roughly 13 trillion tokens—equivalent
+  to about 10 million books. If you read one book per day, it would take you
+  over 27,000 years to read that much! This massive scale is why LLMs can seem
+  so knowledgeable, but also why they sometimes "hallucinate"—they're
+  pattern-matching, not truly understanding.
+</Callout>
+
+<Callout type="important">
+  **The Key Insight:** LLMs don't "know" things the way humans do. They predict
+  what text should come next based on patterns learned during training. This is
+  why they can be confidently wrong—they're optimizing for plausibility, not
+  truth.
+</Callout>
+
 ### Tokens: How LLMs Read Text
+
+<ConceptVisual
+  src="/images/tokenization_visualization.png"
+  alt="Tokenization Visualization"
+  caption="LLMs see text as tokens (numbers), not words. Note how spaces and sub-words are handled."
+/>
 
 <ConceptIntro
   title="Tokenization"
@@ -131,7 +208,60 @@ Example Tokenization:
                          (Each token maps to a number)
 ```
 
+### See Token Generation in Action
+
+Watch how LLMs generate text one token at a time. This "autoregressive" process is fundamental to understanding how these models work:
+
+<TokenFlowAnimation
+  inputTokens={["What", " is", " the", " capital", " of", " France", "?"]}
+  outputTokens={["The", " capital", " of", " France", " is", " Paris", "."]}
+/>
+
+<TokenCalculator />
+
+<Callout type="tip">
+  **Rule of Thumb:** 1 token ≈ 4 characters ≈ 0.75 words in English. Code
+  typically uses more tokens per line than prose because of special characters
+  and syntax.
+</Callout>
+
+### Temperature and Sampling: Controlling Creativity
+
+When you use an LLM, you can adjust how "creative" or "deterministic" its responses are using parameters called **temperature** and **top-p**.
+
+<ConceptVisual
+  src="/images/temperature_slider_visualization.png"
+  alt="Temperature & Creativity"
+  caption="Lower temperature means more deterministic outputs; higher temperature increases creativity and randomness."
+/>
+
+<ConceptIntro
+  title="Temperature"
+  analogy="Imagine a chef deciding what to cook. At low temperature (0.0-0.3), they always pick the most popular dish—safe and predictable. At high temperature (0.7-1.0), they might experiment with unusual combinations—more creative but sometimes weird. Temperature controls how much the model 'takes risks' when choosing the next word."
+  technicalDef="Temperature scales the probability distribution before sampling. Lower values make high-probability tokens even more likely (deterministic), while higher values flatten the distribution, giving lower-probability tokens a better chance (creative/random)."
+  whyItMatters="Choosing the right temperature is crucial for agents. Code generation needs low temperature (accuracy), while brainstorming benefits from higher temperature (creativity)."
+/>
+
+| Use Case         | Recommended Temperature | Why                                  |
+| :--------------- | :---------------------- | :----------------------------------- |
+| Code generation  | 0.0 - 0.2               | Accuracy and consistency matter most |
+| Factual Q&A      | 0.0 - 0.3               | Minimize hallucinations              |
+| Creative writing | 0.7 - 0.9               | Encourage novel ideas                |
+| Brainstorming    | 0.8 - 1.0               | Maximum creativity                   |
+
+<Callout type="info">
+  **Top-P (Nucleus Sampling):** An alternative to temperature that limits
+  choices to the smallest set of tokens whose cumulative probability exceeds P
+  (e.g., 0.9). Often used together with temperature for fine-grained control.
+</Callout>
+
 ### Embeddings: Meaning as Numbers
+
+<ConceptVisual
+  src="/images/embedding_space_3d.png"
+  alt="Vector Embedding Space"
+  caption="Embeddings map concepts to 3D space. semantic relationships are preserved as geometric distances."
+/>
 
 <ConceptIntro
   title="Embeddings"
@@ -161,6 +291,12 @@ graph LR
 
 ### The Context Window: The Model's Memory
 
+<ConceptVisual
+  src="/images/context_window_scrolling.png"
+  alt="Context Window"
+  caption="The context window is the model's short-term memory. Once full, older information drops out 'off the top'."
+/>
+
 <ConceptIntro
   title="Context Window"
   analogy="Imagine you can only remember the last 10 pages of a book while reading. That's the context window—it's how much text the model can 'see' at once. GPT-4 can see about 128,000 tokens (~300 pages), while some models see only 4,000 tokens (~10 pages). Everything outside this window is forgotten."
@@ -168,16 +304,49 @@ graph LR
   whyItMatters="Context window limits affect what agents can do. A coding agent needs to 'see' enough code to understand it. This is why 'context engineering' is so important."
 />
 
-| Model      | Context Window   | Approximate Words |
-| :--------- | :--------------- | :---------------- |
-| GPT-3.5    | 4,096 tokens     | ~3,000 words      |
-| GPT-4      | 128,000 tokens   | ~96,000 words     |
-| Claude 3   | 200,000 tokens   | ~150,000 words    |
-| Gemini 1.5 | 1,000,000 tokens | ~750,000 words    |
+| Model            | Context Window   | Max Output     | Approximate Input Words |
+| :--------------- | :--------------- | :------------- | :---------------------- |
+| GPT-4o           | 128,000 tokens   | 16,384 tokens  | ~96,000 words           |
+| GPT-5            | 400,000 tokens   | 128,000 tokens | ~272,000 words input    |
+| Claude 4 Sonnet  | 200,000 tokens   | 64,000 tokens  | ~150,000 words          |
+| Claude 4 Opus    | 200,000 tokens   | 32,000 tokens  | ~150,000 words          |
+| Gemini 2.5 Pro   | 1,000,000 tokens | 65,536 tokens  | ~750,000 words          |
+| Gemini 2.5 Flash | 1,000,000 tokens | 65,536 tokens  | ~750,000 words          |
+
+<Callout type="info">
+  **Extended Thinking:** Claude 4 models feature "Extended Thinking" mode, where
+  the model can reason for extended periods (up to hours for complex tasks)
+  before responding. This is particularly powerful for complex coding and
+  reasoning tasks. GPT-5 has a similar "Thinking" mode that auto-activates for
+  complex queries.
+</Callout>
 
 ---
 
 ## Part 3: From Chatbots to Agents
+
+This is the most important distinction in this course. Understanding it deeply will shape how you approach every module.
+
+### The Evolution: From Scripted Bots to Agentic AI
+
+The journey from simple chatbots to AI agents represents a fundamental shift in what AI systems can accomplish:
+
+- **2016-2019**: Rule-based chatbots with scripted responses and decision trees
+- **2020-2022**: LLM-powered chatbots with fluent conversation but no action capability
+- **2023-Present**: Agentic AI systems that can reason, plan, use tools, and execute multi-step tasks autonomously
+
+<ConceptVisual
+  src="/images/chatbots_to_agents_timeline.png"
+  alt="Evolution of AI Assistants"
+  caption="The progression from rigid chatbots to conversational LLMs, and finally to autonomous agents."
+/>
+
+<Callout type="info">
+  **Industry Insight:** Gartner predicts that by 2029, agentic AI will
+  autonomously resolve 80% of routine service issues. This shift from
+  "conversation" to "outcomes" is why learning to build agents—not just
+  chatbots—is so valuable.
+</Callout>
 
 <ConceptIntro
   title="AI Agent"
@@ -222,11 +391,90 @@ Unlike a chatbot that responds once, an agent works in a loop:
 4. **Observe**: See the result of the action
 5. **Repeat**: Go back to step 1 until the task is complete
 
+<ThinkingLoop />
+
 <RealWorldExample
   title="Booking a Flight"
   scenario="You ask an agent: 'Book me the cheapest flight to Tokyo next month'"
   implementation="The agent: (1) Searches flight APIs for options, (2) Compares prices, (3) Asks you to confirm the best option, (4) Books the flight, (5) Adds it to your calendar, (6) Sends you a confirmation email."
   takeaway="A chatbot would just tell you about flights. An agent actually books them. This requires tools, planning, and the ability to take real actions."
+/>
+
+<ComparisonTable
+  title="Chatbot vs Agent Capabilities"
+  items={[
+    {
+      name: "Chatbot",
+      icon: "💬",
+      features: {
+        textResponses: true,
+        externalTools: false,
+        executeCode: false,
+        longTermMemory: false,
+        multiStepPlanning: false,
+        realWorldActions: false,
+        handleFailures: false,
+      },
+    },
+    {
+      name: "Agent",
+      icon: "🤖",
+      highlight: true,
+      features: {
+        textResponses: true,
+        externalTools: true,
+        executeCode: true,
+        longTermMemory: true,
+        multiStepPlanning: true,
+        realWorldActions: true,
+        handleFailures: true,
+      },
+    },
+  ]}
+  features={[
+    {
+      key: "textResponses",
+      label: "Generate text responses",
+      description:
+        "Both can produce natural language outputs in response to user queries",
+    },
+    {
+      key: "externalTools",
+      label: "Use external tools/APIs",
+      description:
+        "Agents can call APIs, search the web, and interact with external services",
+    },
+    {
+      key: "executeCode",
+      label: "Execute code",
+      description:
+        "Agents can write and run code to solve problems programmatically",
+    },
+    {
+      key: "longTermMemory",
+      label: "Maintain long-term memory",
+      description:
+        "Agents can remember context across sessions and learn from past interactions",
+    },
+    {
+      key: "multiStepPlanning",
+      label: "Plan multi-step tasks",
+      description:
+        "Agents can break down complex goals into actionable steps and execute them sequentially",
+    },
+    {
+      key: "realWorldActions",
+      label: "Take real-world actions",
+      description:
+        "Agents can book appointments, send emails, make purchases, and more",
+    },
+    {
+      key: "handleFailures",
+      label: "Handle failures and retry",
+      description:
+        "Agents can detect when something goes wrong and try alternative approaches",
+    },
+  ]}
 />
 
 ---
@@ -276,6 +524,12 @@ Unlike a chatbot that responds once, an agent works in a loop:
 
 ### RAG: Giving AI Knowledge
 
+<ConceptVisual
+  src="/images/rag_architecture_flow.png"
+  alt="RAG Architecture"
+  caption="Retrieval-Augmented Generation (RAG) grounds the LLM with relevant data fetched from a knowledge base."
+/>
+
 <ConceptIntro
   title="Retrieval-Augmented Generation (RAG)"
   analogy="Imagine taking an exam where you're allowed to bring notes. You don't need to memorize everything—you just need to know how to find the right information quickly. RAG works the same way: instead of relying only on what the LLM 'memorized' during training, we give it access to a searchable knowledge base."
@@ -284,6 +538,12 @@ Unlike a chatbot that responds once, an agent works in a loop:
 />
 
 ### Hallucinations: When AI Gets It Wrong
+
+<ConceptVisual
+  src="/images/hallucination_split_screen.png"
+  alt="Hallucination vs. Grounding"
+  caption="Without external data, models prioritize plausibility over truth (hallucination). RAG fixes this."
+/>
 
 <ConceptIntro
   title="Hallucination"
@@ -309,24 +569,70 @@ Unlike a chatbot that responds once, an agent works in a loop:
   ]}
 />
 
+### MCP: The Universal Connector
+
+<ConceptVisual
+  src="/images/mcp_universal_connector.png"
+  alt="Model Context Protocol (MCP)"
+  caption="MCP provides a universal standard for connecting AI models to data sources and tools, replacing spaghetti code."
+/>
+
+<ConceptIntro
+  title="Model Context Protocol (MCP)"
+  analogy="Think of MCP like USB-C for AI. Before USB-C, you needed different cables for different devices. MCP does the same for AI tools—instead of writing custom code to connect each AI to each tool, MCP provides a universal standard. Build a tool once, and any MCP-compatible AI can use it."
+  technicalDef="MCP is an open protocol introduced by Anthropic in November 2024 that standardizes how AI systems connect to external tools, data sources, and services. It defines a client-server architecture where AI applications (clients) can discover and use capabilities provided by MCP servers."
+  whyItMatters="MCP has become the industry standard for AI tool integration, with adoption by OpenAI, Google, and other major providers. In December 2025, it was donated to the Linux Foundation's Agentic AI Foundation. Learning MCP means your tools work everywhere."
+/>
+
+<Callout type="info">
+  We'll dive deep into MCP in Week 2. For now, just know it's the standard way
+  we'll connect our agents to the outside world.
+</Callout>
+
 ---
 
 ## Part 5: The Technology Stack
 
 Here's what we'll use in this course:
 
-| Technology           | Purpose          | Why We Use It                           |
-| :------------------- | :--------------- | :-------------------------------------- |
-| **Python**           | Primary language | Industry standard for AI/ML             |
-| **LangGraph**        | Agent framework  | Production-grade, explicit control flow |
-| **OpenAI/Anthropic** | LLM providers    | Best-in-class models                    |
-| **ChromaDB/LanceDB** | Vector databases | Store and search embeddings             |
-| **MCP**              | Tool protocol    | Standard way to connect tools           |
+| Technology           | Purpose          | Why We Use It                                             |
+| :------------------- | :--------------- | :-------------------------------------------------------- |
+| **Python**           | Primary language | Industry standard for AI/ML                               |
+| **LangGraph**        | Agent framework  | Production-grade, explicit control flow                   |
+| **OpenAI/Anthropic** | LLM providers    | Best-in-class models (GPT-4o/5, Claude 4)                 |
+| **ChromaDB/LanceDB** | Vector databases | Store and search embeddings                               |
+| **MCP**              | Tool protocol    | Standard way to connect tools (Anthropic's open standard) |
 
 <Callout type="info">
   Don't worry if these names are unfamiliar. We'll introduce each tool when we
   need it, with hands-on examples.
 </Callout>
+
+### Why LangGraph?
+
+You might wonder why we chose LangGraph over alternatives like CrewAI, AutoGen, or building from scratch. Here's our reasoning:
+
+<Callout type="info">
+  **LangGraph 1.0:** As of late 2025, LangGraph reached version 1.0—the first
+  stable major release in the durable agent framework space. It's now powering
+  agents at companies like Uber, LinkedIn, and Klarna in production.
+</Callout>
+
+<ProsCons
+  title="LangGraph for Agent Development"
+  pros={[
+    "Explicit control flow—you see exactly what your agent does",
+    "Built-in state management and checkpointing",
+    "Production-ready with LangSmith integration for debugging",
+    "Supports complex patterns: loops, branches, human-in-the-loop",
+    "Active development, strong community, and now v1.0 stable",
+  ]}
+  cons={[
+    "Steeper learning curve than simpler frameworks",
+    "More boilerplate for simple use cases",
+    "Tied to LangChain ecosystem (though loosely coupled)",
+  ]}
+/>
 
 ---
 
@@ -364,15 +670,136 @@ Here's what we'll use in this course:
 
 ---
 
+<Quiz
+  question="An LLM generates text by:"
+  options={[
+    {
+      id: "a",
+      text: "Looking up answers in a database",
+      isCorrect: false,
+      explanation:
+        "LLMs don't have a database of answers. They generate text based on learned patterns.",
+    },
+    {
+      id: "b",
+      text: "Predicting the most likely next token based on patterns learned during training",
+      isCorrect: true,
+      explanation:
+        "Correct! LLMs are essentially sophisticated 'next token predictors' that generate text one token at a time based on probability distributions learned from training data.",
+    },
+    {
+      id: "c",
+      text: "Following a set of programmed rules",
+      isCorrect: false,
+      explanation:
+        "Unlike traditional programming, LLMs learn patterns from data rather than following explicit rules.",
+    },
+    {
+      id: "d",
+      text: "Copying text from the internet",
+      isCorrect: false,
+      explanation:
+        "LLMs don't copy text directly. They generate new text based on patterns learned during training.",
+    },
+  ]}
+  hint="Think about what makes LLMs different from traditional search engines or rule-based systems."
+/>
+
+<Quiz
+  question="Which of the following is a capability that distinguishes an AI agent from a chatbot?"
+  options={[
+    {
+      id: "a",
+      text: "Generating human-like text responses",
+      isCorrect: false,
+      explanation:
+        "Both chatbots and agents can generate text responses. This isn't what makes agents special.",
+    },
+    {
+      id: "b",
+      text: "Using external tools and taking real-world actions",
+      isCorrect: true,
+      explanation:
+        "Correct! The key distinction is that agents can use tools (APIs, code execution, web search) and take actions in the real world, while chatbots can only generate text.",
+    },
+    {
+      id: "c",
+      text: "Understanding natural language",
+      isCorrect: false,
+      explanation:
+        "Both chatbots and agents can understand natural language through their underlying LLM.",
+    },
+    {
+      id: "d",
+      text: "Having a friendly personality",
+      isCorrect: false,
+      explanation:
+        "Personality is a prompt engineering choice, not a fundamental capability difference.",
+    },
+  ]}
+  hint="Think about what an agent can DO that a chatbot cannot."
+/>
+
+<Quiz
+  question="When generating code with an LLM, what temperature setting would you typically use?"
+  options={[
+    {
+      id: "a",
+      text: "High temperature (0.8-1.0) for maximum creativity",
+      isCorrect: false,
+      explanation:
+        "High temperature introduces randomness, which can lead to syntax errors and inconsistent code. Not ideal for code generation.",
+    },
+    {
+      id: "b",
+      text: "Low temperature (0.0-0.2) for accuracy and consistency",
+      isCorrect: true,
+      explanation:
+        "Correct! Code generation requires precision and consistency. Low temperature makes the model more deterministic, reducing the chance of errors and producing more reliable code.",
+    },
+    {
+      id: "c",
+      text: "Medium temperature (0.5) for balanced output",
+      isCorrect: false,
+      explanation:
+        "While medium temperature works for some tasks, code generation benefits from lower temperatures to ensure accuracy.",
+    },
+    {
+      id: "d",
+      text: "Temperature doesn't affect code generation",
+      isCorrect: false,
+      explanation:
+        "Temperature significantly affects all LLM outputs, including code. It controls how deterministic vs. creative the model's choices are.",
+    },
+  ]}
+  hint="Think about whether you want predictable, accurate output or creative, varied output when writing code."
+/>
+
+---
+
 <ModuleSummary
   points={[
     "AI → Machine Learning → Deep Learning → LLMs is a hierarchy of increasingly specialized techniques",
     "LLMs are sophisticated 'next word predictors' trained on massive text datasets",
     "Tokens are how LLMs process text; context windows limit how much they can 'see'",
+    "Temperature controls creativity vs. determinism—use low for accuracy, high for creativity",
     "Embeddings represent meaning as numbers, enabling semantic search",
     "Agents extend LLMs with tools, memory, and the ability to take actions",
     "RAG grounds AI responses in your actual data",
     "Hallucinations are a fundamental limitation we must design around",
+  ]}
+/>
+
+---
+
+<Exercise
+  title="Foundation Concepts Check"
+  difficulty="Easy"
+  objectives={[
+    "Explain the difference between AI, ML, and Deep Learning to a colleague",
+    "Calculate approximately how many tokens are in a 10,000 word document",
+    "Describe why an agent is more powerful than a chatbot",
+    "Identify one scenario where RAG would be essential",
   ]}
 />
 
@@ -386,3 +813,27 @@ Now that you understand the building blocks, you're ready to start building. In 
   **Bookmark this page!** As you progress through the course, you may want to
   return here to refresh your understanding of foundational concepts.
 </Callout>
+
+---
+
+## Related Day 00 Modules
+
+- **[Environment Setup](/modules/day-00-course-setup)** — Get your development environment ready
+- **[How to Use This Course](/modules/day-00-how-to-learn)** — Learning strategies for different skill levels
+- **[Glossary](/modules/day-00-glossary)** — Quick reference for all terminology
+
+---
+
+## External Resources
+
+For deeper exploration of the concepts covered here:
+
+- **[3Blue1Brown: Attention in Transformers](https://www.3blue1brown.com/lessons/attention)** — Excellent visual explanation of how attention mechanisms work (highly recommended)
+- **[LangGraph Documentation](https://langchain-ai.github.io/langgraph/)** — Official docs for the agent framework we'll use (now v1.0 stable)
+- **[Model Context Protocol (MCP)](https://modelcontextprotocol.io/)** — Anthropic's open standard for AI tool integration
+- **[OpenAI Platform Docs](https://platform.openai.com/docs)** — API reference and guides
+- **[Anthropic Documentation](https://docs.anthropic.com/)** — Claude models and best practices
+- **[OpenAI Cookbook](https://cookbook.openai.com/)** — Practical examples and patterns
+- **[Prompt Engineering Guide](https://www.promptingguide.ai/)** — Comprehensive prompting techniques
+- **[LangSmith](https://smith.langchain.com/)** — Essential debugging and tracing for agents
+- **[Hugging Face Course](https://huggingface.co/learn)** — Deep dive into transformers and NLP fundamentals

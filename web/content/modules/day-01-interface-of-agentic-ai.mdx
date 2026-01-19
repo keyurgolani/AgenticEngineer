@@ -1,11 +1,11 @@
 ---
 title: "The Anatomy of an Agent"
-description: "Understanding the difference between raw LLMs and Agentic Systems."
+description: "Understanding the difference between raw LLMs and Agentic Systems—the brain vs. body distinction that defines modern AI agents."
 week: 1
 day: 1
 ---
 
-<ReadingTime minutes={15} />
+<ReadingTime minutes={25} />
 
 <SkillLevel level="beginner" description="Builds on Day 00 Foundations" />
 
@@ -13,7 +13,8 @@ day: 1
   items={[
     "Completed Day 00 Setup",
     "Read Day 00 Foundations (recommended for beginners)",
-    "Understand basic API calls",
+    "Understand basic API calls (REST, JSON)",
+    "Python basics (functions, dictionaries, loops)",
   ]}
 />
 
@@ -21,9 +22,12 @@ day: 1
   objectives={[
     "Distinguish between an LLM and an Agent",
     "Explain why linear pipelines fail for complex tasks",
-    "Describe the Cognitive Loop (Perceive → Reason → Act → Observe)",
-    "Understand what MCP is and why it matters",
-    "Identify the components that make up an agent system",
+    "Describe the ReAct pattern (Reason → Act → Observe)",
+    "Understand tool calling and how agents interact with the world",
+    "Compare tool calling approaches across OpenAI, Anthropic, and Google",
+    "Know what MCP is and why it matters for tool integration",
+    "Identify agentic patterns beyond ReAct (Reflexion, Plan-and-Execute)",
+    "Identify the components that make up a production agent system",
   ]}
 />
 
@@ -37,21 +41,42 @@ day: 1
     {
       term: "Agent",
       definition:
-        "A system that wraps an LLM with tools, memory, and a control loop",
+        "A system that wraps an LLM with tools, memory, and a control loop to take actions in the world",
     },
     {
-      term: "Tool",
+      term: "Tool Calling",
       definition:
-        "A function the agent can call to interact with the world (search, code, APIs)",
+        "The ability for an LLM to request execution of external functions with structured parameters (also called function calling)",
+    },
+    {
+      term: "ReAct",
+      definition:
+        "Reason + Act—a pattern where agents alternate between reasoning and taking actions, introduced in a 2022 research paper",
     },
     {
       term: "DAG",
-      definition: "Directed Acyclic Graph—a one-way pipeline with no loops",
+      definition:
+        "Directed Acyclic Graph—a one-way pipeline with no loops or cycles",
     },
     {
       term: "MCP",
       definition:
-        "Model Context Protocol—a standard for connecting tools to AI",
+        "Model Context Protocol—an open standard introduced by Anthropic for connecting tools to AI systems, now governed by the Linux Foundation",
+    },
+    {
+      term: "Orchestrator",
+      definition:
+        "The component that controls the agent loop, managing state transitions between reasoning and action",
+    },
+    {
+      term: "Structured Outputs",
+      definition:
+        "A feature that guarantees LLM responses match a specified JSON schema exactly, eliminating parsing errors",
+    },
+    {
+      term: "Agentic AI",
+      definition:
+        "AI systems that can autonomously plan, decide, and execute multi-step tasks to achieve goals",
     },
   ]}
 />
@@ -62,42 +87,142 @@ day: 1
 
 The most common misconception is that an "LLM" is an "Agent". It is not.
 
+{/* IMAGE_PLACEHOLDER: Create a split-screen illustration showing:
+    LEFT SIDE: A glowing brain in a glass jar labeled "LLM" with thought bubbles containing text like "I can reason", "I can analyze", "I can generate"
+    RIGHT SIDE: A full robotic figure labeled "Agent" with visible components:
+    - Brain (glowing, same as left) in the head
+    - Arms labeled "Tools" holding various icons (API, database, file system)
+    - Chest area showing "Memory" with stacked layers
+    - Legs labeled "Control Loop" with circular arrows
+    - Background: The robot is interacting with the real world (touching a computer, accessing files, making API calls)
+    Style: Modern, clean, tech illustration with a color scheme of blues and purples. The contrast should clearly show isolation vs. integration.
+    Placement: Full-width hero image at the start of section 1.1
+*/}
+
 ![Agent Brain vs Body](/images/brain_vs_body.png)
 
 <ConceptIntro
   title="The Brain-Body Distinction"
-  analogy="Think of it like this: your brain can think, plan, and decide—but without your body, it can't pick up a cup of coffee, type on a keyboard, or walk to the store. An LLM is like a brain in a jar—incredibly smart, but unable to interact with the world. An Agent gives that brain a body: hands (tools), eyes (sensors), and memory."
-  technicalDef="An LLM is a neural network that processes text and generates responses. An Agent is a software system that uses an LLM as its reasoning engine while providing additional capabilities: tool use (APIs, code execution), memory (conversation history, knowledge bases), and control flow (loops, conditionals)."
-  whyItMatters="This distinction is crucial because building agents requires different skills than just prompting an LLM. You need to think about tool design, error handling, and system architecture."
+  analogy="Think of it like this: your brain can think, plan, and decide—but without your body, it can't pick up a cup of coffee, type on a keyboard, or walk to the store. An LLM is like a brain in a jar—incredibly smart, but unable to interact with the world. An Agent gives that brain a body: hands (tools), eyes (sensors), memory (persistence), and reflexes (control loops)."
+  technicalDef="An LLM is a neural network that processes text and generates responses. An Agent is a software system that uses an LLM as its reasoning engine while providing additional capabilities: tool use (APIs, code execution), memory (conversation history, knowledge bases), and control flow (loops, conditionals, error handling)."
+  whyItMatters="This distinction is crucial because building agents requires different skills than just prompting an LLM. You need to think about tool design, error handling, state management, and system architecture—skills we'll develop throughout this course."
 />
 
-| Component                   | LLM (Brain)             | Agent (Body)            |
-| :-------------------------- | :---------------------- | :---------------------- |
-| **Can reason**              | ✅ Yes                  | ✅ Yes (uses LLM)       |
-| **Can remember**            | ❌ No (stateless)       | ✅ Yes (memory systems) |
-| **Can take actions**        | ❌ No                   | ✅ Yes (tools)          |
-| **Can learn from mistakes** | ❌ No                   | ✅ Yes (feedback loops) |
-| **Can access current data** | ❌ No (training cutoff) | ✅ Yes (RAG, APIs)      |
+<Callout type="important">
+  **Key Insight:** An LLM alone is stateless and isolated. Every API call starts
+  fresh with no memory of previous interactions. An agent adds the
+  infrastructure to maintain state, remember context, and take real actions.
+</Callout>
+
+<ComparisonTable
+  title="LLM vs Agent Capabilities"
+  items={[
+    {
+      name: "LLM (Brain Only)",
+      icon: "🧠",
+      features: {
+        reasoning: true,
+        memory: false,
+        actions: false,
+        learning: false,
+        currentData: false,
+        codeExec: false,
+        retry: false,
+      },
+    },
+    {
+      name: "Agent (Brain + Body)",
+      icon: "🤖",
+      highlight: true,
+      features: {
+        reasoning: true,
+        memory: true,
+        actions: true,
+        learning: true,
+        currentData: true,
+        codeExec: true,
+        retry: true,
+      },
+    },
+  ]}
+  features={[
+    {
+      key: "reasoning",
+      label: "Can reason about problems",
+      description: "Both can analyze and think through complex problems",
+    },
+    {
+      key: "memory",
+      label: "Can remember past interactions",
+      description:
+        "LLMs are stateless; agents use memory systems to persist context",
+    },
+    {
+      key: "actions",
+      label: "Can take actions in the world",
+      description:
+        "Agents can call APIs, execute code, and interact with external systems via tool calling",
+    },
+    {
+      key: "learning",
+      label: "Can learn from mistakes in a session",
+      description: "Agents use feedback loops to improve within a task",
+    },
+    {
+      key: "currentData",
+      label: "Can access current data",
+      description:
+        "Agents can use RAG, APIs, and web search to get real-time information",
+    },
+    {
+      key: "codeExec",
+      label: "Can execute code",
+      description: "Agents can run code in sandboxed environments",
+    },
+    {
+      key: "retry",
+      label: "Can retry failed operations",
+      description: "Agents use control loops to handle errors and retry",
+    },
+  ]}
+/>
 
 <ThinkingLoop />
+
+<Callout type="info">
+  **Recall from Day 00:** We introduced the concept that agents extend LLMs with
+  tools, memory, and planning capabilities. Today we'll dive deeper into *how*
+  this works mechanically—the patterns and architecture that make agents
+  possible. Over the next 90 days (3 months, 12 weeks), you'll master these
+  concepts and build production-grade agentic systems.
+</Callout>
 
 ---
 
 ## 1.2 Why Pipelines Fail
 
-In traditional software, we build **Pipelines** (or DAGs - Directed Acyclic Graphs).
+In traditional software, we build **Pipelines** (or DAGs - Directed Acyclic Graphs). Data flows in one direction:
 
 ```
-Input A → Function B → Output C
+Input A → Function B → Function C → Output D
 ```
 
-This is <Glossary term="Deterministic" def="Always producing the same output for the same input. No randomness or variation." />. If you run it 100 times, you get the same result 100 times.
+{/* IMAGE_PLACEHOLDER: Create an animated comparison diagram:
+    TOP: "Traditional Pipeline (DAG)" - Show a linear flow with boxes connected by arrows, labeled with steps like "Input → Process → Transform → Output". Add a red X when an error occurs in the middle, showing the entire pipeline breaking.
+    BOTTOM: "Agentic Loop" - Show a circular flow with "Reason → Act → Observe" in a cycle, with a branch showing error handling that loops back to "Reason" with adjusted strategy.
+    Include small icons: pipeline has a rigid ruler icon, loop has a flexible spring icon.
+    Animation: Show the pipeline failing and stopping vs. the loop adapting and continuing.
+    Style: Clean, technical diagram with color coding (pipeline in gray/red, loop in blue/green)
+    Placement: After the code block showing the linear pipeline
+*/}
+
+This is <Glossary term="Deterministic" def="Always producing the same output for the same input. No randomness or variation." />. Run it 100 times, get the same result 100 times. This predictability is a feature—until you need to handle uncertainty.
 
 <ConceptIntro
   title="The Problem with Linear Pipelines"
   analogy="Imagine you're following a recipe that says 'bake for 30 minutes.' But what if your oven runs hot? A linear recipe can't adapt—it just follows the steps. A good chef, however, checks the food, adjusts the temperature, and maybe bakes for 25 minutes instead. Agents need to work like chefs, not recipes."
   technicalDef="DAGs (Directed Acyclic Graphs) process data in one direction with no cycles. They cannot handle runtime uncertainty, retry failed operations, or adapt based on intermediate results. Agents require cyclical graphs that can loop back based on observations."
-  whyItMatters="Real-world tasks are messy. APIs fail, LLMs make mistakes, and requirements change mid-task. Agents must handle this uncertainty gracefully."
+  whyItMatters="Real-world tasks are messy. APIs fail, LLMs make mistakes, and requirements change mid-task. Agents must handle this uncertainty gracefully through iteration and recovery."
 />
 
 Agents live in a <Glossary term="Probabilistic" def="Involving chance or variation; not deterministic. The same input might produce different outputs." /> world.
@@ -105,110 +230,601 @@ Agents live in a <Glossary term="Probabilistic" def="Involving chance or variati
 If you ask an agent to "Fix the bug in main.py", it might:
 
 1. Read the file
-2. Try a fix
-3. Run the tests
-4. **Fail** ❌
-5. Read the error message
-6. Try a different fix
-7. **Succeed** ✅
+2. Analyze the error
+3. Try a fix
+4. Run the tests
+5. **Fail** ❌
+6. Read the new error message
+7. Try a different fix
+8. **Succeed** ✅
 
-A linear pipeline cannot handle step 4. It would just crash. An **Agentic Loop** can perceive the failure, reason about it, and act again.
+A linear pipeline cannot handle step 5. It would just crash or return an error. An **Agentic Loop** can perceive the failure, reason about what went wrong, and try again.
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Linear Pipeline (DAG)"
+        A[Input] --> B[Process] --> C[Output]
+    end
+    
+    subgraph "Agentic Loop"
+        D[Input] --> E{Reason}
+        E --> F[Act]
+        F --> G[Observe]
+        G -->|"Not done"| E
+        G -->|"Done"| H[Output]
+    end
+    
+    style E fill:#f9f,stroke:#333
+    style F fill:#bbf,stroke:#333
+    style G fill:#bfb,stroke:#333
+`}
+/>
 
 <RealWorldExample
   title="Debugging Code"
   scenario="You ask an agent to fix a failing test in your codebase."
-  implementation="The agent: (1) Reads the test file and error message, (2) Hypothesizes the cause, (3) Makes a code change, (4) Runs the test, (5) If it fails, reads the new error and tries again, (6) Repeats until the test passes or it asks for help."
-  takeaway="This requires a loop, not a pipeline. The agent must be able to observe results and adjust its approach—something impossible in a linear DAG."
+  implementation="The agent: (1) Reads the test file and error message, (2) Hypothesizes the cause based on the stack trace, (3) Makes a code change, (4) Runs the test, (5) If it fails, reads the new error and adjusts its hypothesis, (6) Repeats until the test passes or it determines it needs human help."
+  takeaway="This requires a loop, not a pipeline. The agent must observe results and adjust its approach—something impossible in a linear DAG. This is the fundamental shift from traditional programming to agentic systems."
 />
 
 ---
 
-## 1.3 The Cognitive Loop
+## 1.3 The ReAct Pattern: How Agents Think
 
 The core transformation in this course is moving from **Chains** (Linear) to **Loops** (Cyclical).
 
-We call this the **OODA Loop** (Observe, Orient, Decide, Act), or in AI terms:
+The industry-standard pattern for this is called **ReAct** (Reason + Act), introduced in a [2022 research paper by Yao et al.](https://arxiv.org/abs/2210.03629) that fundamentally changed how we build agents. The paper demonstrated that interleaving reasoning traces with actions significantly improves task performance compared to reasoning-only or action-only approaches:
 
 <Mermaid
   chart={`
 graph TD
-    Start([User Request]) --> Perception
-    Perception[1. Perceive] --> Reasoning{2. Reason}
-    Reasoning -->|"Need more info"| Action[3. Act]
-    Action --> Observation[4. Observe]
-    Observation --> Perception
-    Reasoning -->|"Task complete"| End([Final Answer])
+    Start([User Request]) --> Reason
+    Reason[1. Reason<br/>Think about what to do] --> Act{2. Act<br/>Execute a tool}
+    Act -->|"Tool returns result"| Observe[3. Observe<br/>See the result]
+    Observe --> Reason
+    Reason -->|"Task complete"| End([Final Answer])
 
-    style Reasoning fill:#f9f,stroke:#333,stroke-width:2px
-    style Action fill:#bbf,stroke:#333,stroke-width:2px
-    style Perception fill:#bfb,stroke:#333,stroke-width:2px
-    style Observation fill:#ff9,stroke:#333,stroke-width:2px
+    style Reason fill:#f9f,stroke:#333,stroke-width:2px
+    style Act fill:#bbf,stroke:#333,stroke-width:2px
+    style Observe fill:#bfb,stroke:#333,stroke-width:2px
 
 `}
 />
 
-### The Four Steps
+### The Three Steps of ReAct
 
-| Step            | What Happens                                | Example                                                                         |
-| :-------------- | :------------------------------------------ | :------------------------------------------------------------------------------ |
-| **1. Perceive** | Read input, tool outputs, environment state | "The user wants to book a flight. I have search results showing 3 options."     |
-| **2. Reason**   | Decide what to do next                      | "The cheapest option is $450. I should ask the user to confirm before booking." |
-| **3. Act**      | Execute a tool or generate a response       | Call `send_message("Found a flight for $450. Should I book it?")`               |
-| **4. Observe**  | See the result of the action                | User replied: "Yes, book it."                                                   |
+{/* IMAGE_PLACEHOLDER: Create an interactive circular diagram showing the ReAct loop:
+    - Three main nodes arranged in a circle: "Reason" (purple brain icon), "Act" (blue hand/tool icon), "Observe" (green eye icon)
+    - Arrows connecting them clockwise with labels
+    - Center shows "Task State" that updates as you hover over each step
+    - Each node expands on hover to show example text:
+      * Reason: "I need to search for flights to Tokyo"
+      * Act: "Calling search_flights(destination='Tokyo')"
+      * Observe: "Found 3 flights, cheapest is $450"
+    - Add a "Complete" exit arrow from Reason node
+    - Interactive: Click each node to see a detailed example trace
+    Style: Modern, interactive SVG with smooth animations
+    Placement: Right before the table showing the three steps
+*/}
 
-Then the loop continues: Perceive the new input → Reason about next steps → Act (book the flight) → Observe (confirmation received).
+| Step           | What Happens                                     | Example                                                                |
+| :------------- | :----------------------------------------------- | :--------------------------------------------------------------------- |
+| **1. Reason**  | Think about the current state and plan next step | "The user wants flight options. I should search for flights to Tokyo." |
+| **2. Act**     | Execute a tool or generate a response            | Call `search_flights(destination="Tokyo", date="2024-03-15")`          |
+| **3. Observe** | See the result of the action                     | Tool returns: 3 flights found, cheapest is $450                        |
+
+Then the loop continues: Reason ("I found options, I should present them to the user") → Act (format and display results) → Observe (user says "book the $450 one") → Reason → Act → ...
 
 <Callout type="tip">
-  **Mental Model:** Think of the agent as a junior employee who checks in with
-  you after each step. They perceive the situation, think about what to do, take
-  an action, see what happened, and then decide if they need to do more or if
-  they're done.
+  **Mental Model:** Think of the agent as a thoughtful assistant who narrates
+  their thinking. "Let me search for that... okay, I found 3 options... the
+  cheapest is $450... I should ask if they want to book it." This explicit
+  reasoning helps the agent stay on track and makes debugging easier.
+</Callout>
+
+### ReAct in Practice
+
+Here's what a ReAct trace looks like in practice:
+
+{/* IMAGE_PLACEHOLDER: Create an interactive trace visualizer showing:
+    - A chat-like interface on the left showing the user message
+    - On the right, a step-by-step breakdown with expandable sections:
+      * Step 1: "Thought" (purple background) with brain icon
+      * Step 2: "Action" (blue background) with tool icon and JSON parameters
+      * Step 3: "Observation" (green background) with result data
+      * Step 4: "Thought" (purple) with final reasoning
+      * Step 5: "Response" (gold background) with final answer
+    - Each step has a timestamp and can be clicked to expand details
+    - Add a "Play" button to animate through the steps sequentially
+    - Include syntax highlighting for JSON data
+    Style: Modern code editor aesthetic with dark mode support
+    Placement: Replace or augment the code block showing the trace
+*/}
+
+```
+User: What's the weather in Tokyo and should I bring an umbrella?
+
+Thought: I need to check the current weather in Tokyo to answer this question.
+Action: get_weather(location="Tokyo")
+Observation: {"temp": 18, "condition": "light rain", "humidity": 75}
+
+Thought: It's currently raining in Tokyo with light rain. The user should
+definitely bring an umbrella. Let me provide a helpful response.
+Action: respond_to_user
+Response: It's currently 18°C in Tokyo with light rain and 75% humidity.
+Yes, definitely bring an umbrella! ☔
+```
+
+<DeepDive title="Why Explicit Reasoning Matters">
+
+The key insight from the ReAct paper is that **explicit reasoning traces improve task performance**. When the model "thinks out loud":
+
+1. **Better planning**: The model can break complex tasks into steps
+2. **Error recovery**: When something fails, the reasoning trace helps identify what went wrong
+3. **Debuggability**: You can see exactly why the agent made each decision
+4. **Grounding**: Reasoning traces help the model stay focused on the actual task
+
+Without explicit reasoning, models tend to jump to conclusions or get confused on multi-step tasks. ReAct forces a more deliberate, step-by-step approach.
+
+</DeepDive>
+
+<Callout type="info">
+  **Historical Note:** ReAct builds on the OODA Loop (Observe, Orient, Decide,
+  Act) from military strategy, but adapts it for AI systems. The key innovation
+  was showing that interleaving reasoning with actions outperforms both
+  reasoning-only and action-only approaches. Related patterns include
+  **Reflexion** (adding self-reflection on past attempts) and
+  **Plan-and-Execute** (separating planning from execution).
+</Callout>
+
+### Beyond ReAct: Advanced Agentic Patterns
+
+While ReAct is the foundational pattern, the field has evolved several variations that address specific challenges:
+
+<ComparisonTable
+  title="Agentic Design Patterns"
+  items={[
+    {
+      name: "Key Idea",
+      features: {
+        react: "Interleave reasoning and action",
+        reflexion: "Self-reflect on past attempts and store feedback",
+        planExec: "Create full plan first, then execute steps",
+        lats: "Language Agent Tree Search—explore multiple paths",
+        multiAgent: "Multiple specialized agents collaborate",
+      },
+    },
+    {
+      name: "Best For",
+      highlight: true,
+      features: {
+        react: "General-purpose tasks, debugging",
+        reflexion: "Learning from failures, iterative improvement",
+        planExec: "Complex multi-step tasks with clear goals",
+        lats: "Tasks with uncertain outcomes, optimization",
+        multiAgent: "Complex domains requiring diverse expertise",
+      },
+    },
+  ]}
+  features={[
+    {
+      key: "react",
+      label: "ReAct",
+      description:
+        "The foundational pattern that interleaves reasoning traces with actions",
+    },
+    {
+      key: "reflexion",
+      label: "Reflexion",
+      description:
+        "Adds a self-critique step after each attempt, storing feedback to improve future attempts",
+    },
+    {
+      key: "planExec",
+      label: "Plan-and-Execute",
+      description:
+        "Separates planning from execution, creating a complete plan upfront before executing steps",
+    },
+    {
+      key: "lats",
+      label: "LATS",
+      description:
+        "Language Agent Tree Search explores multiple solution paths simultaneously",
+    },
+    {
+      key: "multiAgent",
+      label: "Multi-Agent",
+      description:
+        "Uses specialized agents that collaborate, each with different capabilities",
+    },
+  ]}
+/>
+
+<DeepDive title="When to Use Each Pattern">
+
+**ReAct** remains the default choice for most tasks. Use it when:
+
+- Tasks require real-time adaptation
+- You need visibility into agent reasoning
+- The path to completion isn't known in advance
+
+**Reflexion** adds a self-critique step after each attempt:
+
+```
+Attempt → Result → Reflection → Improved Attempt
+```
+
+Use when agents repeatedly make similar mistakes or when learning from failure is valuable.
+
+**Plan-and-Execute** separates planning from execution:
+
+```
+1. Create complete plan
+2. Execute each step
+3. Re-plan if needed
+```
+
+Use for well-defined tasks where upfront planning reduces errors (e.g., code refactoring, data migrations).
+
+**Multi-Agent** systems use specialized agents that collaborate:
+
+```
+Coordinator → [Researcher, Coder, Reviewer] → Final Output
+```
+
+Use when tasks span multiple domains or require different "personalities" (e.g., one agent writes code, another reviews it).
+
+We'll implement several of these patterns in later modules, culminating in multi-agent systems in Month 2 (Days 31-60).
+
+</DeepDive>
+
+---
+
+## 1.4 Tool Calling: How Agents Take Action
+
+The magic that enables agents to act in the world is **tool calling** (also called function calling). This is a capability built into modern LLMs that lets them request execution of external functions.
+
+{/* IMAGE_PLACEHOLDER: Create a detailed sequence diagram showing tool calling flow:
+    - Left column: User avatar
+    - Middle columns: Agent system (with sub-components: Orchestrator, LLM, Tool Registry)
+    - Right column: External world (APIs, databases, file systems)
+    - Show the complete flow:
+      1. User sends message
+      2. Orchestrator forwards to LLM with tool definitions
+      3. LLM returns tool call request (show JSON structure)
+      4. Orchestrator validates and executes tool
+      5. Tool interacts with external system
+      6. Results flow back through the chain
+      7. LLM generates final response
+    - Use different colors for different message types (user input, tool calls, tool results, responses)
+    - Add small code snippets showing the JSON structure at each step
+    - Include a "Security Boundary" line showing where the LLM's control ends
+    Style: Professional technical diagram with clear visual hierarchy
+    Placement: Right after the ConceptIntro for tool calling
+*/}
+
+<ConceptIntro
+  title="Tool Calling"
+  analogy="Imagine you're a manager who can't directly access the company database, but you can write a request slip that says 'Please look up customer #12345's order history.' You hand the slip to an assistant who executes the query and brings back the results. Tool calling works the same way—the LLM writes a structured request, your code executes it, and the results come back to the LLM."
+  technicalDef="Tool calling is an API feature where you define available functions (with names, descriptions, and parameter schemas), and the LLM can output structured JSON to invoke them. The LLM doesn't execute the tools—it generates the parameters, and your code handles execution and returns results."
+  whyItMatters="Tool calling is what transforms an LLM from a text generator into an agent. Without it, the LLM can only talk about doing things. With it, the LLM can actually do things—search the web, query databases, send emails, execute code."
+/>
+
+<Callout type="important">
+  **Critical Understanding:** The LLM never executes tools directly. It only
+  *requests* that tools be executed by outputting structured JSON. Your
+  application code is responsible for actually running the tool and returning
+  results. This separation is important for security and control.
+</Callout>
+
+### How Tool Calling Works
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Agent
+    participant LLM
+    participant Tool
+    
+    User->>Agent: "What's the weather in Paris?"
+    Agent->>LLM: User message + available tools
+    LLM->>Agent: Tool call: get_weather(location="Paris")
+    Agent->>Tool: Execute get_weather("Paris")
+    Tool->>Agent: {"temp": 22, "condition": "sunny"}
+    Agent->>LLM: Tool result + conversation
+    LLM->>Agent: "It's 22°C and sunny in Paris!"
+    Agent->>User: "It's 22°C and sunny in Paris!"
+`}
+/>
+
+### Defining Tools
+
+When you call an LLM API with tools, you provide schemas that describe what each tool does. Here's the standard format used by OpenAI and most providers:
+
+{/* IMAGE_PLACEHOLDER: Create an interactive tool schema builder/visualizer:
+    - Left panel: Shows the JSON schema with syntax highlighting
+    - Right panel: Shows how the LLM "sees" this tool with annotations:
+      * Highlights the description and shows "This is what the LLM reads to decide when to use this tool"
+      * Highlights parameters and shows "These become the function arguments"
+      * Highlights required fields and shows "LLM must provide these"
+      * Shows example LLM reasoning: "User asked about weather → I have get_weather tool → I'll use it with location='Paris'"
+    - Interactive: User can edit the schema and see how it affects LLM understanding
+    - Include a "Test" button that shows example tool calls the LLM might generate
+    - Add common mistakes section (vague descriptions, missing required fields, etc.)
+    Style: Split-panel code editor with live preview
+    Placement: Alongside or replacing the code block showing tool definition
+*/}
+
+```python
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get the current weather for a location. Returns temperature, conditions, and humidity.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "City name, e.g., 'Paris, France' or 'Tokyo, Japan'"
+                    },
+                    "units": {
+                        "type": "string",
+                        "enum": ["celsius", "fahrenheit"],
+                        "default": "celsius",
+                        "description": "Temperature units to return"
+                    }
+                },
+                "required": ["location"]
+            }
+        }
+    }
+]
+```
+
+The LLM reads these descriptions and decides when and how to use each tool. **Good tool descriptions are crucial**—they're essentially prompts that teach the LLM what each tool does and when to use it.
+
+### Parallel Tool Calling
+
+Modern LLMs can request multiple tools in a single response. For example, if you ask "What's the weather in Paris and Tokyo?", the model might return:
+
+{/* IMAGE_PLACEHOLDER: Create a comparison visualization showing sequential vs parallel tool execution:
+    - TOP: "Sequential Execution" - Timeline showing tools called one after another with total time
+    - BOTTOM: "Parallel Execution" - Timeline showing tools called simultaneously with reduced total time
+    - Use a stopwatch/timer visual to emphasize the performance difference
+    - Show the JSON structure for parallel tool calls
+    - Include a performance metrics box: "Sequential: 4.2s | Parallel: 2.1s | 50% faster"
+    - Add visual indicators for when each tool starts and completes
+    Style: Clean timeline visualization with performance metrics
+    Placement: Right after the JSON code block showing parallel tool calls
+*/}
+
+```json
+{
+  "tool_calls": [
+    { "name": "get_weather", "arguments": { "location": "Paris" } },
+    { "name": "get_weather", "arguments": { "location": "Tokyo" } }
+  ]
+}
+```
+
+Your agent can execute these in parallel for better performance. This is especially useful for tasks that require gathering information from multiple sources.
+
+<Callout type="tip">
+  **Performance Tip:** When building agents, look for opportunities to batch
+  independent tool calls. Parallel execution can significantly reduce latency
+  for multi-step tasks.
+</Callout>
+
+<Callout type="info">
+  **Structured Outputs:** Modern LLM APIs (OpenAI, Anthropic) support "strict"
+  mode for tool calling, which guarantees the output matches your JSON schema
+  exactly. This eliminates parsing errors and makes agents more reliable. Always
+  enable strict mode in production.
+</Callout>
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Writing vague tool descriptions",
+      fix: "Be specific: instead of 'searches the web', say 'searches the web using Google and returns the top 5 results with titles, URLs, and snippets'",
+    },
+    {
+      mistake: "Giving the agent too many tools at once",
+      fix: "Start with 3-5 essential tools. Add more as needed. Too many tools confuse the LLM, increase latency, and raise costs.",
+    },
+    {
+      mistake: "Not handling tool errors gracefully",
+      fix: "Always return informative error messages so the agent can reason about what went wrong and try alternatives.",
+    },
+    {
+      mistake: "Forgetting to send tool results back to the LLM",
+      fix: "The ReAct loop requires observation. Always send tool results back so the agent can reason about next steps.",
+    },
+  ]}
+/>
+
+---
+
+## 1.4.1 Tool Calling Across Providers
+
+Different AI providers have evolved their own approaches to tool calling. Understanding these differences helps you build portable agents and choose the right platform for your use case.
+
+### OpenAI: Responses API & Agents SDK
+
+In March 2025, OpenAI released the **Responses API** and **Agents SDK**, representing a major evolution in their agent infrastructure:
+
+- **Responses API**: Combines Chat Completions simplicity with Assistants API tool capabilities
+- **Built-in tools**: Web search, file search, code interpreter, and computer use
+- **MCP support**: Added in May 2025, enabling connection to any MCP server
+- **Structured Outputs**: Setting `strict: true` guarantees JSON schema compliance
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+# Using the Responses API with built-in tools
+response = client.responses.create(
+    model="gpt-4.1",
+    input="What's the latest news about AI agents?",
+    tools=[{"type": "web_search"}]  # Built-in web search
+)
+```
+
+### Anthropic: Advanced Tool Use
+
+Anthropic's Claude models excel at complex tool orchestration:
+
+- **Advanced Tool Use** (November 2025): Handles 100+ tools without context pollution
+- **Computer Use**: Claude can control desktop applications via screenshots and mouse/keyboard
+- **Claude Agent SDK**: Production-ready framework for building autonomous agents
+- **Prompt caching**: Reduces latency for stable tool definitions
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+# Claude with tool use
+response = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    tools=[{
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string"}
+            },
+            "required": ["location"]
+        }
+    }],
+    messages=[{"role": "user", "content": "What's the weather in Tokyo?"}]
+)
+```
+
+### Google: Gemini Function Calling
+
+Google's Gemini models offer deep integration with Google services:
+
+- **Gemini Agent**: Multi-step task execution with Calendar, Gmail, and Drive integration
+- **Agentic browsing**: Can work across multiple browser tabs
+- **Let Google Call**: AI can phone businesses to gather information
+- **Native MCP support**: Added at Google I/O 2025
+
+<Callout type="info">
+  **Choosing a Provider:** For most agent tasks, all major providers work well.
+  Choose based on: existing infrastructure (Google Cloud → Gemini), specific
+  capabilities (computer use → Claude), or ecosystem (OpenAI if using their
+  other tools). MCP support means your tools work across all of them.
 </Callout>
 
 ---
 
-## 1.4 Introduction to MCP
+## 1.5 Introduction to MCP
 
-How does the Brain talk to the Hands? We need a standard interface.
+How does the Brain talk to the Hands? We need a standard interface. Enter **MCP**.
+
+{/* IMAGE_PLACEHOLDER: Create an ecosystem visualization showing MCP as the universal connector:
+    - CENTER: Large "MCP Protocol" hub with the official MCP logo
+    - TOP: Row of AI provider logos (OpenAI, Anthropic, Google, Microsoft, AWS) all connecting to MCP
+    - BOTTOM: Grid of tool/service icons (databases, file systems, APIs, cloud services) all connecting to MCP
+    - Show bidirectional arrows indicating the protocol enables communication both ways
+    - Include statistics overlays: "10,000+ servers", "97M monthly downloads", "Linux Foundation governed"
+    - Add a "Before MCP" vs "After MCP" comparison:
+      * Before: Tangled web of custom connections between each AI and each tool
+      * After: Clean hub-and-spoke model with MCP at center
+    - Include small code snippets showing the same tool working with different AI providers
+    Style: Modern ecosystem diagram with clean lines and professional branding
+    Placement: Right after the section heading, before ConceptIntro
+*/}
 
 <ConceptIntro
   title="Model Context Protocol (MCP)"
-  analogy="Before USB, every device had its own connector—printers, cameras, phones all needed different cables. USB standardized this: one port, many devices. MCP does the same for AI tools. Instead of writing custom code to connect each tool to each AI, MCP provides one standard that works everywhere."
-  technicalDef="MCP (Model Context Protocol) is an open standard introduced by Anthropic that defines how AI systems connect to external tools and data sources. It specifies a client-server architecture where MCP Servers expose tools/resources and MCP Clients (agents) consume them."
-  whyItMatters="MCP means you can write a tool once and use it with Claude, GPT, or any MCP-compatible agent. It also means a growing ecosystem of pre-built tools you can use immediately."
+  analogy="Before USB, every device had its own connector—printers, cameras, phones all needed different cables. USB standardized this: one port, many devices. MCP does the same for AI tools. Instead of writing custom code to connect each tool to each AI system, MCP provides one standard that works everywhere."
+  technicalDef="MCP (Model Context Protocol) is an open standard introduced by Anthropic in November 2024 that defines how AI systems connect to external tools and data sources. It specifies a client-server architecture where MCP Servers expose tools/resources and MCP Clients (agents) consume them via JSON-RPC. In December 2025, Anthropic donated MCP to the newly created Agentic AI Foundation (AAIF) under the Linux Foundation, co-founded with Block and OpenAI—establishing MCP as a vendor-neutral industry standard."
+  whyItMatters="MCP means you can write a tool once and use it with Claude, GPT, Gemini, or any MCP-compatible agent. The ecosystem has exploded: over 10,000 public MCP servers, 97 million SDK downloads per month, and adoption by every major AI provider. It's become the de facto standard for AI data connectivity."
 />
+
+### What MCP Provides
 
 Instead of writing custom API wrappers for every tool, MCP provides a universal standard for:
 
 - **Tools**: Executable functions (e.g., `list_files`, `run_query`, `send_email`)
-- **Resources**: Data sources (e.g., logs, documents, database schemas)
+- **Resources**: Data sources the agent can read (e.g., logs, documents, database schemas)
 - **Prompts**: Reusable templates for common tasks
 
 <Mermaid
   chart={`
 graph LR
-    Agent[🤖 Your Agent]
+    Agent[🤖 Your Agent<br/>MCP Client]
     
-    Agent -->|MCP| Tool1[📁 File System]
-    Agent -->|MCP| Tool2[🔍 Web Search]
-    Agent -->|MCP| Tool3[🗄️ Database]
-    Agent -->|MCP| Tool4[📧 Email]
-    Agent -->|MCP| Tool5[📅 Calendar]
+    Agent -->|MCP| FS[📁 File System<br/>MCP Server]
+    Agent -->|MCP| Search[🔍 Web Search<br/>MCP Server]
+    Agent -->|MCP| DB[🗄️ Database<br/>MCP Server]
+    Agent -->|MCP| Email[📧 Email<br/>MCP Server]
+    Agent -->|MCP| Git[📦 Git/GitHub<br/>MCP Server]
     
     style Agent fill:#f9f,stroke:#333
 `}
 />
 
-We will dive deep into MCP in **Day 03**. For now, just understand that MCP is the "USB port" for connecting tools to your AI.
+### MCP Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Your Application                      │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │              MCP Client (Agent)                  │    │
+│  │  • Discovers available servers                   │    │
+│  │  • Calls tools with parameters                   │    │
+│  │  • Receives results                              │    │
+│  └─────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
+                           │
+                    MCP Protocol
+                    (JSON-RPC over stdio/HTTP)
+                           │
+     ┌─────────────────────┼─────────────────────┐
+     ▼                     ▼                     ▼
+┌─────────┐          ┌─────────┐          ┌─────────┐
+│ MCP     │          │ MCP     │          │ MCP     │
+│ Server  │          │ Server  │          │ Server  │
+│ (Files) │          │ (Search)│          │ (DB)    │
+└─────────┘          └─────────┘          └─────────┘
+```
+
+### The MCP Ecosystem
+
+Since its launch in November 2024, MCP has achieved remarkable adoption and is now the industry standard:
+
+- **10,000+ public MCP servers** covering databases, APIs, cloud services, and enterprise tools
+- **97 million SDK downloads per month** across the developer ecosystem
+- **Official servers** from Notion, Linear, Figma, Stripe, Slack, Worldpay, GitHub, and more
+- **Adopted by every major AI provider** including Anthropic, OpenAI, Google DeepMind, Microsoft, and AWS
+- **SDKs available** in Python, TypeScript, Java, Kotlin, C#, Go, PHP, Ruby, Rust, and Swift
+- **Enterprise-ready** with OAuth2, PKCE, and enterprise authorization features added in 2025
+- **Elicitation support** allowing MCP servers to request clarification from users mid-execution
+- **Linux Foundation governance** as of December 2025, ensuring vendor-neutral stewardship
+
+We will dive deep into MCP in **[Day 03: LangGraph Fundamentals](/modules/day-03-langgraph-basics)**. For now, understand that MCP is the "USB-C for AI"—a universal connector for tools that has become the de facto industry standard, now governed by the Linux Foundation's Agentic AI Foundation (AAIF).
 
 <Callout type="info">
-  **Key Takeaway:** An Agent is a system that wraps an LLM in a loop, giving it
-  access to tools via a standard protocol (MCP) and memory to persist state.
+  **Why MCP Matters for This Course:** Throughout this course, we'll build
+  agents that use MCP servers for tool integration. Learning MCP means your
+  tools work with any compatible AI system—not just the one you built them for.
+  The protocol's enterprise features (OAuth2, authorization) also make it
+  production-ready.
 </Callout>
 
 ---
 
-## 1.5 The Complete Agent Architecture
+## 1.6 The Complete Agent Architecture
 
 Let's put it all together. A production agent has these components:
 
@@ -216,21 +832,21 @@ Let's put it all together. A production agent has these components:
   chart={`
 graph TB
     subgraph "Agent System"
-        User([👤 User]) --> Interface[Interface Layer]
-        Interface --> Orchestrator[🎯 Orchestrator]
+        User([👤 User]) --> Interface[Interface Layer<br/>Chat UI / API / CLI]
+        Interface --> Orchestrator[🎯 Orchestrator<br/>Controls the ReAct loop]
         
         subgraph "The Brain"
-            Orchestrator --> LLM[🧠 LLM]
+            Orchestrator --> LLM[🧠 LLM<br/>Reasoning Engine]
         end
         
         subgraph "The Body"
-            Orchestrator --> Tools[🔧 Tools via MCP]
-            Orchestrator --> Memory[💾 Memory]
-            Orchestrator --> State[📊 State Management]
+            Orchestrator --> Tools[🔧 Tools<br/>via MCP or direct API]
+            Orchestrator --> Memory[💾 Memory<br/>Short and Long-term]
+            Orchestrator --> State[📊 State<br/>Task context]
         end
         
-        Tools --> External[External World]
-        Memory --> VectorDB[(Vector DB)]
+        Tools --> External[External World<br/>APIs, Files, DBs]
+        Memory --> VectorDB[(Vector DB<br/>Semantic Search)]
         
         External --> Orchestrator
         VectorDB --> Orchestrator
@@ -241,14 +857,243 @@ graph TB
 `}
 />
 
-| Component        | Purpose              | Technologies                 |
-| :--------------- | :------------------- | :--------------------------- |
-| **Interface**    | How users interact   | Chat UI, API, CLI            |
-| **Orchestrator** | Controls the loop    | LangGraph, custom code       |
-| **LLM**          | Reasoning engine     | GPT-4, Claude, Llama         |
-| **Tools**        | Actions in the world | MCP servers, APIs            |
-| **Memory**       | Persistence          | Vector DBs, key-value stores |
-| **State**        | Current task context | Graph state, checkpoints     |
+<ComparisonTable
+  title="Agent Architecture Components"
+  items={[
+    {
+      name: "Purpose",
+      features: {
+        interface: "How users interact with the agent",
+        orchestrator: "Controls the ReAct loop and state transitions",
+        llm: "Reasoning engine that decides what to do",
+        tools: "Actions the agent can take in the world",
+        memory: "Persistence across interactions",
+        state: "Current task context and checkpoints",
+      },
+    },
+    {
+      name: "Technologies",
+      highlight: true,
+      features: {
+        interface: "Chat UI, REST API, CLI, Slack bot",
+        orchestrator: "LangGraph, OpenAI Agents SDK, custom code",
+        llm: "GPT-4.1, o3, Claude 4 Sonnet/Opus, Gemini 2.5 Pro",
+        tools: "MCP servers, Responses API tools, direct APIs",
+        memory: "Vector DBs (ChromaDB, Pinecone, Qdrant), Redis",
+        state: "Graph state, conversation history, checkpointers",
+      },
+    },
+  ]}
+  features={[
+    {
+      key: "interface",
+      label: "Interface",
+      description:
+        "The entry point for user interactions with the agent system",
+    },
+    {
+      key: "orchestrator",
+      label: "Orchestrator",
+      description:
+        "The control layer that manages the agent loop and coordinates components",
+    },
+    {
+      key: "llm",
+      label: "LLM",
+      description:
+        "The reasoning engine that processes information and makes decisions",
+    },
+    {
+      key: "tools",
+      label: "Tools",
+      description:
+        "External capabilities the agent can invoke to interact with the world",
+    },
+    {
+      key: "memory",
+      label: "Memory",
+      description:
+        "Systems for storing and retrieving information across interactions",
+    },
+    {
+      key: "state",
+      label: "State",
+      description: "Current context and progress tracking for ongoing tasks",
+    },
+  ]}
+/>
+
+### How Components Work Together
+
+1. **User sends a request** through the interface
+2. **Orchestrator receives the request** and initializes state
+3. **LLM reasons** about what to do (the "Reason" step)
+4. **Orchestrator executes tools** based on LLM's decision (the "Act" step)
+5. **Results flow back** to the orchestrator (the "Observe" step)
+6. **Loop continues** until the task is complete
+7. **Memory persists** important information for future interactions
+
+<Callout type="tip">
+  **LangGraph Preview:** In Day 03, we'll implement this architecture using
+  LangGraph. The orchestrator becomes a "graph" with nodes (functions) and edges
+  (control flow). State flows through the graph, and the LLM decides which path
+  to take. LangGraph Platform (now called LangSmith Deployment) provides managed
+  infrastructure for deploying these stateful agents at scale.
+</Callout>
+
+---
+
+## 1.7 LLM API vs Agent: A Code Comparison
+
+To make the distinction concrete, let's compare a simple LLM API call with an agent loop:
+
+<Callout type="warning">
+  **Anthropic's Key Insight:** "When building applications with LLMs, we
+  recommend finding the simplest solution possible, and only increasing
+  complexity when needed. This might mean not building agentic systems at all.
+  Agentic systems often trade latency and cost for better task performance."
+  Always ask: does this task actually need an agent, or would a simple prompt
+  suffice?
+</Callout>
+
+### Raw LLM API Call (No Agency)
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+# Simple completion - no tools, no memory, no loop
+response = client.chat.completions.create(
+    model="gpt-4.1",
+    messages=[
+        {"role": "user", "content": "What's the weather in Tokyo?"}
+    ]
+)
+
+print(response.choices[0].message.content)
+# Output: "I don't have access to real-time weather data..."
+```
+
+The LLM can only respond with what it knows from training. It can't actually check the weather.
+
+### Agent with Tool Calling
+
+```python
+from openai import OpenAI
+import json
+
+client = OpenAI()
+
+# Define available tools
+tools = [{
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a city. Returns temperature in Celsius and conditions.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "city": {"type": "string", "description": "City name, e.g., 'Tokyo, Japan'"}
+            },
+            "required": ["city"]
+        }
+    }
+}]
+
+def get_weather(city: str) -> dict:
+    """Actual implementation that calls a weather API."""
+    # In production, this would call a real weather service
+    # For demo purposes, returning mock data
+    return {"city": city, "temp_celsius": 22, "condition": "sunny"}
+
+def run_agent(user_message: str) -> str:
+    """Run a simple ReAct agent loop."""
+    messages = [{"role": "user", "content": user_message}]
+
+    max_iterations = 10  # Prevent infinite loops
+
+    for _ in range(max_iterations):
+        # 1. REASON: Ask LLM what to do
+        response = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=messages,
+            tools=tools
+        )
+
+        assistant_message = response.choices[0].message
+        messages.append(assistant_message)
+
+        # 2. Check if we're done or need to ACT
+        if not assistant_message.tool_calls:
+            # No tool calls - return final response
+            return assistant_message.content
+
+        # 3. ACT: Execute each tool call
+        for tool_call in assistant_message.tool_calls:
+            function_name = tool_call.function.name
+            arguments = json.loads(tool_call.function.arguments)
+
+            # Execute the tool
+            if function_name == "get_weather":
+                result = get_weather(**arguments)
+            else:
+                result = {"error": f"Unknown tool: {function_name}"}
+
+            # 4. OBSERVE: Add result to conversation
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": json.dumps(result)
+            })
+
+    return "Max iterations reached without completing task."
+
+# Run the agent
+answer = run_agent("What's the weather in Tokyo?")
+print(answer)
+# Output: "It's currently 22°C and sunny in Tokyo!"
+```
+
+<Callout type="tip">
+  **Key Difference:** The raw LLM call is a single request-response. The agent
+  runs a loop that continues until the task is complete, calling tools as
+  needed. This is the fundamental architectural difference between a chatbot and
+  an agent.
+</Callout>
+
+<DeepDive title="When to Use Agents vs. Simpler Approaches">
+
+Not every task needs an agent. Anthropic's research team recommends this decision framework:
+
+**Use a simple prompt when:**
+
+- The task is well-defined with predictable inputs
+- No external data or actions are needed
+- A single LLM call can produce the answer
+
+**Use a chain/pipeline when:**
+
+- Multiple steps are needed but the flow is predictable
+- Each step's output feeds the next step
+- No iteration or error recovery is required
+
+**Use an agent when:**
+
+- The task requires real-world actions (API calls, file operations)
+- The number of steps isn't known in advance
+- Error recovery and iteration are essential
+- The task involves gathering information from multiple sources
+
+**The tradeoff:** Agents provide better task performance but at the cost of higher latency (multiple LLM calls), higher cost (more tokens), and increased complexity. Start simple and add agency only when needed.
+
+</DeepDive>
+
+<Callout type="warning">
+  **Production Note:** The code above is simplified for learning. Production
+  agents need additional handling for: rate limits, timeouts, error recovery,
+  logging, cost tracking, and security validation of tool inputs.
+</Callout>
 
 ---
 
@@ -258,22 +1103,32 @@ graph TB
     {
       question: "What's the key difference between an LLM and an Agent?",
       answer:
-        "An LLM is just the reasoning engine (the 'brain'). An Agent wraps the LLM with tools (to take actions), memory (to persist information), and a control loop (to handle uncertainty and iterate).",
+        "An LLM is just the reasoning engine (the 'brain'). An Agent wraps the LLM with tools (to take actions), memory (to persist information), and a control loop (to handle uncertainty and iterate until the task is complete). The LLM is stateless; the agent maintains state.",
     },
     {
       question: "Why can't a simple pipeline (DAG) handle agent tasks?",
       answer:
-        "Pipelines flow in one direction and can't loop back. Agents need to try things, observe results, and retry if something fails—this requires cycles, not linear flow.",
+        "Pipelines flow in one direction and can't loop back. Agents need to try things, observe results, and retry if something fails—this requires cycles, not linear flow. Real-world tasks involve uncertainty that pipelines can't handle.",
     },
     {
-      question: "What are the four steps of the Cognitive Loop?",
+      question: "What are the three steps of the ReAct pattern?",
       answer:
-        "Perceive (read inputs), Reason (decide what to do), Act (execute a tool), Observe (see the result). Then repeat until done.",
+        "Reason (think about what to do next), Act (execute a tool or respond), Observe (see the result). Then repeat until the task is complete. The explicit reasoning step is key—it helps the agent plan and recover from errors.",
+    },
+    {
+      question: "What is tool calling and why is it important?",
+      answer:
+        "Tool calling is an LLM capability where the model outputs structured JSON to request execution of external functions. It's important because it transforms an LLM from a text generator into an agent that can take real actions—search the web, query databases, execute code. The LLM never executes tools directly; your code handles execution.",
+    },
+    {
+      question: "How do Reflexion and Plan-and-Execute differ from ReAct?",
+      answer:
+        "Reflexion adds a self-critique step after each attempt, storing feedback to improve future attempts—useful when agents repeatedly make similar mistakes. Plan-and-Execute separates planning from execution, creating a complete plan upfront before executing steps—better for well-defined tasks where upfront planning reduces errors.",
     },
     {
       question: "What is MCP and why does it matter?",
       answer:
-        "Model Context Protocol—a standard for connecting tools to AI. It matters because it lets you write tools once and use them with any MCP-compatible agent, and gives you access to a growing ecosystem of pre-built tools.",
+        "Model Context Protocol—an open standard introduced by Anthropic for connecting tools to AI systems, now governed by the Linux Foundation. It matters because it lets you write tools once and use them with any MCP-compatible agent (Claude, GPT, Gemini), and gives you access to an ecosystem of 10,000+ pre-built tool servers with 97 million SDK downloads per month.",
     },
   ]}
 />
@@ -284,15 +1139,23 @@ graph TB
   mistakes={[
     {
       mistake: "Thinking you just need a better prompt to build an agent",
-      fix: "Agents require architecture: tools, memory, state management, and error handling—not just prompts",
+      fix: "Agents require architecture: tools, memory, state management, error handling, and control loops—not just prompts",
     },
     {
       mistake: "Building everything as a linear chain",
-      fix: "Design for loops and retries from the start. Assume things will fail.",
+      fix: "Design for loops and retries from the start. Assume things will fail and plan for recovery.",
     },
     {
       mistake: "Giving the agent too many tools at once",
-      fix: "Start with 2-3 essential tools. Add more as needed. Too many tools confuse the LLM.",
+      fix: "Start with 3-5 essential tools. Add more as needed. Too many tools confuse the LLM, slow down responses, and increase costs.",
+    },
+    {
+      mistake: "Not providing tool results back to the LLM",
+      fix: "The ReAct loop requires observation. Always send tool results back so the agent can reason about next steps.",
+    },
+    {
+      mistake: "Using `while True` without exit conditions",
+      fix: "Always set a maximum iteration count to prevent infinite loops and runaway costs.",
     },
   ]}
 />
@@ -301,39 +1164,201 @@ graph TB
 
 <ModuleSummary
   points={[
-    "An LLM is the brain; an Agent is the brain + body (tools, memory, loops)",
-    "Linear pipelines fail because they can't handle uncertainty or retry",
-    "The Cognitive Loop: Perceive → Reason → Act → Observe → Repeat",
-    "MCP standardizes how agents connect to tools (like USB for AI)",
-    "Production agents need: orchestration, tools, memory, and state management",
+    "An LLM is the brain; an Agent is the brain + body (tools, memory, control loops)",
+    "Linear pipelines (DAGs) fail because they can't handle uncertainty or retry failed operations",
+    "The ReAct pattern: Reason → Act → Observe → Repeat until done",
+    "Advanced patterns like Reflexion and Plan-and-Execute address specific challenges",
+    "Tool calling enables LLMs to request execution of external functions via structured JSON",
+    "The LLM never executes tools directly—your code handles execution and returns results",
+    "Major providers (OpenAI, Anthropic, Google) offer different tool calling APIs but all support MCP",
+    "MCP standardizes how agents connect to tools—10,000+ servers, 97M monthly SDK downloads",
+    "Production agents need: orchestration, tools, memory, state management, and error handling",
   ]}
 />
 
 ---
 
 <Exercise
-  title="Mental Model Check"
+  title="Agent Architecture Design"
   difficulty="beginner"
   objectives={[
-    "Identify the difference between an LLM and an Agent",
-    "Explain why loops are necessary for error recovery",
-    "Define what MCP stands for",
-    "Draw the Cognitive Loop from memory"
+    "Identify the components needed for a specific agent use case",
+    "Distinguish between what the LLM handles vs. what tools handle",
+    "Design a simple ReAct loop for a real task",
+    "Consider error handling and edge cases"
   ]}
   hints={[
-    "Think about what happens when a tool call fails—how would a pipeline handle it vs. a loop?",
-    "Consider: what can an agent do that a chatbot cannot?"
+    "Think about what happens when a tool call fails—how would the agent recover?",
+    "Consider: what information needs to persist between turns?",
+    "Start simple: what's the minimum set of tools needed?",
+    "Think about what could go wrong at each step"
   ]}
 >
 
-**Try This:** Think of a task you do at work that requires multiple steps and might fail partway through. How would you design an agent to handle it? What tools would it need? What happens if step 3 fails?
+**Design Exercise:** You're building an agent to help users manage their calendar. Think through:
+
+1. **What tools would this agent need?** (List at least 4 with descriptions)
+
+   - Consider: reading, creating, updating, and checking availability
+
+2. **Walk through a ReAct trace** for: "Schedule a meeting with Sarah next Tuesday at 2pm"
+
+   - Write out each Thought/Action/Observation step
+
+3. **What happens if** Sarah's calendar shows she's busy at 2pm? How does the agent handle this?
+
+   - Design the recovery flow
+
+4. **What memory** would this agent need to be useful over time?
+
+   - Think about: user preferences, past interactions, contact information
+
+5. **What could go wrong?** List 3 potential failure modes and how the agent should handle them.
+
+Write out your answers, then compare with a classmate or save for discussion.
 
 </Exercise>
 
 ---
 
+<Exercise
+  title="Hands-On: Trace a ReAct Loop"
+  difficulty="beginner"
+  objectives={[
+    "Write out a complete ReAct trace",
+    "Identify each Reason/Act/Observe step",
+    "Handle a failure case in the trace"
+  ]}
+>
+
+**Task:** Write out a complete ReAct trace for an agent handling this request:
+
+> "Find the cheapest flight from NYC to London next month and tell me the price"
+
+Include:
+
+- At least 3 Reason/Act/Observe cycles
+- One case where the first attempt doesn't give complete information
+- The final response to the user
+
+Format your trace like this:
+
+```
+Thought: [reasoning about current state and what to do next]
+Action: tool_name(param1="value1", param2="value2")
+Observation: [result returned by the tool]
+
+Thought: [next reasoning based on observation]
+...
+```
+
+**Bonus Challenge:** What if the flight search API returns an error? Add a cycle showing how the agent would handle and recover from this failure.
+
+</Exercise>
+
+---
+
+<Exercise
+  title="Tool Schema Design"
+  difficulty="intermediate"
+  objectives={[
+    "Write production-quality tool schemas",
+    "Create clear, specific descriptions",
+    "Define appropriate parameter types and constraints"
+  ]}
+>
+
+**Task:** Design tool schemas for a code review agent. Create JSON schemas for these three tools:
+
+1. **`read_file`** - Read the contents of a file from the repository
+2. **`search_code`** - Search for patterns across the codebase
+3. **`add_comment`** - Add a review comment to a specific line
+
+For each tool, define:
+
+- A clear, specific description (remember: this is a prompt for the LLM!)
+- All necessary parameters with types and descriptions
+- Which parameters are required vs. optional
+- Any enum constraints or validation rules
+
+Use the OpenAI function calling format shown in section 1.4.
+
+**Evaluation Criteria:**
+
+- Would an LLM know exactly when to use each tool?
+- Are the parameter descriptions specific enough to avoid errors?
+- Have you handled edge cases (e.g., file not found, invalid line numbers)?
+
+</Exercise>
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** The concepts in this module—ReAct loops, tool
+  calling, and agent architecture—form the foundation of every agent you'll
+  build throughout this 90-day course. In the final AgentOS capstone (Month 3, Days 85-90), you'll orchestrate multiple specialized
+  agents that each use these patterns to reason, act, and observe in their
+  domains.
+</Callout>
+
+### Recommended Exercises
+
+Complete these exercises to reinforce the concepts from this module:
+
+- **EX-01: First LLM Call** (15 min) - Make your first API call to an LLM and understand the request/response cycle. This is the foundation for all agent interactions. See the [Project Hierarchy](/modules/day-00-project-hierarchy) for full details.
+
+### What's Next
+
+The exercises above give you hands-on practice with the fundamentals. As you progress through Month 1 (Days 1-30: Foundations & Core Concepts), you'll build on these skills to create increasingly sophisticated agents. By Month 2 (Days 31-60), you'll be orchestrating multi-agent systems, and in Month 3 (Days 61-90), you'll tackle advanced architectures and capstone projects.
+
+---
+
 ### Coming Up Next
 
-In **Day 02**, we will learn about **Context Engineering**—how to manage the memory of our agent so it doesn't get confused or overwhelmed.
+In **[Day 02: Context Engineering](/modules/day-02-context-engineering)**, we'll learn how to manage the memory and context of our agent so it doesn't get confused or overwhelmed. You'll learn:
 
-In **Day 03**, we will write our first code using **LangGraph** and build a working agent loop.
+- How to structure prompts for agent tasks
+- Managing conversation history and context windows
+- When to summarize vs. when to keep full history
+- Techniques for keeping agents focused on the task
+
+In **[Day 03: LangGraph Fundamentals](/modules/day-03-langgraph-basics)**, we'll write our first code using **LangGraph** and build a working agent loop with real tools.
+
+---
+
+## Additional Resources
+
+### Essential Reading
+
+- **[ReAct: Synergizing Reasoning and Acting in Language Models](https://arxiv.org/abs/2210.03629)** — The original 2022 research paper introducing the ReAct pattern (Yao et al.)
+- **[Building Effective Agents (Anthropic)](https://www.anthropic.com/engineering/building-effective-agents)** — Essential December 2024 guide on agent design patterns and best practices from Anthropic's research team
+- **[Model Context Protocol Specification](https://modelcontextprotocol.io/)** — Official MCP documentation and ecosystem (now under Linux Foundation governance)
+
+### Tool Calling Documentation
+
+- **[OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses)** — The new unified API for building agents with built-in tools
+- **[OpenAI Function Calling Guide](https://platform.openai.com/docs/guides/function-calling)** — Official documentation on tool use with GPT models
+- **[Anthropic Tool Use Documentation](https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview)** — Claude's approach to tool calling
+- **[Anthropic Advanced Tool Use](https://www.anthropic.com/engineering/advanced-tool-use)** — Handling large tool ecosystems without context pollution
+
+### Agent SDKs & Frameworks
+
+- **[OpenAI Agents SDK](https://github.com/openai/openai-agents-python)** — Open-source framework for multi-agent orchestration
+- **[Claude Agent SDK](https://docs.anthropic.com/en/docs/agents-and-tools/claude-agent-sdk)** — Anthropic's production-ready agent framework
+- **[LangGraph Documentation](https://langchain-ai.github.io/langgraph/)** — The framework we'll use starting Day 03
+- **[LangSmith Deployment](https://www.langchain.com/langgraph-platform)** — Managed infrastructure for deploying stateful agents (formerly LangGraph Platform)
+
+### Further Learning
+
+- **[Reflexion: Language Agents with Verbal Reinforcement Learning](https://arxiv.org/abs/2303.11366)** — Self-reflection pattern for agent improvement
+- **[OpenAI o3/o4-mini Function Calling Guide](https://cookbook.openai.com/examples/o-series/o3o4-mini_prompting_guide)** — Latest best practices for reasoning models with tool use
+
+---
+
+## Related Modules
+
+- **[Day 00: AI Foundations](/modules/day-00-foundations)** — Review the building blocks if any concepts were unclear
+- **[Day 00: Glossary](/modules/day-00-glossary)** — Quick reference for terminology
+- **[Day 02: Context Engineering](/modules/day-02-context-engineering)** — Next module on managing agent context

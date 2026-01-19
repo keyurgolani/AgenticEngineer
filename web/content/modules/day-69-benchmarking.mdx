@@ -1,0 +1,612 @@
+---
+title: "Day 69: Benchmarking with SWE-bench"
+description: "The Gold Standard for Coding Agents."
+week: 10
+day: 69
+---
+
+<ReadingTime minutes={30} />
+
+<SkillLevel level="advanced" description="Data Science for Agents" />
+
+<Prerequisites
+  items={[
+    "Understanding of unit testing",
+    "Experience building agents (Weeks 1-3)",
+    "Familiarity with dataset management",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Understand why vibe checks fail and rigorous benchmarks succeed",
+    "Navigate the 2025 benchmark landscape: SWE-bench, ARC-AGI-2, τ-bench, WebArena, OSWorld",
+    "Implement an LLM-as-a-Judge evaluation pipeline",
+    "Calculate Pass@k metrics for stochastic agents",
+    "Evaluate agent trajectories, not just final outputs",
+    "Set up production evaluation patterns: shadow mode, A/B testing, regression detection",
+    "Choose the right eval framework for your use case",
+  ]}
+/>
+
+---
+
+## 69.1 The "Vibe Check" Problem
+
+{/* IMAGE_PLACEHOLDER: Create an illustration showing a developer confidently shipping code after testing with only 3 queries, followed by a flood of user complaints. Split-screen design: left side shows developer with 3 green checkmarks, right side shows multiple red X marks from production users. Style: modern, slightly humorous, tech-focused illustration with clean lines. */}
+
+You build an agent. It works on your test query. You ship it.
+A week later, users complain it's broken. What happened?
+
+**The "Vibe Check" Trap:**
+
+1.  Developer tries 3 queries.
+2.  Agent gets 3/3 right.
+3.  "It works!" -> Ship it.
+4.  Reality: 3 samples is statistically insignificant.
+
+<Callout type="warning">
+  **The Law of Large Numbers:** You need at least 50-100 examples to have *any*
+  confidence in an LLM system's performance. Stochasticity means "it worked
+  once" proves nothing.
+</Callout>
+
+{/* IMAGE_PLACEHOLDER: Create a graph showing confidence intervals vs sample size. X-axis: number of test samples (1, 3, 10, 50, 100, 500), Y-axis: confidence level (%). Show how confidence dramatically increases from 3 samples to 50-100 samples, with a clear "danger zone" highlighted for <50 samples. Include a horizontal line at 95% confidence threshold. Style: clean data visualization with color-coded zones (red for danger, yellow for caution, green for reliable). */}
+
+---
+
+## 69.2 SWE-bench: The Gold Standard
+
+[SWE-bench](https://www.swebench.com/) has become the industry standard for evaluating coding agents.
+
+<Callout type="info">
+  **SWE-bench Variants**: The benchmark now includes multiple variants: -
+  **SWE-bench Full**: 2,294 real GitHub issues from 12 Python repositories -
+  **SWE-bench Lite**: 300 curated, self-contained issues for faster evaluation -
+  **SWE-bench Verified**: Human-validated subset with confirmed solvability -
+  **SWE-bench Pro**: Extended benchmark for complex, real-world engineering
+  tasks
+</Callout>
+
+<Callout type="success">
+  **2025 Leaderboard Update**: Top agents now achieve **77%+** on SWE-bench
+  Verified: - **Gemini 3 Pro + Live-SWE-agent**: 77.4% (Nov 2025) - **Gemini 3
+  Flash**: 76.2% (Dec 2025) - **Claude 4.5 Sonnet/Opus**: ~72% with agentic
+  scaffolding - **OpenHands CodeAct 2.1**: 60.6% (open-source SOTA) -
+  **mini-SWE-agent**: 65% in just 100 lines of Python!
+</Callout>
+
+### Examples of Real Issues
+
+| Repo         | Issue                                    | Difficulty |
+| :----------- | :--------------------------------------- | :--------- |
+| **Flask**    | "jsonify() fails on datetime objects"    | Medium     |
+| **Django**   | "QuerySet.union() crashes with ordering" | Hard       |
+| **Requests** | "Proxy auth header missing in redirects" | Easy       |
+
+### How It Works
+
+{/* IMAGE_PLACEHOLDER: Create a flowchart diagram showing the SWE-bench evaluation process. Four connected boxes: 1) "Input" (GitHub issue + codebase snapshot), 2) "Agent Action" (agent explores, edits, submits patch), 3) "Verification" (apply patch + run tests), 4) "Score" (pass/fail with checkmarks). Use arrows to show flow, include icons for each step (document, robot, test tube, trophy). Style: clean technical diagram with modern iconography, color-coded stages. */}
+
+1.  **Input**: Issue description + Codebase snapshot (pre-fix).
+2.  **Agent Action**: Agent explores, edits, and submits a patch.
+3.  **Verification**: The harness applies the patch and runs **new tests** that came with the real PR.
+4.  **Score**: Pass only if it fixes the bug AND breaks nothing else.
+
+### Top Performing Agents (2025)
+
+{/* IMAGE_PLACEHOLDER: Create a leaderboard-style visualization showing top SWE-bench agents. Bar chart with agent names on Y-axis and accuracy percentage on X-axis. Bars should be color-coded by category (proprietary vs open-source). Include agent logos/icons if possible. Highlight the 77.4% achievement with a special marker. Style: modern dashboard aesthetic with gradient bars, clean typography, professional color scheme. */}
+
+| Agent              | Architecture                | SWE-bench Verified | Notes                        |
+| :----------------- | :-------------------------- | :----------------- | :--------------------------- |
+| **Live-SWE-agent** | Gemini 3 Pro + agentic loop | 77.4%              | Current SOTA                 |
+| **Devin**          | Proprietary multi-agent     | ~70%               | First "AI software engineer" |
+| **OpenHands**      | Open-source CodeAct         | 60.6%              | Best open-source option      |
+| **Aider**          | CLI-based pair programming  | ~55%               | Lightweight, fast iteration  |
+| **SWE-agent**      | ReAct + file editing        | ~50%               | Princeton research baseline  |
+
+<Callout type="info">
+  **SWE-bench Multimodal (2025)**: The newest variant includes issues with
+  images, diagrams, and screenshots—testing agents' ability to understand visual
+  context in bug reports and feature requests.
+</Callout>
+
+---
+
+## 69.3 Beyond SWE-bench: The 2025 Benchmark Landscape
+
+SWE-bench revolutionized coding agent evaluation, but 2024-2025 brought a wave of new benchmarks testing different agent capabilities:
+
+### Reasoning Benchmarks
+
+{/* IMAGE_PLACEHOLDER: Create a comparison matrix visualization showing reasoning benchmarks. Three columns for each benchmark (ARC-AGI-2, GPQA Diamond, SuperGPQA), with rows showing: benchmark icon, focus area, top AI score, human baseline score. Use progress bars or circular progress indicators to show scores. Include visual indicators where AI exceeds human performance. Style: infographic-style with icons, clean data visualization, color-coded performance levels. */}
+
+| Benchmark        | Focus                     | Top Score (2025)            | Human Baseline        |
+| :--------------- | :------------------------ | :-------------------------- | :-------------------- |
+| **ARC-AGI-2**    | Abstract visual reasoning | 75% (GPT-5.2 + scaffolding) | 100% (experts)        |
+| **GPQA Diamond** | PhD-level science Q&A     | 92.4% (Aristotle-X1)        | 69.7% (experts)       |
+| **SuperGPQA**    | 285 graduate disciplines  | Varies by domain            | ~80% (domain experts) |
+
+<Callout type="warning">
+  **ARC-AGI-2 Reality Check**: When ARC-AGI-2 launched, top models crashed from
+  75% (ARC-AGI-1) to just 4%. By late 2025, scaffolded systems reached 75%, but
+  the benchmark exposed how much "reasoning" is actually pattern matching.
+</Callout>
+
+### Agent Capability Benchmarks
+
+| Benchmark      | What It Tests                | Environment                             |
+| :------------- | :--------------------------- | :-------------------------------------- |
+| **WebArena**   | Web navigation & interaction | 812 tasks across mock websites          |
+| **OSWorld**    | Desktop computer use         | 369 tasks in Windows/Ubuntu VMs         |
+| **τ-bench**    | Tool-Agent-User interaction  | Retail & airline customer service       |
+| **AgentBench** | Multi-agent coordination     | Dynamic multi-agent environments        |
+| **GAIA**       | General assistant tasks      | Web search, PDF processing, calculation |
+
+```python
+# Example: τ-bench evaluates multi-turn tool use
+# Agent must handle dynamic user requests + API calls + policy compliance
+
+task = {
+    "domain": "airline",
+    "user_goal": "Change my flight to tomorrow, same time",
+    "constraints": [
+        "Must verify identity first",
+        "Check change fee policy",
+        "Confirm seat availability"
+    ],
+    "success_criteria": "Flight changed AND user informed of fees"
+}
+```
+
+<Callout type="tip">
+  **Choosing the Right Benchmark**: - **Coding agents** → SWE-bench Verified -
+  **Web agents** → WebArena or WebVoyager - **Desktop automation** → OSWorld -
+  **Customer service** → τ-bench - **Scientific reasoning** → GPQA Diamond -
+  **General reasoning** → ARC-AGI-2
+</Callout>
+
+---
+
+## 69.4 Types of Evals
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Deterministic"
+        Code[Unit Tests]
+        Regex[Regex Match]
+        JSON[JSON Schema]
+    end
+
+    subgraph "Probabilistic"
+        Judge[LLM-as-a-Judge]
+        Semantic[Embedding Similarity]
+        Human[Human Review]
+    end
+
+    subgraph "Agentic (2025)"
+        Trajectory[Trajectory Eval]
+        ToolUse[Tool Use Accuracy]
+        MultiTurn[Multi-Turn Coherence]
+    end
+
+    Agent --> Output
+    Output --> Code
+    Output --> Judge
+    Agent --> Trajectory
+
+    style Code fill:#bfb,stroke:#333
+    style Judge fill:#f9f,stroke:#333
+    style Trajectory fill:#bbf,stroke:#333
+
+`}
+/>
+
+### 1. Deterministic Evals (Code/Math)
+
+- **Binary**: Pass/Fail.
+- **Tools**: `pytest`, `grep`, `jsonschema`.
+- **Cost**: Cheap & Fast.
+- **Use Case**: Coding agents, Structured Output.
+
+### 2. LLM-as-a-Judge (Chat/Creative)
+
+- **Scale**: 1-5 or boolean.
+- **Tools**: GPT-4 evaluating Llama-3 output.
+- **Cost**: Expensive & Slow.
+- **Use Case**: Chatbots, Summarization.
+
+### 3. Agentic Evaluation (2025)
+
+Beyond just evaluating outputs, modern agent evaluation examines the entire trajectory:
+
+- **Trajectory Evaluation**: Was the reasoning path efficient? Did the agent explore appropriately?
+- **Tool Use Accuracy**: Did the agent call the right tools with correct parameters?
+- **Multi-Turn Coherence**: Does the agent maintain context across conversation turns?
+- **Cost-Adjusted Performance**: What's the accuracy per dollar spent?
+
+```python
+# Trajectory evaluation example
+def evaluate_trajectory(trajectory: list[AgentStep]) -> TrajectoryScore:
+    return TrajectoryScore(
+        efficiency=len(trajectory) / optimal_steps,
+        tool_accuracy=correct_tool_calls / total_tool_calls,
+        reasoning_quality=judge_reasoning_chain(trajectory),
+        cost_per_success=total_cost / (1 if success else 0.001),
+        latency_p95=calculate_p95_latency(trajectory)
+    )
+```
+
+---
+
+## 69.5 Implementing Pass@k
+
+{/* IMAGE_PLACEHOLDER: Create an interactive visualization showing Pass@k concept. Show 10 agent runs as circles, with some colored green (correct) and some red (incorrect). Demonstrate how Pass@1, Pass@5, and Pass@10 are calculated from the same set of runs. Include a formula visualization and example calculation. Style: educational diagram with clear visual distinction between success/failure, animated or interactive feel, modern color scheme. */}
+
+Because agents are non-deterministic, a single run is noise. `Pass@k` measures: "If I run the agent `k` times, what's the probability at least one solution is correct?"
+
+**Formula:** `Pass@k = 1 - C(n-c, k) / C(n, k)`
+
+Where:
+
+- `n`: total samples generated (e.g., 100)
+- `c`: number of correct samples
+- `k`: attempts allowed (e.g., 1, 5, 10)
+
+### Why It Matters
+
+{/* IMAGE_PLACEHOLDER: Create a comparison chart showing Pass@1 vs Pass@10 for different agent quality levels. Two side-by-side scenarios: "Reliable Agent" (high Pass@1, high Pass@10) vs "Inconsistent Agent" (low Pass@1, high Pass@10). Use visual metaphors like target accuracy or consistency meters. Include a callout highlighting why Pass@1 matters for production. Style: clean comparison layout, use icons and visual metaphors, professional color coding. */}
+
+- **Pass@1**: Measures reliability (first-try success rate).
+- **Pass@10**: Measures potential (best of 10 attempts).
+
+<Callout type="tip">
+  **Practical Tip**: For production systems, optimize for Pass@1. High Pass@10
+  but low Pass@1 means your agent is inconsistent—users won't retry 10 times.
+</Callout>
+
+---
+
+## 69.6 Build Your Own Eval Harness
+
+<BenchmarkCalculator />
+
+Let's build a simple harness for evaluating a "SQL Agent".
+
+```python
+import json
+import sqlite3
+from langchain_openai import ChatOpenAI
+from tqdm import tqdm
+
+# 1. The Dataset (Golden Set)
+dataset = [
+    {
+        "question": "How many users signed up in 2023?",
+        "sql_ground_truth": "SELECT count(*) FROM users WHERE year(created_at) = 2023",
+        "answer_ground_truth": 1543
+    },
+    {
+        "question": "What is the top selling product?",
+        "sql_ground_truth": "SELECT name FROM products ORDER BY sales DESC LIMIT 1",
+        "answer_ground_truth": "Widget X"
+    }
+    # ... add 50 more
+]
+
+# 2. The Agent
+def run_agent(question):
+    # ... your agent logic ...
+    return executed_sql_result
+
+# 3. The Evaluator
+def evaluate(dataset):
+    correct = 0
+    total = len(dataset)
+
+    results = []
+
+    for item in tqdm(dataset):
+        try:
+            prediction = run_agent(item["question"])
+
+            # Exact match check
+            is_correct = (str(prediction) == str(item["answer_ground_truth"]))
+
+            if is_correct:
+                correct += 1
+
+            results.append({
+                "question": item["question"],
+                "prediction": prediction,
+                "ground_truth": item["answer_ground_truth"],
+                "correct": is_correct
+            })
+
+        except Exception as e:
+            results.append({"error": str(e), "correct": False})
+
+    accuracy = correct / total
+    print(f"Accuracy: {accuracy:.2%}")
+    return results
+
+# Run
+evaluate(dataset)
+```
+
+---
+
+## 69.7 Lab Exercise: Benchmark Your Local Analyst
+
+**Objective**: Create a dataset of 20 questions for the Local Analyst (Day 15) and measure its accuracy.
+
+1.  **Generate Data**: Ask ChatGPT to generate 20 diverse CSV analysis questions (easy, medium, hard) for your `sales.csv`.
+2.  **Manually Solve**: Calculate the true answers (Ground Truth).
+3.  **Run Evals**:
+    - Run your agent against all 20 questions.
+    - Measure % Correct.
+    - Analyze failures: Did it fail on plotting? Or math?
+4.  **Improve**:
+    - Modify the System Prompt.
+    - Re-run Evals.
+    - Did metrics go up?
+
+---
+
+## 📚 Key Takeaways
+
+1.  **Vibe checks are dangerous**: Always use datasets > 50 examples.
+2.  **SWE-bench is the gold standard**: Top agents now achieve 77%+ on Verified (2025).
+3.  **New benchmarks for new capabilities**: ARC-AGI-2 for reasoning, τ-bench for tool use, WebArena for web agents.
+4.  **Evaluate trajectories, not just outputs**: Tool use accuracy, reasoning paths, and cost matter.
+5.  **LLM-as-a-Judge**: Use expensive models (GPT-4) to grade cheaper models.
+6.  **Production evals are non-negotiable**: Shadow mode, A/B testing, and regression detection.
+7.  **Choose the right framework**: Inspect AI for safety, Promptfoo for speed, Braintrust for enterprise.
+
+---
+
+## 🔗 Further Reading
+
+- [SWE-bench Paper](https://arxiv.org/abs/2310.06770)
+- [SWE-bench Leaderboard](https://www.swebench.com/)
+- [ARC Prize & ARC-AGI-2](https://arcprize.org/)
+- [Inspect AI Documentation](https://inspect.aisi.org.uk/)
+- [τ-bench Paper (ICLR 2025)](https://openreview.net/forum?id=roNSXZpUDN)
+- [WebArena Benchmark](https://webarena.dev/)
+- [OSWorld Benchmark](https://os-world.github.io/)
+- [GPQA Diamond Analysis](https://epoch.ai/gradient-updates/gpqa-diamond-whats-left)
+- [OpenHands (Open-source Agent)](https://github.com/All-Hands-AI/OpenHands)
+- [Ragas (RAG Assessment)](https://github.com/explodinggradients/ragas)
+
+---
+
+## 69.8 Modern Eval Frameworks (2025)
+
+{/* IMAGE_PLACEHOLDER: Create a decision tree or framework comparison matrix. Show 7 frameworks (Braintrust, LangSmith, Promptfoo, Langfuse, Inspect AI, Ragas, HELM) with key attributes: deployment type (cloud/self-hosted), best use case, key features. Use icons for each framework and visual indicators for strengths. Style: professional comparison chart, clean layout, color-coded categories, easy to scan. */}
+
+Beyond building your own harness, several production-ready frameworks have emerged. The landscape has matured significantly in 2024-2025:
+
+| Framework                                     | Best For                     | Key Features (2025)                                                                            |
+| :-------------------------------------------- | :--------------------------- | :--------------------------------------------------------------------------------------------- |
+| **[Braintrust](https://braintrust.dev)**      | End-to-end AI observability  | Dataset management, CI/CD integration, production monitoring. Used by Notion, Stripe, Airtable |
+| **[LangSmith](https://smith.langchain.com)**  | LangChain ecosystem          | Datasets & Experiments, prompt versioning, human feedback loops, hub integration               |
+| **[Promptfoo](https://promptfoo.dev)**        | Local/CLI testing + Security | Fast iteration, model comparison, **red-teaming & adversarial testing**                        |
+| **[Langfuse](https://langfuse.com)**          | Open-source observability    | Self-hostable, cost tracking, prompt management, **Langfuse 3.0 with enhanced tracing**        |
+| **[Inspect AI](https://inspect.aisi.org.uk)** | Safety & research evals      | UK AI Safety Institute framework, **100+ pre-built evals**, reproducible benchmarks            |
+| **[Ragas](https://ragas.io)**                 | RAG-specific evals           | Faithfulness, relevancy, context precision, **component-level RAG metrics**                    |
+| **[HELM](https://crfm.stanford.edu/helm)**    | Holistic model evaluation    | Stanford's comprehensive benchmark suite, multi-dimensional assessment                         |
+
+<Callout type="success">
+  **New in 2025: Inspect AI** from the UK AI Safety Institute (now AI Security
+  Institute) provides an open-source Python framework with 100+ pre-built
+  evaluations. It's become the standard for safety-focused evaluation and
+  reproducible research benchmarks.
+</Callout>
+
+### Framework Selection by Use Case
+
+```python
+# Decision tree for framework selection
+def choose_eval_framework(use_case: str) -> str:
+    frameworks = {
+        "rapid_prototyping": "Promptfoo",      # Fast CLI, local-first
+        "langchain_app": "LangSmith",          # Native integration
+        "enterprise_production": "Braintrust", # Full lifecycle
+        "self_hosted_required": "Langfuse",    # Open-source, data sovereignty
+        "rag_system": "Ragas",                 # Specialized RAG metrics
+        "safety_research": "Inspect AI",       # Reproducible, safety-focused
+        "red_teaming": "Promptfoo",            # Adversarial testing built-in
+    }
+    return frameworks.get(use_case, "Braintrust")
+```
+
+<Callout type="tip">
+  **Framework Selection Guide (2025)**: - **Starting out?** Use Promptfoo for
+  fast local iteration - **LangChain user?** LangSmith integrates seamlessly
+  with Datasets & Experiments - **Enterprise needs?** Braintrust offers
+  comprehensive lifecycle management - **RAG system?** Ragas provides
+  specialized retrieval metrics - **Safety-critical?** Inspect AI for
+  reproducible safety evaluations - **Red-teaming?** Promptfoo now includes
+  adversarial testing capabilities - **Data sovereignty?** Langfuse 3.0 is fully
+  self-hostable
+</Callout>
+
+---
+
+## 69.9 Production Evaluation Patterns
+
+Evaluation doesn't stop at development. Production agents need continuous monitoring and validation:
+
+### Continuous Evaluation Pipeline
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Development"
+        Dev[Local Evals] --> CI[CI/CD Evals]
+    end
+    
+    subgraph "Staging"
+        CI --> Shadow[Shadow Mode]
+        Shadow --> AB[A/B Testing]
+    end
+    
+    subgraph "Production"
+        AB --> Prod[Production Monitoring]
+        Prod --> Regression[Regression Detection]
+        Regression --> Alert[Alerts & Rollback]
+    end
+    
+    Alert --> Dev
+    
+    style Shadow fill:#ff9,stroke:#333
+    style AB fill:#9f9,stroke:#333
+    style Regression fill:#f99,stroke:#333
+`}
+/>
+
+### Key Production Patterns
+
+{/* IMAGE_PLACEHOLDER: Create an illustrated guide showing the 4 production patterns. Four panels: 1) Shadow Mode (two parallel agents, one serving users), 2) A/B Testing (traffic split visualization), 3) Evaluation-Gated Deployments (quality gate with pass/fail), 4) Regression Testing (version comparison with metrics). Use consistent iconography and color scheme across all panels. Style: technical infographic, modern illustration style, clear visual hierarchy. */}
+
+**1. Shadow Mode Evaluation**
+Run new agent versions alongside production without affecting users:
+
+```python
+async def shadow_evaluate(request: UserRequest):
+    # Production agent handles the request
+    prod_response = await production_agent.run(request)
+
+    # Shadow agent runs in parallel (no user impact)
+    shadow_response = await shadow_agent.run(request)
+
+    # Log comparison for offline analysis
+    await log_comparison(
+        request=request,
+        prod=prod_response,
+        shadow=shadow_response,
+        metrics=["latency", "cost", "quality_score"]
+    )
+
+    return prod_response  # Only production response goes to user
+```
+
+**2. A/B Testing for Agents**
+Split traffic to measure real-world performance differences:
+
+```python
+@ab_test(experiment="agent_v2_rollout", traffic_split=0.1)
+async def handle_request(request: UserRequest, variant: str):
+    if variant == "control":
+        return await agent_v1.run(request)
+    else:
+        return await agent_v2.run(request)
+```
+
+**3. Evaluation-Gated Deployments**
+Block deployments that fail quality thresholds:
+
+```yaml
+# .github/workflows/deploy.yml
+- name: Run Agent Evals
+  run: |
+    promptfoo eval --config eval.yaml
+
+- name: Check Quality Gate
+  run: |
+    # Fail if accuracy drops below threshold
+    if [ $(cat results.json | jq '.accuracy') -lt 0.85 ]; then
+      echo "Quality gate failed: accuracy below 85%"
+      exit 1
+    fi
+```
+
+**4. Regression Testing for Prompt Changes**
+Every prompt change should trigger evaluation:
+
+```python
+# Track prompt versions and their performance
+class PromptRegistry:
+    def __init__(self):
+        self.versions = {}
+        self.baseline_metrics = {}
+
+    def register_prompt(self, name: str, version: str, prompt: str):
+        self.versions[f"{name}:{version}"] = prompt
+
+    async def evaluate_regression(self, name: str, new_version: str):
+        baseline = self.baseline_metrics[name]
+        new_metrics = await run_eval_suite(name, new_version)
+
+        regression = {
+            "accuracy_delta": new_metrics.accuracy - baseline.accuracy,
+            "latency_delta": new_metrics.p95_latency - baseline.p95_latency,
+            "cost_delta": new_metrics.cost_per_request - baseline.cost_per_request,
+        }
+
+        if regression["accuracy_delta"] < -0.02:  # 2% accuracy drop
+            raise RegressionError(f"Accuracy regression: {regression}")
+
+        return regression
+```
+
+<Callout type="warning">
+  **The Cost of Skipping Production Evals**: Teams that skip continuous
+  evaluation often discover regressions from user complaints—days or weeks after
+  deployment. By then, the damage to user trust is done. Invest in automated
+  monitoring early.
+</Callout>
+
+---
+
+<ModuleSummary
+  points={[
+    "Vibe checks are dangerous—always use datasets with 50+ examples minimum",
+    "SWE-bench Verified is the gold standard; top agents achieve 77%+ in 2025",
+    "New benchmarks: ARC-AGI-2 (reasoning), τ-bench (tool use), WebArena (web agents), OSWorld (desktop)",
+    "Pass@k metrics account for agent non-determinism—optimize for Pass@1 in production",
+    "Evaluate trajectories, not just outputs: tool accuracy, reasoning paths, cost-per-success",
+    "Production patterns: shadow mode, A/B testing, evaluation-gated deployments",
+    "Modern frameworks: Inspect AI (safety), Promptfoo (speed), Braintrust (enterprise), Langfuse (self-hosted)",
+  ]}
+/>
+
+---
+
+**Tomorrow**: Day 70—Open Source Hall of Fame (Learning from Production Agents).
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** Evaluation is critical for production agents. The
+  AgentOS capstone requires you to measure agent performance, track costs, and
+  ensure reliability. These benchmarking skills help you validate each agent in
+  your fleet.
+</Callout>
+
+### Recommended Exercises
+
+- **EX-01**: First LLM Call (15 min) - Add basic metrics tracking
+- **EX-06**: ReAct Loop (30 min) - Measure iteration counts and success rates
+- **NEW**: Set up Promptfoo locally and run a simple eval suite
+- **NEW**: Implement trajectory evaluation for a multi-step agent
+
+### Related POCs
+
+- **POC-01**: LangGraph State Machine (1-2 hours) - Add evaluation checkpoints
+- **POC-06**: Request Classification (1-2 hours) - Measure classification accuracy
+
+### Capstone Connection
+
+In the capstone, you'll implement:
+
+- Per-agent performance metrics with trajectory evaluation
+- Cost tracking across the agent fleet (cost-adjusted performance)
+- Regression testing for prompt changes with quality gates
+- A/B testing for orchestration strategies
+- Shadow mode evaluation for safe rollouts
+
+See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.

@@ -1,0 +1,1026 @@
+---
+title: "Day 11: Building Agent Loops"
+description: "Implementing the ReAct pattern and your first autonomous agent from scratch."
+week: 2
+day: 11
+---
+
+<ReadingTime minutes={25} />
+
+<SkillLevel level="intermediate" description="Hands-on Python implementation" />
+
+<Prerequisites
+  items={[
+    "Completed Day 01: The Anatomy of an Agent (ReAct pattern)",
+    "Completed Day 03: LangGraph Basics",
+    "Python environment with OpenAI SDK installed",
+    "API key (OpenAI) or local Ollama setup",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Build a complete agent loop from scratch without frameworks",
+    "Implement the ReAct pattern (Reason → Act → Observe)",
+    "Create and register tools for your agent",
+    "Use structured outputs for reliable parsing",
+    "Add memory for multi-turn conversations",
+    "Handle errors gracefully with retries",
+    "Stream agent responses for better UX",
+    "Apply self-correction patterns for production reliability",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Agent Loop",
+      definition:
+        "The core cycle where an agent reasons, acts, observes, and repeats until task completion",
+    },
+    {
+      term: "Tool Registry",
+      definition:
+        "A collection of functions the agent can call, with descriptions for the LLM",
+    },
+    {
+      term: "Structured Output",
+      definition:
+        "Using schemas (JSON, Pydantic) to ensure LLM responses are parseable and type-safe",
+    },
+    {
+      term: "Working Memory",
+      definition:
+        "Key-value storage for facts the agent learns during execution",
+    },
+    {
+      term: "Iteration Limit",
+      definition: "Maximum loop cycles to prevent infinite execution",
+    },
+    {
+      term: "Thinking Mode",
+      definition:
+        "Extended reasoning where the model shows step-by-step thought process before answering (used by models like Qwen 3, DeepSeek-R1)",
+    },
+    {
+      term: "Self-Correction",
+      definition:
+        "A pattern where agents verify their outputs and revise them if they don't meet requirements",
+    },
+  ]}
+/>
+
+---
+
+## From Theory to Code
+
+In Day 01, we learned that agents follow the **ReAct pattern**: Reason → Act → Observe → Repeat. In Day 03, we built our first graph with LangGraph. Today, we implement an agent loop **from scratch**—no frameworks, no magic—just Python and an LLM.
+
+{/* IMAGE_PLACEHOLDER: Create an animated diagram showing the ReAct loop in action. Visualize a circular flow with three main stages: 1) A brain icon with thought bubbles (Reasoning), 2) A gear/tool icon (Acting), and 3) An eye icon (Observing). Show arrows connecting them in a cycle, with small example text snippets at each stage (e.g., "I need to check the weather" → "Call weather API" → "Temperature is 72°F"). Use a modern, clean design with the course's color scheme. Place this at the top of the section to immediately ground learners in the concept. */}
+
+<Callout type="info">
+  **Why Build From Scratch?** Understanding the fundamentals makes you a better
+  architect. When LangGraph abstracts the loop away, you'll know exactly what's
+  happening underneath. This knowledge is invaluable for debugging and
+  optimization.
+</Callout>
+
+---
+
+## 4.1 The Agent Loop Architecture
+
+Every agent follows the same fundamental loop:
+
+{/* IMAGE_PLACEHOLDER: Create an interactive loop visualizer showing the agent decision-making process. Design a circular flowchart with animated transitions between states: User Input → Parse → Think → Decide (with branching paths) → Execute/Answer/Error → back to Think. Each node should be clickable to show example data at that stage. Include a "step through" button that animates one iteration at a time. Use icons for each stage (lightbulb for Think, wrench for Execute, checkmark for Answer, warning for Error). This helps learners understand the cyclical nature and decision points in agent loops. */}
+
+<Mermaid
+  chart={`
+graph TD
+    Start([User Input]) --> Parse[Parse Request]
+    Parse --> Think[LLM: Generate Thought]
+    Think --> Decide{Action Type?}
+    
+    Decide -->|Tool Call| Execute[Execute Tool]
+    Execute --> Observe[Capture Output]
+    Observe --> Think
+    
+    Decide -->|Final Answer| Format[Format Response]
+    Format --> End([Return to User])
+    
+    Decide -->|Error| Handle[Error Handler]
+    Handle --> Think
+    
+    style Think fill:#f9f,stroke:#333
+    style Execute fill:#bbf,stroke:#333
+    style Handle fill:#f96,stroke:#333
+`}
+/>
+
+<StepAnimation
+  steps={[
+    {
+      id: 1,
+      title: "1. Parse Request",
+      description:
+        "The agent receives user input and breaks it down into goals.",
+    },
+    {
+      id: 2,
+      title: "2. Think (Reasoning)",
+      description: "The LLM analyzes the goal and decides if it needs tools.",
+    },
+    {
+      id: 3,
+      title: "3. Decide Action",
+      description: "The agent selects a specific tool and arguments.",
+    },
+    {
+      id: 4,
+      title: "4. Execute Tool",
+      description: "The system runs the tool code and captures the output.",
+    },
+    {
+      id: 5,
+      title: "5. Observe & Repeat",
+      description: "The agent reads the observation and decides the next step.",
+    },
+  ]}
+/>
+
+---
+
+## 4.2 Building a Minimal Agent
+
+Let's build a complete agent in ~100 lines of Python:
+
+````python
+import json
+from openai import OpenAI
+
+class SimpleAgent:
+    """A minimal ReAct agent implementation."""
+
+    def __init__(self, model: str = "gpt-4o-mini"):
+        self.client = OpenAI()
+        self.model = model
+        self.tools = {}
+        self.max_iterations = 10
+
+    def register_tool(self, name: str, func, description: str):
+        """Register a tool the agent can use."""
+        self.tools[name] = {
+            "function": func,
+            "description": description
+        }
+
+    def _build_system_prompt(self) -> str:
+        """Build the system prompt with available tools."""
+        tool_docs = "\n".join([
+            f"- {name}: {info['description']}"
+            for name, info in self.tools.items()
+        ])
+
+        return f"""You are a helpful assistant with access to tools.
+
+Available Tools:
+{tool_docs}
+
+Respond in this JSON format:
+{{
+  "thought": "Your reasoning about what to do",
+  "action": "tool_name OR final_answer",
+  "action_input": {{"param": "value"}} OR "your final response"
+}}
+
+Always think before acting. Use tools to gather information.
+When you have enough information, use action: "final_answer"."""
+
+    def _parse_response(self, content: str) -> dict:
+        """Extract JSON from LLM response."""
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0]
+        return json.loads(content.strip())
+
+    def _execute_tool(self, name: str, input_data) -> str:
+        """Execute a registered tool."""
+        if name not in self.tools:
+            return f"Error: Unknown tool '{name}'"
+        try:
+            if isinstance(input_data, dict):
+                result = self.tools[name]["function"](**input_data)
+            else:
+                result = self.tools[name]["function"](input_data)
+            return str(result)
+        except Exception as e:
+            return f"Error executing {name}: {str(e)}"
+
+    def run(self, user_input: str) -> str:
+        """Run the agent loop."""
+        messages = [
+            {"role": "system", "content": self._build_system_prompt()},
+            {"role": "user", "content": user_input}
+        ]
+
+        for iteration in range(self.max_iterations):
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.1
+            )
+
+            content = response.choices[0].message.content
+            messages.append({"role": "assistant", "content": content})
+
+            try:
+                parsed = self._parse_response(content)
+            except json.JSONDecodeError:
+                messages.append({
+                    "role": "user",
+                    "content": "Please respond with valid JSON."
+                })
+                continue
+
+            thought = parsed.get("thought", "")
+            action = parsed.get("action", "")
+            action_input = parsed.get("action_input", {})
+
+            print(f"💭 Thought: {thought}")
+            print(f"🎯 Action: {action}")
+
+            if action == "final_answer":
+                return action_input if isinstance(action_input, str) else json.dumps(action_input)
+
+            observation = self._execute_tool(action, action_input)
+            print(f"👁️ Observation: {observation[:200]}...")
+
+            messages.append({
+                "role": "user",
+                "content": f"Observation: {observation}"
+            })
+
+        return "Max iterations reached. Please try a simpler request."
+````
+
+<Callout type="tip">
+  **Connection to Day 03:** Notice how this manual loop mirrors what LangGraph
+  does automatically. The `messages` list is our state, the `for` loop is our
+  graph execution, and the `if action == "final_answer"` is our conditional edge
+  to END.
+</Callout>
+
+---
+
+## 4.3 Using Structured Outputs (Production Pattern)
+
+The JSON parsing in our simple agent is fragile. Production agents use **structured outputs** to guarantee valid responses. Here's the modern approach using Pydantic:
+
+{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison illustration showing "Fragile JSON Parsing" vs "Structured Outputs". Left side: Show raw JSON text with red X marks indicating parsing errors, broken brackets, and question marks. Right side: Show a clean Pydantic model schema with green checkmarks, type annotations, and validation shields. Include visual metaphors like a cracked foundation vs. a solid blueprint. Add a caption: "From brittle string parsing to type-safe guarantees". This helps learners understand why structured outputs matter for production systems. */}
+
+```python
+from pydantic import BaseModel, Field
+from typing import Literal, Union
+from openai import OpenAI
+
+class ToolCall(BaseModel):
+    """Represents a tool the agent wants to call."""
+    thought: str = Field(description="Agent's reasoning about what to do")
+    action: str = Field(description="Name of the tool to call")
+    action_input: dict = Field(description="Arguments for the tool")
+
+class FinalAnswer(BaseModel):
+    """Represents the agent's final response."""
+    thought: str = Field(description="Agent's reasoning about the answer")
+    answer: str = Field(description="The final answer to return")
+
+class AgentResponse(BaseModel):
+    """Union type for agent responses."""
+    response_type: Literal["tool_call", "final_answer"]
+    tool_call: ToolCall | None = None
+    final_answer: FinalAnswer | None = None
+
+
+class StructuredAgent:
+    """Agent using structured outputs for reliable parsing."""
+
+    def __init__(self, model: str = "gpt-4o-mini"):
+        self.client = OpenAI()
+        self.model = model
+        self.tools = {}
+
+    def _get_structured_response(self, messages: list) -> AgentResponse:
+        """Get a structured response from the LLM."""
+        response = self.client.beta.chat.completions.parse(
+            model=self.model,
+            messages=messages,
+            response_format=AgentResponse,
+        )
+        return response.choices[0].message.parsed
+
+    def run(self, user_input: str) -> str:
+        """Run agent with guaranteed structured outputs."""
+        messages = [
+            {"role": "system", "content": self._build_system_prompt()},
+            {"role": "user", "content": user_input}
+        ]
+
+        for _ in range(self.max_iterations):
+            result = self._get_structured_response(messages)
+
+            print(f"💭 {result.tool_call.thought if result.tool_call else result.final_answer.thought}")
+
+            if result.response_type == "final_answer":
+                return result.final_answer.answer
+
+            # Execute tool call
+            tool_result = self._execute_tool(
+                result.tool_call.action,
+                result.tool_call.action_input
+            )
+            messages.append({
+                "role": "assistant",
+                "content": f"Calling {result.tool_call.action}"
+            })
+            messages.append({
+                "role": "user",
+                "content": f"Observation: {tool_result}"
+            })
+
+        return "Max iterations reached."
+```
+
+<Callout type="success">
+  **Why Structured Outputs Matter:** - **No parsing errors**: The SDK guarantees
+  valid JSON matching your schema - **Type safety**: Pydantic validates all
+  fields automatically - **Better prompting**: The schema itself guides the
+  LLM's output format - **Easier debugging**: Clear separation between tool
+  calls and final answers
+</Callout>
+
+<Callout type="info">
+  **Local Model Alternative:** For Ollama, you can use the `instructor` library
+  to get structured outputs from local models: ```python import instructor from
+  openai import OpenAI client = instructor.from_openai(
+  OpenAI(base_url="http://localhost:11434/v1", api_key="ollama") ) ```
+</Callout>
+
+---
+
+## 4.4 Adding Tools
+
+Tools are just Python functions with descriptions:
+
+{/* IMAGE_PLACEHOLDER: Create an illustrated "Tool Registry" diagram showing how tools connect to the agent. Design it like a toolbox or plugin system with visual representations of different tools (file icon for read_file, folder for list_directory, terminal for run_python, magnifying glass for search_web). Show arrows from the agent's "brain" to each tool, with speech bubbles showing the tool descriptions. Include a "Tool Interface" box showing the input/output contract. This visualization helps learners understand tools as modular, pluggable capabilities. */}
+
+```python
+import os
+import subprocess
+
+def read_file(path: str) -> str:
+    """Read contents of a file."""
+    try:
+        with open(path, 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return f"File not found: {path}"
+    except PermissionError:
+        return f"Permission denied: {path}"
+
+def list_directory(path: str = ".") -> str:
+    """List files in a directory."""
+    try:
+        files = os.listdir(path)
+        return "\n".join(files)
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def run_python(code: str) -> str:
+    """Execute Python code and return output."""
+    try:
+        result = subprocess.run(
+            ["python", "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        return result.stdout or result.stderr
+    except subprocess.TimeoutExpired:
+        return "Error: Code execution timed out"
+
+def search_web(query: str) -> str:
+    """Search the web (simulated)."""
+    return f"Search results for '{query}': [Simulated - integrate real API]"
+
+# Register tools
+agent = SimpleAgent()
+agent.register_tool("read_file", read_file, "Read a file. Input: {path: string}")
+agent.register_tool("list_directory", list_directory, "List directory. Input: {path: string}")
+agent.register_tool("run_python", run_python, "Execute Python. Input: {code: string}")
+agent.register_tool("search_web", search_web, "Search web. Input: {query: string}")
+```
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Vague tool descriptions",
+      fix: "Be specific: 'Read a file and return its contents. Input: {path: string}'",
+    },
+    {
+      mistake: "Too many tools at once",
+      fix: "Start with 3-5 essential tools. More tools = more confusion",
+    },
+    {
+      mistake: "Not handling tool errors",
+      fix: "Always return informative error messages",
+    },
+  ]}
+/>
+
+---
+
+## 4.5 Running the Agent
+
+<Terminal
+  command="python agent.py"
+  output={`>>> User: What Python files are in the current directory?
+
+💭 Thought: I need to list the directory to find Python files.
+🎯 Action: list_directory
+👁️ Observation: agent.py, tools.py, config.py, README.md...
+
+💭 Thought: I found Python files. Let me read agent.py.
+🎯 Action: read_file
+👁️ Observation: import json...
+
+💭 Thought: I have enough information.
+🎯 Action: final_answer
+
+Result: The directory contains agent.py, tools.py, and config.py.`}
+/>
+
+---
+
+## 4.6 Adding Memory
+
+For multi-turn conversations, persist state across runs:
+
+```python
+class AgentWithMemory(SimpleAgent):
+    """Agent with working memory."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.conversation_history = []
+        self.working_memory = {}
+
+    def remember(self, key: str, value: str):
+        """Store a fact in working memory."""
+        self.working_memory[key] = value
+
+    def recall(self, key: str) -> str:
+        """Retrieve a fact from working memory."""
+        return self.working_memory.get(key, "Not found")
+
+    def _build_system_prompt(self) -> str:
+        """Include memory context in the system prompt."""
+        base_prompt = super()._build_system_prompt()
+        if self.working_memory:
+            memory_str = "\n".join([
+                f"- {k}: {v}" for k, v in self.working_memory.items()
+            ])
+            base_prompt += f"\n\nWorking Memory:\n{memory_str}"
+        return base_prompt
+
+    def run(self, user_input: str) -> str:
+        """Run with conversation history tracking."""
+        self.conversation_history.append({"role": "user", "content": user_input})
+        result = super().run(user_input)
+        self.conversation_history.append({"role": "assistant", "content": result})
+        return result
+```
+
+<Callout type="info">
+  **Connection to Day 02:** This working memory is our L1 from the Memory
+  Hierarchy. For L2, add vector database retrieval. For L3, implement
+  summarization.
+</Callout>
+
+---
+
+## 4.7 Error Handling and Retries
+
+Production agents need robust error handling:
+
+{/* IMAGE_PLACEHOLDER: Create an animated retry mechanism visualization showing exponential backoff. Design a timeline with attempt markers (Attempt 1, 2, 3) and growing wait times (1s, 2s, 4s) represented by expanding clock icons or progress bars. Show a failed tool call icon transforming into a success icon after retries. Include visual indicators for "transient errors" (cloud with lightning) vs "permanent failures" (broken chain). Add a flowchart showing the decision tree: Try → Fail → Wait → Retry → Success/Give Up. This helps learners understand resilience patterns in production systems. */}
+
+```python
+import time
+from typing import Optional
+
+class RobustAgent(AgentWithMemory):
+    """Agent with retry logic."""
+
+    def __init__(self, *args, max_retries: int = 3, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.max_retries = max_retries
+
+    def _execute_tool_with_retry(self, name: str, input_data) -> str:
+        """Execute tool with exponential backoff."""
+        last_error = None
+        for attempt in range(self.max_retries):
+            try:
+                result = self._execute_tool(name, input_data)
+                if not result.startswith("Error"):
+                    return result
+                last_error = result
+            except Exception as e:
+                last_error = str(e)
+
+            if attempt < self.max_retries - 1:
+                wait_time = 2 ** attempt
+                print(f"⚠️ Retry {attempt + 1}/{self.max_retries} in {wait_time}s...")
+                time.sleep(wait_time)
+
+        return f"Failed after {self.max_retries} attempts: {last_error}"
+```
+
+---
+
+## 4.8 Streaming Responses
+
+For better UX, stream the agent's thinking:
+
+```python
+def run_streaming(self, user_input: str):
+    """Run agent with streaming output."""
+    messages = [
+        {"role": "system", "content": self._build_system_prompt()},
+        {"role": "user", "content": user_input}
+    ]
+
+    for iteration in range(self.max_iterations):
+        print(f"\n--- Iteration {iteration + 1} ---")
+
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.1,
+            stream=True
+        )
+
+        content = ""
+        print("🤖 ", end="", flush=True)
+
+        for chunk in stream:
+            if chunk.choices[0].delta.content:
+                token = chunk.choices[0].delta.content
+                content += token
+                print(token, end="", flush=True)
+
+        print()
+        messages.append({"role": "assistant", "content": content})
+
+        try:
+            parsed = self._parse_response(content)
+            if parsed.get("action") == "final_answer":
+                return parsed.get("action_input")
+
+            observation = self._execute_tool(
+                parsed.get("action"),
+                parsed.get("action_input")
+            )
+            print(f"👁️ {observation[:100]}...")
+            messages.append({"role": "user", "content": f"Observation: {observation}"})
+        except json.JSONDecodeError:
+            messages.append({"role": "user", "content": "Please respond with valid JSON."})
+```
+
+---
+
+## 4.9 Using Local Models
+
+Use the same agent with local Ollama models (see [Day 04: Local Lab](/modules/day-04-local-lab)):
+
+```python
+# Switch to local model
+agent = SimpleAgent.__new__(SimpleAgent)
+agent.client = OpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama"
+)
+agent.model = "llama3.3"
+agent.tools = {}
+agent.max_iterations = 10
+
+# Everything else works the same!
+agent.register_tool("read_file", read_file, "Read a file. Input: {path: string}")
+result = agent.run("What files are in the current directory?")
+```
+
+---
+
+## 4.10 Using Native Function Calling
+
+Modern LLMs support **native function calling**, which is more reliable than JSON parsing. Here's how to use OpenAI's tool calling API:
+
+{/* IMAGE_PLACEHOLDER: Create a comparison diagram showing "Manual JSON Parsing" vs "Native Function Calling". Left side: Show a complex flow with JSON string → Parse → Validate → Extract → Error handling with multiple failure points marked in red. Right side: Show a streamlined flow with LLM → Structured Tool Call → Direct Execution with green checkmarks. Include visual elements like a tangled wire vs. a clean pipeline. Add metrics showing "95% accuracy" vs "99.5% accuracy" and "High latency" vs "Low latency". This illustrates why native function calling is the production standard. */}
+
+```python
+from openai import OpenAI
+
+class FunctionCallingAgent:
+    """Agent using native function calling."""
+
+    def __init__(self, model: str = "gpt-4o-mini"):
+        self.client = OpenAI()
+        self.model = model
+        self.tools = []
+        self.tool_functions = {}
+
+    def register_tool(self, name: str, func, description: str, parameters: dict):
+        """Register a tool with its JSON schema."""
+        self.tools.append({
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": description,
+                "parameters": parameters
+            }
+        })
+        self.tool_functions[name] = func
+
+    def run(self, user_input: str) -> str:
+        """Run agent with native function calling."""
+        messages = [{"role": "user", "content": user_input}]
+
+        for _ in range(10):
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                tools=self.tools if self.tools else None,
+                tool_choice="auto"
+            )
+
+            message = response.choices[0].message
+
+            # Check if model wants to call tools
+            if message.tool_calls:
+                messages.append(message)
+
+                for tool_call in message.tool_calls:
+                    func = self.tool_functions[tool_call.function.name]
+                    args = json.loads(tool_call.function.arguments)
+                    result = func(**args)
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": str(result)
+                    })
+            else:
+                # No tool calls = final answer
+                return message.content
+
+        return "Max iterations reached."
+
+
+# Usage with proper JSON schema
+agent = FunctionCallingAgent()
+agent.register_tool(
+    name="read_file",
+    func=read_file,
+    description="Read the contents of a file",
+    parameters={
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "Path to the file"}
+        },
+        "required": ["path"]
+    }
+)
+```
+
+<Callout type="success">
+  **Native Function Calling Advantages:** - **Higher accuracy**: The model is
+  trained specifically for tool use - **Parallel calls**: Can request multiple
+  tools in one response - **Structured arguments**: JSON schema validation
+  built-in - **Works with Ollama**: Ollama v0.8+ supports the same API
+</Callout>
+
+---
+
+## 4.11 Parallel Tool Calling
+
+Modern LLMs can request multiple tools in a single response, dramatically improving efficiency for independent operations:
+
+{/* IMAGE_PLACEHOLDER: Create an animated performance comparison showing sequential vs parallel tool execution. Top half: Show a timeline with 3 tools executing one after another (Tool A → Tool B → Tool C) taking 9 seconds total. Bottom half: Show the same 3 tools executing simultaneously in parallel, taking only 3 seconds. Use progress bars, clock icons, and speedometer graphics to emphasize the performance gain. Include a real-world example like "Fetch weather for 3 cities: 9s → 3s (3x faster)". Add visual indicators for "Independent operations" (separate boxes) vs "Dependent operations" (connected boxes). This helps learners understand when and why to use parallel execution. */}
+
+```python
+class ParallelToolAgent:
+    """Agent that handles parallel tool calls."""
+
+    def run(self, user_input: str) -> str:
+        messages = [{"role": "user", "content": user_input}]
+
+        for _ in range(10):
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                tools=self.tools,
+                tool_choice="auto",
+                parallel_tool_calls=True  # Enable parallel calls
+            )
+
+            message = response.choices[0].message
+
+            if message.tool_calls:
+                messages.append(message)
+
+                # Execute all tool calls (can be parallelized with asyncio)
+                for tool_call in message.tool_calls:
+                    func = self.tool_functions[tool_call.function.name]
+                    args = json.loads(tool_call.function.arguments)
+                    result = func(**args)
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": str(result)
+                    })
+            else:
+                return message.content
+
+        return "Max iterations reached."
+```
+
+<Callout type="success">
+  **Parallel Execution Benefits:** When the model requests multiple independent
+  tools (e.g., fetching weather for 3 cities), you can execute them concurrently
+  using `asyncio.gather()` to reduce total latency.
+</Callout>
+
+---
+
+## 4.12 Thinking Models and Extended Reasoning
+
+Some models like **DeepSeek-R1** and **Qwen 3** support explicit "thinking" modes where they show their reasoning process:
+
+{/* IMAGE_PLACEHOLDER: Create a visual representation of "thinking models" showing the internal reasoning process. Design a split-screen view: Left side shows a standard model with "Input → Output" as a black box. Right side shows a thinking model with "Input → <think> Step 1: Analyze... Step 2: Consider... Step 3: Conclude... </think> → Output" with the thinking process visible in a transparent container. Use thought bubble graphics, step numbers, and branching decision trees to show the reasoning chain. Include example use cases with icons: math problem (calculator), code debugging (bug icon), architecture decision (blueprint). This helps learners understand when the extra token cost is worth the improved accuracy. */}
+
+```python
+def run_with_thinking(self, user_input: str) -> dict:
+    """Run agent with thinking model that shows reasoning."""
+    response = self.client.chat.completions.create(
+        model="deepseek-r1",  # or "qwen3:32b"
+        messages=[
+            {"role": "system", "content": "Think step by step before answering."},
+            {"role": "user", "content": user_input}
+        ],
+        temperature=0.6,  # Slightly higher for reasoning diversity
+    )
+
+    content = response.choices[0].message.content
+
+    # DeepSeek-R1 wraps thinking in <think> tags
+    if "<think>" in content:
+        thinking = content.split("<think>")[1].split("</think>")[0]
+        answer = content.split("</think>")[-1].strip()
+        return {"thinking": thinking, "answer": answer}
+
+    return {"thinking": None, "answer": content}
+```
+
+<Callout type="info">
+  **When to Use Thinking Models:** - Complex multi-step reasoning tasks - Math
+  and logic problems - Code debugging and architecture decisions - When you need
+  to audit the model's reasoning process **Trade-off:** Thinking models use more
+  tokens but often produce more accurate results for complex tasks.
+</Callout>
+
+---
+
+<Exercise
+  title="Build a File Analysis Agent"
+  difficulty="intermediate"
+  objectives={[
+    "Extend the SimpleAgent with new tools",
+    "Implement search_code using grep",
+    "Add count_lines and find_functions tools",
+    "Handle errors gracefully"
+  ]}
+  hints={[
+    "Use subprocess to call grep",
+    "For find_functions, use regex to match 'def ' patterns",
+    "Return helpful error messages when files don't exist"
+  ]}
+>
+
+**Task:** Extend the SimpleAgent to analyze a codebase.
+
+**Starter Code:**
+
+```python
+import subprocess
+import re
+
+def search_code(pattern: str, path: str = ".") -> str:
+    """Search for a pattern in code files."""
+    try:
+        result = subprocess.run(
+            ["grep", "-r", "-n", pattern, path],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        return result.stdout or "No matches found"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def count_lines(path: str) -> str:
+    """Count lines in a file."""
+    # Your implementation here
+    pass
+
+def find_functions(path: str) -> str:
+    """Find function definitions in a Python file."""
+    # Your implementation here
+    pass
+
+agent = SimpleAgent()
+agent.register_tool("search_code", search_code, "Search code. Input: {pattern, path}")
+agent.register_tool("count_lines", count_lines, "Count lines. Input: {path}")
+agent.register_tool("find_functions", find_functions, "Find functions. Input: {path}")
+
+result = agent.run("How many lines of code are in this project?")
+```
+
+</Exercise>
+
+---
+
+<ProgressCheckpoint
+  title="Agent Loop Knowledge Check"
+  questions={[
+    {
+      question: "What are the three main steps in the ReAct pattern?",
+      answer:
+        "Reason (think about what to do), Act (execute a tool), Observe (see the result). Then repeat until done.",
+    },
+    {
+      question: "Why use JSON-structured output for agent responses?",
+      answer:
+        "JSON provides reliable, parseable structure for extracting thought, action, and action_input programmatically.",
+    },
+    {
+      question: "What is the purpose of max_iterations?",
+      answer:
+        "It prevents infinite loops. The agent returns gracefully instead of running forever.",
+    },
+    {
+      question: "How does working memory differ from conversation history?",
+      answer:
+        "Conversation history stores full messages. Working memory stores extracted facts as key-value pairs.",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "Agent loops follow ReAct: Parse → Think → Act → Observe → Repeat",
+    "Tools are Python functions with descriptions for the LLM",
+    "Structured outputs (Pydantic) eliminate parsing errors in production",
+    "Native function calling is more reliable than JSON prompting",
+    "Parallel tool calling enables concurrent execution of independent operations",
+    "Thinking models (DeepSeek-R1, Qwen 3) provide explicit reasoning chains",
+    "Working memory stores facts; conversation history stores messages",
+    "Error handling with retries is critical for production",
+    "Streaming improves UX by showing thinking in real-time",
+    "The same code works with cloud APIs and local Ollama models",
+    "Self-correction patterns (verify → revise → retry) improve reliability",
+    "Start simple—only add agent complexity when simpler approaches fail",
+  ]}
+/>
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** The ReAct loop you build here is the cognitive
+  core of every agent in the AgentOS capstone (Month 3, Days 61-90). Your research agents, code
+  analysis agents, and orchestrator all use this pattern to reason about tasks,
+  take actions, and learn from observations.
+</Callout>
+
+### Recommended Exercises
+
+Complete these exercises to reinforce the concepts from this module:
+
+- **EX-06: ReAct Loop** (30 min) - Implement a complete ReAct agent from scratch with tool calling, observation handling, and iteration limits. This exercise builds directly on the code patterns in this module. See the [Project Hierarchy](/modules/day-00-project-hierarchy) for full details.
+
+### What's Next
+
+The ReAct pattern you've learned is fundamental to all agent architectures. In the capstone projects (Month 3), you'll see how multiple ReAct agents can be coordinated by a supervisor to tackle complex, multi-step tasks.
+
+{/* IMAGE_PLACEHOLDER: Create a "learning journey" roadmap showing progression from this module to future topics. Design a winding path with milestone markers: "Day 11: Single Agent Loop" (current location with a "You Are Here" flag) → "Day 14: Router Lab" → "Week 5-8: Multi-Agent Systems" → "Month 3: AgentOS Capstone". Each milestone should have a small icon representing the concept (single robot, router/switch, multiple robots, complex system). Use a gradient color scheme showing progression from beginner (blue) to advanced (purple). This helps learners see how today's foundational knowledge builds toward the course's advanced projects. */}
+
+---
+
+## Connection to LangGraph
+
+The manual loop we built is what LangGraph automates:
+
+| Manual Implementation         | LangGraph Equivalent         |
+| :---------------------------- | :--------------------------- |
+| `messages` list               | `State` with `MessagesState` |
+| `for` loop                    | Graph execution engine       |
+| `if action == "final_answer"` | Conditional edge to `END`    |
+| `_execute_tool()`             | `ToolNode`                   |
+| `max_iterations`              | `recursion_limit` config     |
+| Pydantic models               | State schema validation      |
+
+<Callout type="info">
+  **When to Use Each Approach:** - **Manual loops**: Learning, simple agents,
+  maximum control - **LangGraph**: Production systems, complex workflows,
+  built-in persistence Understanding the manual approach makes you better at
+  debugging LangGraph agents.
+</Callout>
+
+---
+
+## Production Best Practices
+
+When building agent loops for production, keep these principles in mind:
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing the "Complexity Ladder" for agent systems. Design a ladder or staircase with 5 steps, each showing when to use different approaches: Step 1 "Direct LLM Call" (simplest, fastest), Step 2 "Prompt Chain" (fixed sequence), Step 3 "ReAct Loop" (dynamic tools), Step 4 "Self-Correcting Agent" (with verification), Step 5 "Multi-Agent System" (most complex). Each step should show example use cases, latency indicators (fast to slow), and cost indicators ($ to $$$). Include a decision tree on the side: "Is the workflow fixed? → Use prompt chain. Need dynamic tool selection? → Use ReAct loop." This helps learners choose the right architecture for their use case. */}
+
+<Callout type="warning">
+  **Start Simple, Add Complexity Only When Needed.** As [Anthropic's engineering
+  team
+  recommends](https://www.anthropic.com/engineering/building-effective-agents),
+  agentic systems trade latency and cost for better task performance. Consider
+  whether you actually need an agent loop, or if a simpler prompt chain would
+  suffice.
+</Callout>
+
+### Self-Correction Patterns
+
+Effective agentic systems separate concerns into distinct phases:
+
+{/* IMAGE_PLACEHOLDER: Create a circular workflow diagram showing the self-correction cycle. Design 4 connected phases in a circle: 1) "Planning" (blueprint icon with task breakdown), 2) "Execution" (gear icon with tools running), 3) "Verification" (magnifying glass icon checking output), 4) "Revision" (pencil icon with feedback loop). Show arrows connecting them, with a "Success Exit" arrow from Verification when output is valid, and a "Retry Loop" arrow from Revision back to Execution when corrections are needed. Include a counter showing "Attempt 1/3" to indicate max corrections. Add example annotations: "Does output meet requirements?" at Verification, "Apply feedback and retry" at Revision. This visualizes the quality assurance pattern in production agents. */}
+
+1. **Planning** — Decompose the task into steps
+2. **Execution** — Run each step with appropriate tools
+3. **Verification** — Check if the output meets requirements
+4. **Revision** — If verification fails, retry with feedback
+
+```python
+def run_with_self_correction(self, user_input: str, max_corrections: int = 2) -> str:
+    """Agent loop with built-in self-correction."""
+    result = self.run(user_input)
+
+    for attempt in range(max_corrections):
+        # Verify the result
+        verification = self._verify_result(result, user_input)
+
+        if verification["is_valid"]:
+            return result
+
+        # Revise based on feedback
+        revision_prompt = f"""
+        Original task: {user_input}
+        Previous result: {result}
+        Issue found: {verification["feedback"]}
+
+        Please fix the issue and provide a corrected response.
+        """
+        result = self.run(revision_prompt)
+
+    return result  # Return best effort after max corrections
+```
+
+### When to Use Agent Loops vs. Simpler Approaches
+
+| Use Case                            | Recommended Approach      |
+| :---------------------------------- | :------------------------ |
+| Single-step tasks                   | Direct LLM call           |
+| Fixed multi-step workflows          | Prompt chains             |
+| Dynamic tool selection              | ReAct agent loop          |
+| Complex reasoning with verification | Self-correcting agent     |
+| Multi-domain tasks                  | Multi-agent orchestration |
+
+---
+
+## Further Reading
+
+- **[ReAct Paper](https://arxiv.org/abs/2210.03629)** — Original research on Reasoning + Acting
+- **[Building Effective Agents (Anthropic)](https://www.anthropic.com/engineering/building-effective-agents)** — Production guidance from Anthropic's engineering team
+- **[OpenAI Function Calling](https://platform.openai.com/docs/guides/function-calling)** — Native tool calling docs
+- **[Structured Outputs Guide](https://platform.openai.com/docs/guides/structured-outputs)** — Pydantic integration
+- **[LangGraph Documentation](https://langchain-ai.github.io/langgraph/)** — Production framework
+- **[Instructor Library](https://python.useinstructor.com/)** — Structured outputs for any LLM
+
+**Next:** [Day 14: Router Lab](/modules/day-14-router-lab) — Build your first LangGraph router.

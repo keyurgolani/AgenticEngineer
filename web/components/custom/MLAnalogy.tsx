@@ -1,11 +1,11 @@
 "use client"
 
 import React, { useState } from "react"
-import { Brain, GitBranch, Layers, Minimize2, ChevronDown, ChevronUp, Sparkles } from "lucide-react"
+import { Brain, GitBranch, Layers, Minimize2, ChevronDown, ChevronUp, Sparkles, Gamepad2, Focus, ArrowRightLeft, Shield, TrendingUp } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
-type AnalogyType = "svm" | "ensemble" | "neural" | "pca"
+type AnalogyType = "svm" | "ensemble" | "neural" | "pca" | "rl" | "attention" | "transfer" | "regularization" | "optimization"
 
 interface MLAnalogyProps {
   type: AnalogyType
@@ -20,21 +20,36 @@ const iconMap = {
   svm: Brain,
   ensemble: GitBranch,
   neural: Layers,
-  pca: Minimize2
+  pca: Minimize2,
+  rl: Gamepad2,
+  attention: Focus,
+  transfer: ArrowRightLeft,
+  regularization: Shield,
+  optimization: TrendingUp
 }
 
 const colorMap = {
   svm: { border: "border-violet-500/20", bg: "bg-violet-500/5", text: "text-violet-400", badge: "border-violet-500/30" },
   ensemble: { border: "border-amber-500/20", bg: "bg-amber-500/5", text: "text-amber-400", badge: "border-amber-500/30" },
   neural: { border: "border-rose-500/20", bg: "bg-rose-500/5", text: "text-rose-400", badge: "border-rose-500/30" },
-  pca: { border: "border-teal-500/20", bg: "bg-teal-500/5", text: "text-teal-400", badge: "border-teal-500/30" }
+  pca: { border: "border-teal-500/20", bg: "bg-teal-500/5", text: "text-teal-400", badge: "border-teal-500/30" },
+  rl: { border: "border-green-500/20", bg: "bg-green-500/5", text: "text-green-400", badge: "border-green-500/30" },
+  attention: { border: "border-blue-500/20", bg: "bg-blue-500/5", text: "text-blue-400", badge: "border-blue-500/30" },
+  transfer: { border: "border-orange-500/20", bg: "bg-orange-500/5", text: "text-orange-400", badge: "border-orange-500/30" },
+  regularization: { border: "border-cyan-500/20", bg: "bg-cyan-500/5", text: "text-cyan-400", badge: "border-cyan-500/30" },
+  optimization: { border: "border-pink-500/20", bg: "bg-pink-500/5", text: "text-pink-400", badge: "border-pink-500/30" }
 }
 
 const labelMap = {
   svm: "Feature Engineering",
   ensemble: "Ensemble Methods",
   neural: "Deep Learning",
-  pca: "Dimensionality Reduction"
+  pca: "Dimensionality Reduction",
+  rl: "Reinforcement Learning",
+  attention: "Attention Mechanisms",
+  transfer: "Transfer Learning",
+  regularization: "Regularization",
+  optimization: "Optimization"
 }
 
 export function MLAnalogy({ type, title, mlConcept, agenticParallel, keyInsight, codeExample }: MLAnalogyProps) {

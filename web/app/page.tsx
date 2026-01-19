@@ -34,7 +34,7 @@ export default function Home() {
         {/* <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-blue-500/10 blur-[120px] rounded-full -z-10" /> remove old blob */}
         
         <Badge variant="outline" className="text-blue-400 border-blue-900/50 bg-blue-900/10 px-4 py-1.5 rounded-full text-sm font-medium">
-            The 2026 Agentic Software Engineer
+            The Agentic Software Engineer
         </Badge>
         
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight pb-4 leading-tight text-foreground">
@@ -44,12 +44,12 @@ export default function Home() {
         
         <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
             Move from writing code to orchestrating <span className="text-foreground font-medium">autonomous workforces</span>. 
-            A comprehensive one-month intensive to build production-grade Agentic Systems with 5 real-world projects.
+            A comprehensive 3-month course to build production-grade Agentic Systems with 12 real-world projects.
         </p>
         
         <div className="flex flex-wrap justify-center gap-3 pt-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">📚 30+ Modules</span>
-            <span className="flex items-center gap-1">🛠️ 5 Capstone Projects</span>
+            <span className="flex items-center gap-1">📚 90-Day Curriculum</span>
+            <span className="flex items-center gap-1">🛠️ 12 Projects</span>
             <span className="flex items-center gap-1">🔧 Hands-on Labs</span>
             <span className="flex items-center gap-1">🌐 Open Source</span>
         </div>
@@ -60,7 +60,7 @@ export default function Home() {
                     Start Week 1 <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
             </Link>
-            <Link href="/modules/day-30-conclusion">
+            <Link href="/syllabus">
                  <Button size="lg" variant="outline" className="h-12 px-8 text-base border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900">
                     View Syllabus
                 </Button>
@@ -104,18 +104,38 @@ export default function Home() {
                         </div>
                         <div>
                             <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                                {/* Month 1: Foundations & Core Concepts (Weeks 1-4) */}
                                 {weekNum === 1 && "The Agentic Mindset"}
                                 {weekNum === 2 && "The Agentic Toolkit"}
-                                {weekNum === 3 && "Production Engineering"}
-                                {weekNum === 4 && "Real-World Application"}
-                                {weekNum === 5 && "Bonus: Real World & Tooling"}
+                                {weekNum === 3 && "RAG & Memory Systems"}
+                                {weekNum === 4 && "Single-Agent Mastery"}
+                                {/* Month 2: Multi-Agent Systems & Production Engineering (Weeks 5-8) */}
+                                {weekNum === 5 && "Multi-Agent Orchestration"}
+                                {weekNum === 6 && "Production Security"}
+                                {weekNum === 7 && "Observability & Reliability"}
+                                {weekNum === 8 && "Production Engineering"}
+                                {/* Month 3: Advanced Architectures & Mastery (Weeks 9-12) */}
+                                {weekNum === 9 && "Agent Swarms"}
+                                {weekNum === 10 && "Enterprise Deployment"}
+                                {weekNum === 11 && "Specialized Projects"}
+                                {weekNum === 12 && "Capstone & Mastery"}
                             </h2>
                             <p className="text-sm text-muted-foreground pt-1">
+                                {/* Month 1: Foundations & Core Concepts (Weeks 1-4) */}
                                 {weekNum === 1 && "Foundations: LLMs, Prompts, and Context"}
                                 {weekNum === 2 && "Frameworks: LangChain, CrewAI, and MCP"}
-                                {weekNum === 3 && "Engineering: Durability, Observability, Security"}
-                                {weekNum === 4 && "Portfolio: 5 Capstone Projects"}
-                                {weekNum === 5 && "Enrichment: Open Source Hall of Fame"}
+                                {weekNum === 3 && "Knowledge: Vector DBs, Embeddings, Retrieval"}
+                                {weekNum === 4 && "Integration: Tools, APIs, and Workflows"}
+                                {/* Month 2: Multi-Agent Systems & Production Engineering (Weeks 5-8) */}
+                                {weekNum === 5 && "Patterns: Coordination, Delegation, Consensus"}
+                                {weekNum === 6 && "Security: Sandboxing, Auth, and Guardrails"}
+                                {weekNum === 7 && "Monitoring: Tracing, Logging, and Debugging"}
+                                {weekNum === 8 && "Engineering: Durability, Scaling, and Testing"}
+                                {/* Month 3: Advanced Architectures & Mastery (Weeks 9-12) */}
+                                {weekNum === 9 && "Swarms: Emergent Behavior and Collective Intelligence"}
+                                {weekNum === 10 && "Enterprise: K8s, CI/CD, and Infrastructure"}
+                                {weekNum === 11 && "Projects: Privacy, Refactoring, Forensics Agents"}
+                                {weekNum === 12 && "Capstone: AgentOS Ecosystem and Final Projects"}
                             </p>
                         </div>
                     </div>
@@ -150,7 +170,7 @@ export default function Home() {
       </section>
 
       <footer className="w-full py-12 border-t border-border bg-background text-center">
-        <p className="text-muted-foreground text-sm">© 2026 Agentic Software Engineering. All rights reserved.</p>
+        <p className="text-muted-foreground text-sm">© Agentic Software Engineering. All rights reserved.</p>
       </footer>
     </div>
   )

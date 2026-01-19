@@ -1,8 +1,18 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Outfit } from "next/font/google";
-import "./globals.css";
-import { cn } from "@/lib/utils";
+
+import { CommandPalette } from "@/components/features/CommandPalette";
+import { KeyboardShortcutsProvider } from "@/components/features/KeyboardShortcuts";
+import { NotesModalWrapper } from "@/components/features/notes/NotesModalWrapper";
+import { SearchWrapper } from "@/components/features/search/SearchWrapper";
+import { Header } from "@/components/layout/Header";
 import JsonLd from "@/components/seo/JsonLd";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
+import { getAllModules } from "@/lib/modules";
+import { cn } from "@/lib/utils";
+
+import "./globals.css";
 
 // Sans Serif Fonts
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -12,11 +22,12 @@ const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://agenticengineer.keyurgolani.name'),
   title: {
     default: "Agentic Engineer | Master AI Agent Architecture",
     template: "%s | Agentic Engineer"
   },
-  description: "A 30-day comprehensive course on building production-ready AI agents. From basics to advanced swarms, LangGraph, CrewAI, and beyond.",
+  description: "A 90-day comprehensive course on building production-ready AI agents. From basics to advanced swarms, LangGraph, CrewAI, and beyond.",
   keywords: ["AI Agents", "LLM", "LangGraph", "CrewAI", "TypeScript", "Python", "Course"],
   authors: [{ name: "Agentic Engineer Team" }],
   creator: "Agentic Engineer",
@@ -46,14 +57,6 @@ export const metadata: Metadata = {
     icon: "/favicon.ico",
   },
 };
-import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/sonner"
-import { Header } from "@/components/layout/Header"
-import { NotesModalWrapper } from "@/components/features/notes/NotesModalWrapper"
-import { SearchWrapper } from "@/components/features/search/SearchWrapper"
-import { KeyboardShortcutsProvider } from "@/components/features/KeyboardShortcuts"
-import { CommandPalette } from "@/components/features/CommandPalette"
-import { getAllModules } from "@/lib/modules"
 
 const courseSchema = {
   "@context": "https://schema.org",

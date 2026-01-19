@@ -4,7 +4,7 @@ import Link from "next/link"
 
 export function EditOnGithub({ slug }: { slug: string }) {
   // Assuming the structure is: web/content/modules/[slug].mdx
-  const editUrl = `https://github.com/StartAgentic/agentic-engineer-handbook/edit/main/web/content/modules/${slug}.mdx`
+  const editUrl = `https://github.com/keyurgolani/AgenticEngineer/edit/main/web/content/modules/${slug}.mdx`
 
   return (
     <div className="mt-8 pt-8 border-t border-border flex justify-end">

@@ -1,0 +1,2972 @@
+---
+title: "Project 5: The Financial Forensics Swarm"
+description: "Building a multi-tool investigation agent using MCP for fraud detection."
+week: 11
+day: 79
+---
+
+<ReadingTime minutes={45} />
+
+<Callout type="info">
+  **Project Tier:** This is a **Tier 4 Project** (4-8 hours). It demonstrates
+  multi-system integration using MCP for cross-platform investigations.
+  Prerequisites: Complete foundational exercises from Days 1-30 and POC-01
+  (LangGraph State Machine) first.
+</Callout>
+
+<SkillLevel level="advanced" description="Multi-system integration project" />
+
+<Prerequisites
+  items={[
+    "Completed Day 11: MCP Standards",
+    "Understanding of LangGraph orchestration (Day 09)",
+    "Familiarity with async Python",
+    "Basic knowledge of financial transaction patterns",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Configure multiple MCP servers for cross-system data access",
+    "Build a hub-and-spoke swarm architecture for investigations",
+    "Implement investigative reasoning chains with evidence correlation",
+    "Add human-in-the-loop approval for high-stakes decisions",
+    "Create structured investigation reports with audit trails",
+  ]}
+/>
+
+---
+
+## Project Overview
+
+<ConceptVisual
+  src="/images/forensics_swarm_hero.png"
+  alt="Forensics Swarm Hero Agent"
+  caption="The Financial Forensics Swarm orchestrates multiple tools to investigate fraud."
+/>
+
+**Objective**: Build a "Sherlock Holmes" investigation agent that connects to multiple data sources (Stripe, Slack, PostgreSQL) simultaneously to investigate suspicious transactions.
+
+**Why This Matters**: Real-world investigations require "swivel-chair integration"—jumping between payment dashboards, chat logs, and databases. This project demonstrates how MCP eliminates integration hell.
+
+<ConceptVisual
+  src="/images/mcp_vs_traditional_investigation.png"
+  alt="Traditional vs MCP Investigation"
+  caption="MCP unifies scattered data sources into a single stream of intelligence."
+/>
+
+**Skills Showcased**:
+
+- Model Context Protocol (MCP) integration
+- Multi-server swarm architecture
+- Cross-system data correlation
+- Investigative reasoning chains
+
+---
+
+## Project Requirements Document
+
+This section provides comprehensive requirements for implementing the Financial Forensics Swarm. Use this as a reference for estimation, implementation, and verification.
+
+### User Stories
+
+| ID    | User Story                                                                                                                                                                  | Priority |
+| :---- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------- |
+| US-01 | As a **fraud analyst**, I want to investigate suspicious transactions by querying multiple data sources, so that I can identify fraud patterns quickly.                     | P0       |
+| US-02 | As a **fraud analyst**, I want the system to automatically correlate data across Stripe, Slack, and our database, so that I don't have to manually cross-reference systems. | P0       |
+| US-03 | As a **fraud analyst**, I want a risk score calculated for each investigation, so that I can prioritize high-risk cases.                                                    | P1       |
+| US-04 | As a **compliance officer**, I want all investigation steps logged with evidence, so that we have an audit trail for regulatory review.                                     | P0       |
+| US-05 | As a **fraud analyst**, I want high-risk cases to require human approval before action, so that we don't accidentally block legitimate customers.                           | P0       |
+| US-06 | As a **fraud analyst**, I want investigation reports generated automatically, so that I can share findings with stakeholders.                                               | P1       |
+| US-07 | As a **IT administrator**, I want to configure which MCP servers are available, so that I can control data access.                                                          | P1       |
+| US-08 | As a **fraud analyst**, I want to search for patterns across multiple transactions, so that I can identify coordinated fraud rings.                                         | P2       |
+
+### Acceptance Criteria
+
+#### US-01: Multi-Source Investigation
+
+- **Given** a suspicious transaction ID
+- **When** the investigation agent runs
+- **Then** the system:
+  - Retrieves transaction details from Stripe
+  - Queries customer information from the database
+  - Searches for related communications in Slack
+  - Checks audit logs for user activity
+  - Compiles all findings into a unified view
+
+#### US-02: Automatic Data Correlation
+
+- **Given** transaction data from Stripe
+- **When** the agent identifies a customer ID
+- **Then** the system automatically:
+  - Looks up the customer in PostgreSQL
+  - Finds their account creation date
+  - Searches Slack for mentions of their email
+  - Correlates IP addresses across systems
+
+#### US-03: Risk Scoring
+
+- **Given** investigation findings
+- **When** the analysis phase completes
+- **Then** the system calculates a risk score (0-100) based on:
+  - Account age vs. transaction amount
+  - Transaction velocity (frequency)
+  - Amount patterns (round numbers, just under limits)
+  - Communication history presence
+  - Geographic consistency
+
+#### US-04: Audit Trail
+
+- **Given** an investigation is in progress
+- **When** any tool is invoked
+- **Then** the system logs:
+  - Timestamp
+  - Tool name and parameters
+  - Data source accessed
+  - Results summary (not raw data)
+  - Reasoning for the query
+
+#### US-05: Human-in-the-Loop for High Risk
+
+- **Given** a risk score >= 70
+- **When** the investigation reaches the decision phase
+- **Then** the system:
+  - Pauses execution
+  - Sends notification to fraud team
+  - Waits for human approval/rejection
+  - Records the decision and approver
+
+#### US-06: Report Generation
+
+- **Given** an investigation is complete
+- **When** the report is generated
+- **Then** the output includes:
+  - Case ID and transaction ID
+  - Risk score with explanation
+  - Timeline of events
+  - Evidence summary
+  - Recommendation (BLOCK/REVIEW/APPROVE)
+  - All sources cited
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       Financial Forensics Swarm                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Investigation Hub                               │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │ │
+│  │  │                    Investigation Agent                           │  │ │
+│  │  │  (LangChain Agent with MCP Tools)                               │  │ │
+│  │  │                                                                   │  │ │
+│  │  │  • Reasoning Chain                                               │  │ │
+│  │  │  • Evidence Correlation                                          │  │ │
+│  │  │  • Risk Calculation                                              │  │ │
+│  │  └─────────────────────────────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                         │
+│                    ┌───────────────┼───────────────┐                        │
+│                    │               │               │                        │
+│                    ▼               ▼               ▼                        │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐            │
+│  │   MCP Client     │ │   MCP Client     │ │   MCP Client     │            │
+│  │   (Stripe)       │ │   (PostgreSQL)   │ │   (Slack)        │            │
+│  └────────┬─────────┘ └────────┬─────────┘ └────────┬─────────┘            │
+│           │                    │                    │                       │
+│           ▼                    ▼                    ▼                       │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐            │
+│  │  Stripe MCP      │ │  PostgreSQL MCP  │ │  Slack MCP       │            │
+│  │  Server          │ │  Server          │ │  Server          │            │
+│  │                  │ │                  │ │                  │            │
+│  │  • get_txn       │ │  • query         │ │  • search_msgs   │            │
+│  │  • search_txns   │ │  • get_user      │ │  • get_channel   │            │
+│  │  • get_customer  │ │  • get_history   │ │  • get_thread    │            │
+│  └────────┬─────────┘ └────────┬─────────┘ └────────┬─────────┘            │
+│           │                    │                    │                       │
+│           ▼                    ▼                    ▼                       │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐            │
+│  │   Stripe API     │ │   PostgreSQL     │ │   Slack API      │            │
+│  │   (Payments)     │ │   (Users/Orders) │ │   (Messages)     │            │
+│  └──────────────────┘ └──────────────────┘ └──────────────────┘            │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Supporting Components                                                       │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐                 │
+│  │  Checkpoint    │  │  Report        │  │  Notification  │                 │
+│  │  Store         │  │  Generator     │  │  Service       │                 │
+│  │  (SQLite)      │  │  (Markdown)    │  │  (Slack/Email) │                 │
+│  └────────────────┘  └────────────────┘  └────────────────┘                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+| Component                 | Responsibility                                   | Data Access         |
+| :------------------------ | :----------------------------------------------- | :------------------ |
+| **Investigation Agent**   | Orchestrate investigation, reason about findings | All (via MCP)       |
+| **Stripe MCP Server**     | Payment and customer data access                 | Stripe API          |
+| **PostgreSQL MCP Server** | User and order database queries                  | PostgreSQL          |
+| **Slack MCP Server**      | Communication history search                     | Slack API           |
+| **Filesystem MCP Server** | Audit log access                                 | Local files         |
+| **Checkpoint Store**      | Persist investigation state for HITL             | SQLite              |
+| **Report Generator**      | Create investigation reports                     | Investigation state |
+| **Notification Service**  | Alert fraud team for approvals                   | Slack/Email         |
+
+### State Machine Design
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Idle
+    
+    Idle --> Initializing: start_investigation
+    
+    Initializing --> GatheringTransaction: mcp_connected
+    Initializing --> Error: connection_failed
+    
+    GatheringTransaction --> TransactionFound: txn_retrieved
+    GatheringTransaction --> NotFound: txn_not_found
+    
+    NotFound --> Idle: reset
+    
+    TransactionFound --> IdentifyingCustomer: auto_transition
+    
+    IdentifyingCustomer --> CustomerIdentified: customer_found
+    IdentifyingCustomer --> GatheringTransaction: no_customer
+    
+    CustomerIdentified --> CheckingHistory: auto_transition
+    
+    CheckingHistory --> HistoryComplete: all_sources_checked
+    
+    HistoryComplete --> AnalyzingPatterns: auto_transition
+    
+    AnalyzingPatterns --> RiskCalculated: analysis_complete
+    
+    RiskCalculated --> HighRiskReview: risk_score_gte_70
+    RiskCalculated --> MediumRiskReview: risk_score_50_to_69
+    RiskCalculated --> LowRiskApprove: risk_score_lt_50
+    
+    HighRiskReview --> AwaitingApproval: auto_transition
+    
+    AwaitingApproval --> Approved: human_approves
+    AwaitingApproval --> Rejected: human_rejects
+    AwaitingApproval --> AwaitingApproval: request_more_info
+    
+    MediumRiskReview --> GeneratingReport: auto_transition
+    LowRiskApprove --> GeneratingReport: auto_transition
+    Approved --> GeneratingReport: auto_transition
+    Rejected --> GeneratingReport: auto_transition
+    
+    GeneratingReport --> Complete: report_saved
+    
+    Complete --> Idle: reset
+    Error --> Idle: reset
+`}
+/>
+
+| State                  | Description                        | Timeout | Valid Transitions                                  |
+| :--------------------- | :--------------------------------- | :------ | :------------------------------------------------- |
+| `Idle`                 | Awaiting investigation request     | None    | → Initializing                                     |
+| `Initializing`         | Connecting to MCP servers          | 30s     | → GatheringTransaction, Error                      |
+| `GatheringTransaction` | Retrieving transaction from Stripe | 15s     | → TransactionFound, NotFound                       |
+| `TransactionFound`     | Transaction data available         | 1s      | → IdentifyingCustomer                              |
+| `IdentifyingCustomer`  | Looking up customer details        | 15s     | → CustomerIdentified                               |
+| `CustomerIdentified`   | Customer data available            | 1s      | → CheckingHistory                                  |
+| `CheckingHistory`      | Querying all data sources          | 60s     | → HistoryComplete                                  |
+| `HistoryComplete`      | All source data gathered           | 1s      | → AnalyzingPatterns                                |
+| `AnalyzingPatterns`    | LLM analyzing for red flags        | 30s     | → RiskCalculated                                   |
+| `RiskCalculated`       | Risk score computed                | 1s      | → HighRiskReview, MediumRiskReview, LowRiskApprove |
+| `HighRiskReview`       | High risk, needs approval          | 1s      | → AwaitingApproval                                 |
+| `AwaitingApproval`     | Waiting for human decision         | 24h     | → Approved, Rejected                               |
+| `MediumRiskReview`     | Medium risk, auto-review           | 1s      | → GeneratingReport                                 |
+| `LowRiskApprove`       | Low risk, auto-approve             | 1s      | → GeneratingReport                                 |
+| `Approved`             | Human approved action              | 1s      | → GeneratingReport                                 |
+| `Rejected`             | Human rejected, no action          | 1s      | → GeneratingReport                                 |
+| `GeneratingReport`     | Creating investigation report      | 30s     | → Complete                                         |
+| `Complete`             | Investigation finished             | N/A     | → Idle                                             |
+
+### Tool Specifications
+
+#### Tool: `stripe.get_transaction`
+
+| Attribute            | Value                                                         |
+| :------------------- | :------------------------------------------------------------ |
+| **Purpose**          | Retrieve transaction details from Stripe                      |
+| **Input**            | `transaction_id: str` (pi_xxx or ch_xxx)                      |
+| **Output**           | `{id, amount, currency, status, customer, created, metadata}` |
+| **MCP Server**       | `@stripe/agent-toolkit` or custom                             |
+| **Error Conditions** | Not found → return error message                              |
+
+#### Tool: `stripe.search_transactions`
+
+| Attribute            | Value                                                                             |
+| :------------------- | :-------------------------------------------------------------------------------- |
+| **Purpose**          | Search transactions with filters                                                  |
+| **Input**            | `customer_id: str, min_amount: float, max_amount: float, status: str, limit: int` |
+| **Output**           | `List[{id, amount, status, customer, created}]`                                   |
+| **MCP Server**       | `@stripe/agent-toolkit` or custom                                                 |
+| **Error Conditions** | No results → return empty list                                                    |
+
+#### Tool: `stripe.get_customer`
+
+| Attribute            | Value                                  |
+| :------------------- | :------------------------------------- |
+| **Purpose**          | Get Stripe customer details            |
+| **Input**            | `customer_id: str`                     |
+| **Output**           | `{id, email, name, created, metadata}` |
+| **MCP Server**       | `@stripe/agent-toolkit` or custom      |
+| **Error Conditions** | Not found → return error message       |
+
+#### Tool: `postgres.query`
+
+| Attribute            | Value                                       |
+| :------------------- | :------------------------------------------ |
+| **Purpose**          | Execute SQL query on database               |
+| **Input**            | `sql: str` (SELECT only)                    |
+| **Output**           | `List[dict]` (query results)                |
+| **MCP Server**       | `@modelcontextprotocol/server-postgres`     |
+| **Security**         | Read-only connection, parameterized queries |
+| **Error Conditions** | SQL error → return error message            |
+
+#### Tool: `slack.search_messages`
+
+| Attribute            | Value                                    |
+| :------------------- | :--------------------------------------- |
+| **Purpose**          | Search Slack messages                    |
+| **Input**            | `query: str, channel: str (optional)`    |
+| **Output**           | `List[{text, user, channel, timestamp}]` |
+| **MCP Server**       | `@modelcontextprotocol/server-slack`     |
+| **Error Conditions** | No results → return empty list           |
+
+#### Tool: `filesystem.read_file`
+
+| Attribute            | Value                                     |
+| :------------------- | :---------------------------------------- |
+| **Purpose**          | Read audit log files                      |
+| **Input**            | `path: str`                               |
+| **Output**           | `str` (file content)                      |
+| **MCP Server**       | `@modelcontextprotocol/server-filesystem` |
+| **Security**         | Restricted to configured directories      |
+| **Error Conditions** | File not found → return error             |
+
+#### Tool: `calculate_risk_score`
+
+| Attribute            | Value                                                         |
+| :------------------- | :------------------------------------------------------------ |
+| **Purpose**          | Compute fraud risk score                                      |
+| **Input**            | `findings: InvestigationFindings`                             |
+| **Output**           | `{score: int, factors: List[{name, weight, value}]}`          |
+| **Algorithm**        | Weighted sum of risk factors                                  |
+| **Factors**          | Account age, velocity, amount patterns, communication history |
+| **Error Conditions** | Insufficient data → return 50 (medium)                        |
+
+### Risk Scoring Algorithm
+
+<RiskScoreCalculator />
+
+```python
+RISK_FACTORS = {
+    "account_age_hours": {
+        "weight": 25,
+        "thresholds": [(24, 25), (168, 15), (720, 5), (float('inf'), 0)]
+    },
+    "amount_near_limit": {
+        "weight": 20,
+        "description": "Transaction amount within 5% of reporting threshold"
+    },
+    "round_amount": {
+        "weight": 10,
+        "description": "Amount is a round number (e.g., $1000, $5000)"
+    },
+    "high_velocity": {
+        "weight": 20,
+        "thresholds": [(5, 20), (3, 10), (1, 0)]  # transactions per hour
+    },
+    "no_communication_history": {
+        "weight": 15,
+        "description": "No Slack/email history for customer"
+    },
+    "disposable_email": {
+        "weight": 10,
+        "description": "Email from known disposable domain"
+    }
+}
+```
+
+---
+
+## Advanced Fraud Detection Patterns (2024-2025)
+
+<Callout type="info">
+  **2025 Update**: Modern fraud detection has evolved beyond rule-based systems.
+  This section covers cutting-edge techniques including graph neural networks,
+  behavioral biometrics, and synthetic identity detection.
+</Callout>
+
+### Graph-Based Fraud Detection
+
+<ConceptVisual
+  src="/images/fraud_ring_visualization.png"
+  alt="Fraud Ring Detection Graph"
+  caption="Graph algorithms reveal circular money flows that individual transaction analysis misses."
+/>
+
+Graph Neural Networks (GNNs) analyze the network structure of financial transactions, capturing patterns that traditional methods miss. Unlike examining transactions in isolation, GNNs map connections between accounts and trace money flows across entire networks.
+
+<FraudGraphExplorer />
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Transaction Graph"
+        A[Account A] -->|$5000| B[Account B]
+        A -->|$4999| C[Account C]
+        B -->|$4800| D[Account D]
+        C -->|$4700| D
+        D -->|$9000| E[Merchant E]
+    end
+    
+    subgraph "GNN Analysis"
+        F[Node Embeddings] --> G[Message Passing]
+        G --> H[Aggregation]
+        H --> I[Fraud Score]
+    end
+    
+    D -.->|High Risk Node| I
+    
+    style D fill:#f66,stroke:#333,stroke-width:3px
+    style I fill:#ff9,stroke:#333
+`}
+/>
+
+```python
+from dataclasses import dataclass
+from typing import List, Dict
+import networkx as nx
+
+@dataclass
+class TransactionNode:
+    account_id: str
+    transaction_ids: List[str]
+    total_volume: float
+    connection_count: int
+
+@dataclass
+class GraphFraudSignal:
+    signal_type: str  # "ring", "layering", "burst"
+    confidence: float
+    involved_accounts: List[str]
+    description: str
+
+class GraphFraudDetector:
+    """Detect fraud patterns using graph analysis."""
+
+    def __init__(self):
+        self.graph = nx.DiGraph()
+
+    def build_transaction_graph(self, transactions: List[dict]) -> None:
+        """Build graph from transaction data."""
+        for txn in transactions:
+            self.graph.add_edge(
+                txn["source_account"],
+                txn["dest_account"],
+                amount=txn["amount"],
+                timestamp=txn["timestamp"],
+                txn_id=txn["id"]
+            )
+
+    def detect_fraud_rings(self) -> List[GraphFraudSignal]:
+        """Detect circular transaction patterns (fraud rings)."""
+        signals = []
+
+        # Find strongly connected components (potential rings)
+        sccs = list(nx.strongly_connected_components(self.graph))
+
+        for scc in sccs:
+            if len(scc) >= 3:  # Ring requires at least 3 nodes
+                subgraph = self.graph.subgraph(scc)
+                total_flow = sum(d["amount"] for _, _, d in subgraph.edges(data=True))
+
+                signals.append(GraphFraudSignal(
+                    signal_type="ring",
+                    confidence=min(0.9, len(scc) * 0.15),
+                    involved_accounts=list(scc),
+                    description=f"Circular flow detected: {len(scc)} accounts, ${total_flow:,.2f} total"
+                ))
+
+        return signals
+
+    def detect_layering(self, account_id: str, depth: int = 3) -> List[GraphFraudSignal]:
+        """Detect money layering patterns (rapid fund movement through multiple accounts)."""
+        signals = []
+
+        # Find all paths from account within depth
+        paths = []
+        for target in self.graph.nodes():
+            if target != account_id:
+                try:
+                    for path in nx.all_simple_paths(self.graph, account_id, target, cutoff=depth):
+                        if len(path) >= 3:
+                            paths.append(path)
+                except nx.NetworkXNoPath:
+                    continue
+
+        # Analyze timing of transactions along paths
+        for path in paths:
+            timestamps = []
+            for i in range(len(path) - 1):
+                edge_data = self.graph.get_edge_data(path[i], path[i+1])
+                timestamps.append(edge_data["timestamp"])
+
+            # Check if transactions happened in rapid succession (< 1 hour apart)
+            if self._is_rapid_sequence(timestamps):
+                signals.append(GraphFraudSignal(
+                    signal_type="layering",
+                    confidence=0.75,
+                    involved_accounts=path,
+                    description=f"Rapid fund movement through {len(path)} accounts"
+                ))
+
+        return signals
+
+    def calculate_account_risk(self, account_id: str) -> Dict[str, float]:
+        """Calculate risk metrics for an account based on graph position."""
+        if account_id not in self.graph:
+            return {"overall_risk": 0.0}
+
+        # PageRank indicates importance/centrality in transaction network
+        pagerank = nx.pagerank(self.graph)
+
+        # Betweenness centrality indicates if account is a "bridge"
+        betweenness = nx.betweenness_centrality(self.graph)
+
+        # In-degree vs out-degree ratio (high out = potential source of fraud)
+        in_deg = self.graph.in_degree(account_id)
+        out_deg = self.graph.out_degree(account_id)
+
+        return {
+            "pagerank_score": pagerank.get(account_id, 0),
+            "betweenness_score": betweenness.get(account_id, 0),
+            "flow_ratio": out_deg / max(in_deg, 1),
+            "overall_risk": self._calculate_composite_risk(
+                pagerank.get(account_id, 0),
+                betweenness.get(account_id, 0),
+                out_deg / max(in_deg, 1)
+            )
+        }
+```
+
+### Behavioral Biometrics Integration
+
+<ConceptVisual
+  src="/images/behavioral_biometrics_comparison.png"
+  alt="Behavioral Biometrics: Legitimate vs Fraudster"
+  caption="Behavioral biometrics analyze how users interact with devices to detect anomalies."
+/>
+
+Behavioral biometrics analyze how users interact with devices—typing patterns, mouse movements, touch gestures—to detect account takeover and synthetic identities.
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "BehaviorSimulator" component where users can:
+
+1. Choose "Legitimate User" or "Bot/Fraudster" mode
+2. Type in a text field and move mouse around
+3. See real-time behavioral metrics (typing cadence, mouse velocity, pause patterns)
+4. View a risk score that updates based on their behavior
+5. Compare their patterns against stored profiles
+   This demonstrates how behavioral biometrics work in practice. Place after the code example. */}
+
+```python
+@dataclass
+class BehavioralProfile:
+    user_id: str
+    typing_cadence_ms: float  # Average time between keystrokes
+    mouse_velocity: float     # Average mouse movement speed
+    session_duration_avg: float
+    time_of_day_pattern: List[int]  # Hour buckets of typical activity
+    device_fingerprints: List[str]
+
+@dataclass
+class BehavioralAnomaly:
+    anomaly_type: str
+    deviation_score: float  # Standard deviations from normal
+    details: str
+
+class BehavioralBiometricsAnalyzer:
+    """Analyze behavioral patterns for fraud detection."""
+
+    def __init__(self, profile_store):
+        self.profile_store = profile_store
+
+    async def analyze_session(
+        self,
+        user_id: str,
+        session_data: dict
+    ) -> List[BehavioralAnomaly]:
+        """Compare current session behavior against user's profile."""
+        anomalies = []
+        profile = await self.profile_store.get_profile(user_id)
+
+        if not profile:
+            # New user - flag for enhanced monitoring
+            return [BehavioralAnomaly(
+                anomaly_type="new_user",
+                deviation_score=0,
+                details="No behavioral baseline established"
+            )]
+
+        # Check typing cadence
+        if session_data.get("typing_cadence_ms"):
+            deviation = abs(session_data["typing_cadence_ms"] - profile.typing_cadence_ms)
+            if deviation > profile.typing_cadence_ms * 0.5:  # 50% deviation
+                anomalies.append(BehavioralAnomaly(
+                    anomaly_type="typing_pattern",
+                    deviation_score=deviation / profile.typing_cadence_ms,
+                    details=f"Typing speed differs significantly from baseline"
+                ))
+
+        # Check device fingerprint
+        if session_data.get("device_fingerprint"):
+            if session_data["device_fingerprint"] not in profile.device_fingerprints:
+                anomalies.append(BehavioralAnomaly(
+                    anomaly_type="new_device",
+                    deviation_score=1.0,
+                    details="Transaction from unrecognized device"
+                ))
+
+        # Check time-of-day pattern
+        current_hour = session_data.get("hour_of_day", 12)
+        if current_hour not in profile.time_of_day_pattern:
+            anomalies.append(BehavioralAnomaly(
+                anomaly_type="unusual_time",
+                deviation_score=0.5,
+                details=f"Activity at unusual hour: {current_hour}:00"
+            ))
+
+        return anomalies
+```
+
+### Synthetic Identity Fraud Detection
+
+<ConceptVisual
+  src="/images/synthetic_identity_infographic.png"
+  alt="Anatomy of a Synthetic Identity"
+  caption="Fraudsters combine real and fake data points to create ghost identities."
+/>
+
+Synthetic identity fraud—where criminals create fake identities from real and fabricated data—is one of the fastest-growing fraud types. Detection requires cross-referencing multiple data points.
+
+<SyntheticIdentityDetector />
+
+```python
+@dataclass
+class SyntheticIdentitySignal:
+    signal_name: str
+    risk_contribution: float
+    evidence: str
+
+class SyntheticIdentityDetector:
+    """Detect synthetic (fabricated) identities."""
+
+    SYNTHETIC_SIGNALS = {
+        "ssn_issued_recently": 0.15,
+        "thin_credit_file": 0.20,
+        "address_velocity": 0.15,  # Multiple identities at same address
+        "phone_voip": 0.10,
+        "email_disposable": 0.10,
+        "name_ssn_mismatch_age": 0.15,  # SSN issued before birth year
+        "no_social_footprint": 0.15,
+    }
+
+    async def analyze_identity(
+        self,
+        identity_data: dict,
+        mcp_client  # For cross-system queries
+    ) -> tuple[float, List[SyntheticIdentitySignal]]:
+        """Analyze identity for synthetic fraud indicators."""
+        signals = []
+        total_risk = 0.0
+
+        # Check SSN issuance date vs claimed birth year
+        ssn_data = await mcp_client.call_tool(
+            "identity_verification",
+            "check_ssn_issuance",
+            {"ssn": identity_data["ssn"]}
+        )
+
+        if ssn_data["issuance_year"] > identity_data["birth_year"]:
+            signals.append(SyntheticIdentitySignal(
+                signal_name="ssn_issued_recently",
+                risk_contribution=0.15,
+                evidence=f"SSN issued {ssn_data['issuance_year']}, birth year {identity_data['birth_year']}"
+            ))
+            total_risk += 0.15
+
+        # Check for thin credit file
+        credit_data = await mcp_client.call_tool(
+            "credit_bureau",
+            "get_credit_summary",
+            {"ssn": identity_data["ssn"]}
+        )
+
+        if credit_data["account_count"] < 2 and credit_data["oldest_account_months"] < 12:
+            signals.append(SyntheticIdentitySignal(
+                signal_name="thin_credit_file",
+                risk_contribution=0.20,
+                evidence=f"Only {credit_data['account_count']} accounts, oldest {credit_data['oldest_account_months']} months"
+            ))
+            total_risk += 0.20
+
+        # Check address velocity (multiple identities at same address)
+        address_check = await mcp_client.call_tool(
+            "postgres",
+            "query",
+            {"sql": f"SELECT COUNT(DISTINCT ssn) FROM users WHERE address_hash = '{identity_data['address_hash']}'"}
+        )
+
+        if address_check[0]["count"] > 3:
+            signals.append(SyntheticIdentitySignal(
+                signal_name="address_velocity",
+                risk_contribution=0.15,
+                evidence=f"{address_check[0]['count']} different identities at this address"
+            ))
+            total_risk += 0.15
+
+        # Check for disposable email
+        email_domain = identity_data["email"].split("@")[1]
+        if email_domain in DISPOSABLE_EMAIL_DOMAINS:
+            signals.append(SyntheticIdentitySignal(
+                signal_name="email_disposable",
+                risk_contribution=0.10,
+                evidence=f"Disposable email domain: {email_domain}"
+            ))
+            total_risk += 0.10
+
+        return total_risk, signals
+```
+
+### Account Takeover (ATO) Detection
+
+<ConceptVisual
+  src="/images/impossible_travel_map.png"
+  alt="Impossible Travel Detection"
+  caption="A user cannot physically log in from New York and Tokyo within 90 minutes."
+/>
+
+<ImpossibleTravelDetector />
+
+Account takeover attacks exploit valid credentials, making them difficult to detect. Modern ATO detection combines multiple signals.
+
+```python
+@dataclass
+class ATOSignal:
+    signal_type: str
+    severity: str  # "low", "medium", "high", "critical"
+    details: str
+    recommended_action: str
+
+class ATODetector:
+    """Detect account takeover attempts."""
+
+    async def analyze_login_session(
+        self,
+        user_id: str,
+        session: dict,
+        mcp_client
+    ) -> List[ATOSignal]:
+        """Analyze login session for ATO indicators."""
+        signals = []
+
+        # Get user's historical login data
+        history = await mcp_client.call_tool(
+            "postgres",
+            "query",
+            {"sql": f"""
+                SELECT ip_address, device_fingerprint, country,
+                       login_time, success
+                FROM login_history
+                WHERE user_id = '{user_id}'
+                ORDER BY login_time DESC
+                LIMIT 100
+            """}
+        )
+
+        # Check for impossible travel
+        if history:
+            last_login = history[0]
+            time_diff_hours = (session["timestamp"] - last_login["login_time"]).total_seconds() / 3600
+
+            if last_login["country"] != session["country"]:
+                # Calculate if travel is physically possible
+                distance_km = self._calculate_distance(
+                    last_login["country"],
+                    session["country"]
+                )
+                max_travel_km = time_diff_hours * 900  # ~900 km/h max flight speed
+
+                if distance_km > max_travel_km:
+                    signals.append(ATOSignal(
+                        signal_type="impossible_travel",
+                        severity="critical",
+                        details=f"Login from {session['country']} {time_diff_hours:.1f}h after {last_login['country']}",
+                        recommended_action="Block and require re-authentication"
+                    ))
+
+        # Check for credential stuffing pattern
+        failed_attempts = await mcp_client.call_tool(
+            "postgres",
+            "query",
+            {"sql": f"""
+                SELECT COUNT(*) as failures
+                FROM login_history
+                WHERE user_id = '{user_id}'
+                AND success = false
+                AND login_time > NOW() - INTERVAL '1 hour'
+            """}
+        )
+
+        if failed_attempts[0]["failures"] >= 5:
+            signals.append(ATOSignal(
+                signal_type="credential_stuffing",
+                severity="high",
+                details=f"{failed_attempts[0]['failures']} failed attempts in last hour",
+                recommended_action="Enforce CAPTCHA and rate limit"
+            ))
+
+        # Check for session anomalies
+        if session.get("user_agent") and history:
+            known_agents = {h["device_fingerprint"] for h in history}
+            if session["device_fingerprint"] not in known_agents:
+                signals.append(ATOSignal(
+                    signal_type="new_device",
+                    severity="medium",
+                    details="Login from previously unseen device",
+                    recommended_action="Send verification email/SMS"
+                ))
+
+        return signals
+```
+
+### Security Requirements
+
+| Requirement             | Implementation                                     | Priority |
+| :---------------------- | :------------------------------------------------- | :------- |
+| **Read-Only Database**  | PostgreSQL connection with SELECT-only permissions | P0       |
+| **API Key Security**    | Store Stripe/Slack keys in environment variables   | P0       |
+| **Audit Logging**       | Log all MCP tool invocations with timestamps       | P0       |
+| **Data Minimization**   | Only retrieve necessary fields, not full records   | P1       |
+| **PII Handling**        | Mask sensitive data in logs and reports            | P0       |
+| **Access Control**      | Restrict MCP server access by role                 | P1       |
+| **Rate Limiting**       | Limit investigations per analyst per hour          | P1       |
+| **Encryption**          | TLS for all API connections                        | P0       |
+| **Checkpoint Security** | Encrypt investigation state at rest                | P1       |
+| **Report Access**       | Reports accessible only to authorized users        | P0       |
+
+#### Required API Permissions
+
+**Stripe:**
+
+- `read_only` - View transactions and customers
+- No write permissions
+
+**Slack:**
+
+- `search:read` - Search messages
+- `channels:read` - List channels
+- `users:read` - Get user info
+
+**PostgreSQL:**
+
+- `SELECT` on `users`, `orders`, `audit_log` tables
+- No `INSERT`, `UPDATE`, `DELETE`
+
+### Performance Requirements
+
+| Metric                             | Target                       | Measurement                     |
+| :--------------------------------- | :--------------------------- | :------------------------------ |
+| **MCP server connection**          | < 5 seconds                  | Time to connect all servers     |
+| **Transaction retrieval**          | < 2 seconds                  | Time to get Stripe transaction  |
+| **Database query**                 | < 3 seconds                  | Time for PostgreSQL query       |
+| **Slack search**                   | < 5 seconds                  | Time to search messages         |
+| **Full investigation (low risk)**  | < 60 seconds                 | End-to-end for simple case      |
+| **Full investigation (high risk)** | < 90 seconds + approval time | End-to-end excluding human wait |
+| **Report generation**              | < 10 seconds                 | Time to create markdown report  |
+| **Concurrent investigations**      | 5+                           | Simultaneous investigations     |
+| **Memory per investigation**       | < 256MB                      | Peak memory usage               |
+
+### Deployment Checklist
+
+#### Pre-Deployment
+
+- [ ] MCP servers installed:
+  - [ ] `npm install @modelcontextprotocol/server-postgres`
+  - [ ] `npm install @modelcontextprotocol/server-slack`
+  - [ ] `npm install @modelcontextprotocol/server-filesystem`
+  - [ ] Stripe MCP server (custom or `@stripe/agent-toolkit`)
+- [ ] Environment variables configured:
+  - [ ] `OPENAI_API_KEY` - For investigation agent
+  - [ ] `STRIPE_SECRET_KEY` - Stripe API access
+  - [ ] `SLACK_BOT_TOKEN` - Slack API access
+  - [ ] `DATABASE_URL` - PostgreSQL connection string
+- [ ] MCP configuration file created (`mcp_config.json`)
+- [ ] Database read-only user created
+- [ ] Slack app installed in workspace
+
+#### Smoke Tests
+
+- [ ] **Test 1: MCP Connection** - Connect to all servers → All connections successful
+- [ ] **Test 2: Transaction Lookup** - Query known transaction → Details returned
+- [ ] **Test 3: Cross-Reference** - Transaction → Customer → DB lookup → Data correlated
+- [ ] **Test 4: Risk Scoring** - Suspicious transaction → Risk score >= 70
+- [ ] **Test 5: HITL Flow** - High risk case → Approval request sent, waits for response
+
+#### Post-Deployment Verification
+
+- [ ] Monitor first 10 investigations:
+  - [ ] All MCP tools responding
+  - [ ] Risk scores correlate with analyst judgment
+  - [ ] Reports contain all required sections
+- [ ] Verify audit logs are complete
+- [ ] Check no PII in logs
+
+#### Rollback Plan
+
+1. Stop investigation service
+2. Disconnect MCP servers
+3. Preserve checkpoint database for analysis
+4. Revert to manual investigation process
+5. Investigate MCP server logs for issues
+
+---
+
+## 79.1 Architecture: Hub-and-Spoke Swarm
+
+{/* IMAGE_PLACEHOLDER: Create a detailed hub-and-spoke architecture diagram. CENTER: Large "Investigation Hub" node with an AI brain icon. SPOKES: Four MCP client nodes radiating outward (Stripe, PostgreSQL, Slack, Filesystem), each connected to their respective data sources (shown as cylinders/icons). Add animated data flow arrows showing queries going out and results coming back. Include a "Checkpoint Store" and "Report Generator" at the bottom. Use different colors for each data source type (blue for payments, green for database, purple for communications, orange for files). Style: Professional architecture diagram with 3D-style nodes and glowing connection lines. */}
+
+![Forensics Swarm Architecture](/images/forensics_swarm.png)
+
+<Mermaid
+  chart={`
+graph TB
+    User([Analyst]) --> Hub[Investigation Agent]
+    
+    Hub -->|MCP| Stripe[Stripe MCP Server]
+    Hub -->|MCP| Postgres[PostgreSQL MCP Server]
+    Hub -->|MCP| Slack[Slack MCP Server]
+    Hub -->|MCP| Files[Filesystem MCP Server]
+    
+    Stripe --> Transactions[(Transaction Data)]
+    Postgres --> Users[(User Database)]
+    Slack --> Messages[(Chat History)]
+    Files --> Logs[(Audit Logs)]
+    
+    style Hub fill:#f9f,stroke:#333,stroke-width:3px
+    style Stripe fill:#bbf,stroke:#333
+    style Postgres fill:#bbf,stroke:#333
+    style Slack fill:#bbf,stroke:#333
+`}
+/>
+
+### Why MCP for This Project?
+
+| Traditional Approach     | MCP Approach                                |
+| :----------------------- | :------------------------------------------ |
+| Write Stripe API wrapper | Use `@stripe/agent-toolkit` MCP server      |
+| Write Postgres connector | Use `@modelcontextprotocol/server-postgres` |
+| Write Slack integration  | Use `@modelcontextprotocol/server-slack`    |
+| Maintain 3 codebases     | Configure 3 servers in JSON                 |
+
+---
+
+## Multi-Agent Investigation Patterns (2024-2025)
+
+{/* IMAGE_PLACEHOLDER: Create an illustration showing parallel agent execution. Display a "Lead Investigator" agent at the top spawning 4 specialist agents simultaneously (Payment Analyst, Communication Analyst, Behavior Analyst, Graph Analyst). Show each specialist with their own data source and magnifying glass. Use parallel horizontal lanes to show they work simultaneously, not sequentially. Add clock icons showing time saved (Sequential: 8 minutes vs Parallel: 2 minutes). Include an "Evidence Aggregator" at the bottom collecting findings from all agents. Style: Flowchart-style with agent avatars, parallel swim lanes, and time indicators. */}
+
+<Callout type="tip">
+  **2025 Update**: Modern investigation systems use parallel specialist agents
+  rather than a single monolithic agent. This section covers patterns from
+  Anthropic's multi-agent research system and industry best practices.
+</Callout>
+
+### Parallel Investigation Architecture
+
+Instead of sequential data gathering, spawn parallel agents that investigate simultaneously:
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Lead Investigator"
+        Lead[Lead Agent] --> Plan[Investigation Plan]
+    end
+    
+    Plan --> |spawn| PA[Payment Analyst]
+    Plan --> |spawn| CA[Communication Analyst]
+    Plan --> |spawn| BA[Behavior Analyst]
+    Plan --> |spawn| GA[Graph Analyst]
+    
+    PA --> |findings| Agg[Evidence Aggregator]
+    CA --> |findings| Agg
+    BA --> |findings| Agg
+    GA --> |findings| Agg
+    
+    Agg --> Conf[Confidence Scorer]
+    Conf --> Report[Final Report]
+    
+    style Lead fill:#f9f,stroke:#333,stroke-width:2px
+    style Agg fill:#9f9,stroke:#333,stroke-width:2px
+`}
+/>
+
+```python
+from typing import TypedDict, List, Optional
+from dataclasses import dataclass
+import asyncio
+from langgraph.graph import StateGraph, START, END
+
+@dataclass
+class AgentFinding:
+    agent_name: str
+    finding_type: str
+    confidence: float  # 0.0 to 1.0
+    evidence: List[str]
+    risk_contribution: float
+    reasoning: str
+
+@dataclass
+class AgentDisagreement:
+    topic: str
+    agents: List[str]
+    positions: dict[str, str]
+    resolution: Optional[str] = None
+
+class ParallelInvestigationState(TypedDict):
+    case_id: str
+    transaction_id: str
+    investigation_plan: str
+
+    # Parallel agent findings
+    payment_findings: List[AgentFinding]
+    communication_findings: List[AgentFinding]
+    behavior_findings: List[AgentFinding]
+    graph_findings: List[AgentFinding]
+
+    # Aggregated results
+    all_findings: List[AgentFinding]
+    disagreements: List[AgentDisagreement]
+    confidence_scores: dict[str, float]
+    final_risk_score: float
+    recommendation: str
+
+class SpecialistAgent:
+    """Base class for specialist investigation agents."""
+
+    def __init__(self, name: str, mcp_servers: List[str], expertise: str):
+        self.name = name
+        self.mcp_servers = mcp_servers
+        self.expertise = expertise
+        self.llm = ChatOpenAI(model="gpt-4o", temperature=0)
+
+    async def investigate(
+        self,
+        context: dict,
+        mcp_client
+    ) -> List[AgentFinding]:
+        """Run specialist investigation. Override in subclasses."""
+        raise NotImplementedError
+
+class PaymentAnalystAgent(SpecialistAgent):
+    """Specialist in payment patterns and transaction analysis."""
+
+    def __init__(self):
+        super().__init__(
+            name="Payment Analyst",
+            mcp_servers=["stripe"],
+            expertise="Transaction patterns, velocity analysis, amount anomalies"
+        )
+
+    async def investigate(self, context: dict, mcp_client) -> List[AgentFinding]:
+        findings = []
+
+        # Get transaction details
+        txn = await mcp_client.call_tool(
+            "stripe", "get_transaction",
+            {"transaction_id": context["transaction_id"]}
+        )
+
+        # Get customer's transaction history
+        history = await mcp_client.call_tool(
+            "stripe", "search_transactions",
+            {"customer_id": txn["customer"], "limit": 50}
+        )
+
+        # Analyze velocity
+        recent_txns = [t for t in history if self._is_recent(t["created"], hours=24)]
+        if len(recent_txns) > 5:
+            findings.append(AgentFinding(
+                agent_name=self.name,
+                finding_type="high_velocity",
+                confidence=0.85,
+                evidence=[f"Transaction IDs: {[t['id'] for t in recent_txns[:5]]}"],
+                risk_contribution=0.20,
+                reasoning=f"{len(recent_txns)} transactions in 24 hours exceeds normal pattern"
+            ))
+
+        # Analyze amount patterns
+        if self._is_structuring_pattern(history):
+            findings.append(AgentFinding(
+                agent_name=self.name,
+                finding_type="structuring",
+                confidence=0.75,
+                evidence=["Multiple transactions just under $10,000 threshold"],
+                risk_contribution=0.25,
+                reasoning="Pattern consistent with structuring to avoid reporting requirements"
+            ))
+
+        return findings
+
+class CommunicationAnalystAgent(SpecialistAgent):
+    """Specialist in communication pattern analysis."""
+
+    def __init__(self):
+        super().__init__(
+            name="Communication Analyst",
+            mcp_servers=["slack", "email"],
+            expertise="Communication history, relationship mapping, sentiment analysis"
+        )
+
+    async def investigate(self, context: dict, mcp_client) -> List[AgentFinding]:
+        findings = []
+
+        # Search for customer communications
+        messages = await mcp_client.call_tool(
+            "slack", "search_messages",
+            {"query": context["customer_email"]}
+        )
+
+        if not messages:
+            findings.append(AgentFinding(
+                agent_name=self.name,
+                finding_type="no_communication_history",
+                confidence=0.70,
+                evidence=["No Slack messages found for customer email"],
+                risk_contribution=0.15,
+                reasoning="Legitimate customers typically have some communication history"
+            ))
+        else:
+            # Analyze sentiment and topics
+            sentiment = await self._analyze_sentiment(messages)
+            if sentiment["negative_ratio"] > 0.5:
+                findings.append(AgentFinding(
+                    agent_name=self.name,
+                    finding_type="negative_sentiment",
+                    confidence=0.60,
+                    evidence=[f"Sample: {messages[0]['text'][:100]}..."],
+                    risk_contribution=0.10,
+                    reasoning="High ratio of negative communications may indicate disputes"
+                ))
+
+        return findings
+
+class BehaviorAnalystAgent(SpecialistAgent):
+    """Specialist in behavioral pattern analysis."""
+
+    def __init__(self):
+        super().__init__(
+            name="Behavior Analyst",
+            mcp_servers=["postgres", "analytics"],
+            expertise="User behavior patterns, session analysis, device fingerprinting"
+        )
+
+    async def investigate(self, context: dict, mcp_client) -> List[AgentFinding]:
+        findings = []
+
+        # Get user session data
+        sessions = await mcp_client.call_tool(
+            "postgres", "query",
+            {"sql": f"""
+                SELECT device_fingerprint, ip_address, session_duration,
+                       pages_visited, time_to_purchase
+                FROM user_sessions
+                WHERE user_id = '{context["user_id"]}'
+                ORDER BY created_at DESC
+                LIMIT 10
+            """}
+        )
+
+        if sessions:
+            # Check for bot-like behavior
+            avg_session_duration = sum(s["session_duration"] for s in sessions) / len(sessions)
+            if avg_session_duration < 30:  # Less than 30 seconds
+                findings.append(AgentFinding(
+                    agent_name=self.name,
+                    finding_type="bot_like_behavior",
+                    confidence=0.80,
+                    evidence=[f"Average session: {avg_session_duration:.1f}s"],
+                    risk_contribution=0.20,
+                    reasoning="Extremely short sessions suggest automated activity"
+                ))
+
+            # Check device diversity
+            unique_devices = len(set(s["device_fingerprint"] for s in sessions))
+            if unique_devices > 5:
+                findings.append(AgentFinding(
+                    agent_name=self.name,
+                    finding_type="device_hopping",
+                    confidence=0.70,
+                    evidence=[f"{unique_devices} unique devices in recent sessions"],
+                    risk_contribution=0.15,
+                    reasoning="Excessive device changes may indicate account sharing or fraud"
+                ))
+
+        return findings
+
+async def run_parallel_investigation(state: ParallelInvestigationState) -> dict:
+    """Run all specialist agents in parallel."""
+
+    agents = [
+        PaymentAnalystAgent(),
+        CommunicationAnalystAgent(),
+        BehaviorAnalystAgent(),
+        GraphAnalystAgent(),
+    ]
+
+    # Create MCP client
+    mcp_client = await create_mcp_client()
+
+    # Run all agents concurrently
+    context = {
+        "transaction_id": state["transaction_id"],
+        "customer_email": state.get("customer_email"),
+        "user_id": state.get("user_id"),
+    }
+
+    results = await asyncio.gather(
+        *[agent.investigate(context, mcp_client) for agent in agents],
+        return_exceptions=True
+    )
+
+    # Collect findings by agent type
+    return {
+        "payment_findings": results[0] if not isinstance(results[0], Exception) else [],
+        "communication_findings": results[1] if not isinstance(results[1], Exception) else [],
+        "behavior_findings": results[2] if not isinstance(results[2], Exception) else [],
+        "graph_findings": results[3] if not isinstance(results[3], Exception) else [],
+    }
+```
+
+### Evidence Aggregation and Confidence Scoring
+
+```python
+class EvidenceAggregator:
+    """Aggregate findings from multiple specialist agents."""
+
+    def aggregate_findings(
+        self,
+        state: ParallelInvestigationState
+    ) -> tuple[List[AgentFinding], dict[str, float]]:
+        """Combine all findings and calculate confidence scores."""
+
+        all_findings = (
+            state["payment_findings"] +
+            state["communication_findings"] +
+            state["behavior_findings"] +
+            state["graph_findings"]
+        )
+
+        # Group findings by type
+        findings_by_type: dict[str, List[AgentFinding]] = {}
+        for finding in all_findings:
+            if finding.finding_type not in findings_by_type:
+                findings_by_type[finding.finding_type] = []
+            findings_by_type[finding.finding_type].append(finding)
+
+        # Calculate confidence scores with corroboration bonus
+        confidence_scores = {}
+        for finding_type, findings in findings_by_type.items():
+            base_confidence = max(f.confidence for f in findings)
+
+            # Corroboration bonus: multiple agents agreeing increases confidence
+            corroboration_bonus = min(0.15, (len(findings) - 1) * 0.05)
+
+            confidence_scores[finding_type] = min(0.99, base_confidence + corroboration_bonus)
+
+        return all_findings, confidence_scores
+
+    def detect_disagreements(
+        self,
+        state: ParallelInvestigationState
+    ) -> List[AgentDisagreement]:
+        """Identify cases where agents have conflicting findings."""
+        disagreements = []
+
+        # Example: Check if payment and behavior agents disagree on risk level
+        payment_risk = sum(f.risk_contribution for f in state["payment_findings"])
+        behavior_risk = sum(f.risk_contribution for f in state["behavior_findings"])
+
+        if abs(payment_risk - behavior_risk) > 0.3:
+            disagreements.append(AgentDisagreement(
+                topic="overall_risk_level",
+                agents=["Payment Analyst", "Behavior Analyst"],
+                positions={
+                    "Payment Analyst": f"Risk contribution: {payment_risk:.2f}",
+                    "Behavior Analyst": f"Risk contribution: {behavior_risk:.2f}"
+                }
+            ))
+
+        return disagreements
+
+    def resolve_disagreements(
+        self,
+        disagreements: List[AgentDisagreement],
+        llm
+    ) -> List[AgentDisagreement]:
+        """Use LLM to resolve agent disagreements."""
+        resolved = []
+
+        for disagreement in disagreements:
+            prompt = f"""
+            Two investigation agents disagree on {disagreement.topic}.
+
+            Positions:
+            {disagreement.positions}
+
+            Based on the evidence, which position is more credible and why?
+            Provide a resolution.
+            """
+
+            resolution = llm.invoke(prompt)
+            disagreement.resolution = resolution.content
+            resolved.append(disagreement)
+
+        return resolved
+
+def calculate_final_risk_score(
+    all_findings: List[AgentFinding],
+    confidence_scores: dict[str, float],
+    disagreements: List[AgentDisagreement]
+) -> float:
+    """Calculate final risk score from aggregated findings."""
+
+    # Base score from risk contributions
+    base_score = sum(f.risk_contribution * f.confidence for f in all_findings)
+
+    # Apply confidence weighting
+    weighted_score = 0
+    for finding in all_findings:
+        type_confidence = confidence_scores.get(finding.finding_type, finding.confidence)
+        weighted_score += finding.risk_contribution * type_confidence
+
+    # Penalty for unresolved disagreements
+    disagreement_penalty = len([d for d in disagreements if not d.resolution]) * 0.05
+
+    final_score = min(100, max(0, (weighted_score * 100) - disagreement_penalty))
+
+    return final_score
+```
+
+<Callout type="info">
+  **MCP Ecosystem Growth (2025)**: The MCP ecosystem has exploded to over
+  17,000+ community servers across directories like mcp.so and PulseMCP. Major
+  platforms including Notion, Linear, Figma, Stripe, and GitHub have released
+  official MCP servers. The official [MCP
+  Registry](https://modelcontextprotocol.io) launched in September 2025 provides
+  a centralized metadata catalog for server discovery.
+</Callout>
+
+---
+
+## 79.2 MCP Ecosystem & Server Discovery (2024-2025)
+
+{/* IMAGE_PLACEHOLDER: Create an ecosystem map showing the MCP landscape. CENTER: "MCP Registry" hub. OUTER RING: Major platform logos (Stripe, Notion, Linear, Figma, GitHub, Slack, PostgreSQL) with their official MCP servers. MIDDLE RING: Community servers organized by category (Payments, Databases, Communication, Files, Analytics). Show connection lines and include a counter showing "17,000+ Servers". Add a timeline at the bottom showing growth from Nov 2024 launch to 2025. Style: Circular ecosystem diagram with logos, categories, and growth metrics. */}
+
+<Callout type="tip">
+  **2025 Update**: The MCP landscape has matured significantly since the
+  protocol's introduction by Anthropic in November 2024. Understanding the
+  ecosystem is essential for building production forensics systems.
+</Callout>
+
+### MCP Registry and Discovery
+
+The official MCP Registry serves as the authoritative source for publicly available MCP servers:
+
+```python
+# Example: Querying the MCP Registry API
+import httpx
+
+async def discover_mcp_servers(capability: str) -> list:
+    """Discover MCP servers by capability from the registry."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://registry.modelcontextprotocol.io/api/servers",
+            params={"capability": capability, "verified": True}
+        )
+        return response.json()["servers"]
+
+# Find all payment-related MCP servers
+payment_servers = await discover_mcp_servers("payments")
+# Returns: [{"name": "@stripe/agent-toolkit", "version": "2.1.0", ...}, ...]
+```
+
+### Official MCP Servers for Forensics
+
+| Server                                  | Provider     | Use Case                          | Authentication                |
+| :-------------------------------------- | :----------- | :-------------------------------- | :---------------------------- |
+| `@stripe/agent-toolkit`                 | Stripe       | Payment data, disputes, customers | API Key (OAuth 2.0 supported) |
+| `@modelcontextprotocol/server-postgres` | MCP Official | Database queries                  | Connection string             |
+| `@modelcontextprotocol/server-slack`    | MCP Official | Message search, channels          | Bot Token (OAuth)             |
+| `@linear/mcp-server`                    | Linear       | Issue tracking, audit logs        | API Key                       |
+| `@notion/mcp-server`                    | Notion       | Document search, databases        | Integration Token             |
+| `@github/mcp-server`                    | GitHub       | Code search, commit history       | PAT or GitHub App             |
+
+### MCP Authentication Patterns
+
+<Callout type="warning">
+  **Security Note**: Production forensics systems must implement proper
+  authentication rotation and secret management. Never hardcode credentials in
+  MCP configurations.
+</Callout>
+
+```python
+from mcp.auth import OAuthProvider, APIKeyProvider
+
+# OAuth 2.0 authentication (recommended for production)
+oauth_config = {
+    "stripe": {
+        "provider": OAuthProvider(
+            client_id=os.environ["STRIPE_CLIENT_ID"],
+            client_secret=os.environ["STRIPE_CLIENT_SECRET"],
+            token_url="https://connect.stripe.com/oauth/token",
+            scopes=["read_only"]
+        )
+    }
+}
+
+# API Key authentication with rotation
+api_key_config = {
+    "slack": {
+        "provider": APIKeyProvider(
+            key_source="aws_secrets_manager",
+            secret_name="forensics/slack-bot-token",
+            rotation_interval_days=90
+        )
+    }
+}
+```
+
+### MCP Server Health Monitoring
+
+```python
+from dataclasses import dataclass
+from datetime import datetime
+import asyncio
+
+@dataclass
+class MCPServerHealth:
+    server_name: str
+    status: str  # "healthy", "degraded", "unavailable"
+    latency_ms: float
+    last_check: datetime
+    error_rate_1h: float
+
+class MCPHealthMonitor:
+    """Monitor health of connected MCP servers."""
+
+    def __init__(self, servers: list[str]):
+        self.servers = servers
+        self.health_cache: dict[str, MCPServerHealth] = {}
+
+    async def check_server_health(self, server_name: str) -> MCPServerHealth:
+        """Perform health check on a single MCP server."""
+        start = datetime.now()
+        try:
+            # Ping the server with a lightweight operation
+            async with asyncio.timeout(5.0):
+                await self.client.call_tool(server_name, "health_check", {})
+
+            latency = (datetime.now() - start).total_seconds() * 1000
+            return MCPServerHealth(
+                server_name=server_name,
+                status="healthy" if latency < 1000 else "degraded",
+                latency_ms=latency,
+                last_check=datetime.now(),
+                error_rate_1h=self._calculate_error_rate(server_name)
+            )
+        except asyncio.TimeoutError:
+            return MCPServerHealth(
+                server_name=server_name,
+                status="unavailable",
+                latency_ms=-1,
+                last_check=datetime.now(),
+                error_rate_1h=1.0
+            )
+
+    async def get_available_servers(self) -> list[str]:
+        """Return list of healthy servers for investigation routing."""
+        health_checks = await asyncio.gather(
+            *[self.check_server_health(s) for s in self.servers]
+        )
+        return [h.server_name for h in health_checks if h.status != "unavailable"]
+```
+
+---
+
+## 79.3 Setting Up MCP Servers
+
+### Server Configuration
+
+<Callout type="warning">
+  **Note on Stripe MCP**: As of 2025, Stripe provides the
+  `@stripe/agent-toolkit` package which includes MCP server support. Check the
+  [Stripe Agent Toolkit](https://github.com/stripe/agent-toolkit) for the latest
+  configuration options.
+</Callout>
+
+```json
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://analyst:readonly@localhost:5432/company_db"
+      ]
+    },
+    "slack": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "env": {
+        "SLACK_BOT_TOKEN": "xoxb-your-token",
+        "SLACK_TEAM_ID": "T12345678"
+      }
+    },
+    "stripe": {
+      "command": "npx",
+      "args": ["-y", "@stripe/agent-toolkit", "--mcp"],
+      "env": {
+        "STRIPE_SECRET_KEY": "sk_test_..."
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/var/log/audit"
+      ]
+    }
+  }
+}
+```
+
+### Custom Stripe MCP Server (if official doesn't exist)
+
+```python
+from mcp.server.fastmcp import FastMCP
+import stripe
+
+mcp = FastMCP("stripe-forensics")
+stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+
+@mcp.tool()
+async def get_transaction(transaction_id: str) -> str:
+    """Get details of a Stripe transaction.
+
+    Args:
+        transaction_id: The Stripe transaction ID (e.g., pi_xxx or ch_xxx)
+    """
+    try:
+        if transaction_id.startswith("pi_"):
+            obj = stripe.PaymentIntent.retrieve(transaction_id)
+        elif transaction_id.startswith("ch_"):
+            obj = stripe.Charge.retrieve(transaction_id)
+        else:
+            return f"Unknown transaction type: {transaction_id}"
+
+        return json.dumps({
+            "id": obj.id,
+            "amount": obj.amount / 100,
+            "currency": obj.currency,
+            "status": obj.status,
+            "customer": obj.customer,
+            "created": obj.created,
+            "metadata": dict(obj.metadata)
+        }, indent=2)
+    except stripe.error.StripeError as e:
+        return f"Stripe error: {str(e)}"
+
+@mcp.tool()
+async def search_transactions(
+    customer_id: str = None,
+    min_amount: float = None,
+    max_amount: float = None,
+    status: str = None,
+    limit: int = 10
+) -> str:
+    """Search Stripe transactions with filters.
+
+    Args:
+        customer_id: Filter by customer ID
+        min_amount: Minimum amount in dollars
+        max_amount: Maximum amount in dollars
+        status: Filter by status (succeeded, pending, failed)
+        limit: Maximum results to return
+    """
+    params = {"limit": limit}
+
+    if customer_id:
+        params["customer"] = customer_id
+
+    charges = stripe.Charge.list(**params)
+
+    results = []
+    for charge in charges.data:
+        amount = charge.amount / 100
+
+        if min_amount and amount < min_amount:
+            continue
+        if max_amount and amount > max_amount:
+            continue
+        if status and charge.status != status:
+            continue
+
+        results.append({
+            "id": charge.id,
+            "amount": amount,
+            "status": charge.status,
+            "customer": charge.customer,
+            "created": charge.created
+        })
+
+    return json.dumps(results, indent=2)
+
+@mcp.tool()
+async def get_customer(customer_id: str) -> str:
+    """Get Stripe customer details."""
+    try:
+        customer = stripe.Customer.retrieve(customer_id)
+        return json.dumps({
+            "id": customer.id,
+            "email": customer.email,
+            "name": customer.name,
+            "created": customer.created,
+            "metadata": dict(customer.metadata)
+        }, indent=2)
+    except stripe.error.StripeError as e:
+        return f"Error: {str(e)}"
+
+if __name__ == "__main__":
+    mcp.run()
+```
+
+---
+
+## 79.4 The Investigation Agent
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+INVESTIGATION_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", """You are a financial forensics investigator. Your job is to investigate
+suspicious transactions by correlating data across multiple systems.
+
+Investigation Protocol:
+1. Start with the transaction in question
+2. Identify the customer/user involved
+3. Check their account history and creation date
+4. Search for related communications (Slack, email)
+5. Look for patterns (velocity, amount anomalies, geographic inconsistencies)
+6. Compile findings into a structured report
+
+Red Flags to Watch For:
+- Account created very recently before large transaction
+- Multiple failed attempts before success
+- Unusual transaction amounts (round numbers, just under limits)
+- Mismatched billing/shipping information
+- No communication history for the user
+- Transactions at unusual hours
+
+Always cite your sources and explain your reasoning."""),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}")
+])
+
+async def create_investigation_agent():
+    """Create the multi-source investigation agent."""
+
+    # Connect to all MCP servers
+    client = MultiServerMCPClient({
+        "postgres": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-postgres",
+                     "postgresql://analyst:readonly@localhost/company"]
+        },
+        "slack": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-slack"],
+            "env": {"SLACK_BOT_TOKEN": os.environ["SLACK_BOT_TOKEN"]}
+        },
+        "stripe": {
+            "command": "python",
+            "args": ["stripe_mcp_server.py"]
+        }
+    })
+
+    # Get all tools from all servers
+    tools = await client.get_tools()
+
+    print(f"Loaded {len(tools)} tools from MCP servers:")
+    for tool in tools:
+        print(f"  - {tool.name}: {tool.description[:50]}...")
+
+    # Create the agent
+    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    agent = create_tool_calling_agent(llm, tools, INVESTIGATION_PROMPT)
+
+    return AgentExecutor(
+        agent=agent,
+        tools=tools,
+        verbose=True,
+        max_iterations=15,
+        handle_parsing_errors=True
+    )
+```
+
+---
+
+## 79.5 Investigation Workflow
+
+```python
+from typing import TypedDict, List
+from langgraph.graph import StateGraph, START, END
+
+class InvestigationState(TypedDict):
+    case_id: str
+    transaction_id: str
+    findings: List[dict]
+    risk_score: float
+    recommendation: str
+    evidence: List[str]
+
+async def gather_transaction_data(state: InvestigationState) -> dict:
+    """Gather initial transaction data."""
+    agent = await create_investigation_agent()
+
+    result = await agent.ainvoke({
+        "input": f"""Investigate transaction {state['transaction_id']}.
+
+        Step 1: Get the transaction details from Stripe.
+        Step 2: Identify the customer ID.
+        Step 3: Get customer details.
+
+        Return the findings as structured data."""
+    })
+
+    return {
+        "findings": [{"stage": "transaction_data", "data": result["output"]}]
+    }
+
+async def check_user_history(state: InvestigationState) -> dict:
+    """Check user's history across systems."""
+    agent = await create_investigation_agent()
+
+    result = await agent.ainvoke({
+        "input": f"""Based on the previous findings, investigate the user's history.
+
+        Previous findings: {state['findings']}
+
+        Step 1: Query the users table in PostgreSQL for this customer.
+        Step 2: Check when the account was created.
+        Step 3: Look for any previous transactions.
+        Step 4: Search Slack for any mentions of this user or their email.
+
+        Note any red flags."""
+    })
+
+    return {
+        "findings": state["findings"] + [{"stage": "user_history", "data": result["output"]}]
+    }
+
+async def analyze_patterns(state: InvestigationState) -> dict:
+    """Analyze patterns and anomalies."""
+    agent = await create_investigation_agent()
+
+    result = await agent.ainvoke({
+        "input": f"""Analyze patterns in the collected data.
+
+        All findings so far: {state['findings']}
+
+        Look for:
+        1. Velocity anomalies (too many transactions too fast)
+        2. Amount anomalies (round numbers, just under limits)
+        3. Timing anomalies (unusual hours)
+        4. Geographic inconsistencies
+        5. Missing expected data (no email verification, no address)
+
+        Calculate a risk score from 0-100."""
+    })
+
+    # Extract risk score from response
+    import re
+    risk_match = re.search(r'risk.*?(\d+)', result["output"].lower())
+    risk_score = int(risk_match.group(1)) if risk_match else 50
+
+    return {
+        "findings": state["findings"] + [{"stage": "pattern_analysis", "data": result["output"]}],
+        "risk_score": risk_score
+    }
+
+async def generate_report(state: InvestigationState) -> dict:
+    """Generate final investigation report."""
+
+    # Determine recommendation based on risk score
+    if state["risk_score"] >= 80:
+        recommendation = "BLOCK - High fraud probability"
+    elif state["risk_score"] >= 50:
+        recommendation = "REVIEW - Manual review required"
+    else:
+        recommendation = "APPROVE - Low risk"
+
+    report = f"""
+# Investigation Report: {state['case_id']}
+
+## Transaction: {state['transaction_id']}
+
+## Risk Score: {state['risk_score']}/100
+
+## Recommendation: {recommendation}
+
+## Findings Summary:
+"""
+
+    for finding in state["findings"]:
+        report += f"\n### {finding['stage'].replace('_', ' ').title()}\n"
+        report += finding["data"][:500] + "...\n"
+
+    return {
+        "recommendation": recommendation,
+        "evidence": [f["data"] for f in state["findings"]]
+    }
+
+# Build the investigation graph
+def build_investigation_workflow():
+    workflow = StateGraph(InvestigationState)
+
+    workflow.add_node("gather_transaction", gather_transaction_data)
+    workflow.add_node("check_history", check_user_history)
+    workflow.add_node("analyze_patterns", analyze_patterns)
+    workflow.add_node("generate_report", generate_report)
+
+    workflow.add_edge(START, "gather_transaction")
+    workflow.add_edge("gather_transaction", "check_history")
+    workflow.add_edge("check_history", "analyze_patterns")
+    workflow.add_edge("analyze_patterns", "generate_report")
+    workflow.add_edge("generate_report", END)
+
+    return workflow.compile()
+```
+
+---
+
+## 79.6 Running an Investigation
+
+{/* IMAGE_PLACEHOLDER: Create a terminal-style visualization showing the investigation flow. Design it as an animated sequence with 4 stages, each expanding to show details: Stage 1 (Gathering Transaction Data) with Stripe API calls, Stage 2 (Checking User History) with database queries, Stage 3 (Analyzing Patterns) with red flag warnings appearing, Stage 4 (Final Report) with risk score gauge. Use terminal green text on black background with colored highlights for warnings and success messages. Include ASCII art for the detective emoji and progress bars. */}
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: Create an "InvestigationSimulator" component that:
+
+1. Lets users input a transaction ID
+2. Shows a live progress view as the investigation runs through stages
+3. Displays each MCP tool call with input/output in expandable sections
+4. Highlights red flags as they're detected with explanations
+5. Shows the final risk score calculation with factor breakdown
+6. Generates a downloadable investigation report
+   This would replace or supplement the static Terminal component to make the investigation process interactive. */}
+
+<Terminal 
+  command="python investigate.py --transaction pi_3ABC123XYZ"
+  output={`🔍 Starting investigation for transaction: pi_3ABC123XYZ
+📋 Case ID: CASE-2026-0142
+
+━━━ Stage 1: Gathering Transaction Data ━━━
+🔧 Tool: stripe.get_transaction
+Input: {"transaction_id": "pi_3ABC123XYZ"}
+Result: {
+"amount": 4999.00,
+"status": "succeeded",
+"customer": "cus_ABC123",
+"created": "2026-01-07T03:42:00Z"
+}
+
+🔧 Tool: stripe.get_customer
+Input: {"customer_id": "cus_ABC123"}
+Result: {
+"email": "john.smith.12345@tempmail.com",
+"created": "2026-01-07T03:40:00Z" ⚠️ 2 minutes before transaction!
+}
+
+━━━ Stage 2: Checking User History ━━━
+🔧 Tool: postgres.query
+Input: {"sql": "SELECT \* FROM users WHERE email LIKE '%tempmail%'"}
+Result: 1 row - account created 2 minutes before purchase
+
+🔧 Tool: slack.search_messages
+Input: {"query": "john.smith.12345@tempmail.com"}
+Result: No messages found ⚠️
+
+━━━ Stage 3: Analyzing Patterns ━━━
+Red Flags Detected:
+⚠️ Account created 2 minutes before $4,999 transaction
+⚠️ Amount just under $5,000 reporting threshold
+⚠️ Disposable email domain (tempmail.com)
+⚠️ Transaction at 3:42 AM local time
+⚠️ No prior communication history
+
+━━━ Final Report ━━━
+📊 Risk Score: 92/100
+🚨 Recommendation: BLOCK - High fraud probability
+
+Evidence compiled. Report saved to: reports/CASE-2026-0142.md`}
+/>
+
+---
+
+## 79.7 Adding Human-in-the-Loop
+
+For high-risk cases, require human approval:
+
+```python
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+def build_investigation_with_approval():
+    workflow = StateGraph(InvestigationState)
+
+    # ... add nodes ...
+
+    # Add approval node
+    workflow.add_node("human_review", lambda s: s)  # Pass-through
+
+    # Route high-risk cases to human review
+    def needs_review(state: InvestigationState) -> str:
+        if state["risk_score"] >= 70:
+            return "human_review"
+        return "generate_report"
+
+    workflow.add_conditional_edges(
+        "analyze_patterns",
+        needs_review,
+        {
+            "human_review": "human_review",
+            "generate_report": "generate_report"
+        }
+    )
+
+    workflow.add_edge("human_review", "generate_report")
+
+    # Compile with interrupt
+    checkpointer = SqliteSaver.from_conn_string("investigations.db")
+
+    return workflow.compile(
+        checkpointer=checkpointer,
+        interrupt_before=["human_review"]
+    )
+```
+
+---
+
+## 79.8 Lab Exercise: Extend the Investigation Agent
+
+### Challenge 1: Add Email Integration
+
+Add an email MCP server to search for customer communications.
+
+### Challenge 2: Geographic Analysis
+
+Cross-reference IP addresses with billing addresses using a GeoIP service.
+
+### Challenge 3: Velocity Checks
+
+Implement a tool that checks transaction velocity (transactions per hour/day).
+
+### Challenge 4: Report Generation
+
+Generate a PDF report with charts showing transaction patterns.
+
+---
+
+## Compliance & Regulatory Requirements (2024-2025)
+
+{/* IMAGE_PLACEHOLDER: Create a compliance checklist infographic showing PCI DSS 4.0, GDPR, and CCPA requirements. Use three columns, each with a regulation logo/icon at the top. List key requirements as checkboxes with brief descriptions. Highlight the March 2025 PCI DSS 4.0 deadline with a calendar icon. Include penalty amounts for non-compliance at the bottom ($50K-$500K for PCI DSS violations). Style: Professional compliance document style with official colors (blue for PCI, EU flag colors for GDPR, California flag colors for CCPA). */}
+
+<Callout type="warning">
+  **Critical**: Financial forensics systems must comply with PCI DSS 4.0
+  (mandatory as of March 2025), GDPR, CCPA, and industry-specific regulations.
+  Non-compliance can result in significant fines and loss of payment processing
+  privileges.
+</Callout>
+
+### PCI DSS 4.0 Requirements for Fraud Systems
+
+PCI DSS 4.0 became fully mandatory on March 31, 2025. Key requirements affecting fraud detection systems:
+
+| Requirement | Description                                    | Implementation                                        |
+| :---------- | :--------------------------------------------- | :---------------------------------------------------- |
+| **10.4.1**  | Audit logs must be protected from modification | Immutable log storage, cryptographic signing          |
+| **10.4.2**  | Automated mechanisms to detect tampering       | Log integrity monitoring                              |
+| **11.6.1**  | Deploy change-detection mechanisms             | File integrity monitoring on investigation scripts    |
+| **12.3.1**  | Targeted risk analysis for customized approach | Document risk decisions for ML-based fraud scoring    |
+| **8.3.6**   | MFA for all access to cardholder data          | Require MFA for analyst access to investigation tools |
+| **8.6.1**   | Manage system/application accounts             | Service accounts for MCP servers must be inventoried  |
+
+```python
+from datetime import datetime
+import hashlib
+import json
+
+class PCI_DSS_AuditLogger:
+    """PCI DSS 4.0 compliant audit logging for investigations."""
+
+    def __init__(self, log_store, signing_key: bytes):
+        self.log_store = log_store
+        self.signing_key = signing_key
+        self.previous_hash = "0" * 64  # Genesis hash
+
+    def log_investigation_action(
+        self,
+        case_id: str,
+        action: str,
+        actor: str,
+        data_accessed: List[str],
+        result_summary: str,
+        pii_fields_accessed: List[str] = None
+    ) -> str:
+        """Create tamper-evident audit log entry."""
+
+        entry = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "case_id": case_id,
+            "action": action,
+            "actor": actor,
+            "actor_ip": self._get_actor_ip(),
+            "data_sources_accessed": data_accessed,
+            "result_summary": result_summary,  # Never log raw PII
+            "pii_fields_accessed": pii_fields_accessed or [],
+            "previous_hash": self.previous_hash,
+        }
+
+        # Create chain hash for tamper detection (Req 10.4.2)
+        entry_json = json.dumps(entry, sort_keys=True)
+        entry["hash"] = hashlib.sha256(
+            (entry_json + self.signing_key.hex()).encode()
+        ).hexdigest()
+
+        self.previous_hash = entry["hash"]
+
+        # Store in immutable log (Req 10.4.1)
+        self.log_store.append(entry)
+
+        return entry["hash"]
+
+    def verify_log_integrity(self) -> tuple[bool, List[str]]:
+        """Verify audit log chain hasn't been tampered with."""
+        errors = []
+        previous_hash = "0" * 64
+
+        for i, entry in enumerate(self.log_store.get_all()):
+            # Verify chain
+            if entry["previous_hash"] != previous_hash:
+                errors.append(f"Chain break at entry {i}")
+
+            # Verify entry hash
+            entry_copy = {k: v for k, v in entry.items() if k != "hash"}
+            entry_json = json.dumps(entry_copy, sort_keys=True)
+            expected_hash = hashlib.sha256(
+                (entry_json + self.signing_key.hex()).encode()
+            ).hexdigest()
+
+            if entry["hash"] != expected_hash:
+                errors.append(f"Hash mismatch at entry {i}")
+
+            previous_hash = entry["hash"]
+
+        return len(errors) == 0, errors
+```
+
+### GDPR/CCPA Considerations
+
+```python
+from enum import Enum
+from typing import Optional
+
+class DataRetentionPolicy(Enum):
+    INVESTIGATION_ACTIVE = 90      # Days to retain during active investigation
+    INVESTIGATION_CLOSED = 365     # Days to retain after closure
+    AUDIT_LOGS = 2555              # 7 years for financial audit logs
+    PII_MINIMIZED = 30             # Days before PII minimization
+
+class GDPRCompliantInvestigation:
+    """GDPR/CCPA compliant investigation data handling."""
+
+    def __init__(self, data_store, consent_manager):
+        self.data_store = data_store
+        self.consent_manager = consent_manager
+
+    async def collect_investigation_data(
+        self,
+        subject_id: str,
+        data_types: List[str],
+        legal_basis: str,  # "legitimate_interest", "legal_obligation", "consent"
+        purpose: str
+    ) -> dict:
+        """Collect data with GDPR compliance checks."""
+
+        # Document legal basis (GDPR Art. 6)
+        collection_record = {
+            "subject_id": subject_id,
+            "data_types": data_types,
+            "legal_basis": legal_basis,
+            "purpose": purpose,
+            "collected_at": datetime.utcnow().isoformat(),
+            "retention_until": self._calculate_retention_date(legal_basis),
+        }
+
+        # For fraud investigation, "legitimate interest" or "legal obligation" typically applies
+        if legal_basis == "consent":
+            consent = await self.consent_manager.check_consent(subject_id, data_types)
+            if not consent:
+                raise PermissionError("Subject has not consented to data collection")
+
+        # Log the collection for subject access requests
+        await self.data_store.log_collection(collection_record)
+
+        return collection_record
+
+    async def handle_subject_access_request(
+        self,
+        subject_id: str
+    ) -> dict:
+        """Handle GDPR Article 15 subject access request."""
+
+        # Gather all data held about the subject
+        investigation_data = await self.data_store.get_subject_data(subject_id)
+
+        # Prepare response (must be provided within 30 days)
+        response = {
+            "subject_id": subject_id,
+            "request_date": datetime.utcnow().isoformat(),
+            "data_categories": list(set(d["type"] for d in investigation_data)),
+            "purposes": ["Fraud investigation", "Financial crime prevention"],
+            "legal_basis": "Legitimate interest / Legal obligation",
+            "retention_period": "As required by financial regulations",
+            "data_summary": self._summarize_data(investigation_data),
+            # Note: Full data export may be restricted for ongoing investigations
+        }
+
+        return response
+
+    async def apply_right_to_erasure(
+        self,
+        subject_id: str,
+        request_id: str
+    ) -> dict:
+        """Handle GDPR Article 17 erasure request."""
+
+        # Check for exemptions (fraud investigation is often exempt)
+        exemptions = await self._check_erasure_exemptions(subject_id)
+
+        if exemptions:
+            return {
+                "request_id": request_id,
+                "status": "partially_denied",
+                "reason": "Data retained for legal obligation (fraud investigation)",
+                "exemption_basis": exemptions,
+                "data_minimized": True,  # We can still minimize non-essential data
+            }
+
+        # If no exemptions, proceed with erasure
+        await self.data_store.erase_subject_data(subject_id)
+
+        return {
+            "request_id": request_id,
+            "status": "completed",
+            "erased_at": datetime.utcnow().isoformat(),
+        }
+
+class RightToExplanation:
+    """GDPR Article 22 - Right to explanation for automated decisions."""
+
+    async def generate_explanation(
+        self,
+        case_id: str,
+        decision: str,
+        risk_score: float,
+        findings: List[AgentFinding]
+    ) -> dict:
+        """Generate human-readable explanation of automated fraud decision."""
+
+        # Sort findings by risk contribution
+        sorted_findings = sorted(findings, key=lambda f: f.risk_contribution, reverse=True)
+
+        explanation = {
+            "case_id": case_id,
+            "decision": decision,
+            "risk_score": risk_score,
+            "explanation_summary": self._generate_summary(decision, risk_score),
+            "key_factors": [
+                {
+                    "factor": f.finding_type,
+                    "impact": f"Contributed {f.risk_contribution * 100:.0f}% to risk score",
+                    "reasoning": f.reasoning,
+                    "confidence": f"{f.confidence * 100:.0f}%"
+                }
+                for f in sorted_findings[:5]  # Top 5 factors
+            ],
+            "data_sources_used": list(set(f.agent_name for f in findings)),
+            "human_review_available": True,
+            "appeal_process": "Contact fraud-appeals@company.com within 30 days",
+        }
+
+        return explanation
+
+    def _generate_summary(self, decision: str, risk_score: float) -> str:
+        if decision == "BLOCK":
+            return f"This transaction was blocked due to a high fraud risk score of {risk_score:.0f}/100. The decision was based on multiple automated checks that identified patterns commonly associated with fraudulent activity."
+        elif decision == "REVIEW":
+            return f"This transaction was flagged for manual review due to a moderate risk score of {risk_score:.0f}/100. A human analyst will review the case within 24 hours."
+        else:
+            return f"This transaction was approved with a low risk score of {risk_score:.0f}/100."
+```
+
+### Audit Trail Requirements
+
+```python
+@dataclass
+class InvestigationAuditEntry:
+    """Complete audit trail entry for regulatory compliance."""
+    timestamp: datetime
+    case_id: str
+    action_type: str  # "data_access", "decision", "human_review", "report_generated"
+    actor_type: str   # "system", "agent", "human"
+    actor_id: str
+    description: str
+    data_sources: List[str]
+    pii_accessed: bool
+    decision_made: Optional[str]
+    evidence_hash: str  # Hash of evidence at time of action
+
+class ComplianceAuditTrail:
+    """Maintain complete audit trail for regulatory compliance."""
+
+    def __init__(self, storage_backend):
+        self.storage = storage_backend
+
+    async def record_action(
+        self,
+        case_id: str,
+        action_type: str,
+        actor_type: str,
+        actor_id: str,
+        description: str,
+        data_sources: List[str] = None,
+        pii_accessed: bool = False,
+        decision_made: str = None,
+        evidence: dict = None
+    ) -> str:
+        """Record an action in the audit trail."""
+
+        entry = InvestigationAuditEntry(
+            timestamp=datetime.utcnow(),
+            case_id=case_id,
+            action_type=action_type,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            description=description,
+            data_sources=data_sources or [],
+            pii_accessed=pii_accessed,
+            decision_made=decision_made,
+            evidence_hash=hashlib.sha256(
+                json.dumps(evidence or {}, sort_keys=True).encode()
+            ).hexdigest()
+        )
+
+        entry_id = await self.storage.store(entry)
+        return entry_id
+
+    async def generate_compliance_report(
+        self,
+        case_id: str
+    ) -> dict:
+        """Generate compliance report for regulators."""
+
+        entries = await self.storage.get_by_case(case_id)
+
+        return {
+            "case_id": case_id,
+            "report_generated": datetime.utcnow().isoformat(),
+            "total_actions": len(entries),
+            "timeline": [
+                {
+                    "timestamp": e.timestamp.isoformat(),
+                    "action": e.action_type,
+                    "actor": f"{e.actor_type}:{e.actor_id}",
+                    "description": e.description,
+                }
+                for e in sorted(entries, key=lambda x: x.timestamp)
+            ],
+            "data_sources_accessed": list(set(
+                src for e in entries for src in e.data_sources
+            )),
+            "pii_access_count": sum(1 for e in entries if e.pii_accessed),
+            "decisions_made": [
+                {"timestamp": e.timestamp.isoformat(), "decision": e.decision_made}
+                for e in entries if e.decision_made
+            ],
+            "evidence_integrity": "All evidence hashes verified",
+        }
+```
+
+---
+
+## Production Considerations (2024-2025)
+
+{/* IMAGE_PLACEHOLDER: Create a production architecture diagram showing resilience patterns. Display the Investigation Agent at the center with three protective layers around it: 1) Rate Limiter (with request counters), 2) Cache Layer (with hit/miss indicators), 3) Fallback Handler (with retry logic). Show MCP servers outside these layers with health status indicators (green/yellow/red). Include metrics panels showing latency, error rates, and cache hit ratios. Style: Technical architecture diagram with monitoring dashboards and traffic flow indicators. */}
+
+<Callout type="info">
+  **Production Reality**: Multi-source investigation systems face unique
+  challenges around rate limiting, caching, and resilience. This section covers
+  battle-tested patterns for production deployments.
+</Callout>
+
+### Rate Limiting Across MCP Servers
+
+```python
+from dataclasses import dataclass
+from collections import defaultdict
+import asyncio
+import time
+
+@dataclass
+class RateLimitConfig:
+    requests_per_minute: int
+    requests_per_hour: int
+    burst_limit: int
+
+class MCPRateLimiter:
+    """Rate limiter for MCP server calls."""
+
+    DEFAULT_LIMITS = {
+        "stripe": RateLimitConfig(100, 1000, 25),
+        "slack": RateLimitConfig(50, 500, 10),
+        "postgres": RateLimitConfig(200, 5000, 50),
+        "filesystem": RateLimitConfig(100, 2000, 20),
+    }
+
+    def __init__(self):
+        self.request_times: dict[str, list[float]] = defaultdict(list)
+        self.locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+    async def acquire(self, server_name: str) -> bool:
+        """Acquire permission to make a request."""
+        async with self.locks[server_name]:
+            config = self.DEFAULT_LIMITS.get(
+                server_name,
+                RateLimitConfig(50, 500, 10)
+            )
+
+            now = time.time()
+
+            # Clean old entries
+            self.request_times[server_name] = [
+                t for t in self.request_times[server_name]
+                if now - t < 3600  # Keep last hour
+            ]
+
+            times = self.request_times[server_name]
+
+            # Check hourly limit
+            if len(times) >= config.requests_per_hour:
+                return False
+
+            # Check per-minute limit
+            recent = [t for t in times if now - t < 60]
+            if len(recent) >= config.requests_per_minute:
+                # Wait until we can make another request
+                wait_time = 60 - (now - min(recent))
+                await asyncio.sleep(wait_time)
+
+            # Check burst limit
+            very_recent = [t for t in times if now - t < 1]
+            if len(very_recent) >= config.burst_limit:
+                await asyncio.sleep(1)
+
+            self.request_times[server_name].append(time.time())
+            return True
+
+    async def call_with_rate_limit(
+        self,
+        mcp_client,
+        server_name: str,
+        tool_name: str,
+        args: dict
+    ):
+        """Make MCP call with rate limiting."""
+        await self.acquire(server_name)
+        return await mcp_client.call_tool(server_name, tool_name, args)
+```
+
+### Caching Strategies
+
+```python
+from functools import lru_cache
+import hashlib
+import json
+from typing import Optional, Any
+import redis.asyncio as redis
+
+class InvestigationCache:
+    """Multi-tier caching for investigation queries."""
+
+    def __init__(self, redis_url: str):
+        self.redis = redis.from_url(redis_url)
+        self.local_cache: dict[str, tuple[Any, float]] = {}
+        self.local_ttl = 60  # 1 minute local cache
+
+    def _cache_key(self, server: str, tool: str, args: dict) -> str:
+        """Generate cache key from request parameters."""
+        args_hash = hashlib.md5(
+            json.dumps(args, sort_keys=True).encode()
+        ).hexdigest()[:12]
+        return f"mcp:{server}:{tool}:{args_hash}"
+
+    async def get(
+        self,
+        server: str,
+        tool: str,
+        args: dict
+    ) -> Optional[Any]:
+        """Get cached result if available."""
+        key = self._cache_key(server, tool, args)
+
+        # Check local cache first
+        if key in self.local_cache:
+            value, timestamp = self.local_cache[key]
+            if time.time() - timestamp < self.local_ttl:
+                return value
+            del self.local_cache[key]
+
+        # Check Redis
+        cached = await self.redis.get(key)
+        if cached:
+            value = json.loads(cached)
+            self.local_cache[key] = (value, time.time())
+            return value
+
+        return None
+
+    async def set(
+        self,
+        server: str,
+        tool: str,
+        args: dict,
+        result: Any,
+        ttl_seconds: int = 300
+    ) -> None:
+        """Cache a result."""
+        key = self._cache_key(server, tool, args)
+
+        # Different TTLs based on data type
+        if server == "stripe" and tool == "get_transaction":
+            ttl_seconds = 3600  # Transactions don't change
+        elif server == "slack" and tool == "search_messages":
+            ttl_seconds = 60  # Messages can be edited/deleted
+        elif server == "postgres":
+            ttl_seconds = 300  # 5 minutes for DB queries
+
+        await self.redis.setex(key, ttl_seconds, json.dumps(result))
+        self.local_cache[key] = (result, time.time())
+
+    async def invalidate_case(self, case_id: str) -> None:
+        """Invalidate all cache entries for a case."""
+        pattern = f"mcp:*:*:*{case_id}*"
+        async for key in self.redis.scan_iter(pattern):
+            await self.redis.delete(key)
+```
+
+### Fallback Patterns
+
+```python
+from enum import Enum
+from typing import Callable, Any
+
+class FallbackStrategy(Enum):
+    RETRY = "retry"
+    CACHE = "cache"
+    DEGRADE = "degrade"
+    FAIL = "fail"
+
+class MCPFallbackHandler:
+    """Handle MCP server failures gracefully."""
+
+    def __init__(self, cache: InvestigationCache):
+        self.cache = cache
+        self.server_status: dict[str, str] = {}
+        self.fallback_strategies: dict[str, FallbackStrategy] = {
+            "stripe": FallbackStrategy.RETRY,
+            "slack": FallbackStrategy.DEGRADE,
+            "postgres": FallbackStrategy.CACHE,
+            "filesystem": FallbackStrategy.FAIL,
+        }
+
+    async def call_with_fallback(
+        self,
+        mcp_client,
+        server_name: str,
+        tool_name: str,
+        args: dict,
+        max_retries: int = 3
+    ) -> tuple[Any, str]:  # Returns (result, source)
+        """Make MCP call with fallback handling."""
+
+        strategy = self.fallback_strategies.get(server_name, FallbackStrategy.FAIL)
+
+        for attempt in range(max_retries):
+            try:
+                result = await asyncio.wait_for(
+                    mcp_client.call_tool(server_name, tool_name, args),
+                    timeout=10.0
+                )
+
+                # Cache successful result
+                await self.cache.set(server_name, tool_name, args, result)
+                self.server_status[server_name] = "healthy"
+
+                return result, "live"
+
+            except asyncio.TimeoutError:
+                self.server_status[server_name] = "timeout"
+
+                if strategy == FallbackStrategy.RETRY and attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    continue
+
+            except Exception as e:
+                self.server_status[server_name] = f"error: {str(e)}"
+
+        # All retries failed - apply fallback strategy
+        if strategy == FallbackStrategy.CACHE:
+            cached = await self.cache.get(server_name, tool_name, args)
+            if cached:
+                return cached, "cache"
+
+        if strategy == FallbackStrategy.DEGRADE:
+            return self._get_degraded_response(server_name, tool_name), "degraded"
+
+        raise MCPServerUnavailableError(f"{server_name} unavailable after {max_retries} retries")
+
+    def _get_degraded_response(self, server: str, tool: str) -> dict:
+        """Return degraded response when server unavailable."""
+        return {
+            "status": "degraded",
+            "server": server,
+            "tool": tool,
+            "message": f"Data from {server} temporarily unavailable",
+            "data": None
+        }
+
+class MCPServerUnavailableError(Exception):
+    pass
+```
+
+### Cost Optimization
+
+```python
+@dataclass
+class MCPCostConfig:
+    cost_per_call: float
+    cost_per_mb: float
+    monthly_budget: float
+
+class InvestigationCostOptimizer:
+    """Optimize costs for multi-source investigations."""
+
+    COST_CONFIG = {
+        "stripe": MCPCostConfig(0.001, 0.0001, 100.0),
+        "slack": MCPCostConfig(0.0005, 0.0001, 50.0),
+        "postgres": MCPCostConfig(0.0001, 0.00001, 20.0),
+        "openai": MCPCostConfig(0.01, 0.0, 500.0),  # LLM calls
+    }
+
+    def __init__(self):
+        self.monthly_spend: dict[str, float] = defaultdict(float)
+
+    def estimate_investigation_cost(
+        self,
+        planned_calls: dict[str, int]
+    ) -> dict:
+        """Estimate cost before running investigation."""
+        estimates = {}
+        total = 0.0
+
+        for server, call_count in planned_calls.items():
+            config = self.COST_CONFIG.get(server)
+            if config:
+                cost = call_count * config.cost_per_call
+                estimates[server] = cost
+                total += cost
+
+        return {
+            "breakdown": estimates,
+            "total_estimated": total,
+            "budget_remaining": self._get_budget_remaining(),
+        }
+
+    def optimize_query_plan(
+        self,
+        required_data: List[str],
+        budget_limit: float
+    ) -> List[dict]:
+        """Optimize query plan to stay within budget."""
+
+        # Prioritize by information value / cost ratio
+        data_sources = [
+            {"source": "postgres", "data": "user_history", "cost": 0.001, "value": 0.8},
+            {"source": "stripe", "data": "transactions", "cost": 0.01, "value": 0.9},
+            {"source": "slack", "data": "communications", "cost": 0.005, "value": 0.5},
+        ]
+
+        # Sort by value/cost ratio
+        sorted_sources = sorted(
+            data_sources,
+            key=lambda x: x["value"] / x["cost"],
+            reverse=True
+        )
+
+        # Select sources within budget
+        selected = []
+        remaining_budget = budget_limit
+
+        for source in sorted_sources:
+            if source["cost"] <= remaining_budget:
+                selected.append(source)
+                remaining_budget -= source["cost"]
+
+        return selected
+
+    def track_spend(self, server: str, cost: float) -> None:
+        """Track spending for budget monitoring."""
+        self.monthly_spend[server] += cost
+
+        config = self.COST_CONFIG.get(server)
+        if config and self.monthly_spend[server] > config.monthly_budget * 0.8:
+            # Alert when approaching budget
+            self._send_budget_alert(server, self.monthly_spend[server], config.monthly_budget)
+```
+
+### Monitoring and Alerting
+
+```python
+from prometheus_client import Counter, Histogram, Gauge
+import structlog
+
+# Prometheus metrics
+mcp_calls_total = Counter(
+    'forensics_mcp_calls_total',
+    'Total MCP calls',
+    ['server', 'tool', 'status']
+)
+
+mcp_latency = Histogram(
+    'forensics_mcp_latency_seconds',
+    'MCP call latency',
+    ['server', 'tool'],
+    buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+)
+
+investigation_risk_score = Gauge(
+    'forensics_investigation_risk_score',
+    'Risk score of current investigation',
+    ['case_id']
+)
+
+active_investigations = Gauge(
+    'forensics_active_investigations',
+    'Number of active investigations'
+)
+
+class InvestigationMonitor:
+    """Monitor investigation pipeline health."""
+
+    def __init__(self):
+        self.logger = structlog.get_logger()
+
+    async def record_mcp_call(
+        self,
+        server: str,
+        tool: str,
+        duration: float,
+        success: bool,
+        error: str = None
+    ):
+        """Record MCP call metrics."""
+        status = "success" if success else "error"
+        mcp_calls_total.labels(server=server, tool=tool, status=status).inc()
+        mcp_latency.labels(server=server, tool=tool).observe(duration)
+
+        if not success:
+            self.logger.error(
+                "mcp_call_failed",
+                server=server,
+                tool=tool,
+                duration=duration,
+                error=error
+            )
+
+    async def check_pipeline_health(self) -> dict:
+        """Check overall pipeline health."""
+        health = {
+            "status": "healthy",
+            "checks": {}
+        }
+
+        # Check each MCP server
+        for server in ["stripe", "slack", "postgres"]:
+            try:
+                # Ping server
+                start = time.time()
+                await self.mcp_client.call_tool(server, "health_check", {})
+                latency = time.time() - start
+
+                health["checks"][server] = {
+                    "status": "healthy" if latency < 2.0 else "degraded",
+                    "latency_ms": latency * 1000
+                }
+            except Exception as e:
+                health["checks"][server] = {
+                    "status": "unhealthy",
+                    "error": str(e)
+                }
+                health["status"] = "degraded"
+
+        return health
+
+    def create_alert(
+        self,
+        alert_type: str,
+        severity: str,
+        message: str,
+        context: dict
+    ):
+        """Create alert for operations team."""
+        alert = {
+            "type": alert_type,
+            "severity": severity,
+            "message": message,
+            "context": context,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+        self.logger.warning("alert_created", **alert)
+
+        # Send to alerting system (PagerDuty, Slack, etc.)
+        if severity in ["critical", "high"]:
+            self._send_pagerduty_alert(alert)
+        else:
+            self._send_slack_alert(alert)
+```
+
+---
+
+## 📚 Key Takeaways
+
+1. **MCP ecosystem has matured** - 17,000+ servers with official registry and major platform support
+2. **Parallel specialist agents** outperform single-agent investigations
+3. **Graph-based fraud detection** catches network patterns traditional methods miss
+4. **Behavioral biometrics** detect account takeover and synthetic identities
+5. **PCI DSS 4.0 compliance** is mandatory—implement audit trails and right-to-explanation
+6. **Production resilience** requires rate limiting, caching, and fallback patterns
+7. **Human-in-the-loop** remains critical for high-stakes decisions
+
+---
+
+## 🔗 Further Reading
+
+### MCP Ecosystem (2024-2025)
+
+- [MCP Official Registry](https://modelcontextprotocol.io) - Authoritative source for MCP servers
+- [MCP Ecosystem Guide 2025](https://www.digitalapplied.com/blog/mcp-ecosystem-complete-guide-2025) - Comprehensive ecosystem overview
+- [LangChain MCP Adapters](https://github.com/langchain-ai/langchain-mcp-adapters) - Bridge MCP to LangChain
+- [Stripe Agent Toolkit](https://github.com/stripe/agent-toolkit) - Official Stripe MCP integration
+
+### Fraud Detection (2024-2025)
+
+- [NVIDIA GNN Fraud Detection Blueprint](https://developer.nvidia.com/blog/supercharging-fraud-detection-in-financial-services-with-graph-neural-networks/) - Graph neural networks for fraud
+- [Behavioral Biometrics Guide](https://www.feedzai.com/blog/behavioral-biometrics-next-generation-fraud-prevention/) - Next-gen fraud prevention
+- [Synthetic Identity Fraud Prevention](https://www.crossclassify.com/resources/articles/synthetic-identity-fraud-prevention-behavioral-biometrics/) - Detecting fabricated identities
+- [Account Takeover Detection](https://fingerprint.com/blog/best-account-takeover-detection-tools/) - ATO prevention strategies
+
+### Multi-Agent Systems
+
+- [Anthropic Multi-Agent Research System](https://www.anthropic.com/engineering/multi-agent-research-system) - Parallel agent architecture
+- [Multi-Agent Context Engineering](https://www.bricklayer.ai/insights/multi-agent-context-engineering-mace-the-discipline-behind-investigative-artificial-intelligence-ai/) - MACE methodology
+
+### Compliance & Regulations
+
+- [PCI DSS 4.0 Requirements](https://www.skyflow.com/post/pci-dss-4-0-requirements-explained) - Complete compliance guide
+- [PCI DSS 4.0 Implementation Guide](https://nonasec.com/resources/pci-dss-4-compliance-guide) - E-commerce and financial services
+- [GDPR Right to Explanation](https://gdpr-info.eu/art-22-gdpr/) - Automated decision-making requirements
+
+---
+
+<ModuleSummary
+  points={[
+    "MCP enables composable integrations—connect any data source without custom wrappers",
+    "The MCP ecosystem has grown to 17,000+ servers with official support from Stripe, Notion, Linear, and more",
+    "Multi-agent swarms with parallel specialist agents outperform single-agent investigations",
+    "Graph-based fraud detection and behavioral biometrics catch patterns traditional methods miss",
+    "PCI DSS 4.0 compliance (mandatory March 2025) requires immutable audit logs and right-to-explanation",
+    "Production systems need rate limiting, caching, and fallback patterns across MCP servers",
+    "Human-in-the-loop patterns are essential for high-stakes financial decisions",
+  ]}
+/>
+
+---
+
+**Tomorrow**: Day 80—Benchmarking & Evals (Measuring Agent Performance).
+
+---
+
+## 79.9 Step-by-Step Implementation Guide (Lowest Level Details)
+
+Follow this guide to build the Forensics Swarm from scratch.
+
+## Phase 1: Scaffolding
+
+1.  **Dependencies**:
+
+    ```bash
+    mkdir forensics-swarm
+    cd forensics-swarm
+    python -m venv venv
+    source venv/bin/activate
+    pip install langchain-openai langchain-mcp-adapters stripe
+    npm init -y
+    npm install @modelcontextprotocol/server-postgres @modelcontextprotocol/server-filesystem
+    ```
+
+2.  **Environment**:
+    Create `.env`:
+    ```ini
+    OPENAI_API_KEY=sk-...
+    STRIPE_SECRET_KEY=sk_test_...
+    SLACK_BOT_TOKEN=...
+    ```
+
+## Phase 2: Core Logic (The Agent)
+
+**File: `investigate.py`**
+
+```python
+import os
+import asyncio
+from dotenv import load_dotenv
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+load_dotenv()
+
+PROMPT = ChatPromptTemplate.from_messages([
+    ("system", "You are a detective. Use the available tools to investigate the transaction."),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
+])
+
+async def main():
+    print("🕵️ Connecting to MCP Servers...")
+
+    # Connect to local MCP servers (Node.js)
+    client = MultiServerMCPClient({
+        "filesystem": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "./logs"]
+        },
+        # For this demo, we can just use filesystem to read 'audit logs'
+        # In production, add postgres/slack here
+    })
+
+    tools = await client.get_tools()
+    print(f"✅ Loaded {len(tools)} tools.")
+
+    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    agent = create_tool_calling_agent(llm, tools, PROMPT)
+    executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+
+    print("\n--- STARTING INVESTIGATION ---\n")
+
+    # Scenario: We have a suspicious file in the logs directory
+    await executor.ainvoke({
+        "input": "Read the file 'audit.log' in the logs directory and summarize any suspicious login activity."
+    })
+
+    await client.close()
+
+if __name__ == "__main__":
+    # Create dummy log
+    if not os.path.exists("logs"):
+        os.makedirs("logs")
+    with open("logs/audit.log", "w") as f:
+        f.write("2024-01-01 12:00:00 - User admin login success\n")
+        f.write("2024-01-01 12:05:00 - User admin login failed (IP: 192.168.1.50)\n")
+        f.write("2024-01-01 12:05:01 - User admin login failed (IP: 192.168.1.50)\n")
+        f.write("2024-01-01 12:05:02 - User admin login failed (IP: 192.168.1.50)\n")
+
+    asyncio.run(main())
+```
+
+## Phase 3: Verification
+
+1.  **Run**: `python investigate.py`
+2.  **Output**:
+    - It should launch (installing MCP servers via npx if needed).
+    - It loads tools (`read_file`, etc.).
+    - The agent reads `logs/audit.log`.
+    - The final answer summarizes the 3 failed login attempts.
+
+This proves your agent can "reach out" to the filesystem via MCP without you writing a custom file-reading tool in Python. The MCP server handles it.
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** This project demonstrates the multi-agent swarm
+  pattern used in the AgentOS capstone. The hub-and-spoke architecture, MCP
+  integration, and human-in-the-loop patterns all appear in the final capstone's
+  Smart Orchestrator.
+</Callout>
+
+### Prerequisite Exercises
+
+Before starting this project, complete:
+
+- **EX-03**: Tool Definition (20 min) - Creating MCP-compatible tools
+- **EX-06**: ReAct Loop (30 min) - Investigation reasoning patterns
+- **EX-10**: FastAPI Endpoint (30 min) - API integration patterns
+
+### Related POCs
+
+- **POC-01**: LangGraph State Machine (1-2 hours) - Multi-step investigation workflow
+- **POC-04**: Tool Orchestration (1-2 hours) - Coordinating multiple MCP servers
+- **POC-06**: Request Classification (1-2 hours) - Routing investigations
+
+### Capstone Connection
+
+In the capstone, you'll use these patterns for:
+
+- Smart Orchestrator: Multi-agent coordination
+- Research Agent: Cross-source data correlation
+- Human-in-the-loop: Approval workflows for sensitive actions
+
+See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.

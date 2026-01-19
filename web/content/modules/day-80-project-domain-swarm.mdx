@@ -1,0 +1,2154 @@
+---
+title: "Day 80: Project - Domain Intelligence Swarm"
+description: "Build an autonomous multi-agent system that monitors, evaluates, and acquires expiring domain names."
+week: 11
+day: 80
+---
+
+<ReadingTime minutes={45} />
+
+<SkillLevel level="expert" description="Capstone project" />
+
+<Prerequisites
+  items={[
+    "Completed multi-agent orchestration (Day 35)",
+    "Understanding of autonomous loops (Day 70)",
+    "Familiarity with external API integration",
+    "Basic knowledge of domain registration systems",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Design a multi-agent system with clear agent responsibilities",
+    "Implement event-driven agent communication",
+    "Build scheduled and triggered agent execution",
+    "Handle real-world API integrations with error recovery",
+    "Create a production-ready autonomous monitoring system",
+    "Compare modern orchestration platforms (Temporal, Inngest, Trigger.dev)",
+    "Implement autonomous decision-making with confidence thresholds and budget controls",
+    "Deploy autonomous agents to serverless cloud infrastructure",
+  ]}
+/>
+
+---
+
+## Project Overview
+
+Build **Domain Watchdog**: an autonomous multi-agent system that monitors expiring domains, evaluates their value, and executes purchases—all without human intervention.
+
+{/* IMAGE_PLACEHOLDER: Create an illustration showing a watchdog mascot with binoculars monitoring a stream of domain names flowing past. Some domains are highlighted with green checkmarks (approved), others with red X marks (rejected), and a few with yellow question marks (under review). The watchdog should be sitting at a control panel with multiple screens showing domain analytics, RDAP data, and valuation charts. Style: Modern, friendly, tech-focused with a dashboard aesthetic. Place this at the top of the Project Overview section to immediately convey the autonomous monitoring concept. */}
+
+<Callout type="info">
+  **Why This Project?** Domain acquisition combines multiple agentic patterns:
+  scheduled monitoring, event-driven triggers, multi-agent collaboration, and
+  autonomous decision-making with real financial consequences. Think of it as a
+  "stock trading bot" for domain names—continuously scanning the market,
+  analyzing opportunities, and executing trades based on predefined criteria.
+</Callout>
+
+<Callout type="tip">
+  **2024-2025 Update:** This module now covers modern orchestration platforms
+  (Temporal.io, Inngest, Trigger.dev), cloud-native deployment patterns, and
+  production-grade domain intelligence APIs for building truly autonomous
+  agents.
+</Callout>
+
+---
+
+## Architecture
+
+![Domain Watchdog Swarm Dashboard](/images/domain_watchdog.png)
+
+{/* IMAGE_PLACEHOLDER: Create a detailed system architecture diagram showing the complete Domain Watchdog swarm. Display four agent boxes (Monitor, Evaluator, Purchaser, Notifier) with distinct colors and icons. Show the Scheduler triggering the Monitor, which emits events to the Evaluator, which conditionally triggers the Purchaser, which always triggers the Notifier. Include external services (RDAP API, Blacklist APIs, Domain Registrar) connected to their respective agents. Add a data store (Archive) receiving rejected and completed transactions. Show event flow with animated arrows (in the actual implementation) and label each connection with the event type or data passed. Include a legend explaining the symbols. Style: Professional system architecture diagram with clear component boundaries, data flow arrows, and external service integrations. Place this after the existing Mermaid diagram to provide a more detailed visual reference. */}
+
+<Callout type="concept">
+  **Swarm Architecture Analogy:** Think of this like a restaurant kitchen brigade.
+  The Monitor is the expediter (checking order status), the Evaluator is the head
+  chef (deciding if ingredients are good enough), the Purchaser is the buyer
+  (executing the purchase), and the Notifier is the server (communicating with
+  customers). Each has a specialized role, they communicate through a clear
+  protocol (events), and the system only works when all parts coordinate smoothly.
+</Callout>
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Domain Watchdog Swarm"
+        Scheduler[⏰ Scheduler] --> Monitor
+        
+        Monitor[🔍 Monitor Agent] -->|Domain Released| Evaluator
+        Evaluator[📊 Evaluator Agent] -->|Approved| Purchaser
+        Purchaser[💳 Purchaser Agent] --> Notifier
+        
+        Evaluator -->|Rejected| Archive[(Archive)]
+        Purchaser --> Archive
+        Notifier[📧 Notifier] --> User([👤 User])
+    end
+    
+    subgraph "External Services"
+        RDAP[RDAP API]
+        Blacklist[Blacklist APIs]
+        Registrar[Domain Registrar]
+    end
+    
+    Monitor --> RDAP
+    Evaluator --> Blacklist
+    Purchaser --> Registrar
+    
+    style Monitor fill:#f9f,stroke:#333
+    style Evaluator fill:#bbf,stroke:#333
+    style Purchaser fill:#bfb,stroke:#333
+`}
+/>
+
+---
+
+## Agent Specifications
+
+<OrchestratorPattern
+  orchestratorName="Watchdog Coordinator"
+  orchestratorModel="Event-Driven Scheduler"
+  specialists={[
+    {
+      name: "Monitor",
+      role: "Track domain status via RDAP",
+      model: "Scheduled",
+      icon: "brain",
+    },
+    {
+      name: "Evaluator",
+      role: "Assess domain value & risk",
+      model: "Claude Sonnet",
+      icon: "cpu",
+    },
+    {
+      name: "Purchaser",
+      role: "Execute domain acquisition",
+      model: "Deterministic",
+      icon: "palette",
+    },
+    {
+      name: "Notifier",
+      role: "Alert user of actions",
+      model: "Template",
+      icon: "bug",
+    },
+  ]}
+  workflow={[
+    "Schedule Trigger",
+    "Monitor Check",
+    "Evaluator Analysis",
+    "Purchase Decision",
+    "Notification",
+  ]}
+  parallelExecution={false}
+/>
+
+---
+
+## 80.1 The Monitor Agent
+
+The Monitor Agent tracks domain status using RDAP (Registration Data Access Protocol).
+
+{/* IMAGE_PLACEHOLDER: Create a diagram showing the RDAP query flow: Monitor Agent → RDAP Server → Response parsing → Status determination. Include visual representations of the different domain statuses (registered, pending_delete, redemption, available) as colored status badges. Show a timeline visualization of the domain lifecycle from registration through expiry to availability (typically 75 days). Style: Technical flowchart with timeline elements. Place this before the code block to help readers understand the domain lifecycle and RDAP protocol. */}
+
+<Callout type="concept">
+  **Understanding RDAP:** Think of RDAP as the "credit report" for domain names.
+  Just as a credit report shows the status and history of a person's credit, RDAP
+  provides standardized information about a domain's registration status, expiry
+  date, and registrar. It replaced the older WHOIS protocol with a modern,
+  JSON-based API that's easier to parse and more reliable.
+</Callout>
+
+```python
+import httpx
+from datetime import datetime, timedelta
+from typing import Optional
+from pydantic import BaseModel
+from enum import Enum
+
+class DomainStatus(Enum):
+    REGISTERED = "registered"
+    PENDING_DELETE = "pending_delete"
+    REDEMPTION = "redemption"
+    AVAILABLE = "available"
+    UNKNOWN = "unknown"
+
+class DomainInfo(BaseModel):
+    domain: str
+    status: DomainStatus
+    expiry_date: Optional[datetime]
+    registrar: Optional[str]
+    last_checked: datetime
+    days_until_available: Optional[int]
+
+class MonitorAgent:
+    """Agent 1: Monitor domain status via RDAP."""
+
+    RDAP_SERVERS = {
+        "com": "https://rdap.verisign.com/com/v1/domain/",
+        "net": "https://rdap.verisign.com/net/v1/domain/",
+        "org": "https://rdap.publicinterestregistry.org/rdap/domain/",
+    }
+
+    def __init__(self, watch_list: list[str]):
+        self.watch_list = watch_list
+        self.client = httpx.AsyncClient(timeout=10.0)
+        self.status_cache: dict[str, DomainInfo] = {}
+
+    async def check_domain(self, domain: str) -> DomainInfo:
+        """Query RDAP for domain status."""
+        tld = domain.split(".")[-1]
+        rdap_url = self.RDAP_SERVERS.get(tld)
+
+        if not rdap_url:
+            return DomainInfo(
+                domain=domain,
+                status=DomainStatus.UNKNOWN,
+                expiry_date=None,
+                registrar=None,
+                last_checked=datetime.now(),
+                days_until_available=None
+            )
+
+        try:
+            response = await self.client.get(f"{rdap_url}{domain}")
+
+            if response.status_code == 404:
+                # Domain not found = available
+                return DomainInfo(
+                    domain=domain,
+                    status=DomainStatus.AVAILABLE,
+                    expiry_date=None,
+                    registrar=None,
+                    last_checked=datetime.now(),
+                    days_until_available=0
+                )
+
+            data = response.json()
+            return self._parse_rdap_response(domain, data)
+
+        except Exception as e:
+            print(f"Error checking {domain}: {e}")
+            return self.status_cache.get(domain, DomainInfo(
+                domain=domain,
+                status=DomainStatus.UNKNOWN,
+                expiry_date=None,
+                registrar=None,
+                last_checked=datetime.now(),
+                days_until_available=None
+            ))
+
+    def _parse_rdap_response(self, domain: str, data: dict) -> DomainInfo:
+        """Parse RDAP response into DomainInfo."""
+        status_list = data.get("status", [])
+
+        # Determine status from RDAP status codes
+        if "pendingDelete" in status_list:
+            status = DomainStatus.PENDING_DELETE
+        elif "redemptionPeriod" in status_list:
+            status = DomainStatus.REDEMPTION
+        else:
+            status = DomainStatus.REGISTERED
+
+        # Extract expiry date
+        expiry_date = None
+        for event in data.get("events", []):
+            if event.get("eventAction") == "expiration":
+                expiry_date = datetime.fromisoformat(
+                    event["eventDate"].replace("Z", "+00:00")
+                )
+                break
+
+        # Calculate days until potentially available
+        days_until = None
+        if expiry_date:
+            # Domains typically available ~75 days after expiry
+            available_date = expiry_date + timedelta(days=75)
+            days_until = (available_date - datetime.now()).days
+
+        return DomainInfo(
+            domain=domain,
+            status=status,
+            expiry_date=expiry_date,
+            registrar=data.get("entities", [{}])[0].get("handle"),
+            last_checked=datetime.now(),
+            days_until_available=days_until
+        )
+
+    async def run_check_cycle(self) -> list[DomainInfo]:
+        """Check all domains in watch list."""
+        results = []
+
+        for domain in self.watch_list:
+            info = await self.check_domain(domain)
+            self.status_cache[domain] = info
+            results.append(info)
+
+            # Emit event if domain status changed to actionable
+            if info.status in [DomainStatus.AVAILABLE, DomainStatus.PENDING_DELETE]:
+                await self.emit_event("domain_actionable", info)
+
+        return results
+
+    async def emit_event(self, event_type: str, data: DomainInfo):
+        """Emit event to trigger downstream agents."""
+        print(f"📡 Event: {event_type} for {data.domain}")
+        # In production, this would publish to a message queue
+```
+
+---
+
+## 80.2 The Evaluator Agent
+
+The Evaluator Agent assesses domain value and risk before purchase.
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing the domain evaluation process as a scoring system. Display multiple evaluation criteria as gauges or progress bars: Brand Value (keyword quality, memorability), SEO Value (backlinks, domain age), Risk Score (blacklist status, suspicious patterns), Market Value (comparable sales, TLD premium). Show how these combine into a final confidence score and buy/pass decision. Include visual examples of "good" vs "bad" domains with their scores. Style: Dashboard/analytics visualization with color-coded metrics (green=good, yellow=caution, red=risk). Place this before the Evaluator Agent code to illustrate the multi-factor decision-making process. */}
+
+<Callout type="concept">
+  **Domain Valuation Analogy:** Evaluating a domain is like appraising real estate.
+  You consider location (TLD), neighborhood history (previous use, backlinks),
+  property condition (blacklist status), and comparable sales (similar domains).
+  Just as a house appraiser uses multiple data sources, our Evaluator Agent
+  combines LLM intelligence with API data to estimate value and risk.
+</Callout>
+
+```python
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+
+class DomainEvaluation(BaseModel):
+    domain: str
+    approved: bool
+    confidence: float = Field(ge=0, le=1)
+    estimated_value: float
+    risk_factors: list[str]
+    recommendation: str
+
+class EvaluatorAgent:
+    """Agent 2: Evaluate domain value and risk."""
+
+    BLACKLIST_APIS = [
+        "https://api.spamhaus.org/check/",
+        "https://api.surbl.org/check/",
+    ]
+
+    def __init__(self, max_price: float = 100.0, min_confidence: float = 0.7):
+        self.max_price = max_price
+        self.min_confidence = min_confidence
+        self.llm = ChatOpenAI(model="gpt-4o-mini")
+        self.client = httpx.AsyncClient(timeout=5.0)
+
+    async def evaluate(self, domain_info: DomainInfo) -> DomainEvaluation:
+        """Comprehensive domain evaluation."""
+
+        # Check blacklists
+        blacklist_results = await self._check_blacklists(domain_info.domain)
+
+        # Get historical data (Wayback Machine, etc.)
+        history = await self._get_domain_history(domain_info.domain)
+
+        # LLM-based value assessment
+        value_assessment = await self._assess_value(
+            domain_info, blacklist_results, history
+        )
+
+        # Make final decision
+        approved = (
+            value_assessment["confidence"] >= self.min_confidence and
+            value_assessment["estimated_value"] <= self.max_price and
+            len(blacklist_results["hits"]) == 0
+        )
+
+        return DomainEvaluation(
+            domain=domain_info.domain,
+            approved=approved,
+            confidence=value_assessment["confidence"],
+            estimated_value=value_assessment["estimated_value"],
+            risk_factors=blacklist_results["hits"] + value_assessment["risks"],
+            recommendation=value_assessment["recommendation"]
+        )
+
+    async def _check_blacklists(self, domain: str) -> dict:
+        """Check domain against spam/malware blacklists."""
+        hits = []
+
+        # Simplified blacklist check (production would use real APIs)
+        # Check if domain was previously used for spam/malware
+        suspicious_patterns = ["free", "cheap", "casino", "pharma"]
+        for pattern in suspicious_patterns:
+            if pattern in domain.lower():
+                hits.append(f"Suspicious keyword: {pattern}")
+
+        return {"hits": hits, "checked": len(self.BLACKLIST_APIS)}
+
+    async def _get_domain_history(self, domain: str) -> dict:
+        """Fetch domain history from Wayback Machine."""
+        try:
+            response = await self.client.get(
+                f"https://archive.org/wayback/available?url={domain}"
+            )
+            data = response.json()
+
+            if data.get("archived_snapshots", {}).get("closest"):
+                return {
+                    "has_history": True,
+                    "oldest_snapshot": data["archived_snapshots"]["closest"]["timestamp"],
+                    "url": data["archived_snapshots"]["closest"]["url"]
+                }
+        except Exception:
+            pass
+
+        return {"has_history": False}
+
+    async def _assess_value(
+        self,
+        domain_info: DomainInfo,
+        blacklist: dict,
+        history: dict
+    ) -> dict:
+        """LLM-based domain value assessment."""
+
+        prompt = f"""Evaluate this domain for acquisition:
+
+Domain: {domain_info.domain}
+Status: {domain_info.status.value}
+Previous Registrar: {domain_info.registrar}
+Has Web History: {history.get('has_history', False)}
+Blacklist Hits: {len(blacklist['hits'])}
+
+Assess:
+1. Estimated market value (USD)
+2. Confidence in assessment (0-1)
+3. Risk factors
+4. Recommendation (buy/pass)
+
+Respond in JSON format:
+{{"estimated_value": float, "confidence": float, "risks": [str], "recommendation": str}}
+"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        # Parse JSON response (with fallback)
+        try:
+            import json
+            return json.loads(response.content)
+        except:
+            return {
+                "estimated_value": 50.0,
+                "confidence": 0.5,
+                "risks": ["Could not parse LLM response"],
+                "recommendation": "Manual review required"
+            }
+```
+
+---
+
+## 80.3 The Purchaser Agent
+
+The Purchaser Agent executes domain acquisition via registrar API.
+
+{/* IMAGE_PLACEHOLDER: Create a sequence diagram showing the purchase flow: Purchaser Agent receives approved evaluation → validates price against max budget → calls registrar API with domain and payment info → registrar processes payment → returns transaction ID → Purchaser Agent logs result and returns success/failure. Include error handling branches for: evaluation not approved, price exceeds budget, API call fails, payment declined. Show retry logic with exponential backoff. Add timing annotations for each step. Style: UML sequence diagram with clear actor boundaries and message flows. Place this before the Purchaser Agent code to show the complete purchase transaction flow. */}
+
+<Callout type="warning">
+  **Real Money, Real Consequences:** The Purchaser Agent handles actual financial
+  transactions. Always implement multiple safeguards: price validation, budget
+  checks, transaction logging, and idempotency (prevent duplicate purchases).
+  Think of it like a bank's ATM—it needs to be absolutely certain about every
+  transaction before executing it.
+</Callout>
+
+```python
+class PurchaseResult(BaseModel):
+    domain: str
+    success: bool
+    transaction_id: Optional[str]
+    price_paid: Optional[float]
+    error: Optional[str]
+
+class PurchaserAgent:
+    """Agent 3: Execute domain purchase."""
+
+    def __init__(self, registrar_api_key: str, max_price: float = 100.0):
+        self.api_key = registrar_api_key
+        self.max_price = max_price
+        self.client = httpx.AsyncClient(timeout=30.0)
+
+    async def purchase(self, evaluation: DomainEvaluation) -> PurchaseResult:
+        """Execute domain purchase if approved."""
+
+        if not evaluation.approved:
+            return PurchaseResult(
+                domain=evaluation.domain,
+                success=False,
+                transaction_id=None,
+                price_paid=None,
+                error="Domain not approved by evaluator"
+            )
+
+        # Double-check price
+        if evaluation.estimated_value > self.max_price:
+            return PurchaseResult(
+                domain=evaluation.domain,
+                success=False,
+                transaction_id=None,
+                price_paid=None,
+                error=f"Price ${evaluation.estimated_value} exceeds max ${self.max_price}"
+            )
+
+        # Execute purchase (example with Namecheap-style API)
+        try:
+            result = await self._execute_purchase(evaluation.domain)
+            return result
+        except Exception as e:
+            return PurchaseResult(
+                domain=evaluation.domain,
+                success=False,
+                transaction_id=None,
+                price_paid=None,
+                error=str(e)
+            )
+
+    async def _execute_purchase(self, domain: str) -> PurchaseResult:
+        """Call registrar API to purchase domain."""
+
+        # This is a mock implementation
+        # Production would use real registrar API (Namecheap, GoDaddy, etc.)
+
+        print(f"🛒 Attempting to purchase: {domain}")
+
+        # Simulate API call
+        # response = await self.client.post(
+        #     "https://api.registrar.com/v1/domains/register",
+        #     headers={"Authorization": f"Bearer {self.api_key}"},
+        #     json={"domain": domain, "years": 1}
+        # )
+
+        # Mock success
+        return PurchaseResult(
+            domain=domain,
+            success=True,
+            transaction_id=f"TXN-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            price_paid=12.99,
+            error=None
+        )
+```
+
+---
+
+## 80.4 Orchestration with LangGraph
+
+{/* IMAGE_PLACEHOLDER: Create an animated state machine diagram showing the LangGraph workflow execution. Display states as circles (monitoring, evaluating, purchasing, complete, error) with transitions as arrows. Highlight the current state in a different color as the workflow progresses. Show the state data structure updating at each step (watch_list → domain_info → evaluation → purchase_result). Include conditional routing logic with decision diamonds. Add a timeline at the bottom showing execution time for each step. Style: Interactive state machine with animated transitions and live state inspection. Place this before the LangGraph code to visualize the workflow execution model. */}
+
+<Callout type="concept">
+  **LangGraph for Agent Coordination:** LangGraph is like a GPS navigation system
+  for your agents. It defines the route (workflow), handles decision points
+  (conditional edges), maintains state (where you are and where you've been), and
+  can reroute if needed (error handling). Each node is a checkpoint where the
+  agent performs work and updates the shared state.
+</Callout>
+
+```python
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Literal
+
+class WatchdogState(TypedDict):
+    watch_list: list[str]
+    current_domain: Optional[str]
+    domain_info: Optional[dict]
+    evaluation: Optional[dict]
+    purchase_result: Optional[dict]
+    notifications: list[str]
+    status: Literal["monitoring", "evaluating", "purchasing", "complete", "error"]
+
+async def monitor_node(state: WatchdogState) -> dict:
+    """Monitor agent checks domain status."""
+    monitor = MonitorAgent(state["watch_list"])
+    results = await monitor.run_check_cycle()
+
+    # Find actionable domains
+    actionable = [r for r in results if r.status == DomainStatus.AVAILABLE]
+
+    if actionable:
+        return {
+            "current_domain": actionable[0].domain,
+            "domain_info": actionable[0].model_dump(),
+            "status": "evaluating"
+        }
+
+    return {"status": "complete", "notifications": ["No actionable domains found"]}
+
+async def evaluate_node(state: WatchdogState) -> dict:
+    """Evaluator agent assesses domain."""
+    evaluator = EvaluatorAgent(max_price=100.0)
+    domain_info = DomainInfo(**state["domain_info"])
+
+    evaluation = await evaluator.evaluate(domain_info)
+
+    if evaluation.approved:
+        return {
+            "evaluation": evaluation.model_dump(),
+            "status": "purchasing"
+        }
+
+    return {
+        "evaluation": evaluation.model_dump(),
+        "status": "complete",
+        "notifications": [f"Domain {domain_info.domain} rejected: {evaluation.recommendation}"]
+    }
+
+async def purchase_node(state: WatchdogState) -> dict:
+    """Purchaser agent executes acquisition."""
+    purchaser = PurchaserAgent(
+        registrar_api_key="your-api-key",
+        max_price=100.0
+    )
+
+    evaluation = DomainEvaluation(**state["evaluation"])
+    result = await purchaser.purchase(evaluation)
+
+    notification = (
+        f"✅ Purchased {result.domain} for ${result.price_paid}"
+        if result.success
+        else f"❌ Failed to purchase {result.domain}: {result.error}"
+    )
+
+    return {
+        "purchase_result": result.model_dump(),
+        "status": "complete",
+        "notifications": state["notifications"] + [notification]
+    }
+
+def route_after_monitor(state: WatchdogState) -> str:
+    if state["status"] == "evaluating":
+        return "evaluate"
+    return "end"
+
+def route_after_evaluate(state: WatchdogState) -> str:
+    if state["status"] == "purchasing":
+        return "purchase"
+    return "end"
+
+# Build the graph
+workflow = StateGraph(WatchdogState)
+
+workflow.add_node("monitor", monitor_node)
+workflow.add_node("evaluate", evaluate_node)
+workflow.add_node("purchase", purchase_node)
+
+workflow.add_edge(START, "monitor")
+workflow.add_conditional_edges("monitor", route_after_monitor, {
+    "evaluate": "evaluate",
+    "end": END
+})
+workflow.add_conditional_edges("evaluate", route_after_evaluate, {
+    "purchase": "purchase",
+    "end": END
+})
+workflow.add_edge("purchase", END)
+
+app = workflow.compile()
+
+# Run the swarm
+async def run_watchdog():
+    result = await app.ainvoke({
+        "watch_list": [
+            "coolstartup.com",
+            "aiagents.io",
+            "techbrand.net"
+        ],
+        "notifications": [],
+        "status": "monitoring"
+    })
+
+    print("Notifications:")
+    for n in result["notifications"]:
+        print(f"  {n}")
+```
+
+---
+
+## 80.5 Scheduled Execution
+
+### Traditional Approach: APScheduler
+
+```python
+import asyncio
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+class DomainWatchdogService:
+    """Production service with scheduled execution."""
+
+    def __init__(self, watch_list: list[str], check_interval_hours: int = 6):
+        self.watch_list = watch_list
+        self.check_interval = check_interval_hours
+        self.scheduler = AsyncIOScheduler()
+        self.app = self._build_workflow()
+
+    def _build_workflow(self):
+        # ... (workflow from above)
+        return app
+
+    async def run_check(self):
+        """Execute one check cycle."""
+        print(f"🔍 Running domain check at {datetime.now()}")
+
+        result = await self.app.ainvoke({
+            "watch_list": self.watch_list,
+            "notifications": [],
+            "status": "monitoring"
+        })
+
+        # Send notifications
+        for notification in result["notifications"]:
+            await self.send_notification(notification)
+
+    async def send_notification(self, message: str):
+        """Send notification via email/Slack/etc."""
+        print(f"📧 Notification: {message}")
+        # Production: integrate with email/Slack API
+
+    def start(self):
+        """Start the scheduled service."""
+        self.scheduler.add_job(
+            self.run_check,
+            'interval',
+            hours=self.check_interval,
+            id='domain_check'
+        )
+        self.scheduler.start()
+        print(f"🚀 Domain Watchdog started (checking every {self.check_interval}h)")
+
+# Run service
+if __name__ == "__main__":
+    service = DomainWatchdogService(
+        watch_list=["example.com", "startup.io"],
+        check_interval_hours=6
+    )
+    service.start()
+
+    # Keep running
+    asyncio.get_event_loop().run_forever()
+```
+
+---
+
+## 80.6 Modern Orchestration Platforms (2024-2025)
+
+{/* IMAGE_PLACEHOLDER: Create a comparison visualization showing four orchestration approaches side-by-side: APScheduler (simple cron with in-memory state), Temporal.io (durable workflows with state persistence), Inngest (event-driven serverless functions), and Trigger.dev (background jobs with checkpoints). For each, show: architecture diagram, failure recovery mechanism, deployment model, and ideal use case. Use icons to represent key features: clock for scheduling, shield for durability, cloud for serverless, retry arrows for fault tolerance. Style: Modern comparison chart with clear visual hierarchy. Place this at the start of section 80.6 to help readers choose the right orchestration platform. */}
+
+<Callout type="info">
+  **Beyond APScheduler:** While APScheduler works for simple cases, production
+  autonomous agents benefit from durable workflow orchestration platforms that
+  handle failures, retries, and long-running processes automatically. Think of
+  the difference like this: APScheduler is a kitchen timer (simple, works until
+  power goes out), while Temporal is a smart home automation system (remembers
+  state, recovers from failures, coordinates complex sequences).
+</Callout>
+
+### Comparing Orchestration Approaches
+
+{/* IMAGE_PLACEHOLDER: Create an interactive comparison table that expands on hover/click. Show APScheduler, Temporal.io, Inngest, and Trigger.dev as columns with rows for: Durability (show persistence mechanism), Failure Recovery (show retry visualization), Deployment (show infrastructure), Best For (show use case icons), Language Support (show language logos), Cost (show $ symbols), and Learning Curve (show difficulty stars). Make each cell clickable to reveal more details. Add a "Help Me Choose" button that asks 3 questions and recommends the best platform. Style: Interactive comparison matrix with expandable details and recommendation wizard. Place this after the comparison table to make it more engaging. */}
+
+<Callout type="tip">
+  **Interactive Component Opportunity:** Build an **Orchestration Platform Selector**
+  that asks learners about their requirements (language preference, deployment
+  model, complexity needs) and recommends the best platform with reasoning. Include
+  code examples for each platform showing the same workflow implemented differently.
+</Callout>
+
+| Feature              | APScheduler      | Temporal.io                  | Inngest                 | Trigger.dev       |
+| -------------------- | ---------------- | ---------------------------- | ----------------------- | ----------------- |
+| **Durability**       | None (in-memory) | Full workflow persistence    | Event-driven durability | Checkpoint-based  |
+| **Failure Recovery** | Manual           | Automatic replay             | Automatic retries       | Automatic retries |
+| **Deployment**       | Self-hosted      | Self-hosted or Cloud         | Serverless              | Serverless        |
+| **Best For**         | Simple cron jobs | Complex multi-step workflows | Event-driven functions  | Background jobs   |
+| **Language**         | Python           | Python, Go, TypeScript       | TypeScript/JavaScript   | TypeScript        |
+
+### Temporal.io for Durable Agent Workflows
+
+Temporal provides durable execution—your workflow state survives crashes, restarts, and deployments. This is critical for autonomous agents that may run for hours or days.
+
+```python
+# temporal_watchdog.py
+from temporalio import workflow, activity
+from temporalio.client import Client
+from temporalio.worker import Worker
+from datetime import timedelta
+from dataclasses import dataclass
+
+@dataclass
+class DomainCheckResult:
+    domain: str
+    status: str
+    should_purchase: bool
+    estimated_value: float
+
+@activity.defn
+async def check_domain_status(domain: str) -> dict:
+    """Activity: Check domain via RDAP."""
+    monitor = MonitorAgent([domain])
+    info = await monitor.check_domain(domain)
+    return info.model_dump()
+
+@activity.defn
+async def evaluate_domain(domain_info: dict) -> DomainCheckResult:
+    """Activity: Evaluate domain value and risk."""
+    evaluator = EvaluatorAgent(max_price=100.0)
+    info = DomainInfo(**domain_info)
+    evaluation = await evaluator.evaluate(info)
+    return DomainCheckResult(
+        domain=info.domain,
+        status=info.status.value,
+        should_purchase=evaluation.approved,
+        estimated_value=evaluation.estimated_value
+    )
+
+@activity.defn
+async def purchase_domain(domain: str, max_price: float) -> dict:
+    """Activity: Execute domain purchase."""
+    purchaser = PurchaserAgent(
+        registrar_api_key="your-api-key",
+        max_price=max_price
+    )
+    # Create minimal evaluation for purchase
+    evaluation = DomainEvaluation(
+        domain=domain,
+        approved=True,
+        confidence=0.9,
+        estimated_value=max_price,
+        risk_factors=[],
+        recommendation="buy"
+    )
+    result = await purchaser.purchase(evaluation)
+    return result.model_dump()
+
+@activity.defn
+async def send_notification(message: str) -> None:
+    """Activity: Send notification."""
+    # Integrate with Slack, email, etc.
+    print(f"📧 {message}")
+
+@workflow.defn
+class DomainWatchdogWorkflow:
+    """Durable workflow for domain monitoring."""
+
+    @workflow.run
+    async def run(self, watch_list: list[str], max_price: float = 100.0) -> dict:
+        results = {"checked": [], "purchased": [], "notifications": []}
+
+        for domain in watch_list:
+            # Step 1: Check domain status (with retry)
+            domain_info = await workflow.execute_activity(
+                check_domain_status,
+                domain,
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=RetryPolicy(maximum_attempts=3)
+            )
+
+            # Step 2: Evaluate if actionable
+            if domain_info["status"] in ["available", "pending_delete"]:
+                evaluation = await workflow.execute_activity(
+                    evaluate_domain,
+                    domain_info,
+                    start_to_close_timeout=timedelta(seconds=60)
+                )
+
+                results["checked"].append(evaluation)
+
+                # Step 3: Purchase if approved
+                if evaluation.should_purchase:
+                    purchase_result = await workflow.execute_activity(
+                        purchase_domain,
+                        args=[domain, max_price],
+                        start_to_close_timeout=timedelta(seconds=120)
+                    )
+
+                    if purchase_result["success"]:
+                        results["purchased"].append(domain)
+                        await workflow.execute_activity(
+                            send_notification,
+                            f"✅ Purchased {domain} for ${purchase_result['price_paid']}",
+                            start_to_close_timeout=timedelta(seconds=10)
+                        )
+
+        return results
+
+# Schedule the workflow to run every 6 hours
+async def main():
+    client = await Client.connect("localhost:7233")
+
+    # Start a scheduled workflow
+    await client.start_workflow(
+        DomainWatchdogWorkflow.run,
+        args=[["coolstartup.com", "aiagents.io"], 100.0],
+        id="domain-watchdog-scheduled",
+        task_queue="domain-watchdog",
+        cron_schedule="0 */6 * * *"  # Every 6 hours
+    )
+```
+
+<Callout type="tip">
+  **Why Temporal for Agents?** Temporal's durable execution means your agent
+  workflow survives infrastructure failures. If your server crashes
+  mid-purchase, Temporal replays the workflow from the last checkpoint—no
+  duplicate purchases, no lost state.
+</Callout>
+
+### Inngest for Event-Driven Agent Functions
+
+Inngest excels at event-driven serverless functions with built-in scheduling, retries, and observability.
+
+```typescript
+// inngest/functions/domain-watchdog.ts
+import { inngest } from "./client";
+
+// Define the domain check function
+export const domainWatchdog = inngest.createFunction(
+  {
+    id: "domain-watchdog",
+    // Run every 6 hours
+    cron: "0 */6 * * *",
+    // Retry configuration
+    retries: 3,
+  },
+  { event: "domain/check.scheduled" },
+  async ({ event, step }) => {
+    const watchList = ["coolstartup.com", "aiagents.io", "techbrand.net"];
+
+    // Step 1: Check all domains (parallelized)
+    const domainStatuses = await step.run("check-domains", async () => {
+      const results = await Promise.all(
+        watchList.map((domain) => checkDomainRDAP(domain))
+      );
+      return results;
+    });
+
+    // Step 2: Filter actionable domains
+    const actionable = domainStatuses.filter(
+      (d) => d.status === "available" || d.status === "pending_delete"
+    );
+
+    if (actionable.length === 0) {
+      return { message: "No actionable domains found" };
+    }
+
+    // Step 3: Evaluate each actionable domain
+    const evaluations = await Promise.all(
+      actionable.map((domain) =>
+        step.run(`evaluate-${domain.name}`, async () => {
+          return await evaluateDomain(domain);
+        })
+      )
+    );
+
+    // Step 4: Purchase approved domains
+    const purchases = [];
+    for (const evaluation of evaluations) {
+      if (evaluation.approved && evaluation.confidence > 0.8) {
+        const result = await step.run(
+          `purchase-${evaluation.domain}`,
+          async () => {
+            return await purchaseDomain(evaluation);
+          }
+        );
+        purchases.push(result);
+
+        // Step 5: Send notification
+        await step.run(`notify-${evaluation.domain}`, async () => {
+          await sendSlackNotification(
+            `✅ Purchased ${evaluation.domain} for $${result.price}`
+          );
+        });
+      }
+    }
+
+    return {
+      checked: domainStatuses.length,
+      actionable: actionable.length,
+      purchased: purchases.length,
+    };
+  }
+);
+
+// Event-triggered function for immediate domain checks
+export const domainAlertHandler = inngest.createFunction(
+  { id: "domain-alert-handler" },
+  { event: "domain/alert.received" },
+  async ({ event, step }) => {
+    const { domain, alertType } = event.data;
+
+    // Immediately evaluate high-priority domains
+    if (alertType === "dropping_soon") {
+      const evaluation = await step.run("urgent-evaluation", async () => {
+        return await evaluateDomain({ name: domain, priority: "high" });
+      });
+
+      if (evaluation.approved) {
+        // Human-in-the-loop for high-value domains
+        if (evaluation.estimated_value > 500) {
+          await step.run("request-approval", async () => {
+            await sendApprovalRequest(domain, evaluation);
+          });
+
+          // Wait for human approval (up to 1 hour)
+          const approval = await step.waitForEvent("domain/purchase.approved", {
+            timeout: "1h",
+            match: "data.domain",
+          });
+
+          if (!approval) {
+            return { status: "timeout", domain };
+          }
+        }
+
+        // Execute purchase
+        return await step.run("execute-purchase", async () => {
+          return await purchaseDomain(evaluation);
+        });
+      }
+    }
+  }
+);
+```
+
+### Trigger.dev for Background Jobs
+
+Trigger.dev v3 provides a checkpoint-restore system ideal for long-running agent tasks without timeout limits.
+
+```typescript
+// trigger/domain-watchdog.ts
+import { schedules, task, wait } from "@trigger.dev/sdk/v3";
+
+// Scheduled domain monitoring task
+export const domainMonitorTask = schedules.task({
+  id: "domain-monitor",
+  // Run every 6 hours
+  cron: "0 */6 * * *",
+  run: async (payload) => {
+    const watchList = ["coolstartup.com", "aiagents.io"];
+
+    for (const domain of watchList) {
+      // Check domain status
+      const status = await checkDomainStatus(domain);
+
+      if (status.available) {
+        // Trigger evaluation task
+        await evaluateDomainTask.trigger({ domain, status });
+      }
+    }
+
+    return { checked: watchList.length };
+  },
+});
+
+// Domain evaluation task with AI
+export const evaluateDomainTask = task({
+  id: "evaluate-domain",
+  // Long timeout for LLM calls
+  maxDuration: 300, // 5 minutes
+  retry: {
+    maxAttempts: 3,
+    minTimeoutInMs: 1000,
+    maxTimeoutInMs: 10000,
+  },
+  run: async ({ domain, status }) => {
+    // LLM-based evaluation
+    const evaluation = await evaluateWithLLM(domain, status);
+
+    if (evaluation.approved && evaluation.confidence > 0.8) {
+      // Check budget before purchase
+      const budget = await checkRemainingBudget();
+
+      if (evaluation.estimatedValue <= budget.available) {
+        // Trigger purchase task
+        await purchaseDomainTask.trigger({
+          domain,
+          evaluation,
+          maxPrice: Math.min(evaluation.estimatedValue, budget.maxPerDomain),
+        });
+      } else {
+        // Notify about budget constraint
+        await notifyTask.trigger({
+          type: "budget_exceeded",
+          domain,
+          required: evaluation.estimatedValue,
+          available: budget.available,
+        });
+      }
+    }
+
+    return evaluation;
+  },
+});
+
+// Purchase task with human-in-the-loop for high values
+export const purchaseDomainTask = task({
+  id: "purchase-domain",
+  run: async ({ domain, evaluation, maxPrice }) => {
+    // High-value domains require approval
+    if (evaluation.estimatedValue > 500) {
+      // Send approval request
+      await sendApprovalRequest(domain, evaluation);
+
+      // Wait for approval (Trigger.dev handles the pause)
+      const approved = await wait.for({
+        seconds: 3600, // 1 hour timeout
+        // In production, use webhooks for approval
+      });
+
+      if (!approved) {
+        return { status: "approval_timeout", domain };
+      }
+    }
+
+    // Execute purchase
+    const result = await executePurchase(domain, maxPrice);
+
+    // Log for audit trail
+    await logPurchaseAudit({
+      domain,
+      evaluation,
+      result,
+      timestamp: new Date().toISOString(),
+    });
+
+    return result;
+  },
+});
+```
+
+<Callout type="warning">
+  **Choosing the Right Platform:** - **Temporal.io**: Best for complex,
+  long-running workflows with multiple agents - **Inngest**: Best for
+  event-driven serverless with TypeScript - **Trigger.dev**: Best for background
+  jobs with no timeout limits - **APScheduler**: Best for simple Python scripts
+  without cloud infrastructure
+</Callout>
+
+---
+
+## 80.7 Domain Intelligence APIs (2024-2025)
+
+{/* IMAGE_PLACEHOLDER: Create a visual API integration map showing the Domain Watchdog at the center with connections to various external services: RDAP servers (for status), GoDaddy GoValue (for valuation), EstiBot (for appraisal), NameBio (for comparable sales), Wayback Machine (for history), Spamhaus/SURBL (for blacklists), and domain registrars (for purchase). Show data flowing in (queries) and out (responses) with labeled arrows. Include API rate limits and costs for each service. Add icons representing the type of data each service provides. Style: Hub-and-spoke diagram with the agent at center and external services around the perimeter, with clear data flow indicators. Place this at the start of section 80.7 to show the complete API ecosystem. */}
+
+<Callout type="info">
+  **Modern Domain Intelligence:** The domain industry has evolved significantly.
+  Here's how to integrate with current APIs and services for production-grade
+  domain monitoring. Think of these APIs as your agent's "information network"—
+  each provides a different piece of the puzzle, and combining them gives you a
+  complete picture of a domain's value and risk.
+</Callout>
+
+### RDAP Improvements and Multi-TLD Support
+
+RDAP (Registration Data Access Protocol) has expanded coverage. Here's an updated implementation:
+
+```python
+class EnhancedMonitorAgent:
+    """Enhanced Monitor Agent with 2024-2025 RDAP support."""
+
+    # Updated RDAP servers including new TLDs
+    RDAP_SERVERS = {
+        # Legacy TLDs
+        "com": "https://rdap.verisign.com/com/v1/domain/",
+        "net": "https://rdap.verisign.com/net/v1/domain/",
+        "org": "https://rdap.publicinterestregistry.org/rdap/domain/",
+        "info": "https://rdap.afilias.net/rdap/info/domain/",
+
+        # Country codes
+        "io": "https://rdap.nic.io/domain/",
+        "co": "https://rdap.nic.co/domain/",
+        "ai": "https://rdap.nic.ai/domain/",
+        "dev": "https://rdap.nic.google/domain/",
+        "app": "https://rdap.nic.google/domain/",
+
+        # New gTLDs
+        "xyz": "https://rdap.centralnic.com/xyz/domain/",
+        "online": "https://rdap.centralnic.com/online/domain/",
+        "tech": "https://rdap.centralnic.com/tech/domain/",
+    }
+
+    # Bootstrap for unknown TLDs
+    RDAP_BOOTSTRAP = "https://rdap.org/domain/"
+
+    async def check_domain(self, domain: str) -> DomainInfo:
+        """Query RDAP with fallback to bootstrap."""
+        tld = domain.split(".")[-1].lower()
+        rdap_url = self.RDAP_SERVERS.get(tld, self.RDAP_BOOTSTRAP)
+
+        try:
+            response = await self.client.get(
+                f"{rdap_url}{domain}",
+                headers={"Accept": "application/rdap+json"}
+            )
+
+            if response.status_code == 404:
+                return DomainInfo(
+                    domain=domain,
+                    status=DomainStatus.AVAILABLE,
+                    expiry_date=None,
+                    registrar=None,
+                    last_checked=datetime.now(),
+                    days_until_available=0
+                )
+
+            return self._parse_rdap_response(domain, response.json())
+
+        except Exception as e:
+            # Fallback to WHOIS for unsupported TLDs
+            return await self._fallback_whois_check(domain)
+```
+
+### Domain Valuation APIs
+
+Integrate multiple valuation sources for accurate pricing:
+
+```python
+from dataclasses import dataclass
+from typing import Optional
+import httpx
+
+@dataclass
+class ValuationResult:
+    source: str
+    estimated_value: float
+    confidence: float
+    factors: dict
+
+class DomainValuationService:
+    """Multi-source domain valuation service."""
+
+    def __init__(
+        self,
+        godaddy_api_key: Optional[str] = None,
+        estibot_api_key: Optional[str] = None
+    ):
+        self.godaddy_key = godaddy_api_key
+        self.estibot_key = estibot_api_key
+        self.client = httpx.AsyncClient(timeout=30.0)
+
+    async def get_valuations(self, domain: str) -> list[ValuationResult]:
+        """Get valuations from multiple sources."""
+        valuations = []
+
+        # GoDaddy GoValue API
+        if self.godaddy_key:
+            try:
+                gd_value = await self._godaddy_valuation(domain)
+                if gd_value:
+                    valuations.append(gd_value)
+            except Exception as e:
+                print(f"GoDaddy valuation failed: {e}")
+
+        # EstiBot API
+        if self.estibot_key:
+            try:
+                eb_value = await self._estibot_valuation(domain)
+                if eb_value:
+                    valuations.append(eb_value)
+            except Exception as e:
+                print(f"EstiBot valuation failed: {e}")
+
+        # NameBio comparable sales (free)
+        try:
+            nb_value = await self._namebio_comparables(domain)
+            if nb_value:
+                valuations.append(nb_value)
+        except Exception:
+            pass
+
+        return valuations
+
+    async def _godaddy_valuation(self, domain: str) -> ValuationResult:
+        """GoDaddy GoValue API valuation."""
+        response = await self.client.get(
+            f"https://api.godaddy.com/v1/appraisal/{domain}",
+            headers={
+                "Authorization": f"sso-key {self.godaddy_key}",
+                "Accept": "application/json"
+            }
+        )
+        data = response.json()
+
+        return ValuationResult(
+            source="godaddy",
+            estimated_value=data.get("govalue", 0),
+            confidence=data.get("confidence", 0) / 100,
+            factors={
+                "comparable_sales": data.get("comparables", []),
+                "keyword_value": data.get("keyword_value", 0)
+            }
+        )
+
+    async def _estibot_valuation(self, domain: str) -> ValuationResult:
+        """EstiBot API valuation."""
+        response = await self.client.get(
+            "https://www.estibot.com/api/appraisal",
+            params={
+                "domain": domain,
+                "apikey": self.estibot_key
+            }
+        )
+        data = response.json()
+
+        return ValuationResult(
+            source="estibot",
+            estimated_value=float(data.get("appraised_value", 0)),
+            confidence=0.7,  # EstiBot doesn't provide confidence
+            factors={
+                "search_volume": data.get("search_volume", 0),
+                "cpc": data.get("cpc", 0),
+                "length": data.get("length", 0)
+            }
+        )
+
+    def aggregate_valuations(
+        self,
+        valuations: list[ValuationResult]
+    ) -> tuple[float, float]:
+        """Weighted average of valuations."""
+        if not valuations:
+            return 0.0, 0.0
+
+        # Weight by confidence
+        total_weight = sum(v.confidence for v in valuations)
+        weighted_value = sum(
+            v.estimated_value * v.confidence for v in valuations
+        )
+
+        avg_value = weighted_value / total_weight if total_weight > 0 else 0
+        avg_confidence = total_weight / len(valuations)
+
+        return avg_value, avg_confidence
+```
+
+### Expired Domain Services Integration
+
+```python
+class ExpiredDomainService:
+    """Integration with expired domain services."""
+
+    def __init__(self):
+        self.client = httpx.AsyncClient(timeout=30.0)
+
+    async def get_dropping_domains(
+        self,
+        tlds: list[str] = ["com", "net", "org"],
+        min_backlinks: int = 10,
+        max_price: float = 100
+    ) -> list[dict]:
+        """Fetch domains dropping in the next 5 days."""
+        domains = []
+
+        # ExpiredDomains.net (requires account)
+        for tld in tlds:
+            response = await self.client.get(
+                "https://member.expireddomains.net/domains/pendingdelete/",
+                params={
+                    "ftld": tld,
+                    "fbl": min_backlinks,
+                    "o": "bl",  # Sort by backlinks
+                    "r": "d"   # Descending
+                }
+            )
+            domains.extend(self._parse_expired_domains(response.text))
+
+        return domains
+
+    async def place_backorder(
+        self,
+        domain: str,
+        service: str = "dropcatch",
+        max_bid: float = 100
+    ) -> dict:
+        """Place backorder on dropping domain."""
+        services = {
+            "dropcatch": self._backorder_dropcatch,
+            "namejet": self._backorder_namejet,
+            "snapnames": self._backorder_snapnames,
+            "pool": self._backorder_pool,
+        }
+
+        if service not in services:
+            raise ValueError(f"Unknown service: {service}")
+
+        return await services[service](domain, max_bid)
+
+    async def _backorder_dropcatch(self, domain: str, max_bid: float) -> dict:
+        """Place backorder on DropCatch."""
+        response = await self.client.post(
+            "https://api.dropcatch.com/v1/backorders",
+            json={
+                "domain": domain,
+                "maxBid": max_bid,
+                "autoBid": True
+            },
+            headers={"Authorization": f"Bearer {self.dropcatch_key}"}
+        )
+        return response.json()
+```
+
+<Callout type="warning">
+  **Backorder Strategy:** For high-value domains, place backorders on multiple
+  services (DropCatch, NameJet, SnapNames) simultaneously. Each service has
+  different registry connections and catch rates.
+</Callout>
+
+---
+
+## 80.8 Autonomous Decision Making
+
+{/* IMAGE_PLACEHOLDER: Create a decision tree visualization showing the autonomous decision-making flow. Start with a domain evaluation at the top, then branch based on: confidence level (high/medium/low), estimated value (under/over threshold), risk score (low/high), and budget availability (yes/no). Each path leads to one of three outcomes: Auto-Purchase (green), Request Human Review (yellow), or Auto-Reject (red). Include percentage thresholds on each branch (e.g., "Confidence > 85%", "Value < $500"). Add small icons representing safeguards: shield for risk checks, wallet for budget limits, person for human-in-the-loop. Style: Clean decision tree with color-coded outcomes and clear threshold labels. Place this at the start of section 80.8 to visualize the autonomous decision logic. */}
+
+<Callout type="concept">
+  **Autonomous Decision-Making Analogy:** Think of this like a self-driving car's
+  decision system. The car has multiple sensors (our evaluation criteria), safety
+  thresholds (confidence levels), and fail-safes (budget limits, human review).
+  It can handle routine situations autonomously (high confidence purchases) but
+  knows when to alert the driver (high-value domains requiring approval). The key
+  is building in multiple layers of safeguards so the system can operate
+  independently while staying within safe boundaries.
+</Callout>
+
+### Confidence Thresholds and Budget Management
+
+```python
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Optional
+import json
+
+@dataclass
+class BudgetConfig:
+    daily_limit: float = 500.0
+    weekly_limit: float = 2000.0
+    monthly_limit: float = 5000.0
+    max_per_domain: float = 200.0
+    reserve_percentage: float = 0.2  # Keep 20% reserve
+
+@dataclass
+class ConfidenceThresholds:
+    auto_purchase: float = 0.85      # Auto-buy above this
+    human_review: float = 0.6        # Request review between these
+    auto_reject: float = 0.4         # Auto-reject below this
+    high_value_threshold: float = 500.0  # Always review above this price
+
+@dataclass
+class PurchaseDecision:
+    domain: str
+    action: str  # "auto_purchase", "request_review", "auto_reject"
+    confidence: float
+    estimated_value: float
+    reason: str
+    requires_approval: bool = False
+
+class AutonomousDecisionEngine:
+    """Engine for autonomous purchase decisions with safeguards."""
+
+    def __init__(
+        self,
+        budget: BudgetConfig,
+        thresholds: ConfidenceThresholds,
+        audit_log_path: str = "audit_log.jsonl"
+    ):
+        self.budget = budget
+        self.thresholds = thresholds
+        self.audit_log_path = audit_log_path
+        self.spending_tracker = SpendingTracker()
+
+    async def make_decision(
+        self,
+        domain: str,
+        evaluation: DomainEvaluation,
+        valuations: list[ValuationResult]
+    ) -> PurchaseDecision:
+        """Make autonomous purchase decision with safeguards."""
+
+        # Aggregate valuations
+        avg_value, avg_confidence = self._aggregate_valuations(valuations)
+
+        # Check budget constraints
+        budget_available = await self._check_budget(avg_value)
+
+        # Risk assessment
+        risk_score = self._assess_risk(domain, evaluation, valuations)
+
+        # Decision logic
+        decision = self._apply_decision_rules(
+            domain=domain,
+            confidence=evaluation.confidence,
+            estimated_value=avg_value,
+            budget_available=budget_available,
+            risk_score=risk_score
+        )
+
+        # Log decision for audit trail
+        await self._log_decision(decision, evaluation, valuations)
+
+        return decision
+
+    def _apply_decision_rules(
+        self,
+        domain: str,
+        confidence: float,
+        estimated_value: float,
+        budget_available: bool,
+        risk_score: float
+    ) -> PurchaseDecision:
+        """Apply decision rules with multiple safeguards."""
+
+        # Rule 1: Budget check
+        if not budget_available:
+            return PurchaseDecision(
+                domain=domain,
+                action="auto_reject",
+                confidence=confidence,
+                estimated_value=estimated_value,
+                reason="Insufficient budget"
+            )
+
+        # Rule 2: High-value domains always need review
+        if estimated_value > self.thresholds.high_value_threshold:
+            return PurchaseDecision(
+                domain=domain,
+                action="request_review",
+                confidence=confidence,
+                estimated_value=estimated_value,
+                reason=f"High value domain (>${self.thresholds.high_value_threshold})",
+                requires_approval=True
+            )
+
+        # Rule 3: High risk domains need review
+        if risk_score > 0.7:
+            return PurchaseDecision(
+                domain=domain,
+                action="request_review",
+                confidence=confidence,
+                estimated_value=estimated_value,
+                reason=f"High risk score ({risk_score:.2f})",
+                requires_approval=True
+            )
+
+        # Rule 4: Confidence-based decisions
+        if confidence >= self.thresholds.auto_purchase:
+            return PurchaseDecision(
+                domain=domain,
+                action="auto_purchase",
+                confidence=confidence,
+                estimated_value=estimated_value,
+                reason=f"High confidence ({confidence:.2f})"
+            )
+        elif confidence >= self.thresholds.human_review:
+            return PurchaseDecision(
+                domain=domain,
+                action="request_review",
+                confidence=confidence,
+                estimated_value=estimated_value,
+                reason=f"Medium confidence ({confidence:.2f})",
+                requires_approval=True
+            )
+        else:
+            return PurchaseDecision(
+                domain=domain,
+                action="auto_reject",
+                confidence=confidence,
+                estimated_value=estimated_value,
+                reason=f"Low confidence ({confidence:.2f})"
+            )
+
+    def _assess_risk(
+        self,
+        domain: str,
+        evaluation: DomainEvaluation,
+        valuations: list[ValuationResult]
+    ) -> float:
+        """Calculate risk score (0-1)."""
+        risk_factors = []
+
+        # Valuation variance risk
+        if len(valuations) > 1:
+            values = [v.estimated_value for v in valuations]
+            variance = max(values) / min(values) if min(values) > 0 else 10
+            if variance > 3:
+                risk_factors.append(0.3)
+
+        # Blacklist risk
+        if evaluation.risk_factors:
+            risk_factors.append(0.2 * len(evaluation.risk_factors))
+
+        # Domain pattern risk
+        suspicious_patterns = ["free", "cheap", "buy", "sale", "xxx"]
+        if any(p in domain.lower() for p in suspicious_patterns):
+            risk_factors.append(0.2)
+
+        # TLD risk
+        risky_tlds = ["xyz", "top", "click", "link"]
+        if domain.split(".")[-1] in risky_tlds:
+            risk_factors.append(0.15)
+
+        return min(sum(risk_factors), 1.0)
+
+    async def _check_budget(self, amount: float) -> bool:
+        """Check if purchase fits within budget constraints."""
+        spending = await self.spending_tracker.get_spending()
+
+        if amount > self.budget.max_per_domain:
+            return False
+        if spending["daily"] + amount > self.budget.daily_limit:
+            return False
+        if spending["weekly"] + amount > self.budget.weekly_limit:
+            return False
+        if spending["monthly"] + amount > self.budget.monthly_limit:
+            return False
+
+        # Check reserve
+        remaining = self.budget.monthly_limit - spending["monthly"]
+        reserve = self.budget.monthly_limit * self.budget.reserve_percentage
+        if remaining - amount < reserve:
+            return False
+
+        return True
+
+    async def _log_decision(
+        self,
+        decision: PurchaseDecision,
+        evaluation: DomainEvaluation,
+        valuations: list[ValuationResult]
+    ):
+        """Log decision for audit trail."""
+        audit_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "domain": decision.domain,
+            "action": decision.action,
+            "confidence": decision.confidence,
+            "estimated_value": decision.estimated_value,
+            "reason": decision.reason,
+            "evaluation": evaluation.model_dump(),
+            "valuations": [v.__dict__ for v in valuations]
+        }
+
+        with open(self.audit_log_path, "a") as f:
+            f.write(json.dumps(audit_entry) + "\n")
+```
+
+### Human-in-the-Loop for High-Value Decisions
+
+{/* IMAGE_PLACEHOLDER: Create a Slack notification mockup showing an approval request message. Display a card with domain details (name, estimated value, confidence score, risk factors), evaluation summary, and two prominent buttons: "Approve Purchase" (green) and "Reject" (red). Include a countdown timer showing "3h 45m remaining" for the approval window. Add a small "View Full Analysis" link. Show this as a realistic Slack message with proper formatting, user avatar, and timestamp. Style: Authentic Slack UI mockup with proper branding and interactive elements. Place this before the ApprovalWorkflow code to show what the human-in-the-loop experience looks like. */}
+
+<Callout type="tip">
+  **Interactive Component Opportunity:** Build a **Domain Approval Simulator** that
+  lets learners practice making approval decisions. Show them domain details,
+  evaluation metrics, and risk factors, then reveal whether their decision matched
+  the optimal choice. Track their accuracy over multiple scenarios to build
+  intuition for domain valuation.
+</Callout>
+
+```python
+class ApprovalWorkflow:
+    """Human-in-the-loop approval workflow."""
+
+    def __init__(self, slack_webhook: str, approval_timeout_hours: int = 4):
+        self.slack_webhook = slack_webhook
+        self.timeout = timedelta(hours=approval_timeout_hours)
+        self.pending_approvals: dict[str, dict] = {}
+
+    async def request_approval(
+        self,
+        decision: PurchaseDecision,
+        evaluation: DomainEvaluation
+    ) -> str:
+        """Send approval request and return request ID."""
+        request_id = f"approval-{decision.domain}-{datetime.now().timestamp()}"
+
+        self.pending_approvals[request_id] = {
+            "decision": decision,
+            "evaluation": evaluation,
+            "requested_at": datetime.now(),
+            "status": "pending"
+        }
+
+        await self._send_slack_approval_request(request_id, decision, evaluation)
+        return request_id
+
+    async def _send_slack_approval_request(
+        self,
+        request_id: str,
+        decision: PurchaseDecision,
+        evaluation: DomainEvaluation
+    ):
+        """Send interactive Slack message for approval."""
+        message = {
+            "blocks": [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "🔔 Domain Purchase Approval Required"
+                    }
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {"type": "mrkdwn", "text": f"*Domain:*\n{decision.domain}"},
+                        {"type": "mrkdwn", "text": f"*Est. Value:*\n${decision.estimated_value:.2f}"},
+                        {"type": "mrkdwn", "text": f"*Confidence:*\n{decision.confidence:.1%}"},
+                        {"type": "mrkdwn", "text": f"*Reason:*\n{decision.reason}"}
+                    ]
+                },
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "✅ Approve"},
+                            "style": "primary",
+                            "action_id": f"approve_{request_id}"
+                        },
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "❌ Reject"},
+                            "style": "danger",
+                            "action_id": f"reject_{request_id}"
+                        }
+                    ]
+                }
+            ]
+        }
+
+        async with httpx.AsyncClient() as client:
+            await client.post(self.slack_webhook, json=message)
+
+    async def wait_for_approval(
+        self,
+        request_id: str
+    ) -> tuple[bool, Optional[str]]:
+        """Wait for approval with timeout."""
+        start_time = datetime.now()
+
+        while datetime.now() - start_time < self.timeout:
+            approval = self.pending_approvals.get(request_id)
+
+            if approval and approval["status"] != "pending":
+                return (
+                    approval["status"] == "approved",
+                    approval.get("approved_by")
+                )
+
+            await asyncio.sleep(30)
+
+        self.pending_approvals[request_id]["status"] = "timeout"
+        return False, None
+```
+
+---
+
+## 80.9 Production Deployment
+
+{/* IMAGE_PLACEHOLDER: Create an AWS architecture diagram showing the complete serverless deployment: EventBridge (clock icon) triggering Lambda function (agent icon), which queries DynamoDB (database icon) for watch list, calls external APIs (RDAP, valuation services), stores results back to DynamoDB, and sends notifications via SNS (bell icon) to Slack/Email. Include Secrets Manager (key icon) for API credentials and CloudWatch (chart icon) for monitoring. Show data flow with arrows and label each service with its purpose. Add cost estimates for each component. Style: Professional AWS architecture diagram with official AWS service icons. Place this at the start of section 80.9 to show the complete production infrastructure. */}
+
+<Callout type="tip">
+  **Serverless Benefits for Agents:** Serverless deployment is ideal for
+  autonomous agents because you only pay for actual execution time (not idle
+  time), it scales automatically, and managed services handle infrastructure
+  concerns. For a domain monitoring agent that runs every 6 hours, you might
+  pay just $5-10/month instead of $50-100/month for a dedicated server.
+</Callout>
+
+### Serverless Deployment on AWS Lambda
+
+```python
+# lambda_handler.py
+import json
+import boto3
+from domain_watchdog import DomainWatchdogWorkflow
+
+dynamodb = boto3.resource('dynamodb')
+sns = boto3.client('sns')
+secrets = boto3.client('secretsmanager')
+
+def get_secrets():
+    """Retrieve API keys from Secrets Manager."""
+    response = secrets.get_secret_value(SecretId='domain-watchdog-secrets')
+    return json.loads(response['SecretString'])
+
+def lambda_handler(event, context):
+    """AWS Lambda handler for domain monitoring."""
+    secrets_data = get_secrets()
+    watch_list = get_watch_list_from_dynamodb()
+
+    workflow = DomainWatchdogWorkflow(
+        godaddy_api_key=secrets_data['godaddy_key'],
+        estibot_api_key=secrets_data['estibot_key'],
+        registrar_api_key=secrets_data['registrar_key']
+    )
+
+    import asyncio
+    results = asyncio.get_event_loop().run_until_complete(
+        workflow.run_check_cycle(watch_list)
+    )
+
+    # Send notifications via SNS
+    for notification in results.get('notifications', []):
+        sns.publish(
+            TopicArn='arn:aws:sns:us-east-1:123456789:domain-alerts',
+            Message=notification,
+            Subject='Domain Watchdog Alert'
+        )
+
+    store_results_in_dynamodb(results)
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps({
+            'checked': len(watch_list),
+            'actionable': results.get('actionable_count', 0),
+            'purchased': len(results.get('purchased', []))
+        })
+    }
+
+def get_watch_list_from_dynamodb():
+    """Retrieve watch list from DynamoDB."""
+    table = dynamodb.Table('domain-watch-list')
+    response = table.scan()
+    return [item['domain'] for item in response['Items']]
+```
+
+### Infrastructure as Code (Terraform)
+
+```hcl
+# main.tf - Domain Watchdog Infrastructure
+
+resource "aws_lambda_function" "domain_watchdog" {
+  filename         = "lambda_package.zip"
+  function_name    = "domain-watchdog"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "lambda_handler.lambda_handler"
+  runtime         = "python3.11"
+  timeout         = 300
+  memory_size     = 512
+
+  environment {
+    variables = {
+      SECRETS_ARN = aws_secretsmanager_secret.api_keys.arn
+      TABLE_NAME  = aws_dynamodb_table.watch_list.name
+      SNS_TOPIC   = aws_sns_topic.alerts.arn
+    }
+  }
+}
+
+# EventBridge Schedule (every 6 hours)
+resource "aws_cloudwatch_event_rule" "schedule" {
+  name                = "domain-watchdog-schedule"
+  description         = "Trigger domain watchdog every 6 hours"
+  schedule_expression = "rate(6 hours)"
+}
+
+resource "aws_cloudwatch_event_target" "lambda" {
+  rule      = aws_cloudwatch_event_rule.schedule.name
+  target_id = "domain-watchdog"
+  arn       = aws_lambda_function.domain_watchdog.arn
+}
+
+# DynamoDB for watch list and results
+resource "aws_dynamodb_table" "watch_list" {
+  name           = "domain-watch-list"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "domain"
+
+  attribute {
+    name = "domain"
+    type = "S"
+  }
+}
+
+# SNS for notifications
+resource "aws_sns_topic" "alerts" {
+  name = "domain-watchdog-alerts"
+}
+```
+
+### Cost Management
+
+{/* IMAGE_PLACEHOLDER: Create an interactive cost calculator visualization showing monthly operational costs broken down by service: Lambda compute (based on execution time), API calls (RDAP, valuation services), DynamoDB storage, CloudWatch logs, and Secrets Manager. Display sliders for variables: watch list size (10-1000 domains), check frequency (hourly to weekly), and valuation API usage (0-100%). Show real-time cost calculation with a total at the bottom and a "Within Budget" indicator (green checkmark or red warning). Include a cost optimization tips sidebar. Style: Interactive dashboard with sliders, bar charts, and real-time calculations. Place this before the CostManager code to help learners understand operational costs. */}
+
+<Callout type="tip">
+  **Interactive Component Opportunity:** Build a **Domain Swarm Cost Calculator**
+  that lets learners adjust parameters (watch list size, check frequency, API
+  usage) and see real-time cost estimates. Include optimization suggestions like
+  "Reduce checks for domains >60 days from expiry to save $15/month."
+</Callout>
+
+```python
+class CostManager:
+    """Monitor and manage operational costs."""
+
+    def __init__(self, monthly_budget: float = 100.0):
+        self.monthly_budget = monthly_budget
+        self.cost_per_check = 0.001
+        self.cost_per_valuation = 0.01
+
+    def estimate_monthly_cost(
+        self,
+        watch_list_size: int,
+        checks_per_day: int = 4
+    ) -> dict:
+        """Estimate monthly operational costs."""
+        checks_per_month = watch_list_size * checks_per_day * 30
+
+        costs = {
+            "lambda_compute": checks_per_month * self.cost_per_check,
+            "valuation_apis": checks_per_month * self.cost_per_valuation * 0.1,
+            "dynamodb": 5.0,
+            "secrets_manager": 0.40,
+            "cloudwatch": 3.0,
+        }
+
+        costs["total"] = sum(costs.values())
+        costs["within_budget"] = costs["total"] <= self.monthly_budget
+
+        return costs
+
+    def optimize_check_frequency(
+        self,
+        domain_info: DomainInfo
+    ) -> int:
+        """Optimize check frequency based on domain status."""
+        if domain_info.days_until_available is None:
+            return 24  # Check once daily
+
+        days = domain_info.days_until_available
+
+        if days > 60:
+            return 168  # Weekly
+        elif days > 30:
+            return 72   # Every 3 days
+        elif days > 7:
+            return 24   # Daily
+        elif days > 1:
+            return 6    # Every 6 hours
+        else:
+            return 1    # Hourly (domain dropping soon!)
+```
+
+<Callout type="tip">
+  **Cost Optimization Tips:** - Use adaptive check frequencies based on domain
+  expiry dates - Cache RDAP responses to reduce API calls - Batch valuation
+  requests where possible - Use reserved capacity for predictable workloads
+</Callout>
+
+---
+
+<Exercise
+  title="Extend the Domain Swarm"
+  difficulty="expert"
+  objectives={[
+    "Add a fourth agent for domain valuation using comparable sales",
+    "Implement a bidding strategy for auction domains",
+    "Add persistence to track domain history over time",
+    "Create a dashboard to visualize swarm activity",
+    "Deploy to AWS Lambda or Cloud Run with scheduled triggers",
+    "Implement human-in-the-loop approval for high-value domains"
+  ]}
+  hints={[
+    "Use a vector database to store and search comparable domain sales",
+    "Implement exponential backoff for auction bidding",
+    "Consider using SQLite for local persistence of domain tracking",
+    "Use Terraform or Pulumi for infrastructure as code",
+    "Integrate Slack webhooks for approval workflows"
+  ]}
+>
+
+{/* IMAGE_PLACEHOLDER: Create a "challenge roadmap" visualization showing the 6 extension objectives as connected milestones on a path. Each milestone should have an icon (database for valuation agent, gavel for auction bidding, clock for persistence, dashboard for visualization, cloud for deployment, person for human-in-the-loop). Show estimated time for each extension (e.g., "2-3 hours") and difficulty level (1-3 stars). Connect them with a winding path to show the suggested implementation order. Style: Gamified roadmap with colorful milestone markers. Place this inside the Exercise component to motivate learners with a clear progression path. */}
+
+**Challenge:** Extend the Domain Watchdog with:
+
+1. A **Valuation Agent** that compares against recent domain sales
+2. An **Auction Agent** that can participate in domain auctions
+3. A **Dashboard** showing all monitored domains and their status
+4. **Cloud Deployment** with serverless scheduling and notifications
+5. **Human-in-the-Loop** approval workflow for purchases over $500
+
+</Exercise>
+
+---
+
+<ModuleSummary
+  points={[
+    "Multi-agent swarms divide complex tasks into specialized responsibilities",
+    "Event-driven architecture enables reactive agent coordination",
+    "RDAP provides standardized domain status information",
+    "LLM-based evaluation adds intelligence to automated decisions",
+    "Scheduled execution enables truly autonomous operation",
+    "Modern orchestration platforms (Temporal, Inngest, Trigger.dev) provide durable execution for production agents",
+    "Autonomous decision-making requires confidence thresholds, budget management, and human-in-the-loop safeguards",
+    "Serverless deployment patterns enable cost-effective always-on monitoring",
+  ]}
+/>
+
+---
+
+## 🔗 Further Reading
+
+- [APScheduler Documentation](https://apscheduler.readthedocs.io/)
+- [RFC 9082: RDAP Query Format](https://datatracker.ietf.org/doc/html/rfc9082) (supersedes RFC 7482)
+- [ICANN RDAP Overview](https://www.icann.org/rdap)
+- [Domain Name Valuation Guide](https://www.godaddy.com/garage/how-to-value-domain-names/)
+- [Temporal.io Documentation](https://docs.temporal.io/) - Durable workflow orchestration
+- [Inngest Documentation](https://www.inngest.com/docs) - Event-driven serverless functions
+- [Trigger.dev v3 Documentation](https://trigger.dev/docs) - Background jobs without timeouts
+- [GoDaddy GoValue API](https://developer.godaddy.com/) - Domain valuation API
+- [EstiBot API](https://www.estibot.com/api) - Automated domain appraisals
+- [AWS Serverless AI Patterns](https://docs.aws.amazon.com/prescriptive-guidance/latest/agentic-ai-serverless/) - Deploying AI agents on AWS
+
+<Callout type="info">
+  **RDAP vs WHOIS**: RDAP (Registration Data Access Protocol) is the modern
+  replacement for WHOIS, offering standardized JSON responses,
+  internationalization support, and secure access. All major registries now
+  support RDAP.
+</Callout>
+
+**Tomorrow**: Day 81—Capstone Project: AgentOS Ecosystem.
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** This project demonstrates autonomous multi-agent
+  systems with scheduled execution—a pattern used in the AgentOS capstone for
+  background tasks like memory consolidation and proactive research.
+</Callout>
+
+### Prerequisite Exercises
+
+Complete these before starting:
+
+- **EX-06**: ReAct Loop (30 min) - Agent decision-making
+- **EX-09**: Async Patterns (25 min) - Async agent coordination
+- **EX-10**: FastAPI Endpoint (30 min) - API integration
+
+### Related POCs
+
+- **POC-01**: LangGraph State Machine (1-2 hours) - Event-driven workflows
+- **POC-05**: Web Search Integration (1-2 hours) - External data fetching
+- **POC-06**: Request Classification (1-2 hours) - Decision routing
+
+### Capstone Connection
+
+In the AgentOS capstone, you'll use similar patterns for:
+
+- Scheduled background tasks (memory consolidation, index updates)
+- Event-driven agent triggers
+- Autonomous decision-making with human oversight
+
+See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.
+
+---
+
+# 80.10 Step-by-Step Implementation Guide (Lowest Level Details)
+
+{/* IMAGE_PLACEHOLDER: Create a visual implementation roadmap showing three phases as connected sections: Phase 1 (Scaffolding) with folder structure and dependencies, Phase 2 (Core Logic) with code file previews, and Phase 3 (Verification) with terminal output examples. Use a progress bar showing "Start Here" to "Production Ready" with checkpoints. Include estimated time for each phase (30 min, 2 hours, 30 min). Add icons for each step: folder for structure, code for implementation, checkmark for verification. Style: Step-by-step tutorial visualization with clear progression and time estimates. Place this at the start of section 80.10 to give learners a clear implementation path. */}
+
+<Callout type="tip">
+  **Learning Path:** This implementation guide takes you from zero to a working
+  domain monitoring swarm in about 3 hours. Start with the skeleton (Phase 1),
+  add real functionality (Phase 2), then verify it works (Phase 3). Each phase
+  builds on the previous one, so don't skip ahead!
+</Callout>
+
+Follow this guide to build the Domain Watchdog Swarm.
+
+## Phase 1: Scaffolding
+
+1.  **Dependencies**:
+
+    ```bash
+    mkdir domain-watchdog
+    cd domain-watchdog
+    python -m venv venv
+    source venv/bin/activate
+    pip install langgraph langchain-openai httpx apscheduler pydantic
+    ```
+
+2.  **Structure**:
+    ```text
+    domain-watchdog/
+    ├── main.py       # The Service
+    ├── agents.py     # Monitor, Evaluator, Purchaser classes
+    └── state.py      # TypedDict state
+    ```
+
+## Phase 2: Core Logic (The Code)
+
+**File: `main.py`**
+
+```python
+import asyncio
+from dotenv import load_dotenv
+from agents import MonitorAgent, EvaluatorAgent, PurchaserAgent
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, List, Literal
+
+load_dotenv()
+
+# 1. State
+class WatchdogState(TypedDict):
+    domain: str
+    status: Literal["available", "taken", "unknown"]
+    valuation: dict
+    decision: str     # "buy", "pass"
+    purchase_result: str
+
+# 2. Nodes
+async def monitor_node(state: WatchdogState):
+    print(f"🔍 Monitoring: {state['domain']}")
+    # Mock result for demo
+    return {"status": "available"}
+
+async def evaluator_node(state: WatchdogState):
+    print("📊 Evaluating...")
+    # Mock valuation
+    return {
+        "valuation": {"value": 500, "risk": "low"},
+        "decision": "buy"
+    }
+
+async def purchaser_node(state: WatchdogState):
+    print("💳 Purchasing...")
+    return {"purchase_result": "Success: TXN-12345"}
+
+# 3. Graph
+workflow = StateGraph(WatchdogState)
+workflow.add_node("monitor", monitor_node)
+workflow.add_node("evaluator", evaluator_node)
+workflow.add_node("purchaser", purchaser_node)
+
+workflow.add_edge(START, "monitor")
+workflow.add_edge("monitor", "evaluator")
+workflow.add_edge("evaluator", "purchaser")
+workflow.add_edge("purchaser", END)
+
+app = workflow.compile()
+
+# 4. Execution
+async def main():
+    print("--- 🚀 WATCHDOG STARTED ---")
+    result = await app.ainvoke({"domain": "agentic-engineer.io", "status": "unknown"})
+    print(f"\nFinal Result: {result['purchase_result']}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Phase 3: Verification
+
+1.  **Run**: `python main.py`
+2.  **Observe**:
+    - "Monitoring: agentic-engineer.io"
+    - "Evaluating..."
+    - "Purchasing..."
+    - "Final Result: Success: TXN-12345"
+
+This is the Skeleton. Now copy-paste the `MonitorAgent` (RDAP) and `EvaluatorAgent` (OpenAI) code from the module into `agents.py` to make it real.

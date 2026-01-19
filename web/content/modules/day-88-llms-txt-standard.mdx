@@ -1,0 +1,637 @@
+---
+title: "llms.txt & AI-Readable Documentation"
+description: "Master the llms.txt standard for making documentation AI-friendly. Learn to structure content for optimal LLM consumption."
+day: 88
+week: 12
+tags: ["llms-txt", "documentation", "standards", "ai-readable", "markdown"]
+---
+
+# llms.txt & AI-Readable Documentation
+
+## The Documentation Dilemma
+
+Your documentation is beautiful for humans—but terrible for AI agents. Navigation bars, ads, JavaScript, CSS... all noise that confuses LLMs and wastes context tokens.
+
+**llms.txt** solves this by providing a clean, structured, Markdown-based view of your content specifically for AI consumption.
+
+<ConceptVisual
+  src="/images/llms_txt_comparison.png"
+  alt="HTML vs llms.txt Comparison"
+  caption="Documentation optimized for humans vs. machines: 90% noise reduction."
+/>
+
+<Callout type="insight">
+  **Think of it as**: `robots.txt` for AI inference—not blocking access, but
+  guiding AI to your most useful content in the most efficient format.
+</Callout>
+
+<LLMsTxtGenerator />
+
+## The Problem with HTML Documentation
+
+```html
+<!-- What LLMs see when crawling your docs -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="analytics.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+    <!-- 500 lines of metadata -->
+  </head>
+  <body>
+    <nav><!-- 200 lines of navigation --></nav>
+    <aside><!-- 150 lines of sidebar --></aside>
+    <main>
+      <div class="container">
+        <div class="row">
+          <div class="col-md-8">
+            <!-- Finally, 50 lines of actual content -->
+            <h1>Getting Started</h1>
+            <p>Welcome to our API...</p>
+          </div>
+        </div>
+      </div>
+    </main>
+    <footer><!-- 100 lines of footer --></footer>
+  </body>
+</html>
+```
+
+**Result**: LLM wastes 900 tokens on noise, 50 tokens on content.
+
+<ConceptVisual
+  src="/images/html_noise_visualization.png"
+  alt="Visualization showing how much of HTML is noise vs actual content for LLMs"
+  caption="In typical HTML docs, only 5-10% is actual content—the rest is navigation, styling, and scripts"
+/>
+
+## The llms.txt Standard
+
+### Basic Structure
+
+```
+/llms.txt          # Concise summary (< 8KB)
+/llms-full.txt     # Complete documentation
+```
+
+### Example llms.txt
+
+````markdown
+# MyAPI Documentation
+
+> A RESTful API for managing user accounts and authentication
+
+## Core Concepts
+
+- **Authentication**: OAuth 2.0 with JWT tokens
+- **Rate Limiting**: 1000 requests/hour per API key
+- **Versioning**: URL-based (e.g., /v1/users)
+
+## Quick Start
+
+```bash
+# Get API key
+curl -X POST https://api.example.com/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "secure123"}'
+
+# Make authenticated request
+curl https://api.example.com/v1/users/me \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+````
+
+## Key Endpoints
+
+### Authentication
+
+- POST /v1/auth/register - Create account
+- POST /v1/auth/login - Get access token
+- POST /v1/auth/refresh - Refresh token
+
+### Users
+
+- GET /v1/users/me - Get current user
+- PATCH /v1/users/me - Update profile
+- DELETE /v1/users/me - Delete account
+
+## Common Patterns
+
+### Error Handling
+
+All errors return JSON with `error` and `message` fields:
+
+```json
+{
+  "error": "invalid_token",
+  "message": "The provided token has expired"
+}
+```
+
+### Pagination
+
+Use `page` and `limit` query parameters:
+
+```
+GET /v1/users?page=2&limit=50
+```
+
+## Constraints
+
+- Maximum request size: 10MB
+- Token expiry: 1 hour (access), 30 days (refresh)
+- Supported formats: JSON only
+
+## Full Documentation
+
+For complete API reference, see /llms-full.txt
+
+````
+
+## Implementing llms.txt
+
+### Step 1: Generate from Existing Docs
+
+```python
+from pathlib import Path
+import re
+from typing import List, Dict
+
+class LLMsTxtGenerator:
+    """Generate llms.txt from existing documentation"""
+
+    def __init__(self, docs_dir: str):
+        self.docs_dir = Path(docs_dir)
+
+    def generate(self, output_path: str = "llms.txt"):
+        """Generate llms.txt file"""
+
+        # Collect all markdown files
+        md_files = list(self.docs_dir.rglob("*.md"))
+
+        # Parse and structure content
+        sections = self._parse_docs(md_files)
+
+        # Generate concise version
+        concise = self._generate_concise(sections)
+
+        # Write to file
+        with open(output_path, 'w') as f:
+            f.write(concise)
+
+        # Generate full version
+        full = self._generate_full(sections)
+        with open(output_path.replace('.txt', '-full.txt'), 'w') as f:
+            f.write(full)
+
+    def _parse_docs(self, files: List[Path]) -> Dict:
+        """Parse documentation files into structured sections"""
+        sections = {
+            "overview": "",
+            "concepts": [],
+            "quickstart": "",
+            "endpoints": [],
+            "patterns": [],
+            "constraints": []
+        }
+
+        for file in files:
+            with open(file, 'r') as f:
+                content = f.read()
+
+            # Categorize based on filename/content
+            if "overview" in file.name or "intro" in file.name:
+                sections["overview"] = self._extract_summary(content)
+            elif "quickstart" in file.name or "getting-started" in file.name:
+                sections["quickstart"] = self._clean_markdown(content)
+            elif "api" in file.name or "endpoints" in file.name:
+                sections["endpoints"].extend(self._extract_endpoints(content))
+            elif "concepts" in file.name:
+                sections["concepts"].extend(self._extract_concepts(content))
+
+        return sections
+
+    def _extract_summary(self, content: str, max_words: int = 50) -> str:
+        """Extract concise summary"""
+        # Remove markdown formatting
+        text = re.sub(r'[#*`\[\]]', '', content)
+
+        # Get first paragraph
+        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+        if not paragraphs:
+            return ""
+
+        summary = paragraphs[0]
+        words = summary.split()
+
+        if len(words) > max_words:
+            summary = ' '.join(words[:max_words]) + '...'
+
+        return summary
+
+    def _clean_markdown(self, content: str) -> str:
+        """Clean markdown for LLM consumption"""
+        # Remove HTML comments
+        content = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
+
+        # Remove excessive whitespace
+        content = re.sub(r'\n{3,}', '\n\n', content)
+
+        # Remove navigation links
+        content = re.sub(r'\[.*?\]\(#.*?\)', '', content)
+
+        return content.strip()
+
+    def _extract_endpoints(self, content: str) -> List[Dict]:
+        """Extract API endpoints"""
+        endpoints = []
+
+        # Pattern: ### POST /v1/users
+        pattern = r'###\s+(GET|POST|PUT|PATCH|DELETE)\s+(/[^\s]+)'
+        matches = re.finditer(pattern, content)
+
+        for match in matches:
+            method = match.group(1)
+            path = match.group(2)
+
+            # Extract description (next line after heading)
+            start = match.end()
+            next_heading = content.find('###', start)
+            if next_heading == -1:
+                next_heading = len(content)
+
+            description = content[start:next_heading].strip().split('\n')[0]
+
+            endpoints.append({
+                "method": method,
+                "path": path,
+                "description": description
+            })
+
+        return endpoints
+
+    def _extract_concepts(self, content: str) -> List[Dict]:
+        """Extract key concepts"""
+        concepts = []
+
+        # Pattern: **Concept**: Description
+        pattern = r'\*\*([^*]+)\*\*:\s*([^\n]+)'
+        matches = re.finditer(pattern, content)
+
+        for match in matches:
+            concepts.append({
+                "name": match.group(1),
+                "description": match.group(2)
+            })
+
+        return concepts
+
+    def _generate_concise(self, sections: Dict) -> str:
+        """Generate concise llms.txt (< 8KB)"""
+        output = []
+
+        # Header
+        output.append("# API Documentation\n")
+
+        if sections["overview"]:
+            output.append(f"> {sections['overview']}\n")
+
+        # Core concepts
+        if sections["concepts"]:
+            output.append("## Core Concepts\n")
+            for concept in sections["concepts"][:5]:  # Limit to 5
+                output.append(f"- **{concept['name']}**: {concept['description']}")
+            output.append("")
+
+        # Quick start
+        if sections["quickstart"]:
+            output.append("## Quick Start\n")
+            # Truncate if too long
+            qs = sections["quickstart"]
+            if len(qs) > 1000:
+                qs = qs[:1000] + "\n\n[See llms-full.txt for complete examples]"
+            output.append(qs)
+            output.append("")
+
+        # Key endpoints
+        if sections["endpoints"]:
+            output.append("## Key Endpoints\n")
+
+            # Group by category (first path segment)
+            by_category = {}
+            for ep in sections["endpoints"]:
+                category = ep["path"].split('/')[2] if len(ep["path"].split('/')) > 2 else "general"
+                if category not in by_category:
+                    by_category[category] = []
+                by_category[category].append(ep)
+
+            for category, endpoints in by_category.items():
+                output.append(f"### {category.title()}")
+                for ep in endpoints[:3]:  # Limit to 3 per category
+                    output.append(f"- {ep['method']} {ep['path']} - {ep['description']}")
+                output.append("")
+
+        # Footer
+        output.append("## Full Documentation\n")
+        output.append("For complete API reference, see /llms-full.txt")
+
+        return '\n'.join(output)
+
+    def _generate_full(self, sections: Dict) -> str:
+        """Generate complete llms-full.txt"""
+        # Include everything without truncation
+        output = []
+
+        output.append("# Complete API Documentation\n")
+
+        if sections["overview"]:
+            output.append(f"## Overview\n\n{sections['overview']}\n")
+
+        if sections["concepts"]:
+            output.append("## Core Concepts\n")
+            for concept in sections["concepts"]:
+                output.append(f"### {concept['name']}\n{concept['description']}\n")
+
+        if sections["quickstart"]:
+            output.append(f"## Quick Start\n\n{sections['quickstart']}\n")
+
+        if sections["endpoints"]:
+            output.append("## API Reference\n")
+            for ep in sections["endpoints"]:
+                output.append(f"### {ep['method']} {ep['path']}")
+                output.append(f"{ep['description']}\n")
+
+        return '\n'.join(output)
+
+# Usage
+generator = LLMsTxtGenerator("./docs")
+generator.generate("public/llms.txt")
+````
+
+### Step 2: Serve with Proper Headers
+
+```python
+from fastapi import FastAPI, Response
+from fastapi.responses import PlainTextResponse
+
+app = FastAPI()
+
+@app.get("/llms.txt")
+async def llms_txt():
+    """Serve llms.txt with proper headers"""
+
+    with open("public/llms.txt", 'r') as f:
+        content = f.read()
+
+    return PlainTextResponse(
+        content=content,
+        headers={
+            "Content-Type": "text/markdown; charset=utf-8",
+            "Cache-Control": "public, max-age=3600",
+            "X-Robots-Tag": "noindex",  # Don't index in search engines
+        }
+    )
+
+@app.get("/llms-full.txt")
+async def llms_full_txt():
+    """Serve complete documentation"""
+
+    with open("public/llms-full.txt", 'r') as f:
+        content = f.read()
+
+    return PlainTextResponse(
+        content=content,
+        headers={
+            "Content-Type": "text/markdown; charset=utf-8",
+            "Cache-Control": "public, max-age=3600",
+        }
+    )
+```
+
+### Step 3: Auto-Generate in CI/CD
+
+```yaml
+# .github/workflows/generate-llms-txt.yml
+name: Generate llms.txt
+
+on:
+  push:
+    paths:
+      - "docs/**"
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Generate llms.txt
+        run: |
+          python scripts/generate_llms_txt.py
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add public/llms*.txt
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update llms.txt"
+          git push
+```
+
+## Best Practices
+
+### 1. Keep llms.txt Concise
+
+```python
+def validate_size(filepath: str, max_kb: int = 8):
+    """Ensure llms.txt stays under size limit"""
+    size_kb = Path(filepath).stat().st_size / 1024
+
+    if size_kb > max_kb:
+        raise ValueError(f"llms.txt is {size_kb:.1f}KB, exceeds {max_kb}KB limit")
+
+    print(f"✓ llms.txt is {size_kb:.1f}KB")
+
+validate_size("public/llms.txt")
+```
+
+### 2. Structure for Scanning
+
+```markdown
+# Good: Scannable structure
+
+## Authentication
+
+- OAuth 2.0 with JWT
+- Tokens expire after 1 hour
+- Refresh tokens valid for 30 days
+
+## Rate Limits
+
+- 1000 requests/hour per key
+- 10 requests/second burst
+- 429 status on limit exceeded
+
+# Bad: Dense paragraphs
+
+## Authentication
+
+Our API uses OAuth 2.0 for authentication. When you authenticate, you'll receive a JWT token that expires after one hour. You can use refresh tokens to get new access tokens, and these refresh tokens are valid for 30 days from issuance...
+```
+
+### 3. Include Canonical Examples
+
+````markdown
+## Common Patterns
+
+### Creating a User
+
+```bash
+curl -X POST https://api.example.com/v1/users \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "name": "John Doe",
+    "role": "member"
+  }'
+```
+````
+
+Response:
+
+```json
+{
+  "id": "usr_123",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "role": "member",
+  "created_at": "2025-01-15T10:30:00Z"
+}
+```
+
+````
+
+### 4. Document Constraints Explicitly
+
+```markdown
+## Constraints & Limitations
+
+- **Request Size**: Maximum 10MB per request
+- **Response Time**: 30 second timeout
+- **Pagination**: Max 100 items per page
+- **Supported Formats**: JSON only (no XML)
+- **Date Format**: ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)
+- **Authentication**: Required for all endpoints except /health
+````
+
+## Using llms.txt in Agents
+
+```python
+import requests
+from langchain_openai import ChatOpenAI
+
+class DocumentationAgent:
+    """Agent that uses llms.txt for API knowledge"""
+
+    def __init__(self, llms_txt_url: str):
+        self.llm = ChatOpenAI(model="gpt-4o")
+        self.docs = self._load_docs(llms_txt_url)
+
+    def _load_docs(self, url: str) -> str:
+        """Load llms.txt documentation"""
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.text
+
+    def answer_question(self, question: str) -> str:
+        """Answer questions using documentation"""
+
+        prompt = f"""
+You are an API documentation assistant.
+
+Documentation:
+{self.docs}
+
+User Question: {question}
+
+Provide a clear, accurate answer based on the documentation above.
+Include code examples when relevant.
+"""
+
+        response = self.llm.invoke(prompt)
+        return response.content
+
+# Usage
+agent = DocumentationAgent("https://api.example.com/llms.txt")
+
+answer = agent.answer_question("How do I authenticate?")
+print(answer)
+# Output: "To authenticate, use OAuth 2.0 with JWT tokens..."
+```
+
+## Exercise: Generate llms.txt for Your Project
+
+<Exercise
+  title="Documentation Converter"
+  difficulty="intermediate"
+  timeEstimate="45 minutes"
+>
+
+Create llms.txt for an existing project:
+
+**Requirements**:
+
+1. Parse existing documentation (Markdown, HTML, or API spec)
+2. Generate concise llms.txt (< 8KB)
+3. Generate complete llms-full.txt
+4. Add proper HTTP headers
+5. Validate output quality
+
+**Acceptance Criteria**:
+
+- llms.txt is under 8KB
+- Includes core concepts, quick start, and key endpoints
+- Properly formatted Markdown
+- Served with correct Content-Type header
+
+**Extension Challenge**:
+
+- Add automatic updates on doc changes
+- Generate from OpenAPI/Swagger spec
+- Create interactive preview tool
+
+</Exercise>
+
+## Key Takeaways
+
+<Callout type="success">
+
+**What You Learned**:
+
+1. **llms.txt provides AI-friendly documentation** without HTML noise
+2. **Keep it concise** (< 8KB) with full version in llms-full.txt
+3. **Structure for scanning** with clear headings and bullet points
+4. **Auto-generate** from existing docs to stay synchronized
+5. **Serve with proper headers** for optimal LLM consumption
+
+</Callout>
+
+## Next Steps
+
+In the next module, we'll explore the **Future of Agentic AI**—emerging trends and what's coming next in the field.
+
+<PageNavigation
+  prev={{
+    title: "Capstone: AgentOS Ecosystem",
+    href: "/modules/day-87-capstone-agentic-ecosystem",
+  }}
+  next={{ title: "Future of Agentic AI", href: "/modules/day-89-future" }}
+/>

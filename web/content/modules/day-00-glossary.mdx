@@ -1,32 +1,122 @@
 ---
 title: "AI & Agents Glossary"
-description: "A comprehensive reference of key terms, concepts, and acronyms used throughout this course."
+description: "A comprehensive reference of key terms, concepts, and acronyms used throughout this 90-day course on building production-grade AI agents."
 week: 1
 day: 0
 ---
 
-<ReadingTime minutes={15} />
+<ReadingTime minutes={20} />
 
 # AI & Agents Glossary
 
-This glossary provides definitions for all key terms used in this course. Bookmark this page for quick reference as you progress through the modules.
+This glossary provides definitions for all key terms used throughout this **90-day, 12-week course**. Bookmark this page for quick reference as you progress through the modules.
+
+<ConceptVisual
+  src="/images/glossary_hero_concept.png"
+  alt="Visual Glossary"
+  caption="A map of the AI landscape: connecting Agents, LLMs, MCP, RAG, and LangGraph."
+/>
 
 <Callout type="tip">
   **Pro Tip:** Use your browser's find function (Ctrl/Cmd + F) to quickly search
-  for specific terms.
+  for specific terms. Terms are organized alphabetically with cross-references
+  to related concepts.
 </Callout>
+
+<ConceptVisual
+  src="/images/glossary_search_ui.png"
+  alt="Interactive Glossary Search"
+  caption="Future feature: Interactive search to filter terms by Foundations, Production, and Advanced categories."
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Agent",
+      definition:
+        "An LLM-powered system that can reason, plan, and take actions",
+    },
+    {
+      term: "MCP",
+      definition:
+        "Model Context Protocol - the universal connector for AI tools",
+    },
+    {
+      term: "RAG",
+      definition:
+        "Retrieval-Augmented Generation - grounding LLMs with external data",
+    },
+    {
+      term: "LangGraph",
+      definition: "Framework for building stateful agent workflows",
+    },
+  ]}
+/>
+
+---
+
+## How Terms Are Organized
+
+This glossary covers concepts you'll encounter across all three months of the course:
+
+- **Month 1 (Days 1-30)**: Foundational terms like LLM, Token, Prompt, RAG
+- **Month 2 (Days 31-60)**: Production terms like Orchestrator, Guardrails, Observability
+- **Month 3 (Days 61-90)**: Advanced terms like Swarm Intelligence, World Model, A2A Protocol
+
+<ConceptVisual
+  src="/images/course_timeline_horizontal.png"
+  alt="90-Day Course Timeline"
+  caption="Your 12-week journey from foundations to advanced agentic systems."
+/>
 
 ---
 
 ## A
 
+### A2A Protocol (Agent-to-Agent)
+
+A protocol for enabling communication between AI agents from different systems. Allows agents to discover each other's capabilities and collaborate on tasks. Emerging alongside MCP as part of the agentic AI infrastructure.
+
 ### Agent
 
 A software system that uses an LLM as its reasoning engine while providing additional capabilities like tool use, memory, and control flow. Unlike a chatbot that only generates text, an agent can take actions in the world.
 
+<ConceptIntro
+  title="Understanding Agents"
+  analogy="Think of an agent like a skilled assistant who can not only answer questions but also send emails, search the web, write code, and complete multi-step tasks on your behalf."
+  technicalDef="An agent is a system that combines an LLM for reasoning with tools for action, memory for context persistence, and control flow for handling complex, multi-step tasks autonomously."
+  whyItMatters="Agents are the core building block of this entire course. Understanding what makes something an 'agent' vs a 'chatbot' is fundamental to everything you'll build."
+/>
+
+### Agentic AI
+
+AI systems designed to operate with greater autonomy, making decisions and taking actions over extended periods without constant human guidance. Agentic AI emphasizes goal-directed behavior, planning, and adaptation.
+
 ### Agentic Loop
 
 The cyclical process agents use: Perceive → Reason → Act → Observe → Repeat. This allows agents to handle uncertainty and retry failed operations.
+
+<ConceptVisual
+  src="/images/agentic_loop_cycle.png"
+  alt="The Agentic Loop"
+  caption="The continuous cycle of Perception, Reasoning, Action, and Observation that drives autonomous agents."
+/>
+
+### Agentic RAG
+
+An advanced form of Retrieval-Augmented Generation where the AI agent autonomously decides when and what to retrieve, can refine queries iteratively, and self-corrects its outputs. Unlike traditional RAG which follows a fixed retrieve-then-generate pattern, agentic RAG adapts its retrieval strategy based on the task.
+
+### Agentic Workflow
+
+A structured process where an AI agent autonomously plans, executes, and refines tasks with minimal human intervention. Combines planning, tool use, and self-evaluation to achieve complex goals.
+
+### Anthropic
+
+The AI safety company that created Claude and introduced the Model Context Protocol (MCP). Known for their focus on AI alignment and safety research.
+
+### AutoGen
+
+A Microsoft framework for building autonomous multi-agent systems. Agents can communicate, delegate tasks, and adapt their behavior based on external inputs. Popular for building conversational AI systems and automated research assistants.
 
 ### API (Application Programming Interface)
 
@@ -36,17 +126,43 @@ A set of rules that allows different software applications to communicate. In AI
 
 The core innovation in Transformers that allows the model to focus on relevant parts of the input when generating each output token. It's how LLMs understand context and relationships between words.
 
+<ConceptVisual
+  src="/images/attention_mechanism_heatmap.png"
+  alt="Attention Mechanism"
+  caption="Visualizing how models 'pay attention' to relevant words when processing a sequence."
+/>
+
+### Autonomous Agent
+
+An AI agent that operates independently without requiring constant human supervision. Autonomous agents can perceive their environment, make decisions, and execute multi-step tasks to achieve goals. The degree of autonomy varies from semi-autonomous (requiring periodic human approval) to fully autonomous (operating independently for extended periods).
+
 ---
 
 ## B
+
+### Batch Processing
+
+Processing multiple requests or tasks together rather than one at a time. In agent systems, batch processing can improve efficiency and reduce costs when handling many similar operations.
+
+### Benchmark
+
+A standardized test or dataset used to evaluate and compare AI model performance. Common benchmarks for agents include task completion rates, reasoning accuracy, and tool use effectiveness.
 
 ### Backpropagation
 
 The algorithm used to train neural networks by calculating how much each parameter contributed to the error and adjusting accordingly.
 
+### Belief State
+
+An agent's internal representation of the current situation based on available information. When an agent has incomplete information, it maintains a belief state representing its best understanding of the environment.
+
 ### BM25
 
 A keyword-based ranking algorithm used in traditional search engines. Often combined with vector search in hybrid RAG systems.
+
+### Breakpoint
+
+In LangGraph, a mechanism to pause agent execution at specific points for human review, debugging, or approval before continuing.
 
 ---
 
@@ -56,6 +172,16 @@ A keyword-based ranking algorithm used in traditional search engines. Often comb
 
 A sequence of LLM calls or operations executed in order. Simpler than agents but can't handle loops or retries.
 
+### Chain-of-Thought (CoT)
+
+A prompting technique that encourages the model to show its reasoning step-by-step before arriving at an answer. Improves performance on complex reasoning tasks by making the thinking process explicit.
+
+<ConceptVisual
+  src="/images/cot_comparison_split.png"
+  alt="Chain-of-Thought Reasoning"
+  caption="Step-by-step reasoning (right) significantly improves accuracy over direct answering (left) for complex tasks."
+/>
+
 ### Checkpointing
 
 Saving the state of an agent at specific points so it can be resumed later or rolled back if something goes wrong.
@@ -64,13 +190,27 @@ Saving the state of an agent at specific points so it can be resumed later or ro
 
 The process of splitting documents into smaller pieces for indexing in a RAG system. Good chunking preserves semantic meaning.
 
+<ConceptVisual
+  src="/images/chunking_strategies_diagram.png"
+  alt="Chunking Strategies"
+  caption="Different strategies for splitting text: Fixed-size (fast), Semantic (meaning-aware), and Recursive (hierarchical)."
+/>
+
 ### Claude
 
-Anthropic's family of LLMs, known for strong reasoning and safety features. Claude 3.5 Sonnet is commonly used for coding tasks.
+Anthropic's family of LLMs, known for strong reasoning and safety features. Claude 4 Sonnet and Opus are hybrid models featuring both instant responses and "Extended Thinking" mode for deeper reasoning. Claude 4 Opus can work autonomously on tasks for up to seven hours.
+
+### Coding Agent
+
+An AI agent specialized in software development tasks including writing, reviewing, debugging, and refactoring code. Examples include Claude Code, GitHub Copilot, and Cursor. Coding agents can navigate codebases, execute commands, and make multi-file changes autonomously.
+
+### Cognitive Architecture
+
+The overall design pattern that defines how an agent perceives, reasons, decides, and acts. Different architectures (ReAct, Plan-and-Execute, etc.) suit different types of tasks.
 
 ### Context Engineering
 
-The strategic process of selecting, formatting, and managing information provided to an LLM. Includes deciding what to include, exclude, and how to structure prompts.
+The strategic process of selecting, formatting, and managing information provided to an LLM. Includes deciding what to include, exclude, and how to structure prompts. A critical skill for building effective agents.
 
 ### Context Poisoning
 
@@ -83,6 +223,16 @@ The gradual degradation of model performance as the context window fills with ir
 ### Context Window
 
 The maximum amount of text (measured in tokens) that an LLM can process at once. Includes both input and output.
+
+<ConceptVisual
+  src="/images/context_window_comparison_chart.png"
+  alt="Context Window Comparison"
+  caption="Comparing context window sizes (memory capacity) across major LLMs."
+/>
+
+### Computer Use
+
+A capability that allows AI agents to interact with graphical user interfaces by viewing screenshots and performing actions like clicking, scrolling, and typing. Enables agents to operate software applications just as humans do. Anthropic's Claude and OpenAI's CUA (Computer-Using Agent) model power this capability.
 
 ### CrewAI
 
@@ -100,9 +250,17 @@ A one-way pipeline with no loops. Traditional software architecture that doesn't
 
 A subset of machine learning using neural networks with multiple layers to learn complex patterns from data.
 
+### Delegation
+
+The process by which one agent assigns a subtask to another agent. A key pattern in multi-agent systems where specialized agents handle specific types of work.
+
 ### Deterministic
 
 Always producing the same output for the same input. Traditional software is deterministic; LLMs are probabilistic.
+
+### DeepSeek
+
+A leading Chinese AI lab known for high-performance open-weights models (DeepSeek V3) and reasoning models (DeepSeek R1). They are notable for extreme efficiency and low inference costs.
 
 ---
 
@@ -112,9 +270,19 @@ Always producing the same output for the same input. Traditional software is det
 
 A sandboxed environment for safely executing code generated by LLMs. Prevents malicious code from affecting your system.
 
+### Edge (in LangGraph)
+
+A connection between nodes in a graph that defines control flow. Edges can be conditional, routing to different nodes based on state.
+
 ### Embedding
 
 A numerical representation (vector) of text that captures semantic meaning. Similar concepts have similar embeddings.
+
+<ConceptVisual
+  src="/images/embedding_space_scatter.png"
+  alt="Semantic Embedding Space"
+  caption="Concepts with similar meanings cluster together in the high-dimensional embedding space."
+/>
 
 ### Embedding Model
 
@@ -124,9 +292,21 @@ A model that converts text into embedding vectors. Examples: text-embedding-3-sm
 
 An agent's memory of past experiences and interactions, typically stored in a vector database for retrieval.
 
+### Evaluation (Evals)
+
+The process of systematically testing and measuring an agent's performance. Includes metrics like task completion rate, accuracy, latency, and cost. Critical for production deployment and continuous improvement.
+
+### Extended Thinking
+
+A capability in Claude 4 models where the AI can engage in prolonged reasoning (minutes to hours) before responding. The model "thinks" through complex problems step-by-step, producing higher-quality outputs for difficult tasks like coding, math, and analysis.
+
 ---
 
 ## F
+
+### Fallback
+
+A backup strategy when the primary approach fails. In agents, fallbacks might include retrying with a different model, simplifying the task, or escalating to a human.
 
 ### Few-Shot Learning
 
@@ -136,17 +316,43 @@ Providing a few examples in the prompt to help the model understand the desired 
 
 Training a pre-trained model further on specific data to specialize it for a particular task or domain.
 
+### Function Calling
+
+A capability where LLMs can output structured data to invoke external functions or APIs. The model doesn't execute the function—it generates the parameters, and your code handles execution.
+
 ---
 
 ## G
 
+### Goal
+
+The desired outcome that an agent is designed to achieve. Goals can be explicit (user-specified) or implicit (derived from context). Effective agents decompose high-level goals into actionable subgoals.
+
+### Gemini
+
+Google's family of multimodal LLMs. Gemini 2.5 Pro and Flash models offer up to 1 million token context windows, making them suitable for processing large documents and codebases.
+
 ### GPT (Generative Pre-trained Transformer)
 
-OpenAI's family of LLMs. GPT-4 and GPT-4o are commonly used for agent development.
+OpenAI's family of LLMs. GPT-4o offers 128K context, while GPT-5 (released August 2025) features a 400K context window with up to 128K output tokens. GPT-5 includes three modes: Instant (fast responses), Thinking (deep reasoning), and Pro (maximum capability).
 
 ### Graph (in LangGraph)
 
 A data structure where nodes represent operations and edges represent control flow. LangGraph uses graphs to model agent behavior.
+
+<ConceptVisual
+  src="/images/langgraph_architecture_diagram.png"
+  alt="LangGraph Architecture"
+  caption="LangGraph models agents as nodes and edges, allowing for complex, cyclical workflows and state management."
+/>
+
+### Grounding
+
+The process of connecting LLM outputs to verifiable sources of truth, reducing hallucinations. RAG is one form of grounding; tool use is another.
+
+### Guardrails
+
+Safety mechanisms that constrain agent behavior within acceptable boundaries. Includes input validation, output filtering, action restrictions, and rate limiting. Essential for production agents to prevent harmful or unintended actions.
 
 ---
 
@@ -156,6 +362,16 @@ A data structure where nodes represent operations and edges represent control fl
 
 When an LLM generates content that is factually incorrect or not grounded in the provided context. A fundamental limitation of current models.
 
+<ConceptVisual
+  src="/images/hallucination_comparison_scale.png"
+  alt="Hallucination vs. Grounding"
+  caption="Visualizing the difference between plausible but false 'hallucinations' and verified, grounded responses."
+/>
+
+### Handoff
+
+The process of transferring control from one agent to another, typically with relevant context. Used in multi-agent systems when a task requires different expertise.
+
 ### HITL (Human-in-the-Loop)
 
 A pattern where agents pause for human approval before taking critical actions. Essential for production safety.
@@ -164,17 +380,51 @@ A pattern where agents pause for human approval before taking critical actions. 
 
 Combining keyword-based search (BM25) with semantic search (vectors) for better retrieval results.
 
+<ConceptVisual
+  src="/images/hybrid_search_architecture.png"
+  alt="Hybrid Search Architecture"
+  caption="Merging keyword search (BM25) with semantic search (Vectors) for optimal retrieval accuracy."
+/>
+
 ---
 
 ## I
+
+### Idempotent
+
+An operation that produces the same result regardless of how many times it's executed. Important for agent reliability when retrying failed operations.
 
 ### Inference
 
 The process of generating outputs from a trained model, as opposed to training the model.
 
+### Inference-Time Compute
+
+Also called "test-time compute," this is the computational resources used during model inference rather than training. Reasoning models like OpenAI's o1/o3 series use additional inference-time compute to "think longer" on complex problems, trading speed for improved accuracy. This has emerged as a new scaling paradigm alongside traditional training-time scaling.
+
+### Interrupt
+
+In LangGraph, a mechanism to pause execution and wait for external input (like human approval) before continuing.
+
 ### Isolation (Context)
 
 Giving each agent or sub-agent only the minimum information it needs, preventing context poisoning.
+
+---
+
+## J
+
+### JSON-RPC
+
+A remote procedure call protocol encoded in JSON. Used by MCP for communication between clients and servers, enabling standardized tool invocation and data exchange.
+
+---
+
+## K
+
+### Knowledge Graph
+
+A structured representation of information as a network of entities and their relationships. Agents can query knowledge graphs to understand connections between concepts and make informed decisions.
 
 ---
 
@@ -186,15 +436,27 @@ A popular framework for building LLM applications, providing abstractions for pr
 
 ### LangGraph
 
-A library built on LangChain for creating stateful, graph-based agent workflows. The primary framework used in this course.
+A library built on LangChain for creating stateful, graph-based agent workflows. Uses nodes (functions) and edges (control flow) to model agent behavior. Reached version 1.0 in October 2025, marking production-ready stability. The primary framework used in this course.
 
 ### LangSmith
 
-A platform for debugging, testing, and monitoring LLM applications. Provides detailed execution traces.
+A platform for debugging, testing, and monitoring LLM applications. Provides detailed execution traces and is essential for production agent development.
+
+### Latency
+
+The time delay between sending a request and receiving a response. A critical metric for agent performance, especially in user-facing applications.
+
+### Llama
+
+Meta's family of open-weights LLMs. Llama 3 models are available in various sizes and can be run locally or through cloud providers. Popular for applications requiring data privacy or customization through fine-tuning.
 
 ### LLM (Large Language Model)
 
-A neural network trained on massive text data to understand and generate human language. Examples: GPT-4, Claude, Llama.
+A neural network trained on massive text data to understand and generate human language. Examples: GPT-4o, GPT-5, Claude 4, Gemini 2.5, Llama 3.
+
+### Long-Running Agent
+
+An agent designed to work on tasks over extended periods (hours to days), maintaining state and progress across multiple sessions.
 
 ---
 
@@ -202,7 +464,20 @@ A neural network trained on massive text data to understand and generate human l
 
 ### MCP (Model Context Protocol)
 
-An open standard for connecting AI systems to external tools and data sources. Think of it as "USB for AI."
+An open standard introduced by Anthropic in November 2024 for connecting AI systems to external tools and data sources. Think of it as "USB-C for AI"—a universal connector that eliminates the need for custom integrations. MCP has been adopted by major AI providers including OpenAI and Google, and was donated to the Linux Foundation's Agentic AI Foundation in December 2025.
+
+<ConceptVisual
+  src="/images/mcp_ecosystem_hub.png"
+  alt="MCP Ecosystem"
+  caption="The Model Context Protocol (MCP) acts as a universal hub for connecting AI models to diverse tools and data."
+/>
+
+<ConceptIntro
+  title="Understanding MCP"
+  analogy="Before USB, every device needed its own cable. MCP is like USB-C for AI—one standard protocol that lets any AI connect to any tool or data source."
+  technicalDef="MCP is a JSON-RPC based protocol that standardizes how AI applications discover, connect to, and interact with external tools and data sources through a client-server architecture."
+  whyItMatters="MCP is rapidly becoming the industry standard for AI tool integration. Learning it means your agents can connect to a growing ecosystem of pre-built tools."
+/>
 
 ### Memory (Agent)
 
@@ -211,6 +486,16 @@ Systems that allow agents to persist information across interactions. Includes w
 ### Multi-Agent System
 
 A system where multiple specialized agents collaborate to complete complex tasks, often coordinated by a supervisor agent.
+
+<ConceptVisual
+  src="/images/multi_agent_hierarchy.png"
+  alt="Multi-Agent Hierarchy"
+  caption="A hierarchical system where a Supervisor agent delegates tasks to specialized worker agents."
+/>
+
+### Model Drift
+
+The gradual degradation of model performance over time as real-world data patterns change from the training data. Requires monitoring and periodic retraining or fine-tuning.
 
 ---
 
@@ -228,6 +513,10 @@ A Python function that performs work in a graph. Nodes receive state, do somethi
 
 ## O
 
+### Observation
+
+The data or input an agent receives from its environment after taking an action. Observations inform the agent's next reasoning step in the agentic loop.
+
 ### OODA Loop
 
 Observe, Orient, Decide, Act—a decision-making framework that maps to the agent cognitive loop.
@@ -235,6 +524,14 @@ Observe, Orient, Decide, Act—a decision-making framework that maps to the agen
 ### Orchestrator
 
 The component that controls agent execution, managing the loop between reasoning and action.
+
+### Observability
+
+The ability to understand an agent's internal state and behavior through logs, traces, and metrics. Essential for debugging, monitoring, and improving production agents. Tools like LangSmith provide observability for LLM applications.
+
+### OpenAI Agents SDK
+
+An open-source Python framework from OpenAI for building agentic applications. Provides primitives for Agents, Tools, Handoffs, Guardrails, and Sessions with built-in tracing. Evolved from OpenAI's experimental Swarm project into a production-ready toolkit.
 
 ---
 
@@ -244,9 +541,21 @@ The component that controls agent execution, managing the loop between reasoning
 
 A value in a neural network that is learned during training. LLMs have billions of parameters.
 
+### Persistence
+
+The ability to save and restore agent state across sessions. Enables long-running tasks and recovery from failures.
+
 ### Pipeline
 
 A linear sequence of operations. See DAG.
+
+### Plan-and-Execute
+
+An agent architecture where planning and execution are separated. The agent first creates a complete plan, then executes steps one by one, potentially replanning if needed.
+
+### Planning
+
+The process by which an agent breaks down complex goals into actionable steps. Includes task decomposition, sequencing, and resource allocation. A key capability that distinguishes agents from simple chatbots.
 
 ### Probabilistic
 
@@ -256,9 +565,21 @@ Involving chance or variation. LLMs are probabilistic—the same input might pro
 
 The text input sent to an LLM, including instructions, context, and the user's question.
 
+### Prompt Chaining
+
+A technique where the output of one LLM call becomes the input for the next, allowing complex tasks to be broken into simpler steps.
+
 ### Prompt Engineering
 
 The practice of crafting effective prompts to get desired outputs from LLMs.
+
+### Prompt Injection
+
+A security attack where malicious instructions are hidden in user input or retrieved content, attempting to override the agent's intended behavior.
+
+### PydanticAI
+
+A Python framework for building AI agents using Pydantic for type-safe, validated data structures. Emphasizes structured outputs and type safety in agent development.
 
 ---
 
@@ -268,13 +589,49 @@ The practice of crafting effective prompts to get desired outputs from LLMs.
 
 A technique that retrieves relevant documents from a knowledge base before generating a response, grounding the output in actual data.
 
+<ConceptVisual
+  src="/images/rag_pipeline_steps.png"
+  alt="RAG Pipeline"
+  caption="The 7-step RAG pipeline: from User Query to Grounded Response."
+/>
+
+### Rate Limiting
+
+Controlling the frequency of API calls to prevent overuse, manage costs, and comply with provider limits.
+
 ### ReAct (Reason + Act)
 
 A prompting pattern where the model alternates between reasoning about what to do and taking actions.
 
+<ConceptVisual
+  src="/images/react_pattern_timeline.png"
+  alt="ReAct Pattern"
+  caption="Reasoning + Acting: The agent iterates between Thought, Action, and Observation."
+/>
+
 ### Recursive Summarization
 
 Compressing older conversation messages into summaries to save context window space while preserving key information.
+
+### Reducer (in LangGraph)
+
+A function that defines how state updates are merged. For example, a reducer might append new messages to a list rather than replacing it.
+
+### Reflection
+
+A technique where an agent evaluates its own outputs and reasoning, identifying errors or areas for improvement. Enables self-correction and iterative refinement of responses.
+
+### Retry Logic
+
+Automatic re-execution of failed operations, often with exponential backoff. Essential for handling transient failures in production agents.
+
+### Routing
+
+The process of directing requests to the appropriate model, agent, or tool based on the task requirements. LLM routers can select between different models based on complexity, cost, or capability needs.
+
+### Reasoning Model
+
+A class of LLMs specifically trained to perform extended reasoning before generating responses. Examples include OpenAI's o1/o3 series and DeepSeek R1. These models use chain-of-thought processing and inference-time compute to solve complex problems in math, coding, and analysis.
 
 ---
 
@@ -296,9 +653,17 @@ Finding documents by meaning rather than exact keyword matching, using embedding
 
 A shared dictionary that persists across the agent loop, holding conversation history, intermediate results, and task context.
 
+### Streaming
+
+Delivering LLM output incrementally as it's generated, rather than waiting for the complete response. Improves perceived latency in user-facing applications.
+
 ### Structured Output
 
 Forcing an LLM to output in a specific format (JSON, XML) rather than free-form text.
+
+### Subgraph
+
+In LangGraph, a graph that can be embedded within another graph, enabling modular and reusable agent components.
 
 ### Supervisor Pattern
 
@@ -308,17 +673,51 @@ A multi-agent architecture where a supervisor agent coordinates specialized work
 
 Hidden instructions that define how an AI should behave, typically set by the developer rather than the user.
 
+### Swarm Intelligence
+
+A multi-agent pattern where many simple agents collaborate to solve complex problems through emergent behavior. Inspired by natural systems like ant colonies or bee swarms, where collective intelligence exceeds individual capabilities.
+
+<ConceptVisual
+  src="/images/swarm_intelligence_transition.png"
+  alt="Swarm Intelligence"
+  caption="Emergent behavior from collective action: Single Agent vs. Swarm success rates."
+/>
+
 ---
 
 ## T
+
+### Task Decomposition
+
+Breaking a complex goal into smaller, manageable subtasks. A fundamental capability for agents handling multi-step problems.
 
 ### Tavily
 
 A search API designed for AI agents, providing clean, structured search results.
 
+### Temperature
+
+A parameter that controls randomness in LLM outputs. Lower values (0.0-0.3) produce more deterministic, focused responses; higher values (0.7-1.0) produce more creative, varied outputs.
+
+<ConceptVisual
+  src="/images/temperature_control_columns.png"
+  alt="Temperature Effects"
+  caption="How temperature controls creativity: from Deterministic (0.0) to Creative (1.0)."
+/>
+
+### Thread
+
+In LangGraph, a unique identifier for a conversation or task session. Threads enable persistence and allow resuming previous interactions.
+
 ### Token
 
 A chunk of text (roughly 4 characters or 3/4 of a word) that LLMs process. Pricing and context limits are measured in tokens.
+
+<ConceptVisual
+  src="/images/tokenization_calculator.png"
+  alt="Tokenization Visualization"
+  caption="Breaking down text into tokens: Characters, Words, and Subwords."
+/>
 
 ### Tokenization
 
@@ -328,9 +727,29 @@ The process of converting text into tokens that the model can process.
 
 A function that an agent can call to interact with the world—search, code execution, API calls, etc.
 
+### Tool Calling
+
+See Function Calling. The capability where an LLM generates structured parameters to invoke external tools. The model decides which tool to use and provides the arguments; your application code executes the actual function.
+
+### Tool Use
+
+The capability of an agent to invoke external functions, APIs, or services to accomplish tasks. A fundamental distinction between agents and basic chatbots. The agent decides which tools to use and with what parameters.
+
+### Trace
+
+A detailed record of an agent's execution, including all LLM calls, tool invocations, and state changes. Essential for debugging and optimization.
+
 ### Transformer
 
 The neural network architecture underlying modern LLMs, introduced in the "Attention Is All You Need" paper (2017).
+
+---
+
+## U
+
+### uv
+
+A blazing-fast Python package and project manager written in Rust. Replaces pip, venv, pyenv, and poetry with a single tool that's 10-100x faster. Increasingly the standard for Python development in AI/ML projects.
 
 ---
 
@@ -344,13 +763,35 @@ A list of numbers representing a point in multi-dimensional space. Embeddings ar
 
 A database optimized for storing and searching embedding vectors. Examples: ChromaDB, LanceDB, Pinecone.
 
+<ConceptVisual
+  src="/images/vector_db_workflow.png"
+  alt="Vector Database Workflow"
+  caption="How Vector Databases work: Ingestion (Embeddings) -> Storage -> Semantic Similarity Search."
+/>
+
 ---
 
 ## W
 
+### Worker Agent
+
+In a multi-agent system, a specialized agent that handles specific types of tasks, coordinated by a supervisor or orchestrator.
+
 ### Working Memory
 
 An agent's immediate task context—the current conversation and active goals. Fast but limited (context window).
+
+### World Model
+
+An agent's internal representation of how the environment works. Used to predict outcomes of actions and plan effectively. More sophisticated agents build and update world models based on experience.
+
+---
+
+## X
+
+### XML Tags
+
+A prompting technique where XML-style tags (like `<context>`, `<instructions>`) are used to structure prompts. Particularly effective with Claude models for organizing complex prompts.
 
 ---
 
@@ -362,8 +803,107 @@ Asking a model to perform a task without providing examples, relying only on ins
 
 ---
 
+## Visual Learning Path
+
+<ConceptVisual
+  src="/images/glossary_roadmap_vertical.png"
+  alt="Glossary Learning Path"
+  caption="Your visual roadmap: Mastering terminology from Foundations to Advanced Agentic Systems."
+/>
+
+This glossary is your companion throughout the entire course. As you progress through the 90 days, you'll see these concepts come to life in hands-on projects and real-world implementations.
+
+---
+
+## Test Your Knowledge
+
+<Quiz
+  question="What is the key difference between an agent and a chatbot?"
+  options={[
+    {
+      id: "a",
+      text: "Agents use larger language models",
+      isCorrect: false,
+      explanation:
+        "Model size isn't the distinguishing factor—it's about capabilities.",
+    },
+    {
+      id: "b",
+      text: "Agents can take actions in the world, not just generate text",
+      isCorrect: true,
+      explanation:
+        "Correct! Agents combine LLMs with tools, memory, and control flow to actually do things, not just respond.",
+    },
+    {
+      id: "c",
+      text: "Agents are always more accurate",
+      isCorrect: false,
+      explanation:
+        "Accuracy depends on many factors, not just whether something is an agent.",
+    },
+    {
+      id: "d",
+      text: "Agents don't use prompts",
+      isCorrect: false,
+      explanation:
+        "Agents absolutely use prompts—they're fundamental to how LLMs work.",
+    },
+  ]}
+  hint="Think about what makes agents 'agentic'—it's about capability, not just intelligence."
+  explanation="The defining characteristic of an agent is its ability to take actions through tools, maintain state through memory, and handle complex workflows through control flow."
+/>
+
+<Quiz
+  question="What does MCP stand for and what is its purpose?"
+  options={[
+    {
+      id: "a",
+      text: "Model Computation Protocol - for distributed AI training",
+      isCorrect: false,
+    },
+    {
+      id: "b",
+      text: "Multi-Channel Processing - for handling multiple inputs",
+      isCorrect: false,
+    },
+    {
+      id: "c",
+      text: "Model Context Protocol - a universal standard for connecting AI to tools",
+      isCorrect: true,
+      explanation:
+        "MCP is like 'USB-C for AI'—a standard way to connect any AI system to any tool or data source.",
+    },
+    {
+      id: "d",
+      text: "Machine Control Protocol - for robotics applications",
+      isCorrect: false,
+    },
+  ]}
+  explanation="MCP (Model Context Protocol) was introduced by Anthropic in November 2024 and has been adopted across the industry as the standard for AI tool integration."
+/>
+
+---
+
 <Callout type="info">
-  **Missing a term?** This glossary covers the core concepts. For
-  framework-specific terms, refer to the official documentation for LangGraph,
-  LangChain, or MCP.
+  **Missing a term?** This glossary covers the core concepts for this 90-day
+  course. For framework-specific terms, refer to the official documentation for
+  LangGraph, LangChain, or MCP.
 </Callout>
+
+---
+
+## Additional Resources
+
+- **[LangGraph Glossary](https://langchain-ai.github.io/langgraph/concepts/)** — Framework-specific terminology
+- **[MCP Specification](https://modelcontextprotocol.io/)** — Model Context Protocol documentation
+- **[OpenAI Glossary](https://platform.openai.com/docs/concepts)** — OpenAI-specific terms
+- **[Anthropic Documentation](https://docs.anthropic.com/)** — Claude models and concepts
+- **[Hugging Face Glossary](https://huggingface.co/docs/transformers/glossary)** — ML/NLP terminology
+
+---
+
+## Related Day 00 Modules
+
+- **[AI Foundations](/modules/day-00-foundations)** — Deep dive into the concepts defined here
+- **[Environment Setup](/modules/day-00-course-setup)** — Get your development environment ready
+- **[How to Use This Course](/modules/day-00-how-to-learn)** — Learning strategies and navigation

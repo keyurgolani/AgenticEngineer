@@ -1,0 +1,1555 @@
+---
+title: "Day 17: Retrieval-Augmented Generation"
+description: "Building knowledge bases and semantic search for your agents."
+week: 3
+day: 17
+---
+
+<ReadingTime minutes={35} />
+
+<SkillLevel level="intermediate" description="Hands-on coding required" />
+
+<Prerequisites
+  items={[
+    "Completed Days 01-16 (Foundations through Structured Output)",
+    "Python environment set up",
+    "Understanding of embeddings and vector representations",
+    "Familiarity with LLM APIs (OpenAI, Anthropic, or similar)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Explain what RAG is and why it's essential for production agents",
+    "Implement document chunking strategies (fixed, semantic, late chunking, code-aware)",
+    "Use embedding models to convert text to vectors (OpenAI, Voyage, Cohere, open-source)",
+    "Build a complete RAG pipeline with ChromaDB",
+    "Apply hybrid search combining keyword and semantic approaches",
+    "Understand advanced RAG patterns: HyDE, RAPTOR, GraphRAG, and Agentic RAG",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "RAG",
+      definition:
+        "Retrieval-Augmented Generation—fetching relevant documents before generating a response",
+    },
+    {
+      term: "Chunking",
+      definition:
+        "Splitting documents into smaller pieces for indexing and retrieval",
+    },
+    {
+      term: "Embedding",
+      definition:
+        "Converting text into numerical vectors that capture semantic meaning",
+    },
+    {
+      term: "Vector Database",
+      definition:
+        "A database optimized for storing and searching embedding vectors",
+    },
+    {
+      term: "Semantic Search",
+      definition: "Finding documents by meaning, not just keyword matching",
+    },
+    {
+      term: "Late Chunking",
+      definition:
+        "Processing the full document through the embedding model before chunking to preserve context",
+    },
+    {
+      term: "HyDE",
+      definition:
+        "Hypothetical Document Embeddings—generating a hypothetical answer to improve retrieval",
+    },
+  ]}
+/>
+
+---
+
+## Giving Your Agent a Brain
+
+{/* IMAGE_PLACEHOLDER: Create a hero illustration showing a brain (representing the LLM) connected to a library of books (representing the knowledge base). The brain should have a search beam scanning through the books, with relevant pages floating up and being fed into the brain. Use a modern, clean design with blue/purple gradients. Place this at the top of the module, right after the KeyTerms section. */}
+
+<ConceptIntro
+  title="Retrieval-Augmented Generation (RAG)"
+  analogy="Imagine taking an open-book exam. You don't need to memorize everything—you just need to know how to quickly find the right information in your notes. RAG works the same way: instead of relying only on what the LLM 'memorized' during training, we give it access to a searchable knowledge base. When you ask a question, it first finds relevant documents, then uses those to generate an informed answer. Think of it like having a brilliant research assistant who can instantly scan through thousands of documents to find exactly what you need, then synthesize that information into a coherent answer."
+  technicalDef="RAG is a technique that combines information retrieval with text generation. Before generating a response, the system searches a knowledge base for relevant documents, then includes those documents in the prompt so the LLM can generate answers grounded in actual data."
+  whyItMatters="LLMs have knowledge cutoffs and can't access your private data. RAG solves both problems: it lets you use current information and your own documents while reducing hallucinations by grounding responses in real sources. In production systems, RAG is essential for building agents that can answer questions about your company's documentation, codebase, or any domain-specific knowledge."
+/>
+
+<RealWorldExample
+  title="Company Documentation Bot"
+  scenario="You want an AI assistant that can answer questions about your company's internal policies, product documentation, and engineering guides."
+  implementation="You build a RAG system that: (1) Indexes all your docs into a vector database, (2) When someone asks a question, searches for the 5 most relevant document chunks, (3) Includes those chunks in the prompt, (4) Generates an answer citing the specific documents."
+  takeaway="Without RAG, the LLM would hallucinate policies or say 'I don't have access to that information.' With RAG, it gives accurate answers with citations."
+/>
+
+---
+
+## 5.1 The RAG Architecture
+
+{/* IMAGE_PLACEHOLDER: Create an interactive diagram showing the RAG pipeline with two parallel flows: (1) Indexing Pipeline on the left showing Documents → Chunking → Embedding → Vector DB with icons for each step, and (2) Query Pipeline on the right showing User Query → Query Embedding → Similarity Search → Retrieved Context → LLM → Answer. Use arrows to show data flow and highlight the Vector DB as the central storage component. Make it colorful and modern with icons representing each step (document icon, scissors for chunking, neural network for embedding, database cylinder, magnifying glass for search, brain for LLM). This should be placed prominently at the start of section 5.1. */}
+
+![RAG Data Flow](/images/rag_pipeline.png)
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph Indexing Pipeline
+        Docs[Documents] --> Chunk[Chunking]
+        Chunk --> Embed[Embedding]
+        Embed --> Store[(Vector DB)]
+    end
+    
+    subgraph Query Pipeline
+        Query[User Query] --> QEmbed[Query Embedding]
+        QEmbed --> Search[Similarity Search]
+        Store --> Search
+        Search --> Context[Retrieved Context]
+        Context --> LLM[LLM Generation]
+        LLM --> Answer[Answer]
+    end
+    
+    style Store fill:#f9f,stroke:#333
+    style LLM fill:#bbf,stroke:#333
+`}
+/>
+
+### The Five Steps of RAG
+
+| Step         | Description                   | Key Decisions                      |
+| :----------- | :---------------------------- | :--------------------------------- |
+| **Load**     | Ingest documents from sources | PDF, Markdown, Code, APIs          |
+| **Chunk**    | Split into manageable pieces  | Size, overlap, semantic boundaries |
+| **Embed**    | Convert to vectors            | Model choice, dimensions           |
+| **Store**    | Index in vector database      | ChromaDB, LanceDB, Pinecone        |
+| **Retrieve** | Find relevant chunks          | Top-k, similarity threshold        |
+
+---
+
+## 5.2 Chunking Strategies
+
+Chunking is the most underrated part of RAG. Bad chunking = bad retrieval.
+
+### Fixed-Size Chunking
+
+```python
+def fixed_chunk(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+    """Simple fixed-size chunking with overlap."""
+    chunks = []
+    start = 0
+
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk)
+        start = end - overlap  # Overlap for context continuity
+
+    return chunks
+```
+
+### Semantic Chunking
+
+{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison illustration showing "Bad Chunking" vs "Good Chunking". On the left, show a document being split mid-sentence with broken context (use red highlights and broken chain icons). On the right, show the same document being split at natural paragraph boundaries with intact context (use green highlights and connected chain icons). Add labels pointing out "Context Lost" vs "Context Preserved". This visual should be placed right before the semantic chunking code example. */}
+
+Better: Split on natural boundaries (paragraphs, sections, functions):
+
+```python
+import re
+
+def semantic_chunk(text: str, max_size: int = 1000) -> list[str]:
+    """Split on semantic boundaries."""
+    # Split on double newlines (paragraphs)
+    paragraphs = re.split(r'\n\n+', text)
+
+    chunks = []
+    current_chunk = ""
+
+    for para in paragraphs:
+        if len(current_chunk) + len(para) < max_size:
+            current_chunk += para + "\n\n"
+        else:
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            current_chunk = para + "\n\n"
+
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+
+    return chunks
+```
+
+### Code-Aware Chunking
+
+For code, respect function/class boundaries:
+
+```python
+import ast
+
+def chunk_python_code(code: str) -> list[dict]:
+    """Chunk Python code by function/class."""
+    tree = ast.parse(code)
+    chunks = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            chunk = {
+                "type": type(node).__name__,
+                "name": node.name,
+                "code": ast.get_source_segment(code, node),
+                "line_start": node.lineno,
+                "line_end": node.end_lineno
+            }
+            chunks.append(chunk)
+
+    return chunks
+```
+
+### Late Chunking (Advanced)
+
+Traditional chunking loses context because each chunk is embedded independently. **Late chunking** solves this by processing the entire document through the embedding model first, then chunking the token embeddings:
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph Traditional Chunking
+        A1[Document] --> B1[Split into Chunks]
+        B1 --> C1[Embed Each Chunk]
+        C1 --> D1[Store Vectors]
+    end
+    
+    subgraph Late Chunking
+        A2[Document] --> B2[Embed Full Document]
+        B2 --> C2[Split Token Embeddings]
+        C2 --> D2[Pool into Chunk Vectors]
+        D2 --> E2[Store Vectors]
+    end
+    
+    style D1 fill:#f96,stroke:#333
+    style E2 fill:#9f9,stroke:#333
+`}
+/>
+
+```python
+from transformers import AutoModel, AutoTokenizer
+import torch
+
+def late_chunking(
+    text: str,
+    chunk_size: int = 512,
+    model_name: str = "jinaai/jina-embeddings-v3"
+) -> list[list[float]]:
+    """
+    Late chunking: embed full document, then chunk token embeddings.
+    Requires a long-context embedding model like Jina v3.
+    """
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
+
+    # Tokenize full document
+    inputs = tokenizer(text, return_tensors="pt", truncation=False)
+
+    # Get token embeddings for full document
+    with torch.no_grad():
+        outputs = model(**inputs)
+        token_embeddings = outputs.last_hidden_state[0]  # [seq_len, hidden_dim]
+
+    # Split token embeddings into chunks
+    chunk_embeddings = []
+    for i in range(0, len(token_embeddings), chunk_size):
+        chunk_tokens = token_embeddings[i:i + chunk_size]
+        # Mean pooling over chunk tokens
+        chunk_vector = chunk_tokens.mean(dim=0).tolist()
+        chunk_embeddings.append(chunk_vector)
+
+    return chunk_embeddings
+```
+
+<Callout type="tip">
+  **When to Use Late Chunking**: Late chunking preserves context across chunk
+  boundaries, making it ideal for documents where information spans multiple
+  sections. It requires long-context embedding models (Jina v3, Voyage 3) and
+  more compute, but significantly improves retrieval for complex documents.
+</Callout>
+
+---
+
+## 5.3 Embedding Models
+
+{/* IMAGE_PLACEHOLDER: Create an interactive visualization showing how embeddings work. Show three example sentences: "The cat sat on the mat", "A feline rested on the rug", and "The dog ran in the park". Display them as points in a 3D space where the first two sentences are close together (similar meaning) and the third is farther away (different meaning). Use connecting lines to show similarity distances. Add a slider or toggle that lets users see how different embedding models might position these points differently. This should be an engaging, colorful 3D visualization placed at the start of section 5.3. */}
+
+Embeddings convert text to vectors that capture semantic meaning. The choice of embedding model significantly impacts retrieval quality.
+
+### Popular Embedding Models (2025)
+
+| Model                      | Dimensions | Context | Quality   | Cost            | Best For                    |
+| :------------------------- | :--------- | :------ | :-------- | :-------------- | :-------------------------- |
+| **text-embedding-3-small** | 1536       | 8,191   | Good      | $0.02/1M tokens | Cost-effective default      |
+| **text-embedding-3-large** | 3072       | 8,191   | Excellent | $0.13/1M tokens | High-accuracy needs         |
+| **voyage-3-large**         | 1024       | 32,000  | Best      | $0.06/1M tokens | Long documents, general     |
+| **voyage-code-3**          | 1024       | 32,000  | Best      | $0.06/1M tokens | Code retrieval              |
+| **voyage-3.5-lite**        | 1024       | 32,000  | Great     | $0.02/1M tokens | Cost-effective, Matryoshka  |
+| **cohere-embed-v4**        | 1024       | 128,000 | Excellent | $0.10/1M tokens | Multimodal, 100+ languages  |
+| **nomic-embed-text-v1.5**  | 768        | 8,192   | Great     | Free (local)    | Open-source, Ollama         |
+| **jina-embeddings-v3**     | 1024       | 8,192   | Excellent | Free (local)    | Multilingual, task-specific |
+| **bge-m3**                 | 1024       | 8,192   | Excellent | Free (local)    | Multilingual, hybrid search |
+
+<Callout type="tip">
+  **Model Selection Guide (2025)**: Start with `text-embedding-3-small` for
+  prototyping. For production, `voyage-3.5-lite` offers excellent quality at low
+  cost with Matryoshka support (variable dimensions). For code retrieval,
+  `voyage-code-3` is purpose-built. For multimodal documents (text + images),
+  use `cohere-embed-v4`. For local/private deployments, `nomic-embed-text` via
+  Ollama or `jina-embeddings-v3` are excellent choices.
+</Callout>
+
+### Matryoshka Embeddings
+
+{/* IMAGE_PLACEHOLDER: Create an interactive diagram showing Matryoshka embeddings as nested Russian dolls. The largest doll represents 1536 dimensions (full accuracy), medium doll shows 512 dimensions (balanced), and smallest doll shows 256 dimensions (fast search). Each doll should display its speed multiplier (6x, 3x, 1x) and quality retention percentage (95%, 98%, 100%). Add visual indicators showing the trade-off between speed and accuracy. Place this right before the Matryoshka code example. */}
+
+Modern embedding models like Voyage 3.5 and OpenAI's text-embedding-3 support **Matryoshka representations**—you can truncate embeddings to smaller dimensions while preserving most of the semantic information:
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+def get_embedding_with_dimensions(text: str, dimensions: int = 256) -> list[float]:
+    """Get embedding with reduced dimensions for faster search."""
+    response = client.embeddings.create(
+        input=text,
+        model="text-embedding-3-small",
+        dimensions=dimensions  # 256, 512, 1024, or 1536
+    )
+    return response.data[0].embedding
+
+# Use smaller dimensions for faster search, larger for higher accuracy
+fast_embedding = get_embedding_with_dimensions("Hello world", dimensions=256)
+accurate_embedding = get_embedding_with_dimensions("Hello world", dimensions=1536)
+```
+
+<Callout type="info">
+  **Matryoshka Trade-offs**: 256 dimensions = 6x faster search, ~5% quality
+  loss. 512 dimensions = 3x faster, ~2% quality loss. Use smaller dimensions for
+  initial retrieval, then rerank with full embeddings.
+</Callout>
+
+### Using OpenAI Embeddings
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+def get_embedding(text: str, model: str = "text-embedding-3-small") -> list[float]:
+    """Get embedding vector for text."""
+    response = client.embeddings.create(
+        input=text,
+        model=model
+    )
+    return response.data[0].embedding
+```
+
+### Using Local Embeddings (Sentence Transformers)
+
+```python
+from sentence_transformers import SentenceTransformer
+
+# Choose model based on your needs
+model = SentenceTransformer('all-MiniLM-L6-v2')  # Fast, lightweight
+# model = SentenceTransformer('BAAI/bge-large-en-v1.5')  # Higher quality
+# model = SentenceTransformer('nomic-ai/nomic-embed-text-v1.5')  # Long context
+
+def get_local_embedding(text: str) -> list[float]:
+    """Get embedding using local model."""
+    return model.encode(text).tolist()
+
+# Batch processing for efficiency
+def get_batch_embeddings(texts: list[str]) -> list[list[float]]:
+    """Get embeddings for multiple texts efficiently."""
+    return model.encode(texts).tolist()
+```
+
+### Using Ollama for Local Embeddings
+
+```python
+import ollama
+
+def get_ollama_embedding(text: str, model: str = "nomic-embed-text") -> list[float]:
+    """Get embedding using Ollama (requires: ollama pull nomic-embed-text)."""
+    response = ollama.embeddings(model=model, prompt=text)
+    return response["embedding"]
+```
+
+### Using Cohere Embed v4 (Multimodal)
+
+Cohere's Embed v4 supports text, images, and mixed documents with 128K context:
+
+```python
+import cohere
+import base64
+
+co = cohere.Client()
+
+def get_cohere_embedding(text: str) -> list[float]:
+    """Get text embedding using Cohere Embed v4."""
+    response = co.embed(
+        texts=[text],
+        model="embed-v4",
+        input_type="search_document",  # or "search_query" for queries
+        embedding_types=["float"]
+    )
+    return response.embeddings.float[0]
+
+def get_multimodal_embedding(text: str, image_path: str) -> list[float]:
+    """Get embedding for text + image using Cohere Embed v4."""
+    with open(image_path, "rb") as f:
+        image_base64 = base64.standard_b64encode(f.read()).decode("utf-8")
+
+    response = co.embed(
+        model="embed-v4",
+        input_type="search_document",
+        embedding_types=["float"],
+        images=[f"data:image/jpeg;base64,{image_base64}"],
+        texts=[text]
+    )
+    return response.embeddings.float[0]
+```
+
+<Callout type="info">
+  **Multimodal RAG**: Cohere Embed v4 can embed documents containing both text
+  and images into a single vector. This enables searching across PDFs, slides,
+  and documents with diagrams without separate image processing pipelines.
+</Callout>
+
+---
+
+## 5.4 Vector Databases
+
+{/* IMAGE_PLACEHOLDER: Create an interactive comparison visualization showing how vector databases work vs traditional databases. On the left, show a traditional database with exact keyword matching (searching "car" only finds "car"). On the right, show a vector database with semantic search (searching "car" finds "car", "automobile", "vehicle" based on vector proximity). Use a 2D scatter plot with clusters of related concepts. Add hover states that show similarity scores. This should be placed at the start of section 5.4. */}
+
+### ChromaDB (Recommended for Learning)
+
+Simple, embedded, Python-native:
+
+```python
+import chromadb
+from chromadb.utils import embedding_functions
+
+# Initialize
+client = chromadb.Client()
+
+# Use OpenAI embeddings
+openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+    api_key="your-key",
+    model_name="text-embedding-3-small"
+)
+
+# Create collection
+collection = client.create_collection(
+    name="my_docs",
+    embedding_function=openai_ef
+)
+
+# Add documents
+collection.add(
+    documents=["Document 1 content", "Document 2 content"],
+    metadatas=[{"source": "file1.md"}, {"source": "file2.md"}],
+    ids=["doc1", "doc2"]
+)
+
+# Query
+results = collection.query(
+    query_texts=["What is RAG?"],
+    n_results=3
+)
+```
+
+### LanceDB (Recommended for Production)
+
+Embedded, columnar, zero-copy with Pandas:
+
+```python
+import lancedb
+import pandas as pd
+
+# Connect
+db = lancedb.connect("./lancedb")
+
+# Create table from DataFrame
+data = pd.DataFrame({
+    "text": ["Document 1", "Document 2"],
+    "source": ["file1.md", "file2.md"],
+    "vector": [get_embedding("Document 1"), get_embedding("Document 2")]
+})
+
+table = db.create_table("docs", data)
+
+# Query
+results = table.search(get_embedding("What is RAG?")).limit(3).to_pandas()
+```
+
+### Qdrant (High-Performance Option)
+
+Rust-based, excellent for production workloads with filtering:
+
+```python
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct
+
+# Connect (local or cloud)
+client = QdrantClient(":memory:")  # or QdrantClient(url="http://localhost:6333")
+
+# Create collection
+client.create_collection(
+    collection_name="my_docs",
+    vectors_config=VectorParams(size=1536, distance=Distance.COSINE)
+)
+
+# Add documents
+client.upsert(
+    collection_name="my_docs",
+    points=[
+        PointStruct(
+            id=1,
+            vector=get_embedding("Document 1"),
+            payload={"source": "file1.md", "text": "Document 1"}
+        ),
+        PointStruct(
+            id=2,
+            vector=get_embedding("Document 2"),
+            payload={"source": "file2.md", "text": "Document 2"}
+        )
+    ]
+)
+
+# Query with filtering
+results = client.search(
+    collection_name="my_docs",
+    query_vector=get_embedding("What is RAG?"),
+    limit=3
+)
+```
+
+### Vector Database Comparison (2025)
+
+| Database        | Type      | Best For                    | Key Strength                 |
+| :-------------- | :-------- | :-------------------------- | :--------------------------- |
+| **ChromaDB**    | Embedded  | Prototyping, learning       | Simple Python API            |
+| **LanceDB**     | Embedded  | Production, analytics       | Columnar, zero-copy, fast    |
+| **Qdrant**      | Server    | High-performance production | Rust-based, advanced filters |
+| **Pinecone**    | Managed   | Enterprise, scale           | Fully managed, serverless    |
+| **Weaviate**    | Server    | Multi-modal, hybrid search  | GraphQL, modules, BM25       |
+| **Milvus**      | Server    | Massive scale (billions)    | GPU acceleration, sharding   |
+| **pgvector**    | Extension | Postgres users              | SQL integration, ACID        |
+| **Turbopuffer** | Managed   | Cost-sensitive production   | S3-backed, pay-per-query     |
+
+<Callout type="info">
+  **2025 Recommendations**: Use **ChromaDB** for learning and prototypes.
+  **LanceDB** for production embedded use cases (it's faster and more
+  feature-rich than Chroma). **Qdrant** for self-hosted production with complex
+  filtering. **Pinecone** for managed serverless at scale. **pgvector** if
+  you're already using PostgreSQL and want to avoid another database.
+</Callout>
+
+---
+
+## 5.5 Building a Complete RAG Pipeline
+
+{/* IMAGE_PLACEHOLDER: Create an interactive "RAG Pipeline Playground" component that visualizes the entire RAG process step-by-step. Users should be able to: (1) Input a sample document and see it get chunked (with adjustable chunk size slider), (2) See the chunks get embedded (show as vector representations), (3) Input a query and watch it get embedded, (4) See the similarity search in action (highlight matching chunks with similarity scores), (5) View the final generated answer with source citations. Use animations to show data flowing through each step. This should be a comprehensive, interactive learning tool placed at the start of section 5.5. */}
+
+```python
+import os
+from pathlib import Path
+import chromadb
+from openai import OpenAI
+
+class RAGPipeline:
+    def __init__(self, collection_name: str = "knowledge_base"):
+        self.client = OpenAI()
+        self.chroma = chromadb.Client()
+        self.collection = self.chroma.get_or_create_collection(
+            name=collection_name,
+            metadata={"hnsw:space": "cosine"}
+        )
+
+    def ingest_directory(self, path: str, extensions: list[str] = [".md", ".txt", ".py"]):
+        """Ingest all matching files from a directory."""
+        documents = []
+        metadatas = []
+        ids = []
+
+        for file_path in Path(path).rglob("*"):
+            if file_path.suffix in extensions:
+                content = file_path.read_text()
+                chunks = self._chunk_document(content, str(file_path))
+
+                for i, chunk in enumerate(chunks):
+                    documents.append(chunk["text"])
+                    metadatas.append({
+                        "source": str(file_path),
+                        "chunk_index": i
+                    })
+                    ids.append(f"{file_path.stem}_{i}")
+
+        # Batch add to collection
+        if documents:
+            self.collection.add(
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids
+            )
+            print(f"Ingested {len(documents)} chunks from {path}")
+
+    def _chunk_document(self, content: str, source: str) -> list[dict]:
+        """Chunk a document with metadata."""
+        chunks = []
+        # Simple paragraph-based chunking
+        paragraphs = content.split("\n\n")
+
+        current_chunk = ""
+        for para in paragraphs:
+            if len(current_chunk) + len(para) < 1000:
+                current_chunk += para + "\n\n"
+            else:
+                if current_chunk.strip():
+                    chunks.append({"text": current_chunk.strip(), "source": source})
+                current_chunk = para + "\n\n"
+
+        if current_chunk.strip():
+            chunks.append({"text": current_chunk.strip(), "source": source})
+
+        return chunks
+
+    def query(self, question: str, n_results: int = 5) -> str:
+        """Query the knowledge base and generate an answer."""
+        # Retrieve relevant chunks
+        results = self.collection.query(
+            query_texts=[question],
+            n_results=n_results
+        )
+
+        # Build context from results
+        context_parts = []
+        for doc, metadata in zip(results["documents"][0], results["metadatas"][0]):
+            context_parts.append(f"[Source: {metadata['source']}]\n{doc}")
+
+        context = "\n\n---\n\n".join(context_parts)
+
+        # Generate answer
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are a helpful assistant. Answer questions based on the provided context.
+                    If the context doesn't contain relevant information, say so.
+                    Always cite your sources."""
+                },
+                {
+                    "role": "user",
+                    "content": f"Context:\n{context}\n\nQuestion: {question}"
+                }
+            ],
+            temperature=0.1
+        )
+
+        return response.choices[0].message.content
+
+# Usage
+rag = RAGPipeline()
+rag.ingest_directory("./docs")
+answer = rag.query("How do I configure the database connection?")
+print(answer)
+```
+
+---
+
+## 5.6 Advanced RAG Patterns
+
+Modern RAG systems go far beyond simple retrieve-and-generate. Here are the most impactful patterns for production systems.
+
+### HyDE (Hypothetical Document Embeddings)
+
+{/* IMAGE_PLACEHOLDER: Create an animated flow diagram showing the HyDE process. Start with a short user query "How do I handle rate limits?" → LLM generates a detailed hypothetical answer (show as a document icon expanding) → The hypothetical answer gets embedded (show as vector transformation) → Search finds similar real documents (show matching documents lighting up) → Final answer generated. Use animation arrows and highlight the key insight that the hypothetical answer matches documentation style better than the short query. Place this right after the HyDE section title. */}
+
+The problem: User queries are often short and don't match the style of documents in your corpus. HyDE solves this by generating a hypothetical answer first, then using that to search:
+
+<Mermaid
+  chart={`
+graph LR
+    Q[User Query] --> LLM[LLM generates<br/>hypothetical answer]
+    LLM --> E[Embed hypothetical]
+    E --> S[Search vector DB]
+    S --> R[Retrieved docs]
+    R --> G[Generate final answer]
+    
+    style LLM fill:#bbf,stroke:#333
+    style S fill:#f9f,stroke:#333
+`}
+/>
+
+```python
+def hyde_search(question: str, collection, client: OpenAI, n_results: int = 5):
+    """
+    HyDE: Generate hypothetical answer, then search with it.
+    Improves retrieval when queries don't match document style.
+    """
+    # Step 1: Generate hypothetical document
+    hypothetical = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": """You are a technical documentation writer.
+                Given a question, write a detailed paragraph that would answer it.
+                Write as if this paragraph exists in official documentation."""
+            },
+            {"role": "user", "content": question}
+        ],
+        temperature=0.7
+    ).choices[0].message.content
+
+    # Step 2: Search using the hypothetical document
+    results = collection.query(
+        query_texts=[hypothetical],
+        n_results=n_results
+    )
+
+    return results, hypothetical
+
+# Usage
+results, hypo = hyde_search(
+    "How do I handle rate limits?",
+    collection,
+    client
+)
+# The hypothetical doc matches documentation style better than the short query
+```
+
+<Callout type="tip">
+  **When to Use HyDE**: HyDE works best when your queries are short/vague but
+  your documents are detailed. It adds latency (one extra LLM call) but can
+  significantly improve retrieval for technical documentation, legal documents,
+  and academic papers.
+</Callout>
+
+### RAPTOR (Recursive Abstractive Processing for Tree-Organized Retrieval)
+
+RAPTOR builds a hierarchical tree of summaries, enabling retrieval at different levels of abstraction:
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "RAPTOR Tree Structure"
+        Root[Root Summary<br/>Entire corpus]
+        Root --> C1[Cluster 1 Summary]
+        Root --> C2[Cluster 2 Summary]
+        Root --> C3[Cluster 3 Summary]
+        C1 --> D1[Chunk 1]
+        C1 --> D2[Chunk 2]
+        C2 --> D3[Chunk 3]
+        C2 --> D4[Chunk 4]
+        C3 --> D5[Chunk 5]
+        C3 --> D6[Chunk 6]
+    end
+    
+    style Root fill:#f9f,stroke:#333
+    style C1 fill:#bbf,stroke:#333
+    style C2 fill:#bbf,stroke:#333
+    style C3 fill:#bbf,stroke:#333
+`}
+/>
+
+```python
+from sklearn.cluster import KMeans
+import numpy as np
+
+class RAPTORIndex:
+    """
+    RAPTOR: Build hierarchical summaries for multi-level retrieval.
+    Great for answering questions that span multiple documents.
+    """
+
+    def __init__(self, client: OpenAI, n_clusters: int = 5):
+        self.client = client
+        self.n_clusters = n_clusters
+        self.tree = {}  # level -> [(summary, embedding, children)]
+
+    def build_tree(self, chunks: list[str], embeddings: list[list[float]], level: int = 0):
+        """Recursively cluster and summarize chunks."""
+        if len(chunks) <= self.n_clusters:
+            # Base case: store leaf nodes
+            self.tree[level] = [(chunk, emb, None) for chunk, emb in zip(chunks, embeddings)]
+            return
+
+        # Cluster chunks
+        kmeans = KMeans(n_clusters=self.n_clusters, random_state=42)
+        labels = kmeans.fit_predict(np.array(embeddings))
+
+        # Group chunks by cluster
+        clusters = {}
+        for i, label in enumerate(labels):
+            if label not in clusters:
+                clusters[label] = []
+            clusters[label].append((chunks[i], embeddings[i]))
+
+        # Summarize each cluster
+        summaries = []
+        summary_embeddings = []
+
+        for label, cluster_chunks in clusters.items():
+            texts = [c[0] for c in cluster_chunks]
+            combined = "\n\n".join(texts[:5])  # Limit for context window
+
+            summary = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "Summarize these related text chunks concisely."},
+                    {"role": "user", "content": combined}
+                ]
+            ).choices[0].message.content
+
+            summary_emb = self._get_embedding(summary)
+            summaries.append(summary)
+            summary_embeddings.append(summary_emb)
+
+            # Store this level
+            if level not in self.tree:
+                self.tree[level] = []
+            self.tree[level].append((summary, summary_emb, cluster_chunks))
+
+        # Recurse up the tree
+        self.build_tree(summaries, summary_embeddings, level + 1)
+
+    def query(self, question: str, top_k: int = 5) -> list[str]:
+        """Query across all levels of the tree."""
+        query_emb = self._get_embedding(question)
+        all_results = []
+
+        # Search each level
+        for level, nodes in self.tree.items():
+            for summary, emb, children in nodes:
+                similarity = self._cosine_similarity(query_emb, emb)
+                all_results.append((similarity, summary, level))
+
+        # Return top results across all levels
+        all_results.sort(reverse=True)
+        return [r[1] for r in all_results[:top_k]]
+
+    def _get_embedding(self, text: str) -> list[float]:
+        response = self.client.embeddings.create(
+            input=text, model="text-embedding-3-small"
+        )
+        return response.data[0].embedding
+
+    def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
+        a, b = np.array(a), np.array(b)
+        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+```
+
+<Callout type="info">
+  **RAPTOR Use Cases**: RAPTOR excels at multi-hop questions that require
+  synthesizing information across documents. Questions like "What are the main
+  themes across all quarterly reports?" benefit from higher-level summaries,
+  while specific questions retrieve from leaf chunks.
+</Callout>
+
+### GraphRAG (Knowledge Graph + RAG)
+
+Microsoft's GraphRAG extracts entities and relationships into a knowledge graph, enabling reasoning over document structure:
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "GraphRAG Pipeline"
+        D[Documents] --> E[Entity Extraction]
+        E --> G[Build Knowledge Graph]
+        G --> C[Community Detection]
+        C --> S[Community Summaries]
+    end
+    
+    subgraph "Query Time"
+        Q[Query] --> L{Local or Global?}
+        L -->|Local| V[Vector Search]
+        L -->|Global| CS[Community Summaries]
+        V --> A[Answer]
+        CS --> A
+    end
+    
+    style G fill:#f9f,stroke:#333
+    style CS fill:#bbf,stroke:#333
+`}
+/>
+
+```python
+# GraphRAG conceptual implementation
+# For production, use: pip install graphrag
+
+from dataclasses import dataclass
+
+@dataclass
+class Entity:
+    name: str
+    type: str
+    description: str
+
+@dataclass
+class Relationship:
+    source: str
+    target: str
+    description: str
+
+class SimpleGraphRAG:
+    """
+    Simplified GraphRAG: Extract entities and relationships for structured retrieval.
+    For full implementation, see Microsoft's graphrag library.
+    """
+
+    def __init__(self, client: OpenAI):
+        self.client = client
+        self.entities: dict[str, Entity] = {}
+        self.relationships: list[Relationship] = []
+
+    def extract_from_chunk(self, chunk: str) -> tuple[list[Entity], list[Relationship]]:
+        """Extract entities and relationships from a text chunk."""
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """Extract entities and relationships from the text.
+                    Return JSON with format:
+                    {
+                        "entities": [{"name": "...", "type": "person|org|concept|tech", "description": "..."}],
+                        "relationships": [{"source": "...", "target": "...", "description": "..."}]
+                    }"""
+                },
+                {"role": "user", "content": chunk}
+            ],
+            response_format={"type": "json_object"}
+        )
+
+        data = json.loads(response.choices[0].message.content)
+        entities = [Entity(**e) for e in data.get("entities", [])]
+        relationships = [Relationship(**r) for r in data.get("relationships", [])]
+
+        return entities, relationships
+
+    def query_local(self, question: str, entity_name: str) -> str:
+        """Query for information about a specific entity."""
+        entity = self.entities.get(entity_name)
+        if not entity:
+            return f"Entity '{entity_name}' not found."
+
+        # Find related entities
+        related = [r for r in self.relationships
+                   if r.source == entity_name or r.target == entity_name]
+
+        context = f"Entity: {entity.name} ({entity.type})\n"
+        context += f"Description: {entity.description}\n\n"
+        context += "Relationships:\n"
+        for r in related:
+            context += f"- {r.source} -> {r.target}: {r.description}\n"
+
+        return self._generate_answer(question, context)
+
+    def query_global(self, question: str) -> str:
+        """Query across the entire knowledge graph using community summaries."""
+        # In full GraphRAG, this uses pre-computed community summaries
+        # Here we summarize all entities for demonstration
+        context = "Knowledge Graph Overview:\n\n"
+        for name, entity in list(self.entities.items())[:20]:
+            context += f"- {entity.name} ({entity.type}): {entity.description}\n"
+
+        return self._generate_answer(question, context)
+```
+
+<Callout type="warning">
+  **GraphRAG Trade-offs**: GraphRAG requires significant upfront compute to
+  build the knowledge graph (entity extraction for every chunk). It excels at
+  corpus-level questions ("What are the main themes?") but adds complexity. Use
+  it when you need to answer questions about relationships between concepts
+  across your entire document set.
+</Callout>
+
+### Reranking
+
+{/* IMAGE_PLACEHOLDER: Create a funnel visualization showing the reranking process. Top of funnel shows 20 candidate documents retrieved by vector search (use document icons in a wide array). Middle shows a cross-encoder model analyzing each document (use a neural network icon). Bottom shows the top 5 reranked results (use star ratings or score badges). Add labels showing "Cast Wide Net" → "Deep Analysis" → "Best Results". Use color coding to show how lower-quality results get filtered out. Place this before the reranking code example. */}
+
+Initial retrieval casts a wide net; reranking refines results using a cross-encoder model:
+
+```python
+from sentence_transformers import CrossEncoder
+
+class RerankedRAG(RAGPipeline):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Cross-encoder for reranking
+        self.reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+
+    def query_with_rerank(
+        self,
+        question: str,
+        initial_k: int = 20,
+        final_k: int = 5
+    ) -> str:
+        """Retrieve more candidates, then rerank to get the best."""
+        # Step 1: Initial retrieval (cast wide net)
+        results = self.collection.query(
+            query_texts=[question],
+            n_results=initial_k
+        )
+
+        documents = results["documents"][0]
+        metadatas = results["metadatas"][0]
+
+        # Step 2: Rerank with cross-encoder
+        pairs = [[question, doc] for doc in documents]
+        scores = self.reranker.predict(pairs)
+
+        # Step 3: Sort by reranker score and take top-k
+        ranked = sorted(
+            zip(documents, metadatas, scores),
+            key=lambda x: x[2],
+            reverse=True
+        )[:final_k]
+
+        # Build context from reranked results
+        context_parts = [
+            f"[Source: {meta['source']}]\n{doc}"
+            for doc, meta, _ in ranked
+        ]
+        context = "\n\n---\n\n".join(context_parts)
+
+        return self._generate_answer(question, context)
+```
+
+<Callout type="tip">
+  **Reranking Best Practice**: Retrieve 3-4x more documents than you need, then
+  rerank down. For example, retrieve 20 candidates and rerank to top 5. This
+  dramatically improves precision without sacrificing recall.
+</Callout>
+
+### Query Expansion
+
+Improve recall by generating multiple query variations:
+
+```python
+def expand_query(question: str, client: OpenAI) -> list[str]:
+    """Generate query variations to improve retrieval recall."""
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": """Generate 3 alternative phrasings of the user's question.
+                Return only the questions, one per line.
+                Keep the same intent but use different words."""
+            },
+            {"role": "user", "content": question}
+        ],
+        temperature=0.7
+    )
+
+    variations = response.choices[0].message.content.strip().split("\n")
+    return [question] + [v.strip() for v in variations if v.strip()]
+
+class QueryExpandedRAG(RAGPipeline):
+    def query_with_expansion(self, question: str, n_results: int = 5) -> str:
+        """Use query expansion for better recall."""
+        # Generate query variations
+        queries = expand_query(question, self.client)
+
+        # Retrieve for each query
+        all_docs = {}
+        for query in queries:
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=n_results
+            )
+            for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
+                # Deduplicate by content
+                if doc not in all_docs:
+                    all_docs[doc] = meta
+
+        # Use top unique results
+        context_parts = [
+            f"[Source: {meta['source']}]\n{doc}"
+            for doc, meta in list(all_docs.items())[:n_results]
+        ]
+        context = "\n\n---\n\n".join(context_parts)
+
+        return self._generate_answer(question, context)
+```
+
+### Contextual Retrieval
+
+Add context to chunks before embedding to improve retrieval accuracy:
+
+```python
+def add_chunk_context(chunk: str, document: str, client: OpenAI) -> str:
+    """Add contextual information to a chunk before embedding."""
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": """You are adding context to a document chunk.
+                Given the full document and a specific chunk, write a brief
+                (1-2 sentence) context that situates this chunk within the
+                larger document. This context will be prepended to the chunk."""
+            },
+            {
+                "role": "user",
+                "content": f"Document:\n{document[:2000]}...\n\nChunk:\n{chunk}"
+            }
+        ],
+        temperature=0
+    )
+
+    context = response.choices[0].message.content.strip()
+    return f"{context}\n\n{chunk}"
+
+# Usage during indexing
+def ingest_with_context(self, documents: list[dict]):
+    """Ingest documents with contextual embeddings."""
+    for doc in documents:
+        full_text = doc["content"]
+        chunks = self._chunk_document(full_text, doc["source"])
+
+        for chunk in chunks:
+            # Add context before embedding
+            contextualized = add_chunk_context(
+                chunk["text"],
+                full_text,
+                self.client
+            )
+            chunk["text"] = contextualized
+
+        # Now embed and store the contextualized chunks
+        self._store_chunks(chunks)
+```
+
+### Hybrid Search (BM25 + Vector)
+
+{/* IMAGE_PLACEHOLDER: Create a Venn diagram showing hybrid search. Left circle labeled "BM25 Keyword Search" (finds exact matches like product codes, technical terms). Right circle labeled "Vector Semantic Search" (finds meaning-based matches). Overlapping center labeled "Hybrid Search - Best of Both Worlds". Show example queries and which approach finds them: "SKU-12345" (keyword), "affordable transportation" (semantic), "Tesla Model 3" (both). Use icons and color coding. Place this before the hybrid search code. */}
+
+Combine keyword and semantic search:
+
+```python
+from rank_bm25 import BM25Okapi
+
+class HybridRAG(RAGPipeline):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bm25 = None
+        self.documents = []
+
+    def _build_bm25_index(self):
+        """Build BM25 index for keyword search."""
+        # Get all documents from collection
+        all_docs = self.collection.get()
+        self.documents = all_docs["documents"]
+
+        # Tokenize for BM25
+        tokenized = [doc.lower().split() for doc in self.documents]
+        self.bm25 = BM25Okapi(tokenized)
+
+    def hybrid_query(self, question: str, n_results: int = 5, alpha: float = 0.5):
+        """Combine BM25 and vector search results."""
+        # Vector search
+        vector_results = self.collection.query(
+            query_texts=[question],
+            n_results=n_results * 2
+        )
+
+        # BM25 search
+        if self.bm25 is None:
+            self._build_bm25_index()
+
+        tokenized_query = question.lower().split()
+        bm25_scores = self.bm25.get_scores(tokenized_query)
+
+        # Combine scores (simplified)
+        # In production, use reciprocal rank fusion
+        combined = {}
+        for i, doc in enumerate(vector_results["documents"][0]):
+            combined[doc] = alpha * (1 / (i + 1))  # Vector rank score
+
+        top_bm25_indices = sorted(range(len(bm25_scores)),
+                                   key=lambda i: bm25_scores[i],
+                                   reverse=True)[:n_results * 2]
+
+        for rank, idx in enumerate(top_bm25_indices):
+            doc = self.documents[idx]
+            if doc in combined:
+                combined[doc] += (1 - alpha) * (1 / (rank + 1))
+            else:
+                combined[doc] = (1 - alpha) * (1 / (rank + 1))
+
+        # Return top results
+        sorted_docs = sorted(combined.items(), key=lambda x: x[1], reverse=True)
+        return [doc for doc, score in sorted_docs[:n_results]]
+```
+
+### Agentic RAG
+
+Let the agent decide when, what, and how to retrieve. This is the most flexible pattern—the agent can reformulate queries, choose different retrieval strategies, and decide when it has enough information:
+
+<Mermaid
+  chart={`
+graph TB
+    Q[User Question] --> A[Agent]
+    A --> D{Need more info?}
+    D -->|Yes| T[Choose retrieval tool]
+    T --> R1[Vector Search]
+    T --> R2[Keyword Search]
+    T --> R3[Graph Query]
+    R1 --> E{Enough context?}
+    R2 --> E
+    R3 --> E
+    E -->|No| RF[Reformulate query]
+    RF --> T
+    E -->|Yes| G[Generate Answer]
+    D -->|No| G
+    
+    style A fill:#bbf,stroke:#333
+    style T fill:#f9f,stroke:#333
+`}
+/>
+
+```python
+from typing import Literal
+from pydantic import BaseModel, Field
+
+class RetrievalDecision(BaseModel):
+    """Agent's decision about retrieval."""
+    action: Literal["search", "search_code", "search_graph", "answer"]
+    query: str | None = Field(description="Search query if action is search")
+    reasoning: str = Field(description="Why this action was chosen")
+
+class AgenticRAG:
+    """
+    Agentic RAG: Let the agent control the retrieval process.
+    The agent decides when to search, what to search for, and when to stop.
+    """
+
+    def __init__(self, client: OpenAI, collections: dict):
+        self.client = client
+        self.collections = collections  # {"docs": ..., "code": ..., "graph": ...}
+
+    def run(self, question: str, max_iterations: int = 3) -> str:
+        """Run agentic RAG loop."""
+        context_parts = []
+        iteration = 0
+
+        while iteration < max_iterations:
+            # Ask agent what to do
+            decision = self._decide_action(question, context_parts)
+
+            if decision.action == "answer":
+                break
+
+            # Execute retrieval
+            if decision.action == "search":
+                results = self.collections["docs"].query(
+                    query_texts=[decision.query],
+                    n_results=3
+                )
+                context_parts.extend(results["documents"][0])
+
+            elif decision.action == "search_code":
+                results = self.collections["code"].query(
+                    query_texts=[decision.query],
+                    n_results=3
+                )
+                context_parts.extend(results["documents"][0])
+
+            elif decision.action == "search_graph":
+                # Query knowledge graph
+                results = self._query_graph(decision.query)
+                context_parts.append(results)
+
+            iteration += 1
+
+        # Generate final answer
+        return self._generate_answer(question, context_parts)
+
+    def _decide_action(
+        self,
+        question: str,
+        context: list[str]
+    ) -> RetrievalDecision:
+        """Let the agent decide what to do next."""
+        context_summary = "\n---\n".join(context[-5:]) if context else "No context yet."
+
+        response = self.client.beta.chat.completions.parse(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are a retrieval agent. Given a question and current context,
+                    decide whether to:
+                    - "search": Search documentation for more information
+                    - "search_code": Search code examples
+                    - "search_graph": Query the knowledge graph for relationships
+                    - "answer": You have enough context to answer
+
+                    If searching, provide a specific, targeted query."""
+                },
+                {
+                    "role": "user",
+                    "content": f"Question: {question}\n\nCurrent context:\n{context_summary}"
+                }
+            ],
+            response_format=RetrievalDecision
+        )
+
+        return response.choices[0].message.parsed
+
+# Usage
+agentic_rag = AgenticRAG(client, {
+    "docs": docs_collection,
+    "code": code_collection,
+    "graph": graph_index
+})
+
+answer = agentic_rag.run("How do I implement rate limiting with Redis?")
+```
+
+<Callout type="tip">
+  **Agentic RAG Best Practices**: (1) Give the agent clear retrieval tool
+  descriptions. (2) Include retrieved context in each decision prompt so it
+  knows what it already has. (3) Set a max iteration limit to prevent infinite
+  loops. (4) Log the agent's reasoning for debugging retrieval issues.
+</Callout>
+
+### Choosing the Right RAG Pattern
+
+| Pattern           | Best For                         | Trade-offs                                |
+| :---------------- | :------------------------------- | :---------------------------------------- |
+| **Basic RAG**     | Simple Q&A, documentation        | Fast, simple, but limited context         |
+| **Hybrid Search** | Mixed queries (exact + semantic) | Slightly more complex, better recall      |
+| **Reranking**     | High-precision needs             | Adds latency, improves top-k quality      |
+| **HyDE**          | Short queries, technical docs    | Extra LLM call, better query matching     |
+| **RAPTOR**        | Multi-hop questions, long docs   | High indexing cost, great for synthesis   |
+| **GraphRAG**      | Relationship questions, themes   | Expensive to build, corpus-level insights |
+| **Agentic RAG**   | Complex, multi-step research     | Most flexible, requires good prompting    |
+
+<Callout type="info">
+  **Start Simple**: Begin with basic RAG + reranking. Add hybrid search if you
+  have exact-match needs. Consider HyDE for technical documentation. Use RAPTOR
+  or GraphRAG only when you need corpus-level understanding or multi-hop
+  reasoning.
+</Callout>
+
+---
+
+## Connection to Structured Output
+
+RAG and structured output work together in production systems. While RAG retrieves relevant context, structured output ensures the generated response follows a predictable format:
+
+```python
+from pydantic import BaseModel, Field
+from langchain_openai import ChatOpenAI
+
+class RAGAnswer(BaseModel):
+    """Structured response from RAG system."""
+    answer: str = Field(description="Direct answer to the question")
+    confidence: float = Field(ge=0, le=1, description="Confidence score")
+    sources: list[str] = Field(description="Source documents cited")
+
+def structured_rag_query(question: str, context: str) -> RAGAnswer:
+    """RAG query with structured output."""
+    llm = ChatOpenAI(model="gpt-4o-mini")
+    structured_llm = llm.with_structured_output(RAGAnswer)
+
+    prompt = f"""Answer based on the context. Cite your sources.
+
+Context:
+{context}
+
+Question: {question}"""
+
+    return structured_llm.invoke(prompt)
+```
+
+<Callout type="info">
+  **See Also**: [Day 05: Structured Output](/modules/day-05-structured-output)
+  covers Pydantic schemas, OpenAI Structured Outputs, and LangChain's
+  `with_structured_output()` in detail.
+</Callout>
+
+---
+
+## 🧪 Lab Exercise: Build a Documentation Assistant
+
+<Exercise
+  title="Build a Documentation Assistant"
+  difficulty="intermediate"
+  objectives={[
+    "Ingest all .md and .py files from a project",
+    "Implement semantic chunking that respects code boundaries",
+    "Add metadata (file path, line numbers, type)",
+    "Build a query interface that cites sources"
+  ]}
+  hints={[
+    "Start with a small directory (5-10 files) to test your pipeline",
+    "Use AST parsing for Python files to chunk by function/class",
+    "Store the source file path in metadata so you can cite it later",
+    "Test with questions that require information from multiple chunks"
+  ]}
+>
+
+### Test Questions to Try
+
+- "How do I install this project?"
+- "What does the `process_data` function do?"
+- "Where is authentication handled?"
+
+</Exercise>
+
+---
+
+<ProgressCheckpoint
+  title="RAG Knowledge Check"
+  questions={[
+    {
+      question: "What problem does RAG solve that fine-tuning doesn't?",
+      answer:
+        "RAG allows you to use current, dynamic data without retraining the model. Fine-tuning bakes knowledge into the model weights, which is expensive and static. RAG retrieves from an updateable knowledge base.",
+    },
+    {
+      question: "Why is chunking strategy important for RAG quality?",
+      answer:
+        "Bad chunking leads to bad retrieval. If you split a paragraph in the middle of a sentence, or separate a function from its docstring, the chunks lose context and meaning. Semantic chunking preserves meaningful units.",
+    },
+    {
+      question:
+        "What's the difference between keyword search and semantic search?",
+      answer:
+        "Keyword search (BM25) matches exact words—'car' won't find 'automobile'. Semantic search uses embeddings to match by meaning—'car' will find 'automobile' because they're close in vector space.",
+    },
+    {
+      question:
+        "When would you use hybrid search instead of pure vector search?",
+      answer:
+        "When you need both exact matches (product codes, names, technical terms) AND semantic understanding. Hybrid combines BM25 keyword matching with vector similarity for the best of both worlds.",
+    },
+  ]}
+/>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Using chunks that are too large (>2000 tokens)",
+      fix: "Keep chunks 200-500 tokens. Smaller chunks = more precise retrieval",
+    },
+    {
+      mistake: "Not including overlap between chunks",
+      fix: "Use 10-20% overlap so context isn't lost at boundaries, or use late chunking",
+    },
+    {
+      mistake: "Ignoring metadata when chunking",
+      fix: "Store source file, section headers, and line numbers for better citations",
+    },
+    {
+      mistake: "Retrieving too many chunks (k=20+)",
+      fix: "Start with k=3-5. More chunks = more noise and higher cost. Use reranking instead",
+    },
+    {
+      mistake: "Using the same embedding model for queries and documents",
+      fix: "Some models (Cohere, Voyage) have separate query vs document modes—use them",
+    },
+    {
+      mistake: "Not evaluating retrieval quality separately from generation",
+      fix: "Measure retrieval recall/precision independently. Bad retrieval = bad answers",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "RAG = Retrieve relevant documents + Generate grounded responses",
+    "The pipeline: Load → Chunk → Embed → Store → Retrieve",
+    "Chunking strategy matters: semantic, late chunking, and code-aware approaches",
+    "Modern embeddings: Matryoshka dimensions, multimodal (Cohere v4), code-specific (Voyage)",
+    "Vector databases: ChromaDB for learning, LanceDB/Qdrant for production",
+    "Hybrid search combines keyword (BM25) and semantic (vector) approaches",
+    "Advanced patterns: HyDE for query expansion, RAPTOR for hierarchical retrieval, GraphRAG for relationships",
+    "Agentic RAG lets the agent control retrieval strategy dynamically",
+  ]}
+/>
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** RAG is the knowledge backbone of the AgentOS
+  capstone (Month 3, Days 81-90). Your research agents will use vector databases to retrieve relevant
+  documentation, your code analysis agents will search codebases semantically,
+  and your memory systems will store and retrieve episodic experiences. The RAG patterns you learn here—chunking strategies, hybrid search, and reranking—will be essential for building production-grade agents throughout the 90-day curriculum.
+</Callout>
+
+{/* IMAGE_PLACEHOLDER: Create an interactive "Similarity Calculator" component that lets users input two sentences and see their cosine similarity score. Display the sentences as points in a 2D space with a line connecting them, labeled with the similarity score (0.0 to 1.0). Add example sentence pairs like "The cat sat" vs "A feline rested" (high similarity) and "The cat sat" vs "Python programming" (low similarity). Include a visual color gradient from red (low similarity) to green (high similarity). This should be an engaging, hands-on tool placed in the "Hands-On Practice" section. */}
+
+### Recommended Exercises
+
+Complete these exercises to reinforce the concepts from this module:
+
+- **EX-12: Basic RAG Pipeline** (30 min) - Build a complete RAG pipeline with document loading, chunking, embedding, and retrieval using ChromaDB. See the [Project Hierarchy](/modules/day-00-project-hierarchy) for full details.
+
+- **EX-13: Chunking Strategies** (25 min) - Experiment with different chunking approaches (fixed-size, semantic, code-aware) and measure their impact on retrieval quality.
+
+- **EX-14: Hybrid Search** (30 min) - Implement hybrid search combining BM25 keyword matching with vector similarity for improved retrieval accuracy.
+
+### What's Next
+
+{/* IMAGE_PLACEHOLDER: Create a roadmap visualization showing the progression from RAG (Day 17) to Memory Systems (Day 20) to Multi-Agent Systems (Month 2). Use a timeline or path diagram with icons representing each concept: a database for RAG, a brain for memory, and connected nodes for multi-agent systems. Add arrows showing how these concepts build on each other. Use a modern, clean design with the course color scheme. Place this at the end of the "What's Next" section. */}
+
+RAG provides the retrieval foundation, but agents also need memory that persists across sessions. The next module (Day 20) on Memory Systems shows how to combine RAG with working, episodic, and semantic memory for truly intelligent agents. You'll learn how to build agents that remember past conversations, learn from experience, and maintain context across multiple interactions—essential skills for the multi-agent systems and production deployments you'll tackle in Month 2 (Days 31-60).
+
+---
+
+## 🔗 Further Reading
+
+### Vector Databases
+
+- [ChromaDB Documentation](https://docs.trychroma.com/)
+- [LanceDB Documentation](https://lancedb.github.io/lancedb/)
+- [Qdrant Documentation](https://qdrant.tech/documentation/)
+- [Pinecone Learning Center](https://www.pinecone.io/learn/)
+
+### Embedding Models
+
+- [MTEB Leaderboard](https://huggingface.co/spaces/mteb/leaderboard) — Embedding model benchmarks
+- [Voyage AI Documentation](https://docs.voyageai.com/) — voyage-3, voyage-code-3
+- [Cohere Embed v4](https://docs.cohere.com/docs/embed) — Multimodal embeddings
+- [Sentence Transformers](https://www.sbert.net/) — Open-source embeddings
+
+### Advanced RAG Techniques
+
+- [Anthropic's Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval) — Contextual chunking
+- [Late Chunking Paper](https://arxiv.org/abs/2409.04701) — Jina AI's late chunking technique
+- [RAPTOR Paper](https://arxiv.org/abs/2401.18059) — Recursive abstractive processing
+- [Microsoft GraphRAG](https://microsoft.github.io/graphrag/) — Knowledge graph RAG
+- [HyDE Paper](https://arxiv.org/abs/2212.10496) — Hypothetical document embeddings
+
+### Tutorials & Guides
+
+- [RAG Best Practices - LangChain](https://python.langchain.com/docs/tutorials/rag/)
+- [Building Production RAG - LlamaIndex](https://docs.llamaindex.ai/en/stable/optimizing/production_rag/)
+
+**Also Today**: [Day 05: Structured Output](/modules/day-05-structured-output) — Forcing reliable JSON responses from LLMs.
+
+**Tomorrow**: Memory systems—giving your agent short-term and long-term recall.

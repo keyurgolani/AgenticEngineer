@@ -24,11 +24,19 @@ interface ComparisonTableProps {
 
 export function ComparisonTable({ 
   title,
-  items, 
-  features,
+  items = [], 
+  features = [],
   highlightBest = true 
 }: ComparisonTableProps) {
   const [expandedFeature, setExpandedFeature] = useState<string | null>(null)
+
+  if (!items.length || !features.length) {
+    return (
+      <div className="my-8 p-6 rounded-xl border border-border bg-muted/20 text-center text-muted-foreground">
+        <p>ComparisonTable requires <code>items</code> and <code>features</code> props.</p>
+      </div>
+    )
+  }
 
   const renderValue = (value: FeatureValue) => {
     if (value === true) {

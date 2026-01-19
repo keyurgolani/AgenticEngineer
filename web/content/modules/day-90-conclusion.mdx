@@ -1,0 +1,643 @@
+---
+title: "Day 90: Course Conclusion"
+description: "Synthesizing your journey and charting the path forward as an Agentic AI Engineer."
+week: 12
+day: 90
+---
+
+<ReadingTime minutes={25} />
+
+<SkillLevel level="all" description="Course synthesis" />
+
+<Prerequisites
+  items={[
+    "Completed Days 1-89 of the course",
+    "Built at least one capstone project",
+    "Understanding of the four pillars: Reliability, Interoperability, Efficiency, Correctness",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Synthesize the four pillars of agentic systems engineering",
+    "Review the portfolio of projects you've built",
+    "Understand the 2025 industry landscape and emerging standards",
+    "Chart your path forward as an Agentic AI Engineer",
+    "Connect with the community and continue learning",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Agentic Architect",
+      definition: "Engineer who designs and builds autonomous AI agent systems",
+    },
+    {
+      term: "Four Pillars",
+      definition:
+        "Reliability, Interoperability, Efficiency, and Correctness - the foundations of production agents",
+    },
+    {
+      term: "Silicon Employee",
+      definition: "AI agent capable of performing knowledge work autonomously",
+    },
+    {
+      term: "A2A Protocol",
+      definition:
+        "Agent-to-Agent protocol enabling standardized communication between autonomous agents",
+    },
+    {
+      term: "Context Engineering",
+      definition:
+        "The discipline of optimizing what information agents receive, replacing simple prompt engineering",
+    },
+  ]}
+/>
+
+## The Road You've Traveled
+
+{/* IMAGE_PLACEHOLDER: Hero illustration showing a winding path/journey from "Day 1" to "Day 90" with milestone markers at key points (Week 4, Week 8, Week 12). The path should start with simple building blocks and evolve into complex interconnected systems, symbolizing the progression from foundations to advanced architectures. Style: Modern, gradient colors (purple to blue), with small icons representing key concepts (LLMs, agents, graphs, swarms). Place at the top of this section as a visual journey map. */}
+
+Congratulations. You've completed a comprehensive journey from understanding what agents are to building production-grade systems. Let's synthesize what you've learned and chart your path forward.
+
+---
+
+## 90.1 The 2025 Industry Landscape
+
+Before we synthesize your learning, let's ground ourselves in where the industry stands as of 2025.
+
+### Major Players
+
+{/* IMAGE_PLACEHOLDER: Infographic showing the major AI companies as interconnected nodes in an ecosystem. Each company (OpenAI, Anthropic, Google, Meta, Microsoft) should be represented as a circular node with their logo/icon, with lines connecting to their key contributions and agent offerings. Use a network/constellation visual metaphor. Style: Clean, professional, with company brand colors. Place above the table to provide visual context. */}
+
+The agentic AI landscape has consolidated around key players:
+
+| Company       | Key Contributions                | Agent Offerings                    |
+| :------------ | :------------------------------- | :--------------------------------- |
+| **OpenAI**    | GPT-4.5, o3 reasoning models     | Agents SDK, Operator, Computer Use |
+| **Anthropic** | Claude 4 Sonnet/Opus, MCP        | Claude Code, Computer Use          |
+| **Google**    | Gemini 2.0, Project Mariner      | Vertex AI Agents, Agent Space      |
+| **Meta**      | Llama 4, open weights movement   | Open source agent frameworks       |
+| **Microsoft** | Azure AI Foundry, Copilot Studio | AutoGen/AG2, Foundry Memory        |
+
+### Key Frameworks
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              2025 Agent Framework Landscape                  │
+├─────────────────────────────────────────────────────────────┤
+│  LangGraph      │  Production standard for stateful agents  │
+├─────────────────┼───────────────────────────────────────────┤
+│  AG2 (AutoGen)  │  Microsoft's multi-agent successor        │
+├─────────────────┼───────────────────────────────────────────┤
+│  CrewAI         │  Role-based multi-agent orchestration     │
+├─────────────────┼───────────────────────────────────────────┤
+│  OpenAI SDK     │  Native OpenAI agent development          │
+├─────────────────┼───────────────────────────────────────────┤
+│  Strands SDK    │  AWS's enterprise agent framework         │
+├─────────────────┼───────────────────────────────────────────┤
+│  PydanticAI     │  Type-safe agent development              │
+└─────────────────┴───────────────────────────────────────────┘
+```
+
+### Emerging Standards
+
+- **MCP (Model Context Protocol)** - Now the de facto standard for tool integration, adopted by all major IDEs and agent frameworks
+- **A2A (Agent-to-Agent)** - Google's protocol for inter-agent communication, gaining enterprise traction
+- **AGENTS.md** - Standard for documenting agent capabilities, enabling agent discovery
+
+### Market Trends
+
+<Callout type="info">
+  **2025 Trends**: Enterprise adoption has accelerated dramatically. Vertical AI
+  agents (legal, healthcare, finance) are seeing production deployments.
+  Computer use agents are transforming automation. The focus has shifted from
+  "can we build agents?" to "how do we govern them at scale?"
+</Callout>
+
+---
+
+## 90.2 The Four Pillars Mastered
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph Reliability
+        R1[State Machines]
+        R2[Checkpointing]
+        R3[Human-in-the-Loop]
+        R4[Error Recovery]
+        R5[Durable Execution]
+    end
+    
+    subgraph Interoperability
+        I1[Model Context Protocol]
+        I2[A2A Protocol]
+        I3[agents.md Standard]
+        I4[Tool Abstraction]
+        I5[Multi-Server Swarms]
+    end
+    
+    subgraph Efficiency
+        E1[Context Engineering]
+        E2[Memory Hierarchies]
+        E3[Semantic Caching]
+        E4[Model Routing]
+        E5[Context Isolation]
+    end
+    
+    subgraph Correctness
+        C1[Neuro-Symbolic AI]
+        C2[AST Manipulation]
+        C3[Policy as Code]
+        C4[Sandboxing]
+        C5[Red Teaming]
+    end
+    
+    style R1 fill:#f9f,stroke:#333
+    style I1 fill:#bbf,stroke:#333
+    style E1 fill:#bfb,stroke:#333
+    style C1 fill:#ff9,stroke:#333
+`}
+/>
+
+---
+
+## 90.3 Your Portfolio Projects
+
+{/* IMAGE_PLACEHOLDER: Portfolio showcase grid displaying 5 project cards in a visually appealing layout. Each card should show: 1) Deep Research Analyst (magnifying glass over documents icon), 2) Self-Healing K8s Operator (kubernetes logo with healing/medical cross), 3) Local Data Analyst (shield with database icon), 4) Legacy Code Refactorer (code transformation arrows), 5) Financial Forensics Swarm (detective/forensics badge with network nodes). Style: Modern card design with subtle shadows, gradient backgrounds, and icons. Place above the table as a visual portfolio summary. */}
+
+You've built five production-grade systems:
+
+| Project                       | Skills Demonstrated                                            | Real-World Application                |
+| :---------------------------- | :------------------------------------------------------------- | :------------------------------------ |
+| **Deep Research Analyst**     | Context isolation, parallel execution, recursive summarization | Market research, competitive analysis |
+| **Self-Healing K8s Operator** | Event-driven architecture, HITL, policy-as-code                | SRE automation, incident response     |
+| **Local Data Analyst**        | Privacy-preserving AI, sandboxing, schema-only prompting       | Healthcare, finance, legal            |
+| **Legacy Code Refactorer**    | Neuro-symbolic AI, AST manipulation, deterministic transforms  | Technical debt reduction              |
+| **Financial Forensics Swarm** | MCP integration, multi-source correlation                      | Fraud detection, compliance           |
+
+---
+
+## 90.4 The Technology Stack
+
+### Frameworks You've Mastered
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Your Agentic Stack                        │
+├─────────────────────────────────────────────────────────────┤
+│  Orchestration    │  LangGraph, Temporal.io, Inngest        │
+├───────────────────┼─────────────────────────────────────────┤
+│  Multi-Agent      │  AG2, CrewAI, OpenAI Agents SDK         │
+├───────────────────┼─────────────────────────────────────────┤
+│  Protocol         │  MCP, A2A, AGENTS.md                    │
+├───────────────────┼─────────────────────────────────────────┤
+│  Memory           │  ChromaDB, LanceDB, Foundry Memory      │
+├───────────────────┼─────────────────────────────────────────┤
+│  Execution        │  E2B, Docker, gVisor, Firecracker       │
+├───────────────────┼─────────────────────────────────────────┤
+│  Observability    │  Langfuse, Braintrust, Weave, Logfire   │
+├───────────────────┼─────────────────────────────────────────┤
+│  Code Analysis    │  LibCST, AST, Tree-sitter               │
+├───────────────────┼─────────────────────────────────────────┤
+│  Models           │  Claude 4, GPT-4.5, Llama 4, Gemini 2   │
+└───────────────────┴─────────────────────────────────────────┘
+```
+
+### Framework Selection Guide
+
+| Framework             | Best For                     | Key Strength                              |
+| :-------------------- | :--------------------------- | :---------------------------------------- |
+| **LangGraph**         | Complex stateful workflows   | Graph-based state machines, checkpointing |
+| **AG2**               | Multi-agent research systems | Conversation patterns, extensibility      |
+| **CrewAI**            | Role-based teams             | Simple mental model, rapid prototyping    |
+| **OpenAI Agents SDK** | OpenAI-native apps           | Tight model integration, Responses API    |
+| **Strands SDK**       | AWS enterprise               | Cloud-native, managed infrastructure      |
+| **PydanticAI**        | Type-safe development        | Validation, structured outputs            |
+
+---
+
+## 90.5 Design Patterns Reference
+
+### Core Pattern Catalog
+
+| Pattern               | When to Use              | Key Implementation                  |
+| :-------------------- | :----------------------- | :---------------------------------- |
+| **ReAct**             | Dynamic tool use         | Thought → Action → Observation loop |
+| **Plan-and-Execute**  | Complex multi-step tasks | Separate planner and executor       |
+| **Supervisor**        | Coordinating specialists | Central router with worker nodes    |
+| **Reflection**        | Quality improvement      | Generator → Critic → Refine loop    |
+| **Context Isolation** | Multi-agent systems      | Scoped contexts per worker          |
+| **Human-in-the-Loop** | High-stakes actions      | `interrupt_before` checkpoints      |
+| **Neuro-Symbolic**    | Code manipulation        | LLM reasoning + AST transforms      |
+
+### 2024-2025 Emerging Patterns
+
+| Pattern                      | When to Use              | Key Implementation                            |
+| :--------------------------- | :----------------------- | :-------------------------------------------- |
+| **Tree-of-Thought**          | Complex reasoning        | Branching exploration with backtracking       |
+| **Multi-Agent Debate (MAD)** | Consensus building       | Agents argue positions, synthesize agreement  |
+| **HACN**                     | Large-scale coordination | Hierarchical Adaptive Consensus Network       |
+| **Model Routing**            | Cost optimization        | Route queries to appropriate model tier       |
+| **Semantic Caching**         | Latency reduction        | Cache similar queries, not just exact matches |
+| **Speculative Execution**    | Performance              | Pre-compute likely next steps                 |
+
+<Callout type="tip">
+  **Pattern Selection**: Start with ReAct for simple agents, graduate to
+  Plan-and-Execute for complex tasks, and use Supervisor patterns when you need
+  specialized workers. Add Tree-of-Thought when reasoning quality matters more
+  than speed.
+</Callout>
+
+---
+
+## 90.6 The Evolving Role of the Engineer
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph 2020
+        A1[Write Code]
+        A2[Debug Code]
+        A3[Deploy Code]
+    end
+    
+    subgraph 2024
+        B1[Prompt LLMs]
+        B2[Build RAG]
+        B3[Chain Tools]
+    end
+    
+    subgraph 2026
+        C1[Architect Agents]
+        C2[Govern Swarms]
+        C3[Design Workflows]
+    end
+    
+    subgraph 2028
+        D1[Orchestrate AI Workforces]
+        D2[Design Agent Ecosystems]
+        D3[Manage Silicon Teams]
+    end
+    
+    A1 --> B1
+    A2 --> B2
+    A3 --> B3
+    B1 --> C1
+    B2 --> C2
+    B3 --> C3
+    C1 --> D1
+    C2 --> D2
+    C3 --> D3
+    
+    style C1 fill:#f9f,stroke:#333
+    style C2 fill:#f9f,stroke:#333
+    style C3 fill:#f9f,stroke:#333
+    style D1 fill:#9ff,stroke:#333
+    style D2 fill:#9ff,stroke:#333
+    style D3 fill:#9ff,stroke:#333
+`}
+/>
+
+### Your New Responsibilities
+
+| Traditional Engineer | Agentic Engineer               |
+| :------------------- | :----------------------------- |
+| Write features       | Design agent capabilities      |
+| Fix bugs             | Train error recovery           |
+| Optimize performance | Optimize token efficiency      |
+| Write tests          | Design evaluation frameworks   |
+| Deploy services      | Orchestrate agent swarms       |
+| Monitor metrics      | Observe agent behavior         |
+| Code review          | Agent governance & red teaming |
+| API design           | Protocol design (MCP, A2A)     |
+
+---
+
+## 90.7 Continuous Learning Roadmap
+
+{/* IMAGE_PLACEHOLDER: Interactive roadmap visualization showing three connected phases: "Immediate (30 days)" → "Medium-Term (3-6 months)" → "Long-Term (1+ year)". Each phase should be a distinct section with milestone markers and branching paths for different specializations (Computer Use, Code Agents, Research Agents, Data Agents). Style: Timeline/roadmap design with progress indicators, branch points, and destination markers. Use inspiring colors (green for growth, blue for learning). Place at the beginning of this section to provide visual learning path. */}
+
+### Immediate Next Steps (Next 30 Days)
+
+1. **Deploy a project** - Put one capstone on Vercel, Railway, or your cloud of choice
+2. **Contribute to open source** - Submit a PR to AG2, LangGraph, or an MCP server
+3. **Build your agents.md** - Document your agent's capabilities for discovery
+4. **Set up observability** - Integrate Langfuse or Braintrust for production monitoring
+5. **Join the community** - Connect on AI Engineer Discord and Latent Space
+
+### Medium-Term Goals (3-6 Months)
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: CareerPathExplorer - An interactive tool where learners can explore different specialization paths (Computer Use Agents, Code Agents, Research Agents, Data Agents). Each path should show: required skills, recommended projects, learning resources, typical roles, and salary ranges. Users can select a path to see a detailed roadmap with milestones and checkpoints. Include a "skills gap analysis" feature that compares their current skills (from completed course modules) with target specialization requirements. */}
+
+1. **Specialize in a vertical**:
+   - **Computer Use Agents** - Browser automation, desktop control
+   - **Code Agents** - IDE integration, refactoring, code review
+   - **Research Agents** - Deep research, synthesis, fact-checking
+   - **Data Agents** - Analytics, ETL, business intelligence
+2. **Build a product** - Create something people will pay for
+3. **Publish your learnings** - Write about your experiences, share your code
+4. **Benchmark rigorously** - Run your agents on SWE-bench, AgentBench, or GAIA
+
+### Long-Term Vision (1+ Year)
+
+1. **Lead AI transformation initiatives** at your organization
+2. **Build agent-first products** - Design for AI from the ground up
+3. **Consult** on agentic architecture for enterprises
+4. **Research** novel agent patterns and publish findings
+5. **Teach** the next generation of agentic engineers
+
+---
+
+## 90.8 Resources for Continued Growth
+
+{/* IMAGE_PLACEHOLDER: Resource ecosystem map showing interconnected learning resources organized in concentric circles. Center: "You" (the learner), Inner circle: Communities (Discord, forums), Middle circle: Research sources (arXiv, Papers with Code), Outer circle: Conferences and events. Connect related resources with lines. Style: Network diagram with icons for each resource type, warm welcoming colors. Place at the top of this section to visualize the learning ecosystem. */}
+
+### Communities
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: CommunityConnector - A widget that displays live community stats (member counts, recent activity) for each listed community. Include quick-join buttons, community highlights, and a "recommended for you" section based on learner's interests. Could also show trending discussions or recent helpful threads from each community. */}
+
+- [AI Engineer Discord](https://discord.gg/aiengineers) - The hub for AI engineers
+- [Latent Space Discord](https://discord.gg/latentspace) - Deep technical discussions
+- [LangChain Discord](https://discord.gg/langchain) - LangGraph and ecosystem
+- [AG2 Community](https://github.com/ag2ai/ag2/discussions) - AutoGen successor community
+- [r/LocalLLaMA](https://reddit.com/r/LocalLLaMA) - Open source models
+- [Hacker News](https://news.ycombinator.com) - Tech news and discussions
+
+### Research to Follow
+
+- [arXiv cs.AI](https://arxiv.org/list/cs.AI/recent) - Latest AI papers
+- [Papers With Code - Agents](https://paperswithcode.com/task/autonomous-agents) - Benchmarks and implementations
+- [Anthropic Research](https://www.anthropic.com/research) - Safety and capabilities
+- [OpenAI Research](https://openai.com/research) - Frontier model research
+- [Google DeepMind](https://deepmind.google/research/) - Foundational AI research
+- [Meta AI Research](https://ai.meta.com/research/) - Open source innovations
+- [Hugging Face Papers](https://huggingface.co/papers) - Community-curated papers
+
+### Newsletters & Podcasts
+
+- [Latent Space](https://www.latent.space/) - Deep dives into AI engineering (podcast + newsletter)
+- [AI Engineer Newsletter](https://aiengineering.substack.com/) - Weekly industry updates
+- [Simon Willison's Blog](https://simonwillison.net/) - Practical AI insights
+- [The Batch (DeepLearning.AI)](https://www.deeplearning.ai/the-batch/) - Andrew Ng's weekly digest
+- [Last Week in AI](https://lastweekin.ai/) - Comprehensive AI news roundup
+
+### Conferences
+
+- **AI Engineer World's Fair** - The premier AI engineering conference
+- **LangChain AI Summit** - LangGraph and ecosystem deep dives
+- **Anthropic Developer Day** - Claude and MCP updates
+- **NeurIPS** - Academic research frontier
+- **ICML** - Machine learning advances
+- Local AI/ML meetups - Build your network
+
+---
+
+## 90.9 Final Thoughts
+
+> "The best way to predict the future is to invent it." — Alan Kay
+
+{/* IMAGE_PLACEHOLDER: Inspirational illustration showing a developer/engineer standing at the edge of a new frontier, looking out at a landscape filled with AI agents working together (represented as glowing nodes and connections). The scene should convey possibility, innovation, and the future of work. Style: Cinematic, inspiring, with a blend of human and AI elements. Use dawn/sunrise lighting to symbolize new beginnings. Place at the top of this section. */}
+
+You are now equipped to invent the future of software. The agents you build will:
+
+- **Automate** the tedious parts of knowledge work
+- **Augment** human capabilities in ways we're just beginning to understand
+- **Transform** industries from healthcare to finance to education
+
+The transition from 2024 to 2026 is defined by the maturation of the engineering stack. We are no longer simply "prompting" models; we are architecting **Systems of Intelligence**.
+
+<Callout type="tip">
+  **Think of it this way**: Just as the transition from mainframes to personal
+  computers democratized computing, and the internet democratized information,
+  agentic AI is democratizing expertise. You're not just building
+  software—you're creating digital colleagues that can reason, learn, and act
+  autonomously.
+</Callout>
+
+### The Four Pillars, Revisited
+
+{/* IMAGE_PLACEHOLDER: Four pillars visualization showing classical Greek/Roman columns, each labeled with one pillar (Reliability, Interoperability, Efficiency, Correctness). Each pillar should have visual elements representing its key concepts - Reliability: checkpoint symbols, Interoperability: connection nodes, Efficiency: optimization arrows, Correctness: validation checkmarks. The pillars support a roof labeled "Production-Grade Agentic Systems". Style: Architectural, solid, trustworthy. Place above the pillar descriptions. */}
+
+1. **Reliability** - Your agents will fail. Design for recovery with checkpointing, durable execution, and human-in-the-loop patterns. Temporal.io and Inngest have emerged as key infrastructure for long-running agent workflows.
+
+<Callout type="info">
+  **Real-world analogy**: Think of reliability like building a bridge. You don't
+  just design for perfect conditions—you design for earthquakes, floods, and
+  heavy loads. Similarly, production agents must handle API failures, rate
+  limits, and unexpected inputs gracefully.
+</Callout>
+
+2. **Interoperability** - MCP has become the standard for tool integration, adopted across all major IDEs and frameworks. The A2A protocol is emerging for agent-to-agent communication. Bet on standards—they compound.
+
+<Callout type="info">
+  **Real-world analogy**: Standards are like electrical outlets. Imagine if
+  every appliance needed a different plug! MCP and A2A are creating universal
+  "plugs" for agents, enabling them to work together seamlessly regardless of
+  who built them.
+</Callout>
+
+3. **Efficiency** - Context engineering is the new prompt engineering. It's not just what you say, but what information your agent has access to. Semantic caching, model routing, and context isolation are essential techniques.
+
+<Callout type="info">
+  **Real-world analogy**: Context engineering is like being a great executive
+  assistant. It's not about giving your boss all the information—it's about
+  giving them exactly the right information at the right time. Too much context
+  overwhelms; too little leaves gaps.
+</Callout>
+
+4. **Correctness** - Neuro-symbolic approaches are gaining traction. Ground probabilistic systems in deterministic structures. Red teaming and adversarial testing are now standard practice for production agents.
+
+<Callout type="info">
+  **Real-world analogy**: Neuro-symbolic AI is like having a creative artist
+  (neural) work with a meticulous accountant (symbolic). The artist generates
+  ideas, the accountant verifies they follow the rules. Together, they produce
+  both innovative and correct results.
+</Callout>
+
+---
+
+## 90.10 Success Stories & Real-World Impact
+
+{/* IMAGE_PLACEHOLDER: Success stories showcase featuring 3-4 example scenarios of agents in production. Show visual representations of: 1) A research agent helping a startup analyze market data (charts/graphs), 2) A code agent helping a team refactor legacy systems (code transformation), 3) A customer service agent handling inquiries (chat interface), 4) A data analyst agent generating insights (dashboard). Style: Modern, professional, showing before/after or workflow improvements. Place at the top of this section. */}
+
+### Where Agentic Engineers Are Making Impact
+
+The skills you've learned are already transforming industries. Here are real-world applications where agentic engineers are creating value:
+
+**🏥 Healthcare**: Privacy-preserving agents analyze patient data locally, helping doctors identify patterns without compromising HIPAA compliance. Your Local Data Analyst project directly applies here.
+
+**💰 Finance**: Forensics swarms detect fraud patterns across millions of transactions in real-time, combining multiple data sources while maintaining audit trails. Your Financial Forensics Swarm demonstrates these capabilities.
+
+**🏢 Enterprise IT**: Self-healing infrastructure agents monitor Kubernetes clusters, automatically resolving issues before they impact users. Your K8s Operator project is production-ready for this use case.
+
+**🔬 Research**: Deep research agents help scientists synthesize findings from thousands of papers, accelerating discovery. Your Deep Research Analyst can be adapted for academic and industrial research.
+
+**💻 Software Development**: Code refactoring agents help teams modernize legacy systems, reducing technical debt while maintaining functionality. Your Autonomous Code Refactorer addresses a multi-billion dollar problem.
+
+<Callout type="success">
+  **Your Competitive Advantage**: You've built production-grade implementations
+  of these systems. While others are still learning theory, you have working
+  code and deployment experience. This puts you in the top 1% of AI engineers.
+</Callout>
+
+### Career Paths for Agentic Engineers
+
+Based on your 90-day journey, here are career paths where your skills are in high demand:
+
+| Role                         | Description                                              | Key Skills from Course                   | Typical Salary Range |
+| :--------------------------- | :------------------------------------------------------- | :--------------------------------------- | :------------------- |
+| **AI Agent Architect**       | Design and architect multi-agent systems for enterprises | LangGraph, MCP, A2A, system design       | $150k-$250k+         |
+| **MLOps/LLMOps Engineer**    | Build infrastructure for deploying and monitoring agents | Observability, deployment, evaluation    | $130k-$220k+         |
+| **Agentic Product Engineer** | Build agent-first products and features                  | Full-stack + agents, UX for AI           | $140k-$230k+         |
+| **AI Safety Engineer**       | Ensure agents are safe, reliable, and aligned            | Red teaming, sandboxing, policy-as-code  | $150k-$260k+         |
+| **Research Engineer**        | Develop novel agent architectures and patterns           | Deep learning, research, experimentation | $140k-$280k+         |
+
+<Callout type="tip">
+  **Salary Note**: These ranges are for US-based positions as of 2025. Actual
+  compensation varies by location, company size, and experience. Senior
+  positions and FAANG companies often exceed these ranges significantly.
+</Callout>
+
+---
+
+## 🎓 Certificate of Completion
+
+{/* IMAGE_PLACEHOLDER: Digital certificate design with elegant border, course logo at top, "Certificate of Completion" as heading, "Agentic Systems Engineering" as course name, space for learner name, "90-Day Comprehensive Program" subtitle, completion date field, and signature line. Include decorative elements like a ribbon/seal. Style: Professional, prestigious, printable quality with gold/blue accents. Place prominently at the beginning of this section. */}
+
+You have completed the **Agentic Systems Engineering** course.
+
+**Skills Acquired:**
+
+- ✅ Agent architecture and design patterns
+- ✅ LangGraph workflow orchestration
+- ✅ Model Context Protocol integration
+- ✅ Multi-agent collaboration and A2A communication
+- ✅ Context and memory engineering
+- ✅ Secure code execution and sandboxing
+- ✅ Computer use and browser automation
+- ✅ Cost optimization and model routing
+- ✅ Production deployment and observability
+- ✅ Agent evaluation and benchmarking
+- ✅ Red teaming and adversarial testing
+
+**Projects Completed:**
+
+- ✅ Deep Research Analyst
+- ✅ Self-Healing Kubernetes Operator
+- ✅ Local-First Data Analyst
+- ✅ Autonomous Code Refactorer
+- ✅ Financial Forensics Swarm
+
+---
+
+## 🚀 What's Next?
+
+### The Journey Continues
+
+This 90-day journey has equipped you with comprehensive skills in agentic systems engineering. You've progressed from foundations through advanced architectures, building production-grade systems along the way.
+
+### Continue Your Growth
+
+Now that you've completed the full curriculum, here are ways to continue growing:
+
+- **Deploy your projects** - Put your capstone projects into production
+- **Contribute to open source** - Submit PRs to AG2, LangGraph, or MCP servers
+- **Build your agents.md** - Document your agent's capabilities for discovery
+- **Specialize in a vertical** - Computer use, code agents, research agents, or data agents
+- **Share your knowledge** - Write about your experiences, mentor others
+
+<Callout type="info">
+  **Congratulations!** You've completed the comprehensive 3-month Agentic
+  Systems Engineering program covering foundations, multi-agent systems,
+  production engineering, and advanced architectures.
+</Callout>
+
+### Stay Connected
+
+- Star the [course repository](https://github.com/keyurgolani/AgenticEngineer)
+- Join the [Discord community](https://discord.gg/your-server)
+- Follow for updates on [Twitter/X](https://twitter.com/your-handle)
+
+---
+
+## Final Words
+
+The age of the **Silicon Employee** has begun. You are no longer just a developer—you are an architect of autonomous systems, a governor of AI workforces, a builder of the future.
+
+Go build something amazing.
+
+_— The Agentic Systems Engineering Team_
+
+---
+
+<ProgressCheckpoint
+  questions={[
+    "What are the four pillars of agentic systems engineering?",
+    "Which project from the course would you deploy first, and why?",
+    "What's your 30-day plan for continuing your agentic AI journey?",
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "You've mastered the four pillars: Reliability, Interoperability, Efficiency, Correctness",
+    "Five production-grade projects demonstrate your capabilities",
+    "The role of engineer is evolving from code writer to agent architect",
+    "Continuous learning through communities, research, and practice is essential",
+    "You are now equipped to build the future of autonomous systems",
+  ]}
+/>
+
+**Congratulations on completing the course!** Your journey as an Agentic AI Engineer has just begun.
+
+---
+
+## Hands-On Practice
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: CapstoneProjectGallery - An interactive gallery showcasing all 5 capstone projects with: project cards that flip to show details, live demo links (if deployed), GitHub repo links, tech stack badges, difficulty ratings, and estimated completion times. Include a "Deploy Your Own" button for each project with deployment guides for Vercel, Railway, and AWS. Add a progress tracker showing which projects the learner has completed. */}
+
+<Callout type="tip">
+  **Builds Toward Capstone:** You've now completed the 90-day curriculum. The
+  AgentOS capstone awaits—your chance to synthesize everything into a
+  production-grade agentic ecosystem.
+</Callout>
+
+### Your Capstone Projects
+
+Throughout this 90-day journey, you've built:
+
+- **Deep Research Analyst** - Context isolation, parallel execution, recursive summarization
+- **Self-Healing K8s Operator** - Event-driven architecture, HITL, policy-as-code
+- **Local Data Analyst** - Privacy-preserving AI, sandboxing, schema-only prompting
+- **Autonomous Code Refactorer** - Neuro-symbolic AI, AST manipulation
+- **Financial Forensics Swarm** - MCP integration, multi-source correlation
+
+### Reflection Exercise
+
+Before moving forward, take time to reflect on your journey:
+
+<Callout type="info">
+  **90-Day Reflection Questions**: 1. **What surprised you most** about building
+  agentic systems? What was easier or harder than expected? 2. **Which project
+  are you most proud of** and why? What would you do differently if you rebuilt
+  it today? 3. **What's your biggest takeaway** from the four pillars
+  (Reliability, Interoperability, Efficiency, Correctness)? 4. **Where do you
+  see yourself** in 6 months? Which specialization path calls to you? 5. **What
+  will you build next?** Describe your first post-course project in one
+  sentence.
+</Callout>
+
+{/* INTERACTIVE_COMPONENT_SUGGESTION: JourneyTimeline - An interactive timeline showing the learner's progress through all 90 days. Display completed modules, time spent, projects built, and key milestones achieved. Include statistics like: total learning hours, lines of code written, concepts mastered, and community contributions. Add a "Share Your Journey" button to generate a shareable achievement card for social media. */}
+
+### Next Steps
+
+1. Review the [Project Hierarchy](/modules/day-00-project-hierarchy)
+2. Deploy your favorite project to production
+3. Continue building and experimenting with new agent architectures
+
+See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.

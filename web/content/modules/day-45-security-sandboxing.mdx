@@ -1,0 +1,1415 @@
+---
+title: "Day 45: Secure Code Execution"
+description: "Sandboxing, MicroVMs, and defense-in-depth for agents that run code."
+week: 7
+day: 45
+---
+
+<ReadingTime minutes={45} />
+
+<SkillLevel level="advanced" description="Security engineering" />
+
+<Prerequisites
+  items={[
+    "Understanding of agent architectures (Days 01-03)",
+    "Multi-agent orchestration patterns (Days 31-44)",
+    "Familiarity with Docker and containerization",
+    "Basic knowledge of security concepts",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Understand the threat model for code-executing agents",
+    "Compare isolation technologies: containers, gVisor, MicroVMs, WebAssembly",
+    "Implement secure code execution with E2B sandboxes and cloud alternatives",
+    "Build code validation pipelines with Semgrep and Bandit",
+    "Design capability-based permission systems for agent tools",
+    "Deploy sandboxes on AWS Lambda, Cloud Run, or Azure",
+  ]}
+/>
+
+## The Danger of Code Execution
+
+When your agent can execute code, it can do anything—including `rm -rf /`. Today we learn how to contain the blast radius.
+
+<Callout type="warning">
+  **Real-World Analogy:** Think of code execution like giving someone the keys to your house. Without sandboxing, you're handing over the master key to your entire property. With proper sandboxing, you're giving them a key to a single room with reinforced walls, no windows, and a time-limited lock—even if they try to break out, the damage is contained.
+</Callout>
+
+{/* IMAGE_PLACEHOLDER: Create a dramatic illustration showing a code execution sandbox as a protective barrier. On one side, show dangerous code snippets (rm -rf /, malicious imports, infinite loops) trying to break through. On the other side, show protected system resources (files, network, memory). Use a glowing force field or containment chamber aesthetic. Place this at the top of the section to immediately convey the critical importance of sandboxing. */}
+
+{/* INTERACTIVE_COMPONENT: Create a "Sandbox Security Simulator" that lets users select different isolation technologies (subprocess, Docker, gVisor, Firecracker) and then choose attack scenarios (kernel exploit, resource exhaustion, network exfiltration). The simulator should visually show whether each attack succeeds or is blocked, with explanations of why. Include metrics like startup time, memory overhead, and isolation strength. This would help learners understand the trade-offs between different sandboxing approaches. */}
+
+---
+
+## 45.1 The Threat Model
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing the three types of threats (Malicious Code, Buggy Code, Hallucinated Code) as three distinct attack vectors, each with icons and examples. Show them converging on a central "Agent System" with arrows pointing to different impacts (Data Loss, Exfiltration, Privilege Escalation, DoS). Use a red/orange color scheme for threats and impacts. Place this before the Mermaid diagram to provide visual context. */}
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph Threats
+        Malicious[Malicious Code]
+        Buggy[Buggy Code]
+        Hallucinated[Hallucinated Code]
+    end
+    
+    subgraph Impacts
+        DataLoss[Data Loss]
+        Exfiltration[Data Exfiltration]
+        Privilege[Privilege Escalation]
+        DoS[Denial of Service]
+    end
+    
+    Malicious --> DataLoss
+    Malicious --> Exfiltration
+    Buggy --> DoS
+    Hallucinated --> DataLoss
+    Hallucinated --> Privilege
+    
+    style Malicious fill:#f96,stroke:#333
+    style Exfiltration fill:#f96,stroke:#333
+`}
+/>
+
+### Real Attack Scenarios
+
+{/* INTERACTIVE_COMPONENT: Create a "Threat Scenario Explorer" where users can click on each attack scenario to see: (1) A step-by-step animation of how the attack unfolds, (2) The specific code that would be executed, (3) The potential impact with visual indicators (red for critical, orange for high), (4) Which defense layers would block it. This interactive element would make abstract security concepts concrete and memorable. */}
+
+| Scenario                | Attack Vector                                             | Impact                 |
+| :---------------------- | :-------------------------------------------------------- | :--------------------- |
+| **Prompt Injection**    | User tricks agent into running malicious shell commands   | Full system compromise |
+| **Hallucinated Import** | Agent imports non-existent package, attacker registers it | Supply chain attack    |
+| **Resource Exhaustion** | Infinite loops or massive memory allocation               | System crash           |
+| **Data Exfiltration**   | Agent reads `.env` and sends to external URL              | Credential theft       |
+
+---
+
+## 45.2 Defense in Depth
+
+No single defense is sufficient. We layer multiple protections:
+
+{/* IMAGE_PLACEHOLDER: Create a layered security diagram showing defense-in-depth as concentric circles or nested shields. From outer to inner: Layer 1 (Input Validation - showing code scanning), Layer 2 (Process Isolation - showing containers), Layer 3 (Kernel Isolation - showing MicroVMs/gVisor), Layer 4 (Network Isolation - showing firewalls). Each layer should have icons and brief labels. Use a blue/green gradient for security layers. Place this before the existing diagram to reinforce the concept visually. */}
+
+![Defense in Depth Security Layers](/images/defense_in_depth.png)
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph Layer1[Layer 1: Input Validation]
+        Sanitize[Sanitize Inputs]
+        Blocklist[Code Blocklist]
+    end
+    
+    subgraph Layer2[Layer 2: Process Isolation]
+        Container[Container]
+        Sandbox[Sandbox Runtime]
+    end
+    
+    subgraph Layer3[Layer 3: Kernel Isolation]
+        gVisor[gVisor]
+        MicroVM[MicroVM]
+    end
+    
+    subgraph Layer4[Layer 4: Network Isolation]
+        Firewall[Egress Firewall]
+        VPC[Private Network]
+    end
+    
+    Layer1 --> Layer2
+    Layer2 --> Layer3
+    Layer3 --> Layer4
+    
+    style Layer3 fill:#9f9,stroke:#333
+`}
+/>
+
+---
+
+## 45.3 Isolation Technologies Compared
+
+{/* IMAGE_PLACEHOLDER: Create a comparison chart showing the five isolation technologies (subprocess, Docker, gVisor, Firecracker, E2B) as columns. For each, show visual representations of: isolation level (weak to strong shield icons), startup time (speedometer), overhead (resource gauge), and best use case (icon). Use a gradient from red (weak) to green (strong) for isolation levels. Place this above the comparison table to provide visual context. */}
+
+| Technology      | Isolation Level   | Startup Time | Overhead | Best For              |
+| :-------------- | :---------------- | :----------- | :------- | :-------------------- |
+| **subprocess**  | None              | Under 1ms    | None     | Trusted code only     |
+| **Docker**      | Process namespace | ~500ms       | Low      | Development           |
+| **gVisor**      | User-space kernel | ~100ms       | Medium   | Production containers |
+| **Firecracker** | Full VM           | ~125ms       | Medium   | Untrusted code        |
+| **E2B**         | Firecracker + SDK | ~200ms       | Medium   | AI agents             |
+
+### Why Containers Aren't Enough
+
+Containers share the host kernel. A kernel exploit = full host access.
+
+{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison diagram. Left side: "Container Isolation (Shared Kernel Risk)" showing multiple containers sitting on top of a single host kernel layer, with a red warning icon and an arrow showing how a breach in one container can affect others through the shared kernel. Right side: "MicroVM Isolation (True Isolation)" showing multiple MicroVMs each with their own guest kernel, separated by clear boundaries, with green checkmarks indicating isolation. Use isometric 3D style for depth. Place this before the ASCII diagrams to provide a more visual explanation. */}
+
+```
+┌─────────────────────────────────────────┐
+│              Host Kernel                │  ← Shared!
+├─────────────┬─────────────┬─────────────┤
+│ Container A │ Container B │ Container C │
+│  (Agent 1)  │  (Agent 2)  │  (Agent 3)  │
+└─────────────┴─────────────┴─────────────┘
+
+If Agent 1 exploits the kernel, it can access Agents 2 and 3!
+```
+
+### MicroVMs: True Isolation
+
+```
+┌─────────────────────────────────────────┐
+│              Host Kernel                │
+├─────────────┬─────────────┬─────────────┤
+│  MicroVM 1  │  MicroVM 2  │  MicroVM 3  │
+│ ┌─────────┐ │ ┌─────────┐ │ ┌─────────┐ │
+│ │Guest    │ │ │Guest    │ │ │Guest    │ │
+│ │Kernel   │ │ │Kernel   │ │ │Kernel   │ │
+│ ├─────────┤ │ ├─────────┤ │ ├─────────┤ │
+│ │Agent 1  │ │ │Agent 2  │ │ │Agent 3  │ │
+│ └─────────┘ │ └─────────┘ │ └─────────┘ │
+└─────────────┴─────────────┴─────────────┘
+
+Each agent has its own kernel. Kernel exploit = only that VM.
+```
+
+---
+
+## 45.4 E2B: Purpose-Built for AI Agents
+
+{/* IMAGE_PLACEHOLDER: Create an architectural diagram showing E2B's stack: at the bottom, AWS infrastructure; middle layer showing Firecracker MicroVMs with fast startup indicators; top layer showing the E2B SDK with Python and JavaScript logos. Add arrows showing code flow from agent → SDK → MicroVM → execution → results. Use a modern, tech-forward design with the E2B brand colors. Place this at the start of the E2B section to show the complete architecture. */}
+
+[E2B](https://e2b.dev) provides Firecracker-based sandboxes with an AI-friendly SDK. It's an open-source runtime designed specifically for executing AI-generated code securely in cloud sandboxes.
+
+```python
+from e2b_code_interpreter import Sandbox
+
+def execute_safely(code: str) -> dict:
+    """Execute code in a secure sandbox."""
+
+    with Sandbox() as sandbox:
+        # Sandbox starts in ~200-400ms
+
+        # Execute the code
+        execution = sandbox.run_code(code)
+
+        # Handle results
+        if execution.error:
+            return {
+                "success": False,
+                "error": f"{execution.error.name}: {execution.error.value}"
+            }
+
+        # Collect outputs
+        results = []
+        for result in execution.results:
+            if result.text:
+                results.append({"type": "text", "content": result.text})
+            if result.png:
+                results.append({"type": "image", "content": result.png})
+
+        return {
+            "success": True,
+            "results": results,
+            "stdout": execution.logs.stdout,
+            "stderr": execution.logs.stderr
+        }
+
+# Usage
+result = execute_safely("""
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.DataFrame({'x': [1,2,3], 'y': [4,5,6]})
+plt.plot(df['x'], df['y'])
+plt.savefig('plot.png')
+print("Plot created!")
+""")
+```
+
+### E2B Features
+
+| Feature                 | Description                                    |
+| :---------------------- | :--------------------------------------------- |
+| **Fast startup**        | ~200-400ms cold start (Firecracker MicroVMs)   |
+| **File system**         | Upload/download files to/from sandbox          |
+| **Persistent sessions** | Keep sandbox alive for multi-step tasks        |
+| **Custom templates**    | Pre-install packages and configure environment |
+| **Resource limits**     | CPU, memory, timeout controls                  |
+| **Python & JS SDKs**    | Native support for both languages              |
+
+### E2B Pricing Tiers
+
+E2B offers a free tier for experimentation and paid plans for production use. The free tier includes limited sandbox hours, while paid plans (starting around $29/month) provide more compute time and features like custom templates.
+
+### E2B 2024-2025 Updates
+
+E2B has evolved significantly with new capabilities for production AI agents:
+
+```python
+from e2b_code_interpreter import Sandbox
+
+# Custom Templates (2024)
+# Pre-configure environments with your dependencies
+sandbox = Sandbox(template="my-data-science-template")
+
+# Persistent Sandboxes (2024)
+# Keep sandboxes alive across multiple requests
+sandbox = Sandbox(timeout=3600)  # 1 hour timeout
+sandbox_id = sandbox.id  # Save for later
+
+# Resume later
+sandbox = Sandbox.reconnect(sandbox_id)
+
+# GPU Support (2025)
+# For ML workloads and model inference
+sandbox = Sandbox(
+    template="gpu-pytorch",
+    hardware="gpu"  # Request GPU-enabled sandbox
+)
+
+# Execute GPU-accelerated code
+result = sandbox.run_code("""
+import torch
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Running on: {device}")
+""")
+```
+
+### E2B Alternatives Comparison
+
+Several platforms now compete in the AI sandbox space:
+
+| Provider         | Isolation   | Cold Start | GPU Support | Pricing Model | Best For                     |
+| :--------------- | :---------- | :--------- | :---------- | :------------ | :--------------------------- |
+| **E2B**          | Firecracker | ~200ms     | Yes (2025)  | Per-second    | AI agents, code interpreters |
+| **Modal**        | gVisor      | ~100ms     | Yes         | Per-second    | ML workloads, batch jobs     |
+| **Daytona**      | Container   | ~500ms     | Limited     | Per-workspace | Development environments     |
+| **Replit Agent** | Container   | ~1s        | No          | Subscription  | Prototyping, education       |
+| **CodeSandbox**  | Container   | ~2s        | No          | Subscription  | Web development              |
+
+```python
+# Modal Example (2024)
+import modal
+
+app = modal.App("secure-executor")
+
+@app.function(
+    image=modal.Image.debian_slim().pip_install("pandas", "numpy"),
+    timeout=60,
+    memory=512
+)
+def execute_code(code: str) -> dict:
+    """Execute code in Modal's secure sandbox."""
+    import io
+    import sys
+
+    stdout = io.StringIO()
+    sys.stdout = stdout
+
+    try:
+        exec(code, {"__builtins__": __builtins__})
+        return {"success": True, "output": stdout.getvalue()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+```
+
+### Cloud vs Self-Hosted Sandboxes
+
+<Callout type="info">
+  **When to use cloud sandboxes (E2B, Modal):** Rapid prototyping and
+  development, variable workloads with unpredictable scaling, GPU requirements
+  without infrastructure investment, teams without DevOps expertise. **When to
+  self-host (Docker, Firecracker):** Strict data residency requirements,
+  predictable high-volume workloads, cost optimization at scale (more than 10K
+  executions/day), custom security requirements or compliance needs.
+</Callout>
+
+---
+
+## 45.5 Building Your Own Sandbox
+
+{/* IMAGE_PLACEHOLDER: Create a flowchart showing the Docker sandbox execution pipeline: Code Input → Temp Directory Creation → Resource Limits Applied → Container Spawn → Execution (with timeout) → Result Capture → Cleanup. Show each step as a box with icons (folder, gauge, container, clock, document, trash). Use arrows to show flow and add security checkpoints (shields) at key stages. Place this before the code example to visualize the process. */}
+
+For full control, build a Docker-based sandbox:
+
+```python
+import docker
+import tempfile
+import os
+from pathlib import Path
+
+class DockerSandbox:
+    """Docker-based code execution sandbox."""
+
+    def __init__(self, image: str = "python:3.11-slim"):
+        self.client = docker.from_env()
+        self.image = image
+
+        # Resource limits
+        self.mem_limit = "256m"
+        self.cpu_period = 100000
+        self.cpu_quota = 50000  # 50% of one CPU
+        self.timeout = 30
+
+    def execute(self, code: str, files: dict = None) -> dict:
+        """Execute code in isolated container."""
+
+        # Create temp directory for code and files
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Write code to file
+            code_path = Path(tmpdir) / "code.py"
+            code_path.write_text(code)
+
+            # Write any additional files
+            if files:
+                for name, content in files.items():
+                    (Path(tmpdir) / name).write_text(content)
+
+            try:
+                # Run container with strict limits
+                result = self.client.containers.run(
+                    self.image,
+                    command=["python", "/sandbox/code.py"],
+                    volumes={tmpdir: {"bind": "/sandbox", "mode": "ro"}},
+                    mem_limit=self.mem_limit,
+                    cpu_period=self.cpu_period,
+                    cpu_quota=self.cpu_quota,
+                    network_disabled=True,  # No network access!
+                    read_only=True,  # Read-only filesystem
+                    remove=True,
+                    timeout=self.timeout,
+                    user="nobody",  # Non-root user
+                    security_opt=["no-new-privileges"],
+                )
+
+                return {
+                    "success": True,
+                    "output": result.decode("utf-8")
+                }
+
+            except docker.errors.ContainerError as e:
+                return {
+                    "success": False,
+                    "error": e.stderr.decode("utf-8") if e.stderr else str(e)
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": str(e)
+                }
+
+# Usage
+sandbox = DockerSandbox()
+result = sandbox.execute("""
+print("Hello from sandbox!")
+print(2 + 2)
+""")
+```
+
+### Adding gVisor for Extra Security
+
+```yaml
+# /etc/docker/daemon.json
+{ "runtimes": { "runsc": { "path": "/usr/local/bin/runsc" } } }
+```
+
+```python
+# Use gVisor runtime
+result = self.client.containers.run(
+    self.image,
+    runtime="runsc",  # gVisor runtime
+    # ... other options
+)
+```
+
+---
+
+## 45.6 WebAssembly Sandboxing
+
+{/* IMAGE_PLACEHOLDER: Create a comparison visualization showing WASM's lightweight isolation model. Show a WASM sandbox as a small, efficient container with linear memory (represented as a segmented bar), explicit imports (shown as controlled gates), and the host system outside. Compare this visually to a bulky container image. Use metrics like "1-10ms startup" vs "100-500ms" and "1-10MB memory" vs "50-200MB" with visual size differences. Place this at the section start to immediately show WASM's advantages. */}
+
+WebAssembly (WASM) offers a lightweight alternative to containers for sandboxing code execution. WASM provides memory-safe, capability-based isolation with near-native performance.
+
+### Why WASM for Agent Sandboxing?
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph WASM["WASM Sandbox"]
+        Code[Agent Code]
+        LinearMem[Linear Memory]
+        Imports[Explicit Imports]
+    end
+    
+    subgraph Host["Host System"]
+        FS[File System]
+        Net[Network]
+        Env[Environment]
+    end
+    
+    Imports -.->|Capability| FS
+    Imports -.->|Capability| Net
+    
+    style WASM fill:#e1f5fe,stroke:#333
+    style Host fill:#fff3e0,stroke:#333
+`}
+/>
+
+| Aspect               | Containers        | WASM               |
+| :------------------- | :---------------- | :----------------- |
+| **Startup**          | 100-500ms         | 1-10ms             |
+| **Memory**           | 50-200MB          | 1-10MB             |
+| **Isolation**        | Process/namespace | Memory-safe VM     |
+| **Portability**      | Linux-centric     | Universal          |
+| **Language Support** | Any               | Compiled languages |
+
+### Wasmtime and Wasmer Runtimes
+
+```python
+# Using wasmtime-py (2024)
+from wasmtime import Store, Module, Instance, Func, FuncType, ValType
+
+def create_wasm_sandbox():
+    """Create a WASM sandbox with limited capabilities."""
+    store = Store()
+
+    # Define allowed imports (capabilities)
+    def log_message(msg_ptr: int, msg_len: int):
+        # Only allow logging, no file/network access
+        print(f"[SANDBOX LOG]: {msg_ptr}, {msg_len}")
+
+    # Load and instantiate WASM module
+    module = Module.from_file(store.engine, "sandbox.wasm")
+
+    # Only expose safe functions
+    imports = [
+        Func(store, FuncType([ValType.i32(), ValType.i32()], []), log_message)
+    ]
+
+    instance = Instance(store, module, imports)
+    return instance
+
+# Wasmer alternative with WASI
+import wasmer
+from wasmer import Store, Module, Instance
+from wasmer_compiler_cranelift import Compiler
+
+store = Store(Compiler())
+module = Module(store, open("sandbox.wasm", "rb").read())
+
+# WASI with restricted capabilities
+from wasmer import wasi
+
+wasi_config = wasi.StateBuilder("sandbox").finalize()
+instance = Instance(module, wasi_config.generate_imports(store, module))
+```
+
+### Extism for Plugin-Based Sandboxing
+
+[Extism](https://extism.org) (2024) provides a higher-level framework for WASM plugins, ideal for agent tool execution:
+
+```python
+import extism
+
+# Define a sandboxed plugin for code execution
+manifest = {
+    "wasm": [{"path": "python_executor.wasm"}],
+    "memory": {"max_pages": 256},  # 16MB max memory
+    "timeout_ms": 5000,  # 5 second timeout
+    "allowed_hosts": [],  # No network access
+}
+
+plugin = extism.Plugin(manifest)
+
+# Execute code in WASM sandbox
+result = plugin.call(
+    "execute",
+    b'{"code": "print(2 + 2)", "language": "python"}'
+)
+print(result.decode())
+
+# Plugins are memory-isolated and capability-restricted
+```
+
+### When to Use WASM vs Containers
+
+<Callout type="tip">
+  **Use WASM when:** Sub-millisecond startup is critical (real-time agents),
+  running many concurrent sandboxes (cost-sensitive), executing simple
+  compute-bound tasks, embedding sandboxes in edge/browser environments. **Use
+  Containers/MicroVMs when:** Full OS environment needed (system calls, file
+  I/O), running complex multi-process workloads, GPU access required, existing
+  containerized tooling.
+</Callout>
+
+---
+
+## 45.7 Code Validation Before Execution
+
+{/* IMAGE_PLACEHOLDER: Create a security checkpoint illustration showing code passing through multiple validation gates. Gate 1: Pattern Matching (showing regex patterns), Gate 2: AST Analysis (showing a syntax tree), Gate 3: Import Checking (showing blocked modules in red), Gate 4: Function Scanning (showing dangerous functions crossed out). Code that passes gets a green checkmark, blocked code gets a red X. Use a conveyor belt or pipeline metaphor. Place this before the code validator implementation. */}
+
+Add a pre-execution validation layer:
+
+```python
+import ast
+import re
+
+class CodeValidator:
+    """Validate code before execution."""
+
+    # Dangerous patterns
+    BLOCKED_IMPORTS = {
+        'os', 'subprocess', 'sys', 'shutil',
+        'socket', 'requests', 'urllib', 'http'
+    }
+
+    BLOCKED_FUNCTIONS = {
+        'eval', 'exec', 'compile', '__import__',
+        'open', 'input', 'breakpoint'
+    }
+
+    BLOCKED_PATTERNS = [
+        r'__\w+__',  # Dunder methods
+        r'\.system\s*\(',  # os.system
+        r'\.popen\s*\(',  # os.popen
+        r'subprocess\.',  # subprocess module
+    ]
+
+    def validate(self, code: str) -> tuple[bool, str]:
+        """Validate code. Returns (is_valid, error_message)."""
+
+        # Check for blocked patterns
+        for pattern in self.BLOCKED_PATTERNS:
+            if re.search(pattern, code):
+                return False, f"Blocked pattern detected: {pattern}"
+
+        # Parse AST
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            return False, f"Syntax error: {e}"
+
+        # Check imports
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.split('.')[0] in self.BLOCKED_IMPORTS:
+                        return False, f"Blocked import: {alias.name}"
+
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and node.module.split('.')[0] in self.BLOCKED_IMPORTS:
+                    return False, f"Blocked import: {node.module}"
+
+            elif isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name):
+                    if node.func.id in self.BLOCKED_FUNCTIONS:
+                        return False, f"Blocked function: {node.func.id}"
+
+        return True, "Code validated successfully"
+
+# Usage
+validator = CodeValidator()
+is_valid, message = validator.validate("""
+import os
+os.system('rm -rf /')
+""")
+# Returns: (False, "Blocked import: os")
+```
+
+### Advanced Validation with Semgrep and Bandit (2024)
+
+{/* INTERACTIVE_COMPONENT: Create a "Code Security Tester" where users can paste or write Python code in a text editor, then click "Validate" to see real-time security analysis. Show results from multiple validators (AST analysis, pattern matching, Semgrep rules) with color-coded severity levels. Highlight dangerous lines in the code editor and provide explanations for why each pattern is blocked. Include a "Safe Examples" and "Dangerous Examples" toggle to help users learn what to avoid. This hands-on tool would make security validation tangible and educational. */}
+
+For production systems, use dedicated security scanning tools:
+
+```python
+import subprocess
+import json
+import tempfile
+from pathlib import Path
+
+class AdvancedCodeValidator:
+    """Production-grade code validation with Semgrep and Bandit."""
+
+    def __init__(self):
+        # Custom Semgrep rules for agent security
+        self.semgrep_rules = """
+rules:
+  - id: dangerous-exec
+    patterns:
+      - pattern-either:
+          - pattern: exec(...)
+          - pattern: eval(...)
+          - pattern: compile(..., ..., "exec")
+    message: "Dangerous code execution detected"
+    severity: ERROR
+    languages: [python]
+
+  - id: network-access
+    patterns:
+      - pattern-either:
+          - pattern: requests.$METHOD(...)
+          - pattern: urllib.request.urlopen(...)
+          - pattern: httpx.$METHOD(...)
+    message: "Network access attempt detected"
+    severity: WARNING
+    languages: [python]
+
+  - id: file-system-write
+    patterns:
+      - pattern-either:
+          - pattern: open($PATH, "w", ...)
+          - pattern: open($PATH, "a", ...)
+          - pattern: Path(...).write_text(...)
+    message: "File write attempt detected"
+    severity: WARNING
+    languages: [python]
+"""
+
+    def validate_with_semgrep(self, code: str) -> dict:
+        """Run Semgrep security scan."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Write code and rules
+            code_path = Path(tmpdir) / "code.py"
+            rules_path = Path(tmpdir) / "rules.yaml"
+            code_path.write_text(code)
+            rules_path.write_text(self.semgrep_rules)
+
+            # Run Semgrep
+            result = subprocess.run(
+                ["semgrep", "--config", str(rules_path),
+                 "--json", str(code_path)],
+                capture_output=True, text=True, timeout=30
+            )
+
+            findings = json.loads(result.stdout)
+            return {
+                "valid": len(findings.get("results", [])) == 0,
+                "findings": findings.get("results", [])
+            }
+
+    def validate_with_bandit(self, code: str) -> dict:
+        """Run Bandit Python security scanner."""
+        with tempfile.NamedTemporaryFile(suffix=".py", mode="w") as f:
+            f.write(code)
+            f.flush()
+
+            result = subprocess.run(
+                ["bandit", "-f", "json", "-ll", f.name],
+                capture_output=True, text=True, timeout=30
+            )
+
+            findings = json.loads(result.stdout) if result.stdout else {}
+            issues = findings.get("results", [])
+
+            return {
+                "valid": len(issues) == 0,
+                "findings": issues,
+                "severity_counts": findings.get("metrics", {})
+            }
+
+    def validate(self, code: str) -> dict:
+        """Run all validators."""
+        semgrep_result = self.validate_with_semgrep(code)
+        bandit_result = self.validate_with_bandit(code)
+
+        return {
+            "valid": semgrep_result["valid"] and bandit_result["valid"],
+            "semgrep": semgrep_result,
+            "bandit": bandit_result
+        }
+```
+
+### Real-Time Validation During Agent Execution
+
+Integrate validation into your agent's tool execution loop:
+
+```python
+from typing import Callable
+import asyncio
+
+class ValidatedCodeTool:
+    """Code execution tool with real-time validation."""
+
+    def __init__(self, sandbox, validator):
+        self.sandbox = sandbox
+        self.validator = validator
+        self.validation_cache = {}  # Cache validation results
+
+    async def execute(
+        self,
+        code: str,
+        on_validation_start: Callable = None,
+        on_validation_complete: Callable = None
+    ) -> dict:
+        """Execute code with streaming validation feedback."""
+
+        # Check cache first
+        code_hash = hash(code)
+        if code_hash in self.validation_cache:
+            validation = self.validation_cache[code_hash]
+        else:
+            if on_validation_start:
+                await on_validation_start()
+
+            # Run validation (can be async for Semgrep/Bandit)
+            validation = await asyncio.to_thread(
+                self.validator.validate, code
+            )
+            self.validation_cache[code_hash] = validation
+
+            if on_validation_complete:
+                await on_validation_complete(validation)
+
+        if not validation["valid"]:
+            return {
+                "success": False,
+                "stage": "validation",
+                "errors": validation.get("findings", [])
+            }
+
+        # Execute in sandbox
+        return await asyncio.to_thread(self.sandbox.execute, code)
+
+# Usage in agent loop
+async def agent_code_execution(code: str):
+    tool = ValidatedCodeTool(sandbox, validator)
+
+    result = await tool.execute(
+        code,
+        on_validation_start=lambda: print("🔍 Validating code..."),
+        on_validation_complete=lambda v: print(
+            f"✅ Validation passed" if v["valid"]
+            else f"❌ Found {len(v.get('findings', []))} issues"
+        )
+    )
+    return result
+```
+
+---
+
+## 45.8 Agent-Specific Security Patterns
+
+{/* IMAGE_PLACEHOLDER: Create an illustration of a capability-based permission system. Show an agent at the center with various tools around it (file reader, code executor, network caller, database accessor). Each tool has a lock icon and permission badge. Show some tools with green unlocked badges (granted), some with red locked badges (denied), and one with a yellow badge showing "Requires Approval" with a human icon. Use connecting lines to show the permission relationships. Place this before the Tool Permission Systems section. */}
+
+Beyond sandboxing, agents need fine-grained permission systems for their tools.
+
+### Tool Permission Systems
+
+{/* INTERACTIVE_COMPONENT: Create a "Permission Manager Playground" where users can configure an agent's permissions using checkboxes (READ_FILES, WRITE_FILES, EXECUTE_CODE, etc.), then try to execute different tools. The interface should show: (1) Which tools are allowed/blocked based on current permissions, (2) Real-time audit log of permission checks, (3) Simulation of escalation requests with approve/deny buttons, (4) Visual representation of the principle of least privilege. Include preset scenarios like "Data Analysis Agent" or "DevOps Agent" with recommended permission sets. This would make capability-based security interactive and intuitive. */}
+
+<Mermaid
+  chart={`
+graph TB
+    Agent[Agent] --> PermCheck{Permission Check}
+    PermCheck -->|Allowed| Tool[Execute Tool]
+    PermCheck -->|Denied| Block[Block & Log]
+    PermCheck -->|Escalate| Human[Human Approval]
+    
+    Tool --> Audit[Audit Log]
+    Block --> Audit
+    Human -->|Approved| Tool
+    Human -->|Denied| Block
+    
+    style PermCheck fill:#fff3e0,stroke:#333
+    style Human fill:#e8f5e9,stroke:#333
+`}
+/>
+
+```python
+from enum import Enum
+from dataclasses import dataclass
+from typing import Set, Optional, Callable
+import logging
+
+class Permission(Enum):
+    """Tool permission levels."""
+    READ_FILES = "read_files"
+    WRITE_FILES = "write_files"
+    EXECUTE_CODE = "execute_code"
+    NETWORK_ACCESS = "network_access"
+    SHELL_ACCESS = "shell_access"
+    DATABASE_READ = "database_read"
+    DATABASE_WRITE = "database_write"
+    SEND_EMAIL = "send_email"
+    API_CALLS = "api_calls"
+
+@dataclass
+class ToolDefinition:
+    """Tool with required permissions."""
+    name: str
+    function: Callable
+    required_permissions: Set[Permission]
+    description: str
+    risk_level: str = "low"  # low, medium, high, critical
+
+class PermissionManager:
+    """Capability-based permission system for agents."""
+
+    def __init__(self):
+        self.granted_permissions: Set[Permission] = set()
+        self.denied_permissions: Set[Permission] = set()
+        self.escalation_callback: Optional[Callable] = None
+        self.audit_log = []
+
+    def grant(self, *permissions: Permission):
+        """Grant permissions to the agent."""
+        for perm in permissions:
+            self.granted_permissions.add(perm)
+            self.denied_permissions.discard(perm)
+
+    def deny(self, *permissions: Permission):
+        """Explicitly deny permissions."""
+        for perm in permissions:
+            self.denied_permissions.add(perm)
+            self.granted_permissions.discard(perm)
+
+    def set_escalation_handler(self, callback: Callable):
+        """Set callback for permission escalation requests."""
+        self.escalation_callback = callback
+
+    def check_permission(
+        self,
+        tool: ToolDefinition,
+        context: dict = None
+    ) -> tuple[bool, str]:
+        """Check if tool execution is permitted."""
+
+        missing = tool.required_permissions - self.granted_permissions
+        denied = tool.required_permissions & self.denied_permissions
+
+        # Log the check
+        self.audit_log.append({
+            "tool": tool.name,
+            "required": [p.value for p in tool.required_permissions],
+            "granted": [p.value for p in self.granted_permissions],
+            "context": context
+        })
+
+        if denied:
+            return False, f"Explicitly denied: {[p.value for p in denied]}"
+
+        if missing:
+            # Attempt escalation for high-risk tools
+            if tool.risk_level in ("high", "critical") and self.escalation_callback:
+                approved = self.escalation_callback(tool, missing, context)
+                if approved:
+                    self.grant(*missing)
+                    return True, "Approved via escalation"
+            return False, f"Missing permissions: {[p.value for p in missing]}"
+
+        return True, "Permitted"
+
+    def execute_tool(
+        self,
+        tool: ToolDefinition,
+        *args,
+        context: dict = None,
+        **kwargs
+    ):
+        """Execute tool with permission check."""
+        allowed, reason = self.check_permission(tool, context)
+
+        if not allowed:
+            logging.warning(f"Tool {tool.name} blocked: {reason}")
+            raise PermissionError(f"Tool '{tool.name}' not permitted: {reason}")
+
+        logging.info(f"Executing tool {tool.name}")
+        return tool.function(*args, **kwargs)
+
+# Usage
+permissions = PermissionManager()
+
+# Grant minimal permissions (least privilege)
+permissions.grant(
+    Permission.READ_FILES,
+    Permission.EXECUTE_CODE
+)
+
+# Define tools with required permissions
+read_file_tool = ToolDefinition(
+    name="read_file",
+    function=lambda path: open(path).read(),
+    required_permissions={Permission.READ_FILES},
+    description="Read a file from disk",
+    risk_level="low"
+)
+
+shell_tool = ToolDefinition(
+    name="run_shell",
+    function=lambda cmd: subprocess.run(cmd, shell=True),
+    required_permissions={Permission.SHELL_ACCESS, Permission.EXECUTE_CODE},
+    description="Run shell command",
+    risk_level="critical"
+)
+
+# This works
+content = permissions.execute_tool(read_file_tool, "readme.md")
+
+# This raises PermissionError
+# permissions.execute_tool(shell_tool, "ls -la")
+```
+
+### Runtime Permission Escalation
+
+For dynamic workflows, implement human-in-the-loop escalation:
+
+```python
+import asyncio
+from typing import Awaitable
+
+class EscalationManager:
+    """Handle runtime permission escalation requests."""
+
+    def __init__(self, timeout: int = 300):
+        self.timeout = timeout
+        self.pending_requests = {}
+
+    async def request_escalation(
+        self,
+        tool: ToolDefinition,
+        missing_permissions: Set[Permission],
+        context: dict,
+        notify_callback: Callable[[dict], Awaitable[None]]
+    ) -> bool:
+        """Request human approval for permission escalation."""
+
+        request_id = f"{tool.name}_{hash(frozenset(missing_permissions))}"
+
+        # Notify human (e.g., Slack, email, UI)
+        await notify_callback({
+            "request_id": request_id,
+            "tool": tool.name,
+            "description": tool.description,
+            "risk_level": tool.risk_level,
+            "permissions_needed": [p.value for p in missing_permissions],
+            "context": context,
+            "timeout": self.timeout
+        })
+
+        # Wait for approval
+        approval_event = asyncio.Event()
+        self.pending_requests[request_id] = {
+            "event": approval_event,
+            "approved": False
+        }
+
+        try:
+            await asyncio.wait_for(approval_event.wait(), self.timeout)
+            return self.pending_requests[request_id]["approved"]
+        except asyncio.TimeoutError:
+            return False
+        finally:
+            del self.pending_requests[request_id]
+
+    def approve(self, request_id: str):
+        """Approve a pending escalation request."""
+        if request_id in self.pending_requests:
+            self.pending_requests[request_id]["approved"] = True
+            self.pending_requests[request_id]["event"].set()
+
+    def deny(self, request_id: str):
+        """Deny a pending escalation request."""
+        if request_id in self.pending_requests:
+            self.pending_requests[request_id]["approved"] = False
+            self.pending_requests[request_id]["event"].set()
+```
+
+### Least Privilege Patterns
+
+<Callout type="warning">
+  **The Principle of Least Privilege for Agents:** (1) Start with zero
+  permissions - agents earn trust. (2) Grant per-task - permissions expire after
+  task completion. (3) Scope narrowly - use `read_file:/data/*` not
+  `read_file:*`. (4) Log everything - audit trail for all permission checks. (5)
+  Fail closed - deny by default, require explicit grants.
+</Callout>
+
+```python
+from contextlib import contextmanager
+
+class ScopedPermissions:
+    """Context manager for temporary permission grants."""
+
+    def __init__(self, manager: PermissionManager):
+        self.manager = manager
+        self.original_permissions = set()
+
+    @contextmanager
+    def temporary_grant(self, *permissions: Permission):
+        """Grant permissions for the duration of a context."""
+        self.original_permissions = self.manager.granted_permissions.copy()
+
+        try:
+            self.manager.grant(*permissions)
+            yield
+        finally:
+            # Restore original permissions
+            self.manager.granted_permissions = self.original_permissions
+
+# Usage
+scoped = ScopedPermissions(permissions)
+
+# Temporarily grant network access for API call
+with scoped.temporary_grant(Permission.NETWORK_ACCESS):
+    result = permissions.execute_tool(api_call_tool, "https://api.example.com")
+# Network access automatically revoked
+```
+
+---
+
+## 45.9 Cloud Provider Security Options
+
+{/* IMAGE_PLACEHOLDER: Create a cloud provider comparison matrix showing AWS, GCP, and Azure logos with their respective sandbox services. For each provider, show icons representing: isolation technology (shield strength), cold start time (stopwatch), max duration (hourglass), GPU support (graphics card), and pricing model (dollar signs). Use a clean, modern infographic style with the providers' brand colors. Place this before the comparison table to provide visual context. */}
+
+Major cloud providers offer managed sandboxing solutions with built-in security:
+
+### Comparison of Cloud Sandbox Options
+
+| Provider  | Service             | Isolation   | Cold Start | Max Duration | GPU | Pricing        |
+| :-------- | :------------------ | :---------- | :--------- | :----------- | :-- | :------------- |
+| **AWS**   | Lambda              | Firecracker | 100-500ms  | 15 min       | No  | Per-invocation |
+| **AWS**   | Fargate             | Container   | 30-60s     | Unlimited    | Yes | Per-second     |
+| **GCP**   | Cloud Run           | gVisor      | 100ms-2s   | 60 min       | Yes | Per-request    |
+| **GCP**   | Cloud Functions     | gVisor      | 100-400ms  | 9 min        | No  | Per-invocation |
+| **Azure** | Container Instances | Hyper-V     | 30-60s     | Unlimited    | Yes | Per-second     |
+| **Azure** | Functions           | Hyper-V     | 1-2s       | 10 min       | No  | Per-execution  |
+
+### AWS Lambda for Serverless Sandboxing
+
+```python
+import boto3
+import json
+
+class LambdaSandbox:
+    """Execute code in AWS Lambda for serverless sandboxing."""
+
+    def __init__(self, function_name: str = "code-executor"):
+        self.client = boto3.client("lambda")
+        self.function_name = function_name
+
+    def execute(self, code: str, timeout: int = 30) -> dict:
+        """Execute code in Lambda sandbox."""
+
+        payload = {
+            "code": code,
+            "timeout": timeout
+        }
+
+        response = self.client.invoke(
+            FunctionName=self.function_name,
+            InvocationType="RequestResponse",
+            Payload=json.dumps(payload)
+        )
+
+        result = json.loads(response["Payload"].read())
+
+        return {
+            "success": response["StatusCode"] == 200,
+            "output": result.get("output"),
+            "error": result.get("error"),
+            "duration_ms": response.get("Duration")
+        }
+
+# Lambda function code (deployed separately)
+"""
+def handler(event, context):
+    import sys
+    from io import StringIO
+
+    code = event.get("code", "")
+    stdout = StringIO()
+    sys.stdout = stdout
+
+    try:
+        exec(code, {"__builtins__": __builtins__})
+        return {"output": stdout.getvalue()}
+    except Exception as e:
+        return {"error": str(e)}
+"""
+```
+
+### Google Cloud Run Sandboxed Containers
+
+```python
+import google.auth
+import requests
+
+class CloudRunSandbox:
+    """Execute code in Cloud Run with gVisor isolation."""
+
+    def __init__(self, service_url: str):
+        self.service_url = service_url
+        credentials, project = google.auth.default()
+        self.credentials = credentials
+
+    def execute(self, code: str) -> dict:
+        """Execute code in Cloud Run sandbox."""
+
+        # Get ID token for authentication
+        self.credentials.refresh(google.auth.transport.requests.Request())
+
+        headers = {
+            "Authorization": f"Bearer {self.credentials.token}",
+            "Content-Type": "application/json"
+        }
+
+        response = requests.post(
+            f"{self.service_url}/execute",
+            headers=headers,
+            json={"code": code},
+            timeout=60
+        )
+
+        return response.json()
+
+# Cloud Run service with gVisor (deploy with --execution-environment=gen2)
+# gcloud run deploy code-executor \
+#   --execution-environment=gen2 \
+#   --no-allow-unauthenticated \
+#   --memory=512Mi \
+#   --timeout=60
+```
+
+### Azure Container Instances with Hyper-V Isolation
+
+```python
+from azure.identity import DefaultAzureCredential
+from azure.mgmt.containerinstance import ContainerInstanceManagementClient
+from azure.mgmt.containerinstance.models import (
+    ContainerGroup, Container, ResourceRequests,
+    ResourceRequirements, OperatingSystemTypes
+)
+
+class AzureContainerSandbox:
+    """Execute code in Azure Container Instances."""
+
+    def __init__(self, resource_group: str, subscription_id: str):
+        credential = DefaultAzureCredential()
+        self.client = ContainerInstanceManagementClient(
+            credential, subscription_id
+        )
+        self.resource_group = resource_group
+
+    def execute(self, code: str, container_name: str) -> dict:
+        """Execute code in isolated Azure container."""
+
+        container = Container(
+            name=container_name,
+            image="python:3.11-slim",
+            command=["python", "-c", code],
+            resources=ResourceRequirements(
+                requests=ResourceRequests(memory_in_gb=0.5, cpu=0.5)
+            )
+        )
+
+        container_group = ContainerGroup(
+            location="eastus",
+            containers=[container],
+            os_type=OperatingSystemTypes.LINUX,
+            restart_policy="Never"
+        )
+
+        # Create and run container
+        result = self.client.container_groups.begin_create_or_update(
+            self.resource_group,
+            container_name,
+            container_group
+        ).result()
+
+        # Get logs
+        logs = self.client.containers.list_logs(
+            self.resource_group, container_name, container_name
+        )
+
+        # Cleanup
+        self.client.container_groups.begin_delete(
+            self.resource_group, container_name
+        )
+
+        return {"output": logs.content}
+```
+
+### Choosing a Cloud Sandbox Provider
+
+<Callout type="info">
+  **Decision Framework:** AWS Lambda is best for short-lived, stateless
+  executions with Firecracker providing strong isolation (limited to 15
+  minutes). Google Cloud Run offers the best balance of startup time and
+  flexibility with gVisor providing good security in gen2 execution environment.
+  Azure Container Instances is best for longer-running workloads with very
+  strong Hyper-V isolation but slower startup. E2B/Modal provides the best
+  developer experience for AI-specific workloads with purpose-built SDKs that
+  reduce integration effort.
+</Callout>
+
+---
+
+## 45.10 Complete Secure Execution Pipeline
+
+{/* IMAGE_PLACEHOLDER: Create a comprehensive security pipeline diagram showing the three-layer approach: Layer 1 "Static Validation" (magnifying glass over code), Layer 2 "Sandbox Execution" (code running in protected container), Layer 3 "Output Sanitization" (filter removing sensitive data). Show data flow with arrows, and add security checkpoints (shield icons) at each layer. Include example threats blocked at each layer (malicious imports at Layer 1, kernel exploits at Layer 2, leaked secrets at Layer 3). Place this before the complete implementation code. */}
+
+```python
+class SecureCodeExecutor:
+    """Complete secure code execution pipeline."""
+
+    def __init__(self):
+        self.validator = CodeValidator()
+        self.sandbox = DockerSandbox()
+
+    def execute(self, code: str) -> dict:
+        """Validate and execute code securely."""
+
+        # Layer 1: Static validation
+        is_valid, message = self.validator.validate(code)
+        if not is_valid:
+            return {
+                "success": False,
+                "stage": "validation",
+                "error": message
+            }
+
+        # Layer 2: Sandbox execution
+        result = self.sandbox.execute(code)
+
+        # Layer 3: Output sanitization
+        if result["success"]:
+            result["output"] = self._sanitize_output(result["output"])
+
+        return result
+
+    def _sanitize_output(self, output: str) -> str:
+        """Remove sensitive information from output."""
+        # Remove potential secrets
+        patterns = [
+            (r'[A-Za-z0-9+/]{40,}', '[REDACTED_KEY]'),  # Base64 keys
+            (r'sk-[A-Za-z0-9]{48}', '[REDACTED_API_KEY]'),  # OpenAI keys
+            (r'ghp_[A-Za-z0-9]{36}', '[REDACTED_GITHUB_TOKEN]'),  # GitHub tokens
+        ]
+
+        for pattern, replacement in patterns:
+            output = re.sub(pattern, replacement, output)
+
+        return output
+
+# Usage
+executor = SecureCodeExecutor()
+result = executor.execute("""
+data = [1, 2, 3, 4, 5]
+print(f"Sum: {sum(data)}")
+print(f"Average: {sum(data)/len(data)}")
+""")
+```
+
+---
+
+## 🧪 Lab Exercise: Build a Secure Code Interpreter
+
+### Task
+
+Create a secure code execution tool for your agent.
+
+### Requirements
+
+1. Validate code before execution
+2. Execute in Docker sandbox
+3. Capture stdout, stderr, and return values
+4. Handle timeouts gracefully
+5. Support file uploads/downloads
+
+### Test Cases
+
+```python
+# Should succeed
+executor.execute("print(2 + 2)")
+
+# Should fail validation
+executor.execute("import os; os.system('ls')")
+
+# Should timeout
+executor.execute("while True: pass")
+
+# Should handle errors
+executor.execute("1/0")
+```
+
+---
+
+## 📚 Key Takeaways
+
+1. **Never trust LLM-generated code** - always sandbox
+2. **Containers aren't enough** - use MicroVMs for untrusted code
+3. **Defense in depth** - layer multiple protections
+4. **E2B** is the easiest path to secure AI code execution
+5. **Validate before execute** - catch obvious attacks early with Semgrep/Bandit
+6. **WebAssembly** offers lightweight sandboxing for simple, fast workloads
+7. **Least privilege** - agents should only have permissions they need
+8. **Cloud sandboxes** (Lambda, Cloud Run) provide managed security at scale
+
+---
+
+<ModuleSummary
+  points={[
+    "Code-executing agents face unique security threats: malicious, buggy, and hallucinated code",
+    "Defense in depth layers input validation, process isolation, kernel isolation, and network isolation",
+    "Containers share the host kernel—MicroVMs provide true isolation",
+    "E2B provides Firecracker-based sandboxes purpose-built for AI agents",
+    "WebAssembly offers lightweight, sub-millisecond sandboxing for simple workloads",
+    "Code validation with AST analysis, Semgrep, and Bandit catches dangerous patterns before execution",
+    "Capability-based permission systems enforce least privilege for agent tools",
+    "Cloud providers (AWS Lambda, Cloud Run, Azure) offer managed sandboxing with strong isolation",
+    "Output sanitization prevents accidental credential leakage",
+  ]}
+/>
+
+---
+
+## 🔗 Further Reading
+
+- [E2B Documentation](https://e2b.dev/docs)
+- [Modal Documentation](https://modal.com/docs)
+- [Firecracker MicroVMs](https://firecracker-microvm.github.io/)
+- [gVisor Security Model](https://gvisor.dev/docs/architecture_guide/security/)
+- [Wasmtime Security](https://docs.wasmtime.dev/security.html)
+- [Extism Plugin Framework](https://extism.org/docs/overview)
+- [Semgrep Rules](https://semgrep.dev/docs/writing-rules/overview)
+- [Bandit Python Security](https://bandit.readthedocs.io/)
+- [OWASP Code Injection](https://owasp.org/www-community/attacks/Code_Injection)
+- [AWS Lambda Security](https://docs.aws.amazon.com/lambda/latest/dg/lambda-security.html)
+- [Cloud Run Security](https://cloud.google.com/run/docs/securing/security-best-practices)
+
+**Tomorrow**: Prompt Injection & Data Poisoning Defense.
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** Security sandboxing is essential for the AgentOS
+  capstone. Any agent that executes code (Coding Agent, Data Analyst) must use
+  these patterns to prevent malicious or buggy code from compromising the
+  system.
+</Callout>
+
+### Recommended Exercises
+
+- **EX-03**: Tool Definition (20 min) - Create sandboxed tool wrappers
+- **EX-10**: FastAPI Endpoint (30 min) - Secure API design patterns
+
+### Related POCs
+
+- **POC-01**: LangGraph State Machine (1-2 hours) - Add validation nodes to your workflow
+- **POC-04**: Tool Orchestration (1-2 hours) - Implement tool-level security
+
+### Capstone Connection
+
+In the capstone, you'll implement:
+
+- E2B sandboxes for code execution agents
+- Code validation pipelines before execution
+- Resource limits and timeout controls
+
+See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.

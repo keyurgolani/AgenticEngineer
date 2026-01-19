@@ -1,0 +1,1382 @@
+---
+title: "Mini Project 1: Prompt Library Service"
+description: "Build a self-hosted prompt management system with versioning, tagging, and template variables."
+week: 12
+day: 82
+---
+
+<ReadingTime minutes={45} />
+
+<SkillLevel level="advanced" description="Service development" />
+
+<Prerequisites
+  items={[
+    "Completed Day 81 (The Agentic Toolbox)",
+    "Familiarity with FastAPI and SQLAlchemy",
+    "Understanding of REST API design",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Build a centralized prompt management service",
+    "Implement prompt versioning and rollback capabilities",
+    "Create a template engine with variable substitution",
+    "Design APIs for prompt retrieval and rendering",
+    "Track prompt usage for analytics and optimization",
+  ]}
+/>
+
+<Callout type="info">
+  **Series Overview:** This is the first of 5 mini-projects (Days 82-86) that
+  build components for the final capstone—your self-hosted Agentic Ecosystem.
+  Each mini-project is standalone but designed to integrate into the final
+  system across the 90-day course.
+</Callout>
+
+<ConceptVisual
+  src="/images/agentic_ecosystem_building_blocks.png"
+  alt="Agentic Ecosystem Building Blocks"
+  caption="Five mini-projects stack together to form the complete Agentic Ecosystem."
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Prompt Library",
+      definition:
+        "Centralized service for storing, versioning, and serving prompts to multiple agents",
+    },
+    {
+      term: "Template Variables",
+      definition:
+        "Placeholders in prompts (e.g., {{topic}}) that are replaced with actual values at runtime",
+    },
+    {
+      term: "Prompt Versioning",
+      definition:
+        "Tracking changes to prompts over time, enabling rollbacks and A/B testing",
+    },
+    {
+      term: "Jinja2",
+      definition:
+        "Python templating engine used for rendering prompts with variable substitution and filters",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build a prompt library service that stores, versions, and serves prompts for your agent fleet. This becomes the "prompt brain" of your agentic ecosystem.
+
+**Why This Matters**: Production agent systems need centralized prompt management. Hardcoded prompts become unmaintainable. This service enables A/B testing, rollbacks, and team collaboration on prompts.
+
+<ConceptVisual
+  src="/images/prompt_management_comparison.png"
+  alt="Hardcoded Chaos vs Centralized Control"
+  caption="Moving from hardcoded strings to a managed prompt service enables collaboration and versioning."
+/>
+
+**Skills Showcased**:
+
+- Prompt engineering patterns
+- Template variable systems
+- Version control for prompts
+- REST API design
+- SQLite/PostgreSQL integration
+
+---
+
+## Architecture
+
+<ConceptVisual
+  src="/images/prompt_library_architecture.png"
+  alt="Prompt Library Service Architecture"
+  caption="The architecture separates storage, caching, and serving concerns for scalability."
+/>
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Prompt Library Service"
+        API[FastAPI Server]
+        DB[(SQLite/Postgres)]
+        Cache[Redis Cache]
+        
+        API --> DB
+        API --> Cache
+    end
+    
+    subgraph "Consumers"
+        Agent1[Research Agent]
+        Agent2[Code Agent]
+        Agent3[Analysis Agent]
+    end
+    
+    Agent1 -->|GET /prompts/research| API
+    Agent2 -->|GET /prompts/code| API
+    Agent3 -->|GET /prompts/analysis| API
+    
+    style API fill:#f9f,stroke:#333
+    style DB fill:#bbf,stroke:#333
+`}
+/>
+
+<PromptTemplateBuilder />
+
+---
+
+## Detailed Requirements Specification
+
+### Functional Requirements (FR)
+
+| ID    | Requirement                    | Description                                                                                                                           | Priority |
+| ----- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| FR-01 | Prompt CRUD Operations         | The system shall support Create, Read, Update, and Delete operations for prompts with unique name identifiers                         | P0       |
+| FR-02 | Template Variable Substitution | The system shall support Jinja2-style template variables (e.g., `{{ variable }}`) with filters (`upper`, `lower`, `truncate`, `json`) | P0       |
+| FR-03 | Automatic Variable Extraction  | The system shall automatically extract variable names from prompt templates when not explicitly provided                              | P0       |
+| FR-04 | Prompt Versioning              | Each prompt update shall create a new version, preserving the complete history of all previous versions                               | P0       |
+| FR-05 | Version Rollback               | The system shall allow retrieval of any historical version of a prompt by specifying the version number                               | P1       |
+| FR-06 | Category and Tag Filtering     | The system shall support filtering prompts by category (single value) and tags (multiple values, OR logic)                            | P1       |
+| FR-07 | Full-Text Search               | The system shall support searching prompts by name and description using case-insensitive partial matching                            | P1       |
+| FR-08 | Usage Analytics                | The system shall record prompt usage including agent ID, tokens consumed, latency, and success/failure status                         | P2       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement         | Target                                                                                     | Measurement                      |
+| ------ | ------------------- | ------------------------------------------------------------------------------------------ | -------------------------------- |
+| NFR-01 | Response Latency    | Prompt retrieval and rendering shall complete in < 50ms (p95)                              | API response time monitoring     |
+| NFR-02 | Availability        | Service shall maintain 99.9% uptime                                                        | Health check endpoint monitoring |
+| NFR-03 | Data Integrity      | All prompt versions shall be immutable once created; updates create new versions           | Database constraints             |
+| NFR-04 | Concurrent Access   | Service shall handle 100+ concurrent prompt render requests                                | Load testing                     |
+| NFR-05 | Template Validation | Invalid Jinja2 templates shall be rejected at creation/update time with descriptive errors | Unit tests                       |
+
+### API Contract
+
+#### POST /prompts/ - Create Prompt
+
+**Request Body:**
+
+```json
+{
+  "name": "string (required, unique, 1-255 chars)",
+  "description": "string (optional)",
+  "category": "string (required, 1-100 chars)",
+  "system_prompt": "string (required, valid Jinja2 template)",
+  "user_prompt_template": "string (optional, valid Jinja2 template)",
+  "variables": ["string"],
+  "tags": ["string"],
+  "model_recommendation": "string (default: 'gpt-4o')",
+  "temperature": "string (default: '0.7')",
+  "created_by": "string (optional)"
+}
+```
+
+**Response (201 Created):**
+
+```json
+{
+  "id": "integer",
+  "name": "string",
+  "description": "string | null",
+  "category": "string",
+  "system_prompt": "string",
+  "user_prompt_template": "string | null",
+  "variables": ["string"],
+  "tags": ["string"],
+  "model_recommendation": "string",
+  "temperature": "string",
+  "version": 1,
+  "is_active": true,
+  "created_at": "ISO8601 datetime",
+  "updated_at": "ISO8601 datetime"
+}
+```
+
+#### GET /prompts/NAME - Get Prompt
+
+**Query Parameters:**
+
+- `version` (optional): Integer version number to retrieve historical version
+
+**Response (200 OK):** Same schema as create response
+
+**Error Response (404):**
+
+```json
+{
+  "detail": "Prompt 'NAME' not found"
+}
+```
+
+#### POST /prompts/NAME/render - Render Prompt
+
+**Request Body:**
+
+```json
+{
+  "variables": {
+    "key": "value (string, number, object, or array)"
+  }
+}
+```
+
+**Query Parameters:**
+
+- `version` (optional): Integer version number
+
+**Response (200 OK):**
+
+```json
+{
+  "system_prompt": "string (rendered)",
+  "user_prompt": "string | null (rendered)",
+  "model_recommendation": "string",
+  "temperature": "number",
+  "prompt_id": "integer",
+  "prompt_version": "integer"
+}
+```
+
+**Error Response (400):**
+
+```json
+{
+  "detail": "Missing variable: VARIABLE_NAME"
+}
+```
+
+#### GET /prompts/PROMPT_ID/versions - Get Version History
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "integer",
+    "version": "integer",
+    "system_prompt": "string",
+    "user_prompt_template": "string | null",
+    "variables": ["string"],
+    "change_notes": "string | null",
+    "created_at": "ISO8601 datetime",
+    "created_by": "string | null"
+  }
+]
+```
+
+### Data Models
+
+<ConceptVisual
+  src="/images/prompt_library_erd.png"
+  alt="Prompt Library Database Schema"
+  caption="The data model tracks prompt history and usage analytics across versions."
+/>
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         Prompt                               │
+├─────────────────────────────────────────────────────────────┤
+│ id: INTEGER PRIMARY KEY                                      │
+│ name: VARCHAR(255) UNIQUE NOT NULL                          │
+│ description: TEXT                                            │
+│ category: VARCHAR(100) NOT NULL                             │
+│ system_prompt: TEXT NOT NULL                                │
+│ user_prompt_template: TEXT                                  │
+│ variables: JSON (array of strings)                          │
+│ tags: JSON (array of strings)                               │
+│ model_recommendation: VARCHAR(100)                          │
+│ temperature: VARCHAR(10) DEFAULT '0.7'                      │
+│ version: INTEGER DEFAULT 1                                  │
+│ is_active: BOOLEAN DEFAULT TRUE                             │
+│ created_at: DATETIME                                        │
+│ updated_at: DATETIME                                        │
+│ created_by: VARCHAR(100)                                    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ 1:N
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     PromptVersion                            │
+├─────────────────────────────────────────────────────────────┤
+│ id: INTEGER PRIMARY KEY                                      │
+│ prompt_id: INTEGER FOREIGN KEY → Prompt.id                  │
+│ version: INTEGER NOT NULL                                   │
+│ system_prompt: TEXT NOT NULL                                │
+│ user_prompt_template: TEXT                                  │
+│ variables: JSON                                             │
+│ change_notes: TEXT                                          │
+│ created_at: DATETIME                                        │
+│ created_by: VARCHAR(100)                                    │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                      PromptUsage                             │
+├─────────────────────────────────────────────────────────────┤
+│ id: INTEGER PRIMARY KEY                                      │
+│ prompt_id: INTEGER FOREIGN KEY → Prompt.id                  │
+│ prompt_version: INTEGER                                     │
+│ agent_id: VARCHAR(100)                                      │
+│ variables_used: JSON                                        │
+│ tokens_used: INTEGER                                        │
+│ latency_ms: INTEGER                                         │
+│ success: BOOLEAN                                            │
+│ created_at: DATETIME                                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Error Handling Matrix
+
+<ConceptVisual
+  src="/images/prompt_rendering_flow.png"
+  alt="Prompt Rendering Error Handling"
+  caption="Robust validation ensures that agents never receive malformed prompts."
+/>
+
+| Error Code        | HTTP Status | Cause                                        | Response Body                                                | Recovery Action                      |
+| ----------------- | ----------- | -------------------------------------------- | ------------------------------------------------------------ | ------------------------------------ |
+| PROMPT_NOT_FOUND  | 404         | Prompt name does not exist                   | `{"detail": "Prompt 'NAME' not found"}`                      | Verify prompt name, create if needed |
+| DUPLICATE_NAME    | 400         | Prompt name already exists                   | `{"detail": "Prompt with name 'NAME' already exists"}`       | Use unique name or update existing   |
+| INVALID_TEMPLATE  | 400         | Jinja2 syntax error in template              | `{"detail": "Invalid system prompt: Syntax error: DETAILS"}` | Fix template syntax                  |
+| MISSING_VARIABLE  | 400         | Required variable not provided during render | `{"detail": "Missing variable: NAME"}`                       | Provide all required variables       |
+| VERSION_NOT_FOUND | 404         | Requested version does not exist             | `{"detail": "Version V not found for prompt 'NAME'"}`        | Use valid version number             |
+| VALIDATION_ERROR  | 422         | Request body validation failed               | `{"detail": [field, message]}`                               | Fix request payload                  |
+| DATABASE_ERROR    | 500         | Database connection or query failure         | `{"detail": "Internal server error"}`                        | Retry with exponential backoff       |
+
+### Integration Points
+
+<ConceptVisual
+  src="/images/prompt_integration_diagram.png"
+  alt="Prompt Service Integration Map"
+  caption="The Prompt Service acts as the central hub for all agent communications."
+/>
+
+| Service                     | Integration Type | Purpose                                             | Data Flow                                               |
+| --------------------------- | ---------------- | --------------------------------------------------- | ------------------------------------------------------- |
+| **Agent Services**          | HTTP Client      | Retrieve and render prompts for LLM calls           | Agent → GET/POST /prompts/NAME/render → Rendered prompt |
+| **LLM Router (Day 85)**     | Downstream       | Prompts include model_recommendation used by router | Prompt response → LLM Router model selection            |
+| **Memory Service (Day 83)** | Parallel         | Agents may store prompt performance in memory       | Independent services, shared by agents                  |
+| **Observability Stack**     | Metrics Export   | Usage analytics for dashboards                      | PromptUsage table → Prometheus/Grafana                  |
+| **Redis Cache (Optional)**  | Caching Layer    | Cache frequently accessed prompts                   | GET request → Cache check → DB fallback                 |
+
+### Testing Requirements
+
+#### Unit Test Coverage (Minimum 85%)
+
+| Component              | Test Cases                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PromptTemplateEngine` | Valid template rendering, missing variable handling, filter application (`upper`, `lower`, `truncate`, `json`), variable extraction, syntax validation |
+| `PromptService`        | Create with auto-extracted variables, update creates new version, get by name, get by version, list with filters, usage recording                      |
+| `API Routes`           | All endpoints return correct status codes, validation errors return 422, not found returns 404                                                         |
+
+#### Integration Test Scenarios
+
+| Scenario                     | Steps                                                   | Expected Outcome                                 |
+| ---------------------------- | ------------------------------------------------------- | ------------------------------------------------ |
+| Full Prompt Lifecycle        | Create → Update → Get versions → Render → Record usage  | All operations succeed, version history accurate |
+| Concurrent Updates           | Two clients update same prompt simultaneously           | Both updates succeed with sequential versions    |
+| Template Variable Edge Cases | Render with nested objects, arrays, special characters  | Variables correctly substituted                  |
+| Version Rollback             | Create v1 → Update to v2 → Retrieve v1                  | v1 content returned correctly                    |
+| Search and Filter            | Create 10 prompts with various categories/tags → Filter | Correct subset returned                          |
+
+#### Load Test Targets
+
+| Metric            | Target              | Test Duration |
+| ----------------- | ------------------- | ------------- |
+| Render throughput | 500 requests/second | 5 minutes     |
+| P99 latency       | < 100ms             | Under load    |
+| Error rate        | < 0.1%              | Under load    |
+
+---
+
+## Step-by-Step Implementation
+
+<ConceptVisual
+  src="/images/prompt_implementation_roadmap.png"
+  alt="Implementation Roadmap"
+  caption="Follow this eight-phase journey to build your production-grade prompt service."
+/>
+
+### Phase 1: Project Setup (15 minutes)
+
+```bash
+mkdir prompt-library
+cd prompt-library
+python -m venv venv
+source venv/bin/activate
+
+pip install fastapi uvicorn sqlalchemy pydantic python-dotenv jinja2 redis
+```
+
+#### Project Structure
+
+```
+prompt-library/
+├── .env
+├── main.py
+├── models/
+│   ├── __init__.py
+│   ├── database.py
+│   └── schemas.py
+├── routers/
+│   ├── __init__.py
+│   └── prompts.py
+├── services/
+│   ├── __init__.py
+│   ├── prompt_service.py
+│   └── template_engine.py
+└── tests/
+    └── test_prompts.py
+```
+
+---
+
+### Phase 2: Database Models (20 minutes)
+
+```python
+# models/database.py
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON, ForeignKey, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+from datetime import datetime
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./prompts.db")
+
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class Prompt(Base):
+    """Main prompt storage."""
+    __tablename__ = "prompts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, index=True, nullable=False)
+    description = Column(Text)
+    category = Column(String(100), index=True)  # research, code, analysis, etc.
+
+    # The actual prompt content
+    system_prompt = Column(Text, nullable=False)
+    user_prompt_template = Column(Text)  # With {variable} placeholders
+
+    # Metadata
+    variables = Column(JSON, default=list)  # List of required variables
+    tags = Column(JSON, default=list)
+    model_recommendation = Column(String(100))  # gpt-4o, claude-3, etc.
+    temperature = Column(String(10), default="0.7")
+
+    # Versioning
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(String(100))
+
+    # Relationships
+    versions = relationship("PromptVersion", back_populates="prompt")
+
+class PromptVersion(Base):
+    """Version history for prompts."""
+    __tablename__ = "prompt_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    prompt_id = Column(Integer, ForeignKey("prompts.id"), nullable=False)
+    version = Column(Integer, nullable=False)
+
+    system_prompt = Column(Text, nullable=False)
+    user_prompt_template = Column(Text)
+    variables = Column(JSON, default=list)
+
+    change_notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String(100))
+
+    prompt = relationship("Prompt", back_populates="versions")
+
+class PromptUsage(Base):
+    """Track prompt usage for analytics."""
+    __tablename__ = "prompt_usage"
+
+    id = Column(Integer, primary_key=True, index=True)
+    prompt_id = Column(Integer, ForeignKey("prompts.id"), nullable=False)
+    prompt_version = Column(Integer)
+
+    agent_id = Column(String(100))
+    variables_used = Column(JSON)
+
+    # Performance tracking
+    tokens_used = Column(Integer)
+    latency_ms = Column(Integer)
+    success = Column(Boolean)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+---
+
+### Phase 3: Pydantic Schemas (15 minutes)
+
+```python
+# models/schemas.py
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+
+class PromptCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    category: str = Field(..., min_length=1, max_length=100)
+    system_prompt: str = Field(..., min_length=1)
+    user_prompt_template: Optional[str] = None
+    variables: List[str] = []
+    tags: List[str] = []
+    model_recommendation: Optional[str] = "gpt-4o"
+    temperature: str = "0.7"
+    created_by: Optional[str] = None
+
+class PromptUpdate(BaseModel):
+    description: Optional[str] = None
+    system_prompt: Optional[str] = None
+    user_prompt_template: Optional[str] = None
+    variables: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
+    model_recommendation: Optional[str] = None
+    temperature: Optional[str] = None
+    change_notes: Optional[str] = None
+    updated_by: Optional[str] = None
+
+class PromptResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    category: str
+    system_prompt: str
+    user_prompt_template: Optional[str]
+    variables: List[str]
+    tags: List[str]
+    model_recommendation: Optional[str]
+    temperature: str
+    version: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class PromptRender(BaseModel):
+    """Request to render a prompt with variables."""
+    variables: Dict[str, Any] = {}
+
+class RenderedPrompt(BaseModel):
+    """Rendered prompt ready for LLM."""
+    system_prompt: str
+    user_prompt: Optional[str]
+    model_recommendation: str
+    temperature: float
+    prompt_id: int
+    prompt_version: int
+
+class PromptVersionResponse(BaseModel):
+    id: int
+    version: int
+    system_prompt: str
+    user_prompt_template: Optional[str]
+    variables: List[str]
+    change_notes: Optional[str]
+    created_at: datetime
+    created_by: Optional[str]
+
+    class Config:
+        from_attributes = True
+```
+
+---
+
+### Phase 4: Template Engine (20 minutes)
+
+<ConceptVisual
+  src="/images/template_substitution_visual.png"
+  alt="Template Engine Logic"
+  caption="The engine substitutes variables and applies transforms before sending to the LLM."
+/>
+
+```python
+# services/template_engine.py
+from jinja2 import Environment, BaseLoader, TemplateSyntaxError, UndefinedError
+from typing import Dict, Any, List, Set
+import re
+
+class PromptTemplateEngine:
+    """Renders prompt templates with variables."""
+
+    def __init__(self):
+        self.env = Environment(
+            loader=BaseLoader(),
+            autoescape=False,  # Don't escape for prompts
+            undefined=StrictUndefined
+        )
+
+        # Add custom filters
+        self.env.filters['upper'] = str.upper
+        self.env.filters['lower'] = str.lower
+        self.env.filters['title'] = str.title
+        self.env.filters['truncate'] = self._truncate
+        self.env.filters['json'] = self._to_json
+
+    def _truncate(self, text: str, length: int = 100) -> str:
+        """Truncate text to specified length."""
+        if len(text) <= length:
+            return text
+        return text[:length-3] + "..."
+
+    def _to_json(self, obj: Any) -> str:
+        """Convert object to JSON string."""
+        import json
+        return json.dumps(obj, indent=2)
+
+    def extract_variables(self, template: str) -> List[str]:
+        """Extract variable names from a template."""
+        # Match {{ variable }} and {{ variable | filter }}
+        pattern = r'\{\{\s*(\w+)(?:\s*\|[^}]+)?\s*\}\}'
+        matches = re.findall(pattern, template)
+        return list(set(matches))
+
+    def validate_template(self, template: str) -> tuple[bool, str]:
+        """Validate template syntax."""
+        try:
+            self.env.from_string(template)
+            return True, "Valid"
+        except TemplateSyntaxError as e:
+            return False, f"Syntax error: {e.message}"
+
+    def render(
+        self,
+        template: str,
+        variables: Dict[str, Any],
+        strict: bool = True
+    ) -> str:
+        """
+        Render a template with variables.
+
+        Args:
+            template: The template string
+            variables: Dictionary of variable values
+            strict: If True, raise error for missing variables
+        """
+        try:
+            tmpl = self.env.from_string(template)
+            return tmpl.render(**variables)
+        except UndefinedError as e:
+            if strict:
+                raise ValueError(f"Missing variable: {e}")
+            # Return template with missing vars as placeholders
+            return template
+
+    def render_prompt(
+        self,
+        system_prompt: str,
+        user_template: str | None,
+        variables: Dict[str, Any]
+    ) -> tuple[str, str | None]:
+        """Render both system and user prompts."""
+        rendered_system = self.render(system_prompt, variables)
+        rendered_user = None
+
+        if user_template:
+            rendered_user = self.render(user_template, variables)
+
+        return rendered_system, rendered_user
+
+class StrictUndefined:
+    """Raises error for undefined variables."""
+    def __init__(self, name):
+        self.name = name
+
+    def __str__(self):
+        raise UndefinedError(f"Variable '{self.name}' is not defined")
+
+    def __repr__(self):
+        return self.__str__()
+```
+
+---
+
+### Phase 5: Prompt Service (25 minutes)
+
+```python
+# services/prompt_service.py
+from sqlalchemy.orm import Session
+from models.database import Prompt, PromptVersion, PromptUsage
+from models.schemas import PromptCreate, PromptUpdate, RenderedPrompt
+from services.template_engine import PromptTemplateEngine
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+
+class PromptService:
+    """Business logic for prompt management."""
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.template_engine = PromptTemplateEngine()
+
+    def create_prompt(self, prompt_data: PromptCreate) -> Prompt:
+        """Create a new prompt."""
+        # Validate templates
+        is_valid, error = self.template_engine.validate_template(prompt_data.system_prompt)
+        if not is_valid:
+            raise ValueError(f"Invalid system prompt: {error}")
+
+        if prompt_data.user_prompt_template:
+            is_valid, error = self.template_engine.validate_template(prompt_data.user_prompt_template)
+            if not is_valid:
+                raise ValueError(f"Invalid user prompt template: {error}")
+
+        # Auto-extract variables if not provided
+        variables = prompt_data.variables
+        if not variables:
+            variables = self.template_engine.extract_variables(prompt_data.system_prompt)
+            if prompt_data.user_prompt_template:
+                variables.extend(self.template_engine.extract_variables(prompt_data.user_prompt_template))
+            variables = list(set(variables))
+
+        prompt = Prompt(
+            name=prompt_data.name,
+            description=prompt_data.description,
+            category=prompt_data.category,
+            system_prompt=prompt_data.system_prompt,
+            user_prompt_template=prompt_data.user_prompt_template,
+            variables=variables,
+            tags=prompt_data.tags,
+            model_recommendation=prompt_data.model_recommendation,
+            temperature=prompt_data.temperature,
+            created_by=prompt_data.created_by,
+            version=1
+        )
+
+        self.db.add(prompt)
+        self.db.commit()
+        self.db.refresh(prompt)
+
+        # Create initial version
+        self._create_version(prompt, "Initial version", prompt_data.created_by)
+
+        return prompt
+
+    def update_prompt(self, prompt_id: int, update_data: PromptUpdate) -> Prompt:
+        """Update a prompt and create new version."""
+        prompt = self.db.query(Prompt).filter(Prompt.id == prompt_id).first()
+        if not prompt:
+            raise ValueError(f"Prompt {prompt_id} not found")
+
+        # Update fields
+        update_dict = update_data.model_dump(exclude_unset=True, exclude={'change_notes', 'updated_by'})
+
+        for field, value in update_dict.items():
+            setattr(prompt, field, value)
+
+        # Increment version
+        prompt.version += 1
+        prompt.updated_at = datetime.utcnow()
+
+        self.db.commit()
+        self.db.refresh(prompt)
+
+        # Create version record
+        self._create_version(prompt, update_data.change_notes, update_data.updated_by)
+
+        return prompt
+
+    def _create_version(self, prompt: Prompt, notes: str | None, created_by: str | None):
+        """Create a version snapshot."""
+        version = PromptVersion(
+            prompt_id=prompt.id,
+            version=prompt.version,
+            system_prompt=prompt.system_prompt,
+            user_prompt_template=prompt.user_prompt_template,
+            variables=prompt.variables,
+            change_notes=notes,
+            created_by=created_by
+        )
+        self.db.add(version)
+        self.db.commit()
+
+<ConceptVisual src="/images/prompt_versioning_timeline.png" alt="Version History and Rollbacks" caption="Service maintains complete history, allowing instant rollback to any previous version." />
+
+    def get_prompt(self, name: str, version: int | None = None) -> Prompt | None:
+        """Get a prompt by name, optionally at specific version."""
+        prompt = self.db.query(Prompt).filter(Prompt.name == name).first()
+
+        if not prompt:
+            return None
+
+        if version and version != prompt.version:
+            # Get historical version
+            hist = self.db.query(PromptVersion).filter(
+                PromptVersion.prompt_id == prompt.id,
+                PromptVersion.version == version
+            ).first()
+
+            if hist:
+                # Return prompt with historical content
+                prompt.system_prompt = hist.system_prompt
+                prompt.user_prompt_template = hist.user_prompt_template
+                prompt.variables = hist.variables
+                prompt.version = hist.version
+
+        return prompt
+
+    def render_prompt(
+        self,
+        name: str,
+        variables: Dict[str, Any],
+        version: int | None = None
+    ) -> RenderedPrompt:
+        """Render a prompt with variables."""
+        prompt = self.get_prompt(name, version)
+        if not prompt:
+            raise ValueError(f"Prompt '{name}' not found")
+
+        # Render templates
+        system, user = self.template_engine.render_prompt(
+            prompt.system_prompt,
+            prompt.user_prompt_template,
+            variables
+        )
+
+        return RenderedPrompt(
+            system_prompt=system,
+            user_prompt=user,
+            model_recommendation=prompt.model_recommendation or "gpt-4o",
+            temperature=float(prompt.temperature),
+            prompt_id=prompt.id,
+            prompt_version=prompt.version
+        )
+
+    def list_prompts(
+        self,
+        category: str | None = None,
+        tags: List[str] | None = None,
+        search: str | None = None
+    ) -> List[Prompt]:
+        """List prompts with optional filters."""
+        query = self.db.query(Prompt).filter(Prompt.is_active == True)
+
+        if category:
+            query = query.filter(Prompt.category == category)
+
+        if search:
+            query = query.filter(
+                Prompt.name.ilike(f"%{search}%") |
+                Prompt.description.ilike(f"%{search}%")
+            )
+
+        prompts = query.all()
+
+        # Filter by tags (JSON field)
+        if tags:
+            prompts = [p for p in prompts if any(t in p.tags for t in tags)]
+
+        return prompts
+
+    def get_versions(self, prompt_id: int) -> List[PromptVersion]:
+        """Get version history for a prompt."""
+        return self.db.query(PromptVersion).filter(
+            PromptVersion.prompt_id == prompt_id
+        ).order_by(PromptVersion.version.desc()).all()
+
+    def record_usage(
+        self,
+        prompt_id: int,
+        prompt_version: int,
+        agent_id: str,
+        variables: Dict[str, Any],
+        tokens: int | None = None,
+        latency_ms: int | None = None,
+        success: bool = True
+    ):
+        """Record prompt usage for analytics."""
+        usage = PromptUsage(
+            prompt_id=prompt_id,
+            prompt_version=prompt_version,
+            agent_id=agent_id,
+            variables_used=variables,
+            tokens_used=tokens,
+            latency_ms=latency_ms,
+            success=success
+        )
+        self.db.add(usage)
+        self.db.commit()
+```
+
+---
+
+### Phase 6: API Routes (25 minutes)
+
+```python
+# routers/prompts.py
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from models.database import get_db
+from models.schemas import (
+    PromptCreate, PromptUpdate, PromptResponse,
+    PromptRender, RenderedPrompt, PromptVersionResponse
+)
+from services.prompt_service import PromptService
+from typing import List, Optional
+
+router = APIRouter(prefix="/prompts", tags=["prompts"])
+
+@router.post("/", response_model=PromptResponse)
+def create_prompt(prompt: PromptCreate, db: Session = Depends(get_db)):
+    """Create a new prompt."""
+    service = PromptService(db)
+    try:
+        return service.create_prompt(prompt)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/", response_model=List[PromptResponse])
+def list_prompts(
+    category: Optional[str] = None,
+    tags: Optional[str] = Query(None, description="Comma-separated tags"),
+    search: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """List all prompts with optional filters."""
+    service = PromptService(db)
+    tag_list = tags.split(",") if tags else None
+    return service.list_prompts(category=category, tags=tag_list, search=search)
+
+@router.get("/{name}", response_model=PromptResponse)
+def get_prompt(
+    name: str,
+    version: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get a prompt by name."""
+    service = PromptService(db)
+    prompt = service.get_prompt(name, version)
+    if not prompt:
+        raise HTTPException(status_code=404, detail=f"Prompt '{name}' not found")
+    return prompt
+
+@router.put("/{prompt_id}", response_model=PromptResponse)
+def update_prompt(
+    prompt_id: int,
+    update: PromptUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update a prompt (creates new version)."""
+    service = PromptService(db)
+    try:
+        return service.update_prompt(prompt_id, update)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.post("/{name}/render", response_model=RenderedPrompt)
+def render_prompt(
+    name: str,
+    render_request: PromptRender,
+    version: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Render a prompt with variables."""
+    service = PromptService(db)
+    try:
+        return service.render_prompt(name, render_request.variables, version)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/{prompt_id}/versions", response_model=List[PromptVersionResponse])
+def get_versions(prompt_id: int, db: Session = Depends(get_db)):
+    """Get version history for a prompt."""
+    service = PromptService(db)
+    return service.get_versions(prompt_id)
+
+@router.post("/{prompt_id}/usage")
+def record_usage(
+    prompt_id: int,
+    agent_id: str,
+    prompt_version: int,
+    tokens: Optional[int] = None,
+    latency_ms: Optional[int] = None,
+    success: bool = True,
+    db: Session = Depends(get_db)
+):
+    """Record prompt usage for analytics."""
+    service = PromptService(db)
+    service.record_usage(
+        prompt_id=prompt_id,
+        prompt_version=prompt_version,
+        agent_id=agent_id,
+        variables={},
+        tokens=tokens,
+        latency_ms=latency_ms,
+        success=success
+    )
+    return {"status": "recorded"}
+```
+
+---
+
+### Phase 7: Main Application (10 minutes)
+
+```python
+# main.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routers import prompts
+from models.database import engine, Base
+import uvicorn
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(
+    title="Prompt Library Service",
+    description="Centralized prompt management for your agent fleet",
+    version="1.0.0"
+)
+
+# CORS for local development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(prompts.router)
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "service": "prompt-library"}
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
+```
+
+---
+
+### Phase 8: Client SDK (15 minutes)
+
+```python
+# client/prompt_client.py
+import httpx
+from typing import Dict, Any, Optional
+from pydantic import BaseModel
+
+class RenderedPrompt(BaseModel):
+    system_prompt: str
+    user_prompt: Optional[str]
+    model_recommendation: str
+    temperature: float
+    prompt_id: int
+    prompt_version: int
+
+class PromptLibraryClient:
+    """Client for the Prompt Library Service."""
+
+    def __init__(self, base_url: str = "http://localhost:8001"):
+        self.base_url = base_url
+        self.client = httpx.Client(timeout=10.0)
+
+    def get_prompt(
+        self,
+        name: str,
+        variables: Dict[str, Any] = {},
+        version: Optional[int] = None
+    ) -> RenderedPrompt:
+        """Get and render a prompt."""
+        params = {}
+        if version:
+            params["version"] = version
+
+        response = self.client.post(
+            f"{self.base_url}/prompts/{name}/render",
+            params=params,
+            json={"variables": variables}
+        )
+        response.raise_for_status()
+        return RenderedPrompt(**response.json())
+
+    def list_prompts(
+        self,
+        category: Optional[str] = None,
+        tags: Optional[list] = None
+    ) -> list:
+        """List available prompts."""
+        params = {}
+        if category:
+            params["category"] = category
+        if tags:
+            params["tags"] = ",".join(tags)
+
+        response = self.client.get(
+            f"{self.base_url}/prompts/",
+            params=params
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def record_usage(
+        self,
+        prompt_id: int,
+        prompt_version: int,
+        agent_id: str,
+        tokens: Optional[int] = None,
+        latency_ms: Optional[int] = None,
+        success: bool = True
+    ):
+        """Record prompt usage."""
+        self.client.post(
+            f"{self.base_url}/prompts/{prompt_id}/usage",
+            params={
+                "agent_id": agent_id,
+                "prompt_version": prompt_version,
+                "tokens": tokens,
+                "latency_ms": latency_ms,
+                "success": success
+            }
+        )
+
+# Usage example
+if __name__ == "__main__":
+    client = PromptLibraryClient()
+
+    # Get a rendered prompt
+    prompt = client.get_prompt(
+        "research_analyst",
+        variables={
+            "topic": "Quantum Computing",
+            "depth": "comprehensive",
+            "word_count": 5000
+        }
+    )
+
+    print(f"System Prompt:\n{prompt.system_prompt[:500]}...")
+    print(f"\nModel: {prompt.model_recommendation}")
+    print(f"Temperature: {prompt.temperature}")
+```
+
+---
+
+## Seed Data: Example Prompts
+
+<ConceptVisual
+  src="/images/seed_prompt_gallery.png"
+  alt="Seed Prompt Catalog"
+  caption="Start with foundational prompts for Research, Coding, and Analysis agents."
+/>
+
+````python
+# scripts/seed_prompts.py
+from models.database import SessionLocal
+from services.prompt_service import PromptService
+from models.schemas import PromptCreate
+
+SEED_PROMPTS = [
+    PromptCreate(
+        name="research_analyst",
+        description="Deep research and analysis prompt",
+        category="research",
+        system_prompt="""You are an expert research analyst specializing in {{ domain | default('technology') }}.
+
+Your task is to provide comprehensive, well-researched analysis on the given topic.
+
+Guidelines:
+- Cite sources when making claims
+- Consider multiple perspectives
+- Provide actionable insights
+- Target depth: {{ depth | default('moderate') }}""",
+        user_prompt_template="Research and analyze: {{ topic }}\n\nTarget word count: {{ word_count | default(1000) }}",
+        variables=["topic", "domain", "depth", "word_count"],
+        tags=["research", "analysis", "comprehensive"],
+        model_recommendation="gpt-4o",
+        temperature="0.3"
+    ),
+    PromptCreate(
+        name="code_reviewer",
+        description="Code review and improvement suggestions",
+        category="code",
+        system_prompt="""You are a senior software engineer conducting code reviews.
+
+Language: {{ language | default('Python') }}
+Focus areas: {{ focus_areas | default('readability, performance, security') }}
+
+Provide constructive feedback with specific suggestions.""",
+        user_prompt_template="Review this code:\n\n```{{ language | default('python') }}\n{{ code }}\n```",
+        variables=["code", "language", "focus_areas"],
+        tags=["code", "review", "engineering"],
+        model_recommendation="gpt-4o",
+        temperature="0.2"
+    ),
+    PromptCreate(
+        name="data_analyst",
+        description="Data analysis and insights extraction",
+        category="analysis",
+        system_prompt="""You are a data analyst. Analyze the provided data and extract insights.
+
+Output format: {{ format | default('markdown') }}
+Focus: {{ focus | default('trends and anomalies') }}
+
+Be specific with numbers and percentages.""",
+        user_prompt_template="Analyze this data:\n{{ data }}\n\nQuestion: {{ question }}",
+        variables=["data", "question", "format", "focus"],
+        tags=["data", "analysis", "insights"],
+        model_recommendation="gpt-4o-mini",
+        temperature="0.1"
+    )
+]
+
+def seed_database():
+    db = SessionLocal()
+    service = PromptService(db)
+
+    for prompt_data in SEED_PROMPTS:
+        try:
+            service.create_prompt(prompt_data)
+            print(f"✅ Created: {prompt_data.name}")
+        except Exception as e:
+            print(f"⚠️ Skipped {prompt_data.name}: {e}")
+
+    db.close()
+
+if __name__ == "__main__":
+    seed_database()
+````
+
+---
+
+## Testing
+
+<ConceptVisual
+  src="/images/service_testing_workflow.png"
+  alt="Testing Workflow"
+  caption="Verify the service in three steps: Start, Seed, and Request."
+/>
+
+```bash
+# Start the service
+python main.py
+
+# In another terminal, seed the database
+python scripts/seed_prompts.py
+
+# Test the API
+curl http://localhost:8001/prompts/
+
+# Render a prompt
+curl -X POST http://localhost:8001/prompts/research_analyst/render \
+  -H "Content-Type: application/json" \
+  -d '{"variables": {"topic": "AI Agents", "word_count": 2000}}'
+```
+
+---
+
+## Integration with Agents
+
+<ConceptVisual
+  src="/images/research_agent_interaction_sequence.png"
+  alt="Agent-Service Interaction Flow"
+  caption="Agents decouple prompt logic by delegating rendering to the service."
+/>
+
+```python
+# Example: Using prompt library in an agent
+from langchain_openai import ChatOpenAI
+from client.prompt_client import PromptLibraryClient
+
+class ResearchAgent:
+    def __init__(self):
+        self.prompt_client = PromptLibraryClient()
+
+    async def research(self, topic: str) -> str:
+        # Get prompt from library
+        prompt = self.prompt_client.get_prompt(
+            "research_analyst",
+            variables={"topic": topic, "depth": "comprehensive"}
+        )
+
+        # Use the prompt
+        llm = ChatOpenAI(
+            model=prompt.model_recommendation,
+            temperature=prompt.temperature
+        )
+
+        messages = [
+            {"role": "system", "content": prompt.system_prompt},
+            {"role": "user", "content": prompt.user_prompt}
+        ]
+
+        response = await llm.ainvoke(messages)
+
+        # Record usage
+        self.prompt_client.record_usage(
+            prompt_id=prompt.prompt_id,
+            prompt_version=prompt.prompt_version,
+            agent_id="research-agent-1"
+        )
+
+        return response.content
+```
+
+---
+
+<Exercise title="Prompt Library Lab">
+  1. Add a `/prompts/{name}/test` endpoint that runs the prompt against a test
+  case 2. Implement prompt A/B testing with traffic splitting 3. Add a
+  `/prompts/categories` endpoint to list all categories 4. **Challenge:** Add
+  prompt chaining support (one prompt references another)
+</Exercise>
+
+<ConceptVisual
+  src="/images/ab_testing_concept_visual.png"
+  alt="A/B Testing Prompts"
+  caption="Compare prompt performance by routing traffic to different versions."
+/>
+
+---
+
+## Key Takeaways
+
+<ConceptVisual
+  src="/images/prompt_library_key_takeaways.png"
+  alt="Key Takeaways"
+  caption="Moving prompts out of code is a critical step towards agent reliability."
+/>
+
+1. **Centralized prompts** enable team collaboration and versioning
+2. **Template variables** make prompts reusable across contexts
+3. **Version history** allows safe experimentation and rollbacks
+4. **Usage tracking** provides insights for optimization
+
+---
+
+<ModuleSummary
+  points={[
+    "Centralized prompt management enables team collaboration and versioning",
+    "Template variables with Jinja2 make prompts reusable across contexts",
+    "Version history allows safe experimentation and instant rollbacks",
+    "Usage tracking provides insights for prompt optimization",
+    "Client SDK simplifies integration with agent workflows",
+  ]}
+/>
+
+**Tomorrow**: Day 83—Mini-Project: The Agent Memory Service.

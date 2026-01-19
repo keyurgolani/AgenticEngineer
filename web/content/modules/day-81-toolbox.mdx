@@ -1,0 +1,904 @@
+---
+title: "Day 81: The Agentic Toolbox"
+description: "Essential tools, configurations, and quick-start templates for production agents."
+week: 11
+day: 81
+---
+
+<ReadingTime minutes={35} />
+
+<SkillLevel level="intermediate" description="Reference guide" />
+
+<LearningObjectives
+  objectives={[
+    "Build a production-ready toolkit for agent development",
+    "Master quick-start templates for common patterns",
+    "Configure development and production environments",
+    "Debug and optimize agent systems effectively",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Circuit Breaker",
+      definition:
+        "Pattern that prevents cascade failures by stopping requests to failing services",
+    },
+    {
+      term: "Rate Limiter",
+      definition: "Controls the rate of requests to prevent API exhaustion",
+    },
+    {
+      term: "Token Efficiency",
+      definition:
+        "Optimizing context usage to reduce costs and improve performance",
+    },
+    {
+      term: "Tool Registry",
+      definition: "Centralized catalog of available tools with metadata and schemas",
+    },
+    {
+      term: "MCP Server",
+      definition: "Model Context Protocol server that exposes tools and resources to AI agents",
+    },
+  ]}
+/>
+
+<Callout type="tip">
+  **Bookmark This Module:** This is a reference guide you'll return to often throughout the 90-day course.
+  Save it for quick access to templates and configurations as you build increasingly complex agent systems.
+</Callout>
+
+{/* IMAGE_PLACEHOLDER: Hero illustration showing a developer's workbench with organized tools - visualize different categories (orchestration frameworks, vector databases, observability tools) as organized toolboxes on a workbench. Include visual metaphors like a Swiss Army knife for multi-purpose tools, a magnifying glass for observability, and building blocks for templates. Style: Modern, clean illustration with subtle gradients. Placement: Below the callout, before "Your Production Toolkit" heading */}
+
+## Your Production Toolkit
+
+This module is a reference guide—bookmark it. Here you'll find battle-tested configurations, starter templates, and the tools that production teams actually use throughout the 90-day journey and beyond.
+
+Think of this as your **developer's Swiss Army knife** for agentic systems. Just as a carpenter wouldn't build a house with only a hammer, you need the right tool for each aspect of agent development: orchestration, memory, observability, and execution.
+
+---
+
+## 81.1 Essential Tools by Category
+
+{/* IMAGE_PLACEHOLDER: Interactive diagram showing the agent development stack as layers: Foundation layer (LLM providers), Orchestration layer (frameworks), Memory layer (vector DBs), Observability layer (monitoring tools), and Execution layer (sandboxes). Each layer should be clickable/expandable in concept. Style: Technical architecture diagram with clean lines and icons. Placement: Right after section heading, before Orchestration Frameworks table */}
+
+### Orchestration Frameworks
+
+**The Conductor's Baton:** Just as an orchestra needs a conductor to coordinate musicians, your agents need orchestration frameworks to coordinate tools, manage state, and handle complex workflows.
+
+| Tool                | Best For                  | Install                                       |
+| :------------------ | :------------------------ | :-------------------------------------------- |
+| **LangGraph**       | Production state machines | `pip install langgraph`                       |
+| **PydanticAI**      | Type-safe agents          | `pip install pydantic-ai`                     |
+| **CrewAI**          | Role-based teams          | `pip install crewai`                          |
+| **AutoGen**         | Research/prototyping      | `pip install autogen-agentchat`               |
+| **Smolagents**      | Lightweight agents        | `pip install smolagents`                      |
+| **Semantic Kernel** | Enterprise .NET           | `dotnet add package Microsoft.SemanticKernel` |
+
+### Vector Databases
+
+**The Agent's Memory Palace:** Like the ancient memory technique where information is stored in imaginary locations, vector databases store semantic memories that agents can quickly retrieve based on meaning, not just keywords.
+
+| Tool         | Best For               | Install                       |
+| :----------- | :--------------------- | :---------------------------- |
+| **ChromaDB** | Local development      | `pip install chromadb`        |
+| **LanceDB**  | Embedded production    | `pip install lancedb`         |
+| **Pinecone** | Managed cloud          | `pip install pinecone-client` |
+| **Qdrant**   | Self-hosted production | `docker run qdrant/qdrant`    |
+
+### Local LLM Inference
+
+**Your Private AI Lab:** Running models locally is like having a chemistry lab in your garage—full control, no external dependencies, and perfect for experimentation without API costs.
+
+| Tool          | Best For            | Install                                          |
+| :------------ | :------------------ | :----------------------------------------------- |
+| **Ollama**    | Easy local models   | `curl -fsSL https://ollama.com/install.sh \| sh` |
+| **LM Studio** | GUI experimentation | Download from lmstudio.ai                        |
+| **vLLM**      | Production serving  | `pip install vllm`                               |
+| **llama.cpp** | CPU inference       | Build from source                                |
+| **SGLang**    | High-throughput     | `pip install sglang`                             |
+
+### Observability
+
+**The Agent's Black Box Recorder:** Like flight recorders in aircraft, observability tools capture every decision, tool call, and token spent—essential for debugging and optimization.
+
+| Tool          | Best For              | Install                     |
+| :------------ | :-------------------- | :-------------------------- |
+| **LangSmith** | LangChain ecosystem   | Cloud service               |
+| **Langfuse**  | Open-source tracing   | `pip install langfuse`      |
+| **Logfire**   | PydanticAI ecosystem  | `pip install logfire`       |
+| **AgentOps**  | Production monitoring | `pip install agentops`      |
+| **Phoenix**   | ML observability      | `pip install arize-phoenix` |
+
+### Code Execution
+
+**The Secure Sandbox:** Like a playground with safety fences, these tools let agents execute code without risking your production environment.
+
+| Tool       | Best For                    | Install                            |
+| :--------- | :-------------------------- | :--------------------------------- |
+| **E2B**    | Managed sandboxes           | `pip install e2b-code-interpreter` |
+| **Docker** | Self-hosted isolation       | System install                     |
+| **gVisor** | Enhanced container security | `apt install runsc`                |
+
+---
+
+## 81.2 Quick-Start Templates
+
+{/* IMAGE_PLACEHOLDER: Visual representation of code templates as building blocks or LEGO pieces that snap together. Show 4-5 template types (ReAct, LangGraph, MCP, RAG) as colorful blocks with icons representing their function. Style: Playful but professional, isometric view. Placement: Right after section heading, before Basic ReAct Agent subsection */}
+
+**Copy-Paste Accelerators:** These templates are your starting blocks—battle-tested patterns you can copy, customize, and deploy. Think of them as recipe cards for common agent architectures.
+
+<Callout type="info">
+  **Interactive Enhancement Opportunity:** These templates would benefit from a live code playground where you can modify parameters and see results instantly. Consider building a ToolboxPlayground component for hands-on experimentation.
+</Callout>
+
+### Basic ReAct Agent
+
+```python
+"""Minimal ReAct agent template."""
+from openai import OpenAI
+import json
+
+client = OpenAI()
+
+SYSTEM_PROMPT = """You are a helpful assistant with tools.
+
+Available tools:
+- search(query): Search the web
+- calculate(expression): Evaluate math
+
+Respond in JSON:
+{"thought": "...", "action": "tool_name", "action_input": {...}}
+or
+{"thought": "...", "action": "final_answer", "action_input": "..."}
+"""
+
+def run_agent(user_input: str, max_iterations: int = 5) -> str:
+    """Run a basic ReAct agent loop.
+    
+    This is the simplest production-ready agent pattern. The agent:
+    1. Thinks about what to do (Reasoning)
+    2. Takes an action (Acting)
+    3. Observes the result
+    4. Repeats until it has a final answer
+    """
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_input}
+    ]
+
+    for iteration in range(max_iterations):
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.1
+        )
+
+        content = response.choices[0].message.content
+        parsed = json.loads(content)
+
+        if parsed["action"] == "final_answer":
+            return parsed["action_input"]
+
+        # Execute tool and continue
+        result = execute_tool(parsed["action"], parsed["action_input"])
+        messages.append({"role": "assistant", "content": content})
+        messages.append({"role": "user", "content": f"Observation: {result}"})
+
+    return "Max iterations reached"
+```
+
+<Callout type="tip">
+  **When to Use:** This template is perfect for simple task automation, Q&A with tools, or prototyping new agent ideas. It's the "Hello World" of production agents.
+</Callout>
+
+### LangGraph Workflow Template
+
+{/* IMAGE_PLACEHOLDER: Animated flow diagram showing state transitions in a LangGraph workflow. Visualize nodes (A, B) as circles with state flowing between them, and a router diamond deciding the path. Include arrows showing the flow from START to nodes to END. Style: Clean flowchart with subtle animations showing state progression. Placement: Right before the code block */}
+
+```python
+"""LangGraph workflow template."""
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Annotated, List
+import operator
+
+class AgentState(TypedDict):
+    """State that flows through the graph.
+    
+    Think of this as a package being passed between workers on an
+    assembly line—each worker (node) adds something to the package.
+    """
+    messages: Annotated[List, operator.add]
+    current_step: str
+
+def node_a(state: AgentState) -> dict:
+    """First processing step."""
+    return {"messages": ["Completed step A"], "current_step": "b"}
+
+def node_b(state: AgentState) -> dict:
+    """Second processing step."""
+    return {"messages": ["Completed step B"], "current_step": "done"}
+
+def router(state: AgentState) -> str:
+    """Decide where to go next based on state."""
+    if state["current_step"] == "done":
+        return END
+    return state["current_step"]
+
+# Build graph
+workflow = StateGraph(AgentState)
+workflow.add_node("a", node_a)
+workflow.add_node("b", node_b)
+workflow.add_edge(START, "a")
+workflow.add_conditional_edges("a", router)
+workflow.add_conditional_edges("b", router)
+
+app = workflow.compile()
+result = app.invoke({"messages": [], "current_step": "a"})
+```
+
+<Callout type="tip">
+  **When to Use:** LangGraph shines for complex workflows with branching logic, human-in-the-loop patterns, or when you need to persist and resume agent state. It's the production choice for sophisticated agents.
+</Callout>
+
+### MCP Server Template
+
+{/* IMAGE_PLACEHOLDER: Diagram showing MCP server architecture - a server box in the center with multiple tool functions as plugins/modules connecting to it, and client applications (Claude Desktop, custom agents) connecting from the other side. Style: Technical architecture diagram with clean lines. Placement: Right before the code block */}
+
+```python
+"""MCP server template.
+
+MCP (Model Context Protocol) servers expose tools and resources to AI agents.
+Think of them as API servers specifically designed for AI consumption.
+"""
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("my-server")
+
+@mcp.tool()
+async def my_tool(param1: str, param2: int = 10) -> str:
+    """Description of what this tool does.
+
+    Args:
+        param1: Description of param1
+        param2: Description of param2 (default: 10)
+
+    Returns:
+        Description of return value
+    """
+    return f"Result: {param1}, {param2}"
+
+@mcp.resource("myserver://data")
+async def get_data() -> str:
+    """Get some data.
+    
+    Resources are read-only data sources that agents can access.
+    Use them for configuration, documentation, or reference data.
+    """
+    return "Data content here"
+
+if __name__ == "__main__":
+    mcp.run()
+```
+
+<Callout type="tip">
+  **When to Use:** Build MCP servers to expose your internal tools, databases, or APIs to AI agents. They're especially powerful for creating reusable tool libraries that work across different agent frameworks.
+</Callout>
+
+### RAG Pipeline Template
+
+{/* IMAGE_PLACEHOLDER: Visual flow of RAG pipeline - documents going into a chunking process, then embeddings being generated and stored in a vector database (shown as a grid of vectors), then a query coming in, similarity search happening (highlight matching vectors), and context being retrieved and sent to LLM. Style: Data flow diagram with icons. Placement: Right before the code block */}
+
+```python
+"""RAG pipeline template.
+
+RAG (Retrieval-Augmented Generation) combines vector search with LLM generation.
+It's like giving your agent a searchable library of knowledge.
+"""
+import chromadb
+from openai import OpenAI
+
+client = OpenAI()
+chroma = chromadb.Client()
+collection = chroma.create_collection("docs")
+
+def ingest(texts: list[str], ids: list[str]):
+    """Add documents to the knowledge base.
+    
+    In production, you'd also:
+    - Chunk large documents
+    - Add metadata for filtering
+    - Handle updates and deletions
+    """
+    collection.add(documents=texts, ids=ids)
+
+def query(question: str, n_results: int = 3) -> str:
+    """Answer a question using retrieved context.
+    
+    The magic of RAG: the LLM only sees relevant context,
+    not your entire document collection.
+    """
+    results = collection.query(query_texts=[question], n_results=n_results)
+    context = "\n\n".join(results["documents"][0])
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": f"Answer based on context:\n{context}"},
+            {"role": "user", "content": question}
+        ]
+    )
+    return response.choices[0].message.content
+```
+
+<Callout type="tip">
+  **When to Use:** RAG is essential when your agent needs to work with large knowledge bases, documentation, or frequently updated information. It's more cost-effective than fine-tuning and easier to update.
+</Callout>
+
+---
+
+## 81.3 Configuration Files
+
+{/* IMAGE_PLACEHOLDER: Illustration of configuration files as puzzle pieces fitting together - show .env file, docker-compose.yml, and kubernetes manifests as interlocking pieces that form a complete deployment picture. Style: Modern, clean with subtle shadows. Placement: Right after section heading */}
+
+**Infrastructure as Code:** These configurations are your deployment blueprints. Copy them, customize for your environment, and version control them alongside your code.
+
+### Claude Desktop MCP Config
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/path/to/allowed/dir"
+      ]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "postgresql://user:pass@localhost/db"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..."
+      }
+    }
+  }
+}
+```
+
+<Callout type="info">
+  **Location:** On macOS, this file lives at `~/Library/Application Support/Claude/claude_desktop_config.json`. On Windows, check `%APPDATA%\Claude\claude_desktop_config.json`.
+</Callout>
+
+### Docker Compose for Agent Stack
+
+```yaml
+version: "3.8"
+
+services:
+  agent:
+    build: .
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHROMA_HOST=chromadb
+    depends_on:
+      - chromadb
+      - postgres
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  langfuse:
+    image: langfuse/langfuse:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres/langfuse
+
+volumes:
+  chroma_data:
+  postgres_data:
+```
+
+### Kubernetes Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ai-agent
+  template:
+    metadata:
+      labels:
+        app: ai-agent
+    spec:
+      serviceAccountName: ai-agent-sa
+      containers:
+        - name: agent
+          image: myregistry/ai-agent:v1
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ai-secrets
+                  key: openai-api-key
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-agent-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-agent-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "patch"]
+```
+
+---
+
+## 81.4 Environment Setup Scripts
+
+{/* IMAGE_PLACEHOLDER: Illustration showing a computer terminal with setup script running, with icons floating out representing different tools being installed (Python packages, Ollama, MCP servers, project folders). Style: Modern, animated feel with progress indicators. Placement: Right after section heading */}
+
+**One-Command Setup:** These scripts automate the tedious setup process. Run once, code forever.
+
+### macOS/Linux Setup
+
+```bash
+#!/bin/bash
+# setup-agent-env.sh
+# One-command setup for your agentic development environment
+
+set -e  # Exit on error
+
+echo "🚀 Setting up Agentic Engineer development environment..."
+
+# Install Python dependencies
+echo "📦 Installing Python packages..."
+pip install langchain langgraph langchain-openai chromadb
+pip install crewai autogen-agentchat pydantic-ai smolagents
+pip install e2b-code-interpreter
+pip install langfuse agentops
+
+# Install Ollama for local LLM inference
+echo "🤖 Installing Ollama..."
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3.3:8b-instruct-q4_K_M
+ollama pull nomic-embed-text
+
+# Install MCP servers
+echo "🔧 Installing MCP servers..."
+npm install -g @modelcontextprotocol/server-filesystem
+npm install -g @modelcontextprotocol/server-postgres
+npm install -g @modelcontextprotocol/server-github
+
+# Create project structure
+echo "📁 Creating project structure..."
+mkdir -p agent_project/{agents,tools,memory,tests}
+touch agent_project/{.env,.gitignore,requirements.txt}
+
+echo "✅ Setup complete! Don't forget to set your API keys in .env"
+echo "📚 Next steps:"
+echo "   1. cd agent_project"
+echo "   2. Copy .env.template to .env and add your API keys"
+echo "   3. Start building with the templates from Day 81!"
+```
+
+<Callout type="warning">
+  **Windows Users:** This script is for Unix-like systems. On Windows, use WSL2 or adapt the commands for PowerShell. The Python and npm commands work the same across platforms.
+</Callout>
+
+### .env Template
+
+```bash
+# LLM Providers
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_API_KEY=...
+
+# Vector Databases
+PINECONE_API_KEY=...
+PINECONE_ENVIRONMENT=...
+
+# Observability
+LANGCHAIN_API_KEY=...
+LANGCHAIN_TRACING_V2=true
+LANGFUSE_PUBLIC_KEY=...
+LANGFUSE_SECRET_KEY=...
+
+# External Services
+GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...
+SLACK_BOT_TOKEN=xoxb-...
+POSTGRES_CONNECTION_STRING=postgresql://...
+
+# Execution
+E2B_API_KEY=...
+```
+
+---
+
+## 81.5 Debugging Cheatsheet
+
+{/* IMAGE_PLACEHOLDER: Visual debugging dashboard showing common agent issues as diagnostic panels - one panel showing an infinite loop with a circuit breaker, another showing token overflow with a gauge, another showing tool errors with a wrench icon. Style: Dashboard/monitoring interface aesthetic. Placement: Right after section heading */}
+
+**Troubleshooting Guide:** When things go wrong (and they will), start here. These are the issues every agent developer encounters.
+
+### Common Issues and Solutions
+
+| Issue               | Cause                    | Solution                                     |
+| :------------------ | :----------------------- | :------------------------------------------- |
+| Agent loops forever | No termination condition | Add max_iterations, check for "final_answer" |
+| Context too long    | Accumulating history     | Implement summarization, use sliding window  |
+| Tool not found      | Wrong tool name          | Check tool registration, use exact names     |
+| JSON parse error    | LLM output malformed     | Add retry logic, use structured output       |
+| Rate limited        | Too many API calls       | Add exponential backoff, batch requests      |
+| Memory leak         | Unbounded state growth   | Implement memory compaction                  |
+
+### Debug Logging
+
+```python
+import logging
+
+# Enable detailed logging
+logging.basicConfig(level=logging.DEBUG)
+
+# LangChain specific
+import langchain
+langchain.debug = True
+
+# Or use callbacks for more control
+from langchain.callbacks import StdOutCallbackHandler
+agent.run("query", callbacks=[StdOutCallbackHandler()])
+```
+
+<Callout type="tip">
+  **Pro Tip:** In production, use structured logging (JSON format) and send logs to a centralized system like Langfuse or LangSmith. This makes debugging distributed agent systems much easier.
+</Callout>
+
+{/* IMAGE_PLACEHOLDER: Split-screen comparison showing "Bad Debugging" (developer staring at blank screen) vs "Good Debugging" (developer with multiple monitoring dashboards showing traces, logs, and metrics). Style: Humorous but informative illustration. Placement: After the debug logging code block */}
+
+---
+
+## 81.6 Performance Optimization
+
+{/* IMAGE_PLACEHOLDER: Performance optimization as a race car being tuned - show three pit stops: "Token Efficiency" (removing excess baggage), "Parallel Execution" (multiple engines), and "Caching" (fuel efficiency). Style: Motorsport/racing theme with technical diagrams. Placement: Right after section heading */}
+
+**Speed and Cost Optimization:** These patterns can reduce your agent's cost by 10x and latency by 5x. They're the difference between a prototype and a production system.
+
+### Token Efficiency
+
+```python
+# Bad: Sending full history every time
+messages = full_conversation_history  # Could be 100k tokens!
+
+# Good: Summarize and truncate
+def optimize_context(messages, max_tokens=4000):
+    """Optimize context window to reduce costs.
+    
+    This is like summarizing a long conversation before continuing it.
+    You keep the important parts and compress the rest.
+    """
+    # Keep system prompt
+    system = messages[0]
+
+    # Keep last N messages (recent context is most important)
+    recent = messages[-5:]
+
+    # Summarize the rest
+    if len(messages) > 6:
+        middle = messages[1:-5]
+        summary = summarize(middle)
+        return [system, {"role": "system", "content": f"Summary: {summary}"}] + recent
+
+    return messages
+```
+
+<Callout type="info">
+  **Real Impact:** One production team reduced their GPT-4 costs from $5,000/month to $500/month just by implementing context optimization. The agent quality actually improved because it focused on relevant information.
+</Callout>
+
+### Parallel Tool Execution
+
+```python
+import asyncio
+
+async def execute_tools_parallel(tool_calls: list) -> list:
+    """Execute multiple tool calls in parallel.
+    
+    Why wait for tools sequentially when they're independent?
+    This is like having multiple workers instead of one.
+    """
+    tasks = [execute_tool(call) for call in tool_calls]
+    return await asyncio.gather(*tasks)
+
+# Example: Search multiple sources simultaneously
+async def multi_source_search(query: str):
+    """Search web, docs, and database in parallel."""
+    results = await asyncio.gather(
+        search_web(query),
+        search_docs(query),
+        search_database(query)
+    )
+    return combine_results(results)
+```
+
+<Callout type="tip">
+  **Performance Gain:** Parallel execution can reduce agent response time from 15 seconds to 3 seconds when calling multiple independent tools. Always look for opportunities to parallelize.
+</Callout>
+
+### Caching
+
+```python
+from functools import lru_cache
+import hashlib
+
+@lru_cache(maxsize=1000)
+def cached_embedding(text: str) -> list:
+    """Cache embeddings to avoid redundant API calls.
+    
+    Embeddings for the same text never change, so cache them!
+    This can save thousands of API calls.
+    """
+    return get_embedding(text)
+
+def cache_key(query: str, context: str) -> str:
+    """Generate cache key for LLM responses.
+    
+    For deterministic queries (temperature=0), you can cache
+    the entire LLM response. Great for FAQ-style agents.
+    """
+    return hashlib.md5(f"{query}:{context}".encode()).hexdigest()
+
+# Redis-based cache for distributed systems
+import redis
+r = redis.Redis()
+
+def cached_llm_call(prompt: str, ttl: int = 3600):
+    """Cache LLM responses in Redis."""
+    key = f"llm:{hashlib.md5(prompt.encode()).hexdigest()}"
+    cached = r.get(key)
+    if cached:
+        return cached.decode()
+    
+    response = call_llm(prompt)
+    r.setex(key, ttl, response)
+    return response
+```
+
+<Callout type="info">
+  **Caching Strategy:** Cache embeddings aggressively (they never change), cache LLM responses cautiously (only for deterministic, repeated queries), and always set appropriate TTLs.
+</Callout>
+
+---
+
+## 81.7 Security Checklist
+
+{/* IMAGE_PLACEHOLDER: Security checklist as a fortress with multiple defensive layers - show input validation as the outer wall, sandboxed execution as the moat, data encryption as the vault, and monitoring as watchtowers. Style: Medieval fortress meets modern security. Placement: Right after section heading */}
+
+**Defense in Depth:** Security isn't optional for production agents. This checklist covers the critical controls that prevent the most common vulnerabilities.
+
+```markdown
+## Pre-Deployment Security Checklist
+
+### Input Validation
+
+- [ ] Sanitize all user inputs (remove/escape special characters)
+- [ ] Implement prompt injection detection (check for system prompt overrides)
+- [ ] Validate tool parameters (type checking, range validation)
+- [ ] Set maximum input lengths (prevent DoS via large inputs)
+
+### Execution Security
+
+- [ ] Use sandboxed code execution (E2B/Docker/gVisor)
+- [ ] Implement resource limits (CPU, memory, time, network)
+- [ ] Disable network access for untrusted code
+- [ ] Whitelist allowed operations (file access, system calls)
+
+### Data Protection
+
+- [ ] Never log sensitive data (API keys, PII, passwords)
+- [ ] Encrypt data at rest and in transit (TLS, AES-256)
+- [ ] Implement data retention policies (auto-delete after N days)
+- [ ] Use secrets management (Vault, AWS Secrets Manager)
+
+### Access Control
+
+- [ ] Use least-privilege service accounts (minimal permissions)
+- [ ] Rotate API keys regularly (automated rotation)
+- [ ] Implement rate limiting (per-user, per-IP, per-endpoint)
+- [ ] Add authentication and authorization (OAuth, JWT)
+
+### Monitoring
+
+- [ ] Log all agent actions (tool calls, decisions, errors)
+- [ ] Set up anomaly detection (unusual patterns, high costs)
+- [ ] Create incident response playbook (who to call, what to do)
+- [ ] Monitor for prompt injection attempts (alert on suspicious patterns)
+```
+
+<Callout type="warning">
+  **Critical:** The most common agent security breach is prompt injection leading to unauthorized tool execution. Always validate that tool calls match the user's intent, not just the LLM's output.
+</Callout>
+
+---
+
+## 📚 Quick Reference Links
+
+### Documentation
+
+- [LangGraph Docs](https://langchain-ai.github.io/langgraph/)
+- [MCP Specification](https://modelcontextprotocol.io/)
+- [CrewAI Docs](https://docs.crewai.com/)
+- [PydanticAI Docs](https://ai.pydantic.dev/)
+- [E2B Docs](https://e2b.dev/docs)
+
+### GitHub Repositories
+
+- [LangGraph Examples](https://github.com/langchain-ai/langgraph/tree/main/examples)
+- [MCP Servers](https://github.com/modelcontextprotocol/servers)
+- [Awesome AI Agents](https://github.com/e2b-dev/awesome-ai-agents)
+
+### Benchmarks
+
+- [SWE-bench](https://www.swebench.com/)
+- [AgentBench](https://github.com/THUDM/AgentBench)
+- [WebArena](https://webarena.dev/)
+
+---
+
+<Exercise
+  title="Build Your Toolkit"
+  difficulty="intermediate"
+  objectives={[
+    "Set up a complete development environment",
+    "Create your own quick-start template",
+    "Configure observability for a project",
+  ]}
+  hints={[
+    "Start with the setup script and customize for your needs",
+    "Add your most-used patterns to a personal template repo",
+    "LangSmith free tier is sufficient for development",
+  ]}
+>
+
+**Your Task:** Create your personal agentic development environment:
+
+1. Run the setup script (or adapt it for your OS)
+2. Create a `.env` file with your API keys
+3. Build a simple agent using the ReAct template
+4. Set up tracing with LangSmith or Langfuse
+
+</Exercise>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Not setting up observability from the start",
+      why: "Debugging agents without traces is nearly impossible",
+      correct: "Configure LangSmith or Langfuse before writing agent code",
+    },
+    {
+      mistake: "Ignoring token efficiency",
+      why: "Leads to high costs and slow responses",
+      correct: "Implement context optimization from the beginning",
+    },
+    {
+      mistake: "No caching strategy",
+      why: "Redundant API calls waste money and time",
+      correct: "Cache embeddings and common LLM responses",
+    },
+    {
+      mistake: "Skipping the security checklist",
+      why: "Security issues are expensive to fix after deployment",
+      correct: "Run through the checklist before every deployment",
+    },
+  ]}
+/>
+
+---
+
+<ProgressCheckpoint
+  questions={[
+    "What are the four main categories of tools in the agentic toolbox?",
+    "How would you implement parallel tool execution in Python?",
+    "What should you check before deploying an agent to production?",
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "A well-configured toolkit accelerates agent development significantly",
+    "Quick-start templates reduce boilerplate and enforce best practices",
+    "Observability is essential - set it up before writing agent code",
+    "Performance optimization (caching, parallelism) reduces costs",
+    "Security checklists prevent common vulnerabilities",
+  ]}
+/>
+
+---
+
+**Tomorrow**: Day 82—Prompt Library Service.
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** This toolbox is your reference for the AgentOS
+  capstone. Bookmark it and return when you need quick-start templates,
+  configuration examples, or debugging help.
+</Callout>
+
+### Capstone Setup Checklist
+
+Use this toolbox to set up your capstone environment:
+
+1. **Run the setup script** (or adapt for your OS)
+2. **Configure .env** with all required API keys
+3. **Set up observability** (Langfuse or LangSmith)
+4. **Test local LLM** with Ollama
+5. **Verify MCP servers** are working
+
+### Quick Reference for Capstone
+
+| Need             | Template/Config       |
+| :--------------- | :-------------------- |
+| Agent workflow   | LangGraph template    |
+| Tool integration | MCP server template   |
+| Vector storage   | RAG pipeline template |
+| Debugging        | Debug logging config  |
+
+See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.

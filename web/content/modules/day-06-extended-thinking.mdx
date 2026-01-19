@@ -1,0 +1,527 @@
+---
+title: "Extended Thinking & Test-Time Compute"
+description: "Master reasoning-focused models that 'think' before responding. Learn how o3, DeepSeek-R1, and Qwen leverage test-time compute for complex problem-solving."
+day: 6
+week: 2
+tags:
+  [
+    "reasoning",
+    "test-time-compute",
+    "o3",
+    "deepseek-r1",
+    "qwen",
+    "thinking-models",
+  ]
+---
+
+# Extended Thinking & Test-Time Compute
+
+## The Reasoning Revolution
+
+Traditional LLMs generate responses token-by-token in a single forward pass. But what if we gave models time to "think" before answering? This is the core insight behind **extended thinking models**—a new class of AI that uses test-time compute to reason through problems step-by-step.
+
+<ConceptVisual
+  src="/images/reasoning_models_comparison.png"
+  alt="Comparison of standard LLM vs reasoning model thinking process"
+  caption="Standard models rush to answers, while reasoning models think step-by-step"
+/>
+
+<Callout type="insight">
+  **Key Insight**: Letting models "think longer" through extended
+  chain-of-thought produces reasoning capabilities that training alone cannot
+  achieve. DeepSeek-R1 proved this at scale, matching GPT-4o performance by
+  generating 10-100x more tokens per query.
+</Callout>
+
+<ReasoningProcess />
+
+## What is Test-Time Compute?
+
+**Test-time compute** refers to computational resources spent during inference (when the model generates a response) rather than during training. Instead of rushing to an answer, reasoning models:
+
+1. **Break down complex problems** into simpler sub-tasks
+2. **Work iteratively** on each step
+3. **Recognize and correct mistakes** before finalizing
+4. **Generate internal reasoning traces** that guide their thinking
+
+Think of it like the difference between:
+
+- **Traditional LLM**: "What's 347 × 89?" → Immediate answer (often wrong)
+- **Reasoning Model**: "Let me break this down... 347 × 90 = 31,230, minus 347 = 30,883" → Correct answer
+
+## The Big Three: o3, DeepSeek-R1, and Qwen
+
+### OpenAI o3
+
+OpenAI's o-series models (o1, o3) pioneered commercial reasoning models:
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+response = client.chat.completions.create(
+    model="o3-mini",
+    messages=[
+        {"role": "user", "content": "Solve: If x^2 + 5x + 6 = 0, what are the values of x?"}
+    ],
+    # o3 automatically uses extended thinking
+    reasoning_effort="high"  # low, medium, high
+)
+
+# Access the reasoning trace
+print("Thinking process:")
+print(response.choices[0].message.reasoning_content)
+
+print("\nFinal answer:")
+print(response.choices[0].message.content)
+```
+
+**Key Features**:
+
+- Adjustable reasoning effort (trade latency for accuracy)
+- Hidden reasoning traces (not shown to user by default)
+- Excels at math, coding, and logical reasoning
+
+### DeepSeek-R1
+
+DeepSeek-R1 is the open-source breakthrough that democratized reasoning models:
+
+```python
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-R1")
+model = AutoModelForCausalLM.from_pretrained(
+    "deepseek-ai/DeepSeek-R1",
+    torch_dtype="auto",
+    device_map="auto"
+)
+
+prompt = """Solve this step-by-step:
+A train travels 120 km in 2 hours. If it increases speed by 20%,
+how long will it take to travel 180 km?"""
+
+inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+
+# Generate with extended thinking
+outputs = model.generate(
+    **inputs,
+    max_new_tokens=2000,  # Allow space for reasoning
+    temperature=0.7,
+    do_sample=True
+)
+
+response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+print(response)
+```
+
+**Key Features**:
+
+- Fully open-source (weights, training code, data)
+- Generates 10-100x more tokens per query than standard models
+- Matches o1 performance on many benchmarks
+- Trained with reinforcement learning from execution feedback
+
+### Qwen3 Thinking Mode
+
+Qwen3 introduces **Hybrid Thinking Modes**—seamlessly switching between thinking and non-thinking:
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model = AutoModelForCausalLM.from_pretrained(
+    "Qwen/Qwen3-30B-A3B-Thinking",
+    torch_dtype="auto",
+    device_map="auto"
+)
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-30B-A3B-Thinking")
+
+# Simple query - uses non-thinking mode
+simple_prompt = "What is the capital of France?"
+simple_response = model.generate(tokenizer(simple_prompt, return_tensors="pt"))
+
+# Complex query - automatically switches to thinking mode
+complex_prompt = """Design a database schema for a multi-tenant SaaS application
+with user authentication, billing, and audit logging."""
+
+complex_response = model.generate(
+    tokenizer(complex_prompt, return_tensors="pt"),
+    max_new_tokens=3000
+)
+```
+
+**Key Features**:
+
+- Automatic mode switching based on query complexity
+- Efficient: doesn't waste compute on simple queries
+- 480B parameter MoE architecture (35B active)
+- Excellent for long-context reasoning (128K tokens)
+
+## When to Use Reasoning Models
+
+<ComparisonTable
+  headers={["Use Case", "Standard LLM", "Reasoning Model"]}
+  rows={[
+    ["Simple factual queries", "✅ Fast & cheap", "❌ Overkill"],
+    ["Math problems", "❌ Often incorrect", "✅ Step-by-step accuracy"],
+    ["Code generation", "⚠️ Works for simple code", "✅ Complex algorithms"],
+    ["Logical puzzles", "❌ Struggles", "✅ Excels"],
+    ["Creative writing", "✅ Natural & fast", "⚠️ Overthinks"],
+    ["Multi-step planning", "⚠️ Loses track", "✅ Maintains coherence"],
+  ]}
+/>
+
+<ReasoningModelComparison />
+
+<ConceptVisual
+  src="/images/test_time_compute_tradeoffs.png"
+  alt="Trade-offs between latency, cost, and accuracy in reasoning models"
+  caption="Reasoning models trade speed and cost for significantly improved accuracy"
+/>
+
+## The Cost-Latency Trade-off
+
+Reasoning models are powerful but come with trade-offs:
+
+```python
+import time
+from openai import OpenAI
+
+client = OpenAI()
+
+def compare_models(prompt):
+    # Standard model
+    start = time.time()
+    standard = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    standard_time = time.time() - start
+    standard_tokens = standard.usage.total_tokens
+
+    # Reasoning model
+    start = time.time()
+    reasoning = client.chat.completions.create(
+        model="o3-mini",
+        messages=[{"role": "user", "content": prompt}],
+        reasoning_effort="medium"
+    )
+    reasoning_time = time.time() - start
+    reasoning_tokens = reasoning.usage.total_tokens
+
+    print(f"Standard: {standard_time:.2f}s, {standard_tokens} tokens")
+    print(f"Reasoning: {reasoning_time:.2f}s, {reasoning_tokens} tokens")
+    print(f"Slowdown: {reasoning_time/standard_time:.1f}x")
+    print(f"Token increase: {reasoning_tokens/standard_tokens:.1f}x")
+
+compare_models("Solve: 3x + 7 = 22")
+```
+
+**Typical Results**:
+
+- **Latency**: 3-10x slower
+- **Token usage**: 10-100x more tokens
+- **Cost**: Significantly higher per query
+- **Accuracy**: 20-50% improvement on reasoning tasks
+
+## Building Agents with Reasoning Models
+
+Reasoning models shine in agentic workflows where accuracy matters more than speed:
+
+```python
+from langgraph.graph import StateGraph, END
+from langchain_openai import ChatOpenAI
+
+# Define agent state
+class AgentState(TypedDict):
+    problem: str
+    reasoning_trace: str
+    solution: str
+    verification: str
+
+# Create reasoning model
+reasoning_model = ChatOpenAI(model="o3-mini", reasoning_effort="high")
+
+def reason_node(state: AgentState):
+    """Use reasoning model to solve problem"""
+    response = reasoning_model.invoke([
+        {"role": "user", "content": state["problem"]}
+    ])
+
+    return {
+        "reasoning_trace": response.reasoning_content,
+        "solution": response.content
+    }
+
+def verify_node(state: AgentState):
+    """Verify the solution"""
+    verification_prompt = f"""
+    Problem: {state['problem']}
+    Proposed solution: {state['solution']}
+
+    Verify this solution step-by-step. Is it correct?
+    """
+
+    verification = reasoning_model.invoke([
+        {"role": "user", "content": verification_prompt}
+    ])
+
+    return {"verification": verification.content}
+
+# Build graph
+workflow = StateGraph(AgentState)
+workflow.add_node("reason", reason_node)
+workflow.add_node("verify", verify_node)
+
+workflow.set_entry_point("reason")
+workflow.add_edge("reason", "verify")
+workflow.add_edge("verify", END)
+
+app = workflow.compile()
+
+# Run
+result = app.invoke({
+    "problem": "Design an algorithm to find the longest palindromic substring in O(n) time"
+})
+
+print("Reasoning:", result["reasoning_trace"])
+print("Solution:", result["solution"])
+print("Verification:", result["verification"])
+```
+
+## Optimizing Reasoning Effort
+
+Not all problems need maximum thinking time. Implement dynamic reasoning effort:
+
+```python
+def classify_complexity(query: str) -> str:
+    """Classify query complexity to determine reasoning effort"""
+
+    # Simple heuristics
+    if len(query.split()) < 20:
+        return "low"
+
+    complex_keywords = ["design", "algorithm", "prove", "optimize", "analyze"]
+    if any(kw in query.lower() for kw in complex_keywords):
+        return "high"
+
+    return "medium"
+
+def adaptive_reasoning(query: str):
+    """Use appropriate reasoning effort based on query"""
+    effort = classify_complexity(query)
+
+    response = client.chat.completions.create(
+        model="o3-mini",
+        messages=[{"role": "user", "content": query}],
+        reasoning_effort=effort
+    )
+
+    return response
+
+# Examples
+print(adaptive_reasoning("What is 2+2?"))  # Uses low effort
+print(adaptive_reasoning("Design a distributed consensus algorithm"))  # Uses high effort
+```
+
+## Parallel Reasoning with ThreadWeaver
+
+For ultra-low latency, parallelize the reasoning process:
+
+```python
+import asyncio
+from typing import List
+
+async def parallel_reasoning_step(step: str, context: str):
+    """Execute one reasoning step in parallel"""
+    response = await client.chat.completions.create(
+        model="o3-mini",
+        messages=[
+            {"role": "system", "content": context},
+            {"role": "user", "content": step}
+        ],
+        reasoning_effort="low"  # Each step is simpler
+    )
+    return response.choices[0].message.content
+
+async def threadweaver_reasoning(problem: str, steps: List[str]):
+    """Parallelize reasoning across multiple steps"""
+
+    # Execute all steps in parallel
+    results = await asyncio.gather(*[
+        parallel_reasoning_step(step, problem)
+        for step in steps
+    ])
+
+    # Synthesize results
+    synthesis_prompt = f"""
+    Problem: {problem}
+
+    Partial solutions:
+    {chr(10).join(f"{i+1}. {r}" for i, r in enumerate(results))}
+
+    Synthesize these into a final solution.
+    """
+
+    final = await client.chat.completions.create(
+        model="o3-mini",
+        messages=[{"role": "user", "content": synthesis_prompt}],
+        reasoning_effort="medium"
+    )
+
+    return final.choices[0].message.content
+
+# Example: Break complex problem into parallel steps
+problem = "Design a scalable microservices architecture for an e-commerce platform"
+steps = [
+    "Design the authentication service",
+    "Design the product catalog service",
+    "Design the order processing service",
+    "Design the payment service"
+]
+
+solution = asyncio.run(threadweaver_reasoning(problem, steps))
+```
+
+## Best Practices
+
+### 1. Use Reasoning Models Selectively
+
+```python
+def should_use_reasoning(query: str, context: dict) -> bool:
+    """Decide if reasoning model is worth the cost"""
+
+    # High-stakes decisions
+    if context.get("financial_impact", 0) > 10000:
+        return True
+
+    # Complex technical problems
+    if any(kw in query.lower() for kw in ["algorithm", "proof", "optimization"]):
+        return True
+
+    # Multi-step planning
+    if "step" in query.lower() or "plan" in query.lower():
+        return True
+
+    return False
+```
+
+### 2. Cache Reasoning Traces
+
+```python
+from functools import lru_cache
+import hashlib
+
+@lru_cache(maxsize=1000)
+def cached_reasoning(query_hash: str, query: str):
+    """Cache expensive reasoning results"""
+    response = client.chat.completions.create(
+        model="o3-mini",
+        messages=[{"role": "user", "content": query}],
+        reasoning_effort="high"
+    )
+    return response
+
+def reason_with_cache(query: str):
+    query_hash = hashlib.md5(query.encode()).hexdigest()
+    return cached_reasoning(query_hash, query)
+```
+
+### 3. Monitor Reasoning Quality
+
+```python
+def evaluate_reasoning(problem: str, solution: str, reasoning_trace: str) -> dict:
+    """Evaluate the quality of reasoning"""
+
+    metrics = {
+        "reasoning_length": len(reasoning_trace.split()),
+        "solution_length": len(solution.split()),
+        "steps_taken": reasoning_trace.count("\n\n"),
+        "corrections_made": reasoning_trace.lower().count("wait") +
+                          reasoning_trace.lower().count("actually"),
+    }
+
+    # Verify solution
+    verification_prompt = f"""
+    Problem: {problem}
+    Solution: {solution}
+
+    Rate this solution on a scale of 1-10 for:
+    1. Correctness
+    2. Completeness
+    3. Clarity
+
+    Return JSON: {{"correctness": X, "completeness": Y, "clarity": Z}}
+    """
+
+    eval_response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": verification_prompt}],
+        response_format={"type": "json_object"}
+    )
+
+    metrics.update(json.loads(eval_response.choices[0].message.content))
+    return metrics
+```
+
+## Exercise: Build a Reasoning Agent
+
+<Exercise
+  title="Mathematical Reasoning Agent"
+  difficulty="intermediate"
+  timeEstimate="45 minutes"
+>
+
+Build an agent that solves complex math problems using extended thinking:
+
+**Requirements**:
+
+1. Accept a math problem as input
+2. Use a reasoning model to solve it step-by-step
+3. Verify the solution with a second reasoning pass
+4. If verification fails, retry with higher reasoning effort
+5. Log reasoning traces for debugging
+
+**Acceptance Criteria**:
+
+- Correctly solves at least 8/10 problems from the AIME dataset
+- Shows reasoning traces for each step
+- Implements retry logic for failed verifications
+- Tracks token usage and latency
+
+**Extension Challenge**:
+
+- Implement parallel reasoning for multi-part problems
+- Add a "confidence score" based on reasoning trace analysis
+- Cache solutions for similar problems
+
+</Exercise>
+
+## Key Takeaways
+
+<Callout type="success">
+
+**What You Learned**:
+
+1. **Test-time compute** trades latency for accuracy by letting models "think"
+2. **o3, DeepSeek-R1, and Qwen** are the leading reasoning models
+3. **Use reasoning selectively** for complex problems where accuracy matters
+4. **Parallel reasoning** can reduce latency while maintaining quality
+5. **Monitor and cache** reasoning traces to optimize cost and performance
+
+</Callout>
+
+## Next Steps
+
+In the next module, we'll explore **Agentic Context Engineering (ACE)**—a framework for building self-improving agents that learn from experience without fine-tuning.
+
+<PageNavigation
+  prev={{
+    title: "Structured Output",
+    href: "/modules/day-05-structured-output",
+  }}
+  next={{
+    title: "Prompt Engineering Deep Dive",
+    href: "/modules/day-07-prompt-engineering",
+  }}
+/>

@@ -1,0 +1,782 @@
+---
+title: "Day 16: Lab - Local LLM Setup"
+description: "Running open-source models locally with Ollama for privacy, cost savings, and offline development."
+week: 3
+day: 16
+---
+
+<ReadingTime minutes={18} />
+
+<SkillLevel level="beginner" description="Hands-on setup and configuration" />
+
+<Prerequisites
+  items={[
+    "Completed Day 03: LangGraph Basics",
+    "8GB+ RAM (16GB recommended for larger models)",
+    "Basic command line familiarity",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Install and configure Ollama on your machine",
+    "Pull and run local LLM models",
+    "Use the OpenAI-compatible API for seamless integration",
+    "Understand when to use local vs. cloud models",
+    "Connect local models to your agent code",
+  ]}
+/>
+
+---
+
+## Why Run Models Locally?
+
+Before diving into setup, let's understand why local inference matters for agent development:
+
+{/* IMAGE_PLACEHOLDER: Create an illustration showing a split-screen comparison: Left side shows a developer's laptop with data flowing to cloud servers (with icons for OpenAI, Anthropic) with dollar signs and network latency indicators. Right side shows the same laptop with a local model running (Ollama logo), with checkmarks for privacy, speed, and "no cost" indicators. Use a modern, clean design with blue/purple gradient for cloud and green/teal for local. Place this above the ComparisonTable component. */}
+
+<ComparisonTable
+  items={[
+    {
+      name: "Cloud APIs",
+      description: "OpenAI, Anthropic",
+      features: {
+        privacy: "Data sent to third-party servers",
+        cost: "Pay per token (adds up fast)",
+        latency: "Network round-trip required",
+        availability: "Requires internet connection",
+        rateLimits: "API quotas and throttling",
+        modelControl: "Limited to provider's models",
+      },
+    },
+    {
+      name: "Local Models",
+      description: "Ollama",
+      highlight: true,
+      features: {
+        privacy: "Data never leaves your machine",
+        cost: "Free after hardware investment",
+        latency: "Direct inference, often faster",
+        availability: "Works offline",
+        rateLimits: "No limits",
+        modelControl: "Run any open-source model",
+      },
+    },
+  ]}
+  features={[
+    { key: "privacy", label: "Privacy" },
+    { key: "cost", label: "Cost" },
+    { key: "latency", label: "Latency" },
+    { key: "availability", label: "Availability" },
+    { key: "rateLimits", label: "Rate Limits" },
+    { key: "modelControl", label: "Model Control" },
+  ]}
+/>
+
+<Callout type="info">
+  **When to Use Local Models:** - Development and testing (save on API costs) -
+  Privacy-sensitive applications (healthcare, legal, finance) - Offline or
+  air-gapped environments - Rapid prototyping without rate limits - Learning and
+  experimentation
+</Callout>
+
+---
+
+## 4.1 Installing Ollama
+
+{/* IMAGE_PLACEHOLDER: Create a friendly mascot-style illustration of the Ollama llama logo with gears and tools around it, representing the "setup" phase. Show the llama character holding a wrench with floating icons for macOS, Linux, and Windows around it. Use warm, inviting colors (orange, yellow, teal). Place this at the start of the installation section to make it more engaging. */}
+
+**Ollama** is the simplest way to run open-source LLMs locally. It handles model downloads, quantization, and provides an OpenAI-compatible API out of the box.
+
+Think of Ollama as "Docker for LLMs"—it abstracts away the complexity of model formats, GPU drivers, and inference engines, giving you a simple CLI and API to work with.
+
+### macOS
+
+```bash
+brew install ollama
+```
+
+### Linux
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+### Windows
+
+Download the installer from [ollama.com/download](https://ollama.com/download) or use:
+
+```powershell
+winget install Ollama.Ollama
+```
+
+### Verify Installation
+
+```bash
+ollama --version
+# Should output: ollama version 0.x.x
+```
+
+---
+
+## 4.2 Pulling Your First Model
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing model sizes as building blocks or containers of different sizes. Show three stacks: Small (3-8B models) as a small box with "8GB RAM" label, Medium (13B) as a medium box with "16GB RAM", and Large (70B) as a large box with "40GB+ RAM". Add a special "MoE" section showing how Mixture-of-Experts models work with only a subset of parameters active (visualize with highlighted sections). Use a clean, technical style with size comparisons. */}
+
+Ollama uses a Docker-like pull system for models. Let's start with **Llama 3.3**, Meta's widely used open-weight model that offers excellent performance for agent development:
+
+```bash
+# Pull the 70B model (recommended for quality)
+ollama pull llama3.3
+
+# Or pull the smaller 8B model for faster iteration
+ollama pull llama3.2
+```
+
+<Callout type="tip">
+  **Model Sizing Guide for Standard Models:** - **7-8B models**: 8GB RAM
+  minimum, good for most development tasks - **13B models**: 16GB RAM
+  recommended - **70B models**: 40GB+ RAM, enterprise-grade quality - Quantized
+  versions (Q4, Q5) reduce memory requirements by ~50% **For Mixture-of-Experts
+  (MoE) Models:** - Only active parameters load into memory during inference -
+  Llama 4 Scout (17B active / 109B total): ~24GB RAM for Q4 quantization - Llama
+  4 Maverick (17B active / 400B total): ~48GB+ RAM recommended
+</Callout>
+
+### Popular Models for Agent Development
+
+| Model                | Architecture  | Active Params | Best For                   | Pull Command                  |
+| :------------------- | :------------ | :------------ | :------------------------- | :---------------------------- |
+| **Llama 3.3**        | Dense         | 70B           | General, high quality      | `ollama pull llama3.3`        |
+| **Llama 3.2**        | Dense         | 3B / 8B       | Fast iteration, edge       | `ollama pull llama3.2`        |
+| **Llama 4 Scout**    | MoE (16 exp)  | 17B / 109B    | Long context (10M tokens)  | `ollama pull llama4`          |
+| **Llama 4 Maverick** | MoE (128 exp) | 17B / 400B    | High performance reasoning | `ollama pull llama4:maverick` |
+| **Qwen 3**           | Dense/MoE     | 0.6B-235B     | Hybrid thinking, coding    | `ollama pull qwen3`           |
+| **DeepSeek-R1**      | MoE           | 37B / 671B    | SOTA Reasoning             | `ollama pull deepseek-r1`     |
+| **Mistral Large 3**  | MoE (675B)    | 41B / 675B    | Multimodal, 256K context   | `ollama pull mistral-large`   |
+| **Mistral Small 3**  | Dense         | 24B           | Efficient, multilingual    | `ollama pull mistral-small`   |
+
+<Callout type="info">
+  **Understanding MoE Models:** Mixture-of-Experts models like Llama 4,
+  DeepSeek-R1, Qwen 3, and Mistral Large 3 have many total parameters but only
+  activate a subset (the "active" parameters) for each token. This means faster
+  inference than the total parameter count suggests, but you still need enough
+  RAM to load the full model weights. For example, Llama 4 Scout activates only
+  17B of its 109B parameters per token.
+</Callout>
+
+<Callout type="tip">
+  **Qwen 3 Hybrid Thinking:** Qwen 3 models support two modes—**Thinking Mode**
+  for step-by-step reasoning on complex problems, and **Non-Thinking Mode** for
+  instant responses on simpler queries. This makes them excellent for agent
+  development where you need both deep reasoning and fast responses.
+</Callout>
+
+---
+
+## 4.3 Running Models Interactively
+
+{/* IMAGE_PLACEHOLDER: Create a terminal/CLI mockup screenshot showing the Ollama interactive interface with a sample conversation. Style it like a modern terminal with syntax highlighting. Show the prompt ">>>" and a sample Q&A about privacy. Use a dark theme with green/cyan text on dark background for that authentic terminal feel. */}
+
+Test your model with the interactive CLI:
+
+```bash
+ollama run llama3.3
+```
+
+Here's an example interaction with Ollama:
+
+```
+>>> Why is local inference better for privacy?
+
+Local inference keeps your data entirely on your machine. When you use cloud
+APIs, your prompts and responses travel over the internet to third-party
+servers, where they may be logged, stored, or used for training. With local
+models:
+
+1. No data transmission: Your queries never leave your device
+2. No logging: No third-party has access to your conversations
+3. Compliance: Easier to meet GDPR, HIPAA, and other regulations
+4. Air-gapped: Works in secure environments without internet
+
+>>> /bye
+```
+
+---
+
+## 4.4 Using the OpenAI-Compatible API
+
+{/* IMAGE_PLACEHOLDER: Create a diagram showing code compatibility. Show a Python code snippet in the center with two arrows pointing to different endpoints: one to "OpenAI API" (cloud icon) and one to "Ollama localhost:11434" (local computer icon). Highlight that only the base_url changes. Use a side-by-side comparison style with minimal code changes highlighted in yellow/green. This illustrates the "zero code changes" benefit. */}
+
+Here's the key insight: **Ollama exposes an OpenAI-compatible API**. This means you can use the standard OpenAI Python SDK with local models—just change the base URL.
+
+Think of it like changing a database connection string—your application code stays the same, but you're now talking to a different backend.
+
+### Start the Ollama Server
+
+```bash
+# Ollama runs as a background service automatically on install
+# If needed, start manually:
+ollama serve
+```
+
+The API is available at `http://localhost:11434`.
+
+### Python Integration
+
+```python
+from openai import OpenAI
+
+# Point to local Ollama server
+client = OpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama"  # Required by SDK but not used by Ollama
+)
+
+response = client.chat.completions.create(
+    model="llama3.3",
+    messages=[
+        {"role": "system", "content": "You are a helpful AI assistant."},
+        {"role": "user", "content": "Explain the ReAct pattern in one paragraph."}
+    ],
+    temperature=0.7,
+)
+
+print(response.choices[0].message.content)
+```
+
+<Callout type="success">
+  **Zero Code Changes Required!** If you have existing code using the OpenAI
+  SDK, you only need to change `base_url` to switch between cloud and local
+  models. This makes it trivial to develop locally and deploy with cloud APIs.
+</Callout>
+
+---
+
+## 4.5 Native Tool Calling with Ollama
+
+{/* IMAGE_PLACEHOLDER: Create a flow diagram showing the tool calling process: 1) User query enters the model, 2) Model analyzes and decides to call a tool (show decision diamond), 3) Tool function executes (show function icon with parameters), 4) Results return to model, 5) Model generates final response. Use arrows to show the flow and include icons for each step. Style it like a technical flowchart with rounded rectangles and clear directional arrows. */}
+
+As of Ollama v0.8+, local models support **native tool calling**—the same function calling interface used by OpenAI and Anthropic. This is critical for building agents:
+
+```python
+from openai import OpenAI
+import json
+
+client = OpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama"
+)
+
+# Define tools using OpenAI's function calling format
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get the current weather for a location",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "City name, e.g., 'San Francisco'"
+                    }
+                },
+                "required": ["location"]
+            }
+        }
+    }
+]
+
+response = client.chat.completions.create(
+    model="llama3.3",
+    messages=[{"role": "user", "content": "What's the weather in Tokyo?"}],
+    tools=tools,
+    tool_choice="auto"
+)
+
+# Check if the model wants to call a tool
+message = response.choices[0].message
+if message.tool_calls:
+    tool_call = message.tool_calls[0]
+    print(f"Tool: {tool_call.function.name}")
+    print(f"Args: {tool_call.function.arguments}")
+```
+
+<Callout type="info">
+  **Model Support for Tool Calling:** Not all models support tool calling
+  equally well. For best results with local tool calling, use: - **Llama 3.3
+  70B** — Excellent tool calling accuracy - **Llama 4 Scout/Maverick** — Native
+  multimodal + tool calling - **Qwen 3** — Strong function calling with hybrid
+  thinking modes - **Mistral Large 3** — Excellent tool use with 256K context
+  Smaller models (7B-8B) may struggle with complex tool schemas.
+</Callout>
+
+---
+
+## 4.6 Connecting to Your Agent
+
+Let's integrate a local model with the agent loop from earlier today:
+
+```python
+from openai import OpenAI
+import json
+
+class LocalAgent:
+    """Agent using local Ollama model."""
+
+    def __init__(self, model: str = "llama3.3"):
+        self.client = OpenAI(
+            base_url="http://localhost:11434/v1",
+            api_key="ollama"
+        )
+        self.model = model
+        self.tools = {}
+
+    def register_tool(self, name: str, func, description: str):
+        self.tools[name] = {"function": func, "description": description}
+
+    def run(self, user_input: str) -> str:
+        """Run the agent loop with local model."""
+        system_prompt = self._build_system_prompt()
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input}
+        ]
+
+        for _ in range(10):  # Max iterations
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.1
+            )
+
+            content = response.choices[0].message.content
+            messages.append({"role": "assistant", "content": content})
+
+            # Parse and execute (simplified)
+            if "FINAL ANSWER:" in content:
+                return content.split("FINAL ANSWER:")[-1].strip()
+
+            # Continue loop with tool execution...
+
+        return "Max iterations reached."
+
+    def _build_system_prompt(self) -> str:
+        tool_docs = "\n".join([
+            f"- {name}: {info['description']}"
+            for name, info in self.tools.items()
+        ])
+        return f"""You are a helpful assistant with tools.
+
+Available Tools:
+{tool_docs}
+
+Think step by step. When done, respond with FINAL ANSWER: <your answer>"""
+
+
+# Usage
+agent = LocalAgent(model="llama3.3")
+result = agent.run("What is 2 + 2?")
+print(result)
+```
+
+---
+
+## 4.7 Ollama vs vLLM: Choosing the Right Tool
+
+{/* IMAGE_PLACEHOLDER: Create a decision tree diagram helping developers choose between Ollama and vLLM. Start with a root question "What's your use case?" branching to "Development/Learning" (leads to Ollama with laptop icon) and "Production/High Traffic" (leads to vLLM with server rack icon). Include key metrics like throughput numbers and user counts at each branch. Use a clean flowchart style with icons and color coding (blue for Ollama, orange for vLLM). */}
+
+While Ollama excels at developer experience, **vLLM** is the go-to choice for production deployments requiring high throughput:
+
+<ComparisonTable
+  items={[
+    {
+      name: "Ollama",
+      description: "Developer-friendly",
+      features: {
+        useCase: "Development, prototyping, single-user",
+        setup: "One command install",
+        throughput: "~40 tokens/sec (single user)",
+        concurrent: "Limited batching",
+        gpu: "Good for single requests",
+        format: "GGUF (quantized)",
+        keyFeature: "OpenAI-compatible API",
+      },
+    },
+    {
+      name: "vLLM",
+      description: "Production-grade",
+      highlight: true,
+      features: {
+        useCase: "Production, high-throughput serving",
+        setup: "Requires more configuration",
+        throughput: "~2,200+ tokens/sec/GPU (batched, H200)",
+        concurrent: "Excellent with PagedAttention",
+        gpu: "Optimized for maximum utilization",
+        format: "Native weights, FP16/BF16",
+        keyFeature: "Continuous batching, KV cache sharing",
+      },
+    },
+  ]}
+  features={[
+    { key: "useCase", label: "Primary Use Case" },
+    { key: "setup", label: "Setup Complexity" },
+    { key: "throughput", label: "Throughput" },
+    { key: "concurrent", label: "Concurrent Users" },
+    { key: "gpu", label: "GPU Utilization" },
+    { key: "format", label: "Model Format" },
+    { key: "keyFeature", label: "Key Feature" },
+  ]}
+/>
+
+<Callout type="tip">
+  **When to Use Each:** - **Ollama**: Local development, learning,
+  privacy-sensitive single-user apps - **vLLM**: Production APIs, multi-user
+  applications, when throughput matters Many teams use Ollama for development
+  and vLLM (or cloud APIs) for production.
+</Callout>
+
+### vLLM Production Stack
+
+For Kubernetes deployments, the **vLLM production-stack** provides:
+
+- **10x better performance** with prefix-aware request routing and KV-cache sharing
+- **3-10x lower response latency** and **2-5x higher throughput**
+- Built-in fault tolerance, autoscaling, and observability
+
+```bash
+# Quick vLLM setup for production
+pip install vllm
+
+# Serve a model with OpenAI-compatible API
+python -m vllm.entrypoints.openai.api_server \
+    --model meta-llama/Llama-3.3-70B-Instruct \
+    --tensor-parallel-size 4
+```
+
+---
+
+## 4.8 Environment Configuration
+
+For production code, use environment variables to switch between local and cloud:
+
+```python
+import os
+from openai import OpenAI
+
+def get_llm_client():
+    """Get LLM client based on environment."""
+    if os.getenv("USE_LOCAL_LLM", "false").lower() == "true":
+        return OpenAI(
+            base_url="http://localhost:11434/v1",
+            api_key="ollama"
+        )
+    else:
+        return OpenAI()  # Uses OPENAI_API_KEY from environment
+
+# In your .env file:
+# USE_LOCAL_LLM=true
+# OPENAI_API_KEY=sk-...  (for cloud fallback)
+```
+
+<Callout type="tip">
+  **Development Workflow:** 1. Set `USE_LOCAL_LLM=true` during development 2.
+  Test with local models (free, fast, private) 3. Switch to cloud APIs for
+  production or when you need stronger models
+</Callout>
+
+---
+
+## 4.9 GPU Acceleration
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing GPU vs CPU inference. Left side: CPU with layers slowly processing (show a progress bar at 30%), Right side: GPU with all layers processing in parallel (show a progress bar at 100%). Include visual representations of VRAM usage with a memory gauge. Add icons for NVIDIA and AMD GPUs. Use green for GPU (fast) and gray for CPU (slower). Include a speedometer showing relative performance difference. */}
+
+For optimal performance, ensure Ollama is using your GPU:
+
+```bash
+# Check if GPU is being used
+ollama ps
+
+# Output shows GPU layers loaded:
+# NAME       ID           SIZE    PROCESSOR
+# llama3.3   abc123...    42 GB   100% GPU
+```
+
+<Callout type="warning">
+  **GPU Memory Requirements:** - Models load entirely into GPU VRAM for best
+  performance - If VRAM is insufficient, Ollama automatically offloads layers to
+  CPU (slower) - Use quantized models (Q4, Q5) to fit larger models in limited
+  VRAM - Check `nvidia-smi` (NVIDIA) or `rocm-smi` (AMD) to monitor GPU usage
+</Callout>
+
+### Configuring GPU Layers
+
+```bash
+# Force specific number of GPU layers (useful for partial offload)
+OLLAMA_NUM_GPU=35 ollama serve
+
+# Or set in environment
+export OLLAMA_NUM_GPU=35
+```
+
+---
+
+## 4.10 Cost Optimization Strategies
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing cost savings strategies as a pyramid or layered diagram. Bottom layer (biggest impact): "Model Routing 63% savings" with routing icon, Middle layers: "Prompt Caching 90% savings" and "Token Optimization 20-50% savings", Top layer: "Semantic Caching 40-60% savings". Use dollar signs and percentage badges. Include a total savings calculation showing "60-80% total reduction". Use green gradient for savings visualization. */}
+
+Running models locally is just one way to reduce costs. Here are production-proven strategies that can cut LLM expenses by 60-80%:
+
+### Model Routing (Cascading)
+
+{/* IMAGE_PLACEHOLDER: Create a flow diagram showing intelligent query routing. Show incoming queries at the top, then a "Router/Classifier" component that analyzes complexity, branching into three paths: Simple queries → Small model (3B, fast icon), Medium queries → Medium model (32B, balanced icon), Complex queries → Large model (70B, quality icon). Include example queries for each path and show cost per query decreasing left to right. Use traffic light colors (green for cheap, yellow for medium, red for expensive but necessary). */}
+
+Route simple queries to cheaper/smaller models, complex ones to larger models:
+
+```python
+def route_by_complexity(query: str) -> str:
+    """Route queries to appropriate models based on complexity."""
+    # Simple heuristics - in production, use an LLM classifier
+    word_count = len(query.split())
+
+    if word_count < 20 and "?" not in query:
+        return "llama3.2:3b"  # Fast, cheap for simple tasks
+    elif "code" in query.lower() or "debug" in query.lower():
+        return "qwen3:32b"    # Coding specialist
+    else:
+        return "llama3.3"     # Full capability for complex reasoning
+```
+
+<Callout type="success">
+  **Real Impact:** Research shows routing 70% of straightforward queries to
+  smaller models yields a **63% cost reduction** while maintaining quality for
+  complex tasks.
+</Callout>
+
+### Prompt Caching
+
+Anthropic and OpenAI now offer automatic prompt caching with up to **90% cost reduction** for repeated prefixes:
+
+```python
+# Anthropic prefix caching example
+response = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    system=[
+        {
+            "type": "text",
+            "text": long_system_prompt,  # This gets cached
+            "cache_control": {"type": "ephemeral"}
+        }
+    ],
+    messages=[{"role": "user", "content": user_query}]
+)
+# Subsequent calls with same prefix: 90% cheaper, 85% faster
+```
+
+### Token Optimization Checklist
+
+| Strategy                          | Savings | Implementation                             |
+| :-------------------------------- | :------ | :----------------------------------------- |
+| **Compress system prompts**       | 20-40%  | Remove redundancy, use bullet points       |
+| **Truncate conversation history** | 30-50%  | Keep last N turns, summarize older context |
+| **Use structured outputs**        | 10-20%  | JSON schemas reduce verbose responses      |
+| **Semantic caching**              | 40-60%  | Cache similar query responses              |
+| **Batch requests**                | 20-30%  | Group multiple queries when possible       |
+
+<Callout type="tip">
+  **31% of LLM queries exhibit semantic similarity**—implementing semantic
+  caching alone can dramatically reduce costs for production applications.
+</Callout>
+
+---
+
+## 4.11 Troubleshooting
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Ollama server not running",
+      fix: "Run `ollama serve` or check if the service is running with `ollama list`",
+    },
+    {
+      mistake: "Model not found error",
+      fix: "Pull the model first: `ollama pull llama3`",
+    },
+    {
+      mistake: "Out of memory errors",
+      fix: "Use a smaller model or quantized version. Try `llama3:8b-q4_0` for lower memory usage",
+    },
+    {
+      mistake: "Slow inference",
+      fix: "Ensure GPU acceleration is working. Check `ollama ps` for GPU usage",
+    },
+    {
+      mistake: "Connection refused on port 11434",
+      fix: "Ollama may be running on a different port. Check with `lsof -i :11434` or restart the service",
+    },
+  ]}
+/>
+
+---
+
+## 4.12 Building a Local Chat UI
+
+The CLI is great for testing, but users need a GUI. Because Ollama is OpenAI-compatible, we can build a chat app in < 30 lines of Python using Streamlit:
+
+```python
+# app.py
+import streamlit as st
+from langchain_ollama import OllamaLLM
+
+st.title("Local AI Chat 🦙")
+
+# Initialize model
+if "model" not in st.session_state:
+    st.session_state.model = OllamaLLM(model="llama3.2")
+
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Display history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Handle input
+if prompt := st.chat_input("Ask me anything..."):
+    # Add user message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Generate response
+    with st.chat_message("assistant"):
+        response_placeholder = st.empty()
+        full_response = st.session_state.model.invoke(prompt)
+        response_placeholder.markdown(full_response)
+
+    # Add assistant message
+    st.session_state.messages.append({"role": "assistant", "content": full_response})
+```
+
+Run it with:
+
+```bash
+pip install streamlit langchain_ollama
+streamlit run app.py
+```
+
+---
+
+## 4.13 Advanced: Self-Hosted Answer Engine
+
+For a complete "Perplexity-style" experience (Web Search + Sources + Local LLM), you can self-host **Perplexica**.
+
+It orchestrates:
+
+1.  **SearXNG** (Metasearch engine) to find sources
+2.  **Local Embeddings** to rank results
+3.  **Ollama** to synthesize the answer
+
+### Docker Compose Setup
+
+Save this as `docker-compose.yaml`:
+
+```yaml
+version: "3"
+services:
+  perplexica:
+    image: itzcrazykns1337/perplexica:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - OLLAMA_API_URL=http://host.docker.internal:11434/v1
+    volumes:
+      - ./data:/home/perplexica/data
+    depends_on:
+      - searxng
+
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080
+```
+
+This gives you a powerful, private, free alternative to paid AI search engines.
+
+---
+
+<Exercise
+  title="Local Agent Setup"
+  difficulty="beginner"
+  objectives={[
+    "Install Ollama on your machine",
+    "Pull and test the llama3.3 model",
+    "Write a Python script that queries the local model",
+    "Compare response times between local and cloud APIs"
+  ]}
+  hints={[
+    "Use `time` module to measure response latency",
+    "Try different temperature values to see how they affect output",
+    "Test with both simple and complex prompts"
+  ]}
+>
+
+**Task:** Set up your local development environment:
+
+1. Install Ollama following the instructions above
+2. Pull the `llama3.3` model (or `llama3.2` if you have limited RAM)
+3. Create a Python script that:
+   - Connects to the local Ollama API
+   - Sends a prompt asking for a Python function
+   - Prints the response and the time taken
+
+**Bonus:** If you have an OpenAI API key, compare the response quality and latency between `llama3.3` (local) and `gpt-4o-mini` (cloud).
+
+</Exercise>
+
+---
+
+<ModuleSummary
+  points={[
+    "Ollama provides the simplest way to run open-source LLMs locally",
+    "Local inference offers privacy, cost savings, and offline capability",
+    "The OpenAI-compatible API means zero code changes to switch providers",
+    "Ollama v0.8+ supports native tool calling for agent development",
+    "Llama 3.3 (70B) offers excellent quality; Llama 3.2 (8B) is great for fast iteration",
+    "MoE models (Llama 4, DeepSeek-R1, Qwen 3, Mistral Large 3) offer high performance with efficient inference",
+    "Qwen 3 hybrid thinking modes enable both deep reasoning and instant responses",
+    "Use Ollama for development, consider vLLM for high-throughput production",
+    "Cost optimization through model routing, caching, and token management can reduce expenses by 60-80%",
+    "GPU acceleration significantly improves inference speed",
+  ]}
+/>
+
+---
+
+## Connection to This Week's Content
+
+This lab complements the other Week 3 modules:
+
+- **[Day 15: The Tooling Standard (MCP)](/modules/day-15-mcp-standard)** — Connect your local models to external tools via MCP
+- **[Day 17: Retrieval-Augmented Generation](/modules/day-17-rag)** — Use local models for cost-effective RAG development
+- **[Day 18: Memory-Augmented RAG Agent Lab](/modules/day-18-rag-lab)** — Build a RAG agent using local inference
+
+---
+
+## Additional Resources
+
+- **[Ollama Documentation](https://ollama.com)** — Official docs and model library
+- **[Ollama GitHub](https://github.com/ollama/ollama)** — Source code and issues
+- **[OpenAI Compatibility Docs](https://github.com/ollama/ollama/blob/main/docs/openai.md)** — API reference for OpenAI SDK compatibility
+- **[vLLM Documentation](https://docs.vllm.ai/)** — High-throughput serving alternative
+- **[vLLM Production Stack](https://blog.vllm.ai/2025/01/21/stack-release.html)** — Kubernetes deployment guide
+- **[Hugging Face Open LLM Leaderboard](https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard)** — Compare model performance
+- **[Qwen 3 Technical Report](https://qwenlm.github.io/blog/qwen3)** — Hybrid thinking architecture details
+- **[LocalAI](https://localai.io/)** — Another local inference option with broader format support

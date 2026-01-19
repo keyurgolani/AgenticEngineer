@@ -1,0 +1,1292 @@
+---
+title: "Building the Loop (LangGraph Basics)"
+description: "Implementing your first cognitive control loop using Python and LangGraph 1.0."
+week: 2
+day: 10
+---
+
+<ReadingTime minutes={35} />
+
+<SkillLevel level="intermediate" description="Hands-on Python coding" />
+
+<Prerequisites
+  items={[
+    "Completed Day 00, 01, 02",
+    "Python environment ready (uv/pip)",
+    "Basic Python knowledge (functions, dictionaries, type hints)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Explain the three core concepts of LangGraph: Nodes, Edges, and State",
+    "Build a minimal agent graph from scratch using the LangGraph 1.0 API",
+    "Understand how state flows through the graph with reducers",
+    "Add conditional edges for decision-making",
+    "Implement the ReAct pattern as a working graph",
+    "Use the prebuilt ReAct agent for rapid prototyping",
+    "Choose between the Graph API and Functional API based on your use case",
+    "Visualize and debug your agent's execution",
+    "Understand deployment options with LangGraph Platform",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Node",
+      definition:
+        "A Python function that performs work in the graph (reasoning, tool calls)",
+    },
+    {
+      term: "Edge",
+      definition: "A connection between nodes that defines control flow",
+    },
+    {
+      term: "State",
+      definition:
+        "A typed schema that persists data across the graph execution",
+    },
+    {
+      term: "Reducer",
+      definition:
+        "A function that controls how state updates are merged (e.g., append vs. overwrite)",
+    },
+    {
+      term: "Conditional Edge",
+      definition:
+        "An edge that routes to different nodes based on the current state",
+    },
+    {
+      term: "Compile",
+      definition: "Converting the graph definition into a runnable application",
+    },
+    {
+      term: "Checkpointer",
+      definition:
+        "A persistence layer that saves graph state, enabling resumption and human-in-the-loop workflows",
+    },
+    {
+      term: "Subgraph",
+      definition:
+        "A graph nested within another graph, enabling modular and reusable workflow components",
+    },
+    {
+      term: "Command",
+      definition:
+        "A primitive for combining state updates with control flow (routing to specific nodes)",
+    },
+  ]}
+/>
+
+---
+
+## 3.1 From Concepts to Code
+
+In Day 01, we learned that agents require a **Loop** to handle uncertainty. In Day 02, we explored how to manage context effectively. Today, we build that loop with real code.
+
+{/* IMAGE_PLACEHOLDER: Create a visual diagram showing the progression from Day 01 concepts (the agent loop) to Day 02 (context management) to Day 10 (implementing with LangGraph). Show three connected panels: 1) Abstract loop diagram with "Think-Act-Observe", 2) Memory hierarchy pyramid from Day 02, 3) LangGraph code structure with nodes and edges. Use arrows to show how concepts evolve into implementation. Style: Modern, clean illustration with code snippets visible in the third panel. */}
+
+<ConceptIntro
+  title="LangGraph"
+  analogy="Think of LangGraph like a flowchart that can actually run. Each box in the flowchart is a 'node' (a Python function), and the arrows between boxes are 'edges' (control flow). Unlike a static flowchart, LangGraph can loop back, make decisions, and remember what happened at each step."
+  technicalDef="LangGraph is a low-level orchestration framework for building stateful, graph-based agent workflows. It models agents as directed graphs where nodes are functions, edges define control flow, and state is a typed schema that persists across execution. LangGraph 1.0 (released October 2025) provides production-ready features including durable state management, built-in persistence, and human-in-the-loop patterns."
+  whyItMatters="LangGraph gives you explicit control over agent behavior. Unlike 'magic' frameworks that hide the logic, you can see exactly how your agent makes decisions and debug when things go wrong. The 1.0 release guarantees API stability with no breaking changes until 2.0. Over the next 90 days of this course, you'll use LangGraph to build increasingly sophisticated multi-agent systems."
+/>
+
+{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison showing a traditional static flowchart on the left (with boxes and arrows, looking flat and lifeless) versus an animated LangGraph execution on the right (showing nodes lighting up in sequence, state flowing between them, and a loop back arrow glowing). Add small icons: brain for reasoning nodes, wrench for tool nodes, database for state. Style: Vibrant, animated feel with subtle glow effects. */}
+
+### The Graph Model
+
+LangGraph treats your agent as a graph where:
+
+| Component    | What It Is                         | Example                                      |
+| :----------- | :--------------------------------- | :------------------------------------------- |
+| **Nodes**    | Python functions that do work      | `call_model()`, `use_tool()`                 |
+| **Edges**    | Connections defining flow          | "After reasoning, check if done"             |
+| **State**    | Typed schema for shared memory     | `{"messages": [...], "tool_results": [...]}` |
+| **Reducers** | Functions controlling state merges | `operator.add` appends lists                 |
+
+{/* IMAGE_PLACEHOLDER: Create an interactive-looking diagram showing the anatomy of a LangGraph component. Show a 3D exploded view with four layers stacked vertically: bottom layer shows State (as a glowing database/memory icon), middle layers show Nodes (as function blocks with code snippets visible), and top layer shows Edges (as flowing arrows with conditional logic). Add labels pointing to each component with the examples from the table. Style: Technical blueprint aesthetic with a modern twist, using depth and shadows. */}
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "LangGraph Concepts"
+        State[(📦 State)] --> Node1[🔧 Node 1]
+        Node1 --> Edge{🔀 Edge}
+        Edge -->|"condition A"| Node2[🔧 Node 2]
+        Edge -->|"condition B"| Node3[🔧 Node 3]
+        Node2 --> State
+        Node3 --> State
+    end
+    
+    style State fill:#f9f,stroke:#333
+    style Edge fill:#bbf,stroke:#333
+`}
+/>
+
+<Callout type="info">
+  **Connection to Day 02:** Remember the Memory Hierarchy? LangGraph's State is
+  your L1 (Working Memory)—the immediate context that flows through each node.
+  For L2/L3 memory, you'd integrate vector databases and summarization, which
+  we'll cover in later modules.
+</Callout>
+
+---
+
+## 3.2 Installation and Setup
+
+Before we write code, let's set up our environment:
+
+```bash
+# Create a new project directory
+mkdir langgraph-basics && cd langgraph-basics
+
+# Create virtual environment (using uv for speed)
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install LangGraph and dependencies
+uv pip install langgraph langgraph-prebuilt langchain-core
+```
+
+<Callout type="tip">
+  **Why these packages?** `langgraph` is the core framework.
+  `langgraph-prebuilt` provides high-level agents like `create_react_agent` for
+  rapid prototyping. `langchain-core` provides message types and other
+  primitives. You don't need the full `langchain` package for basic graphs.
+</Callout>
+
+### Two Ways to Build: Graph API vs Functional API
+
+LangGraph offers two complementary approaches for building workflows:
+
+| Approach                                    | Best For                                                         | Style                        |
+| :------------------------------------------ | :--------------------------------------------------------------- | :--------------------------- |
+| **Graph API** (`StateGraph`)                | Complex multi-agent systems, explicit control flow visualization | Declarative graph definition |
+| **Functional API** (`@entrypoint`, `@task`) | Simpler workflows, existing codebases, rapid prototyping         | Traditional Python functions |
+
+Both APIs use the same underlying runtime and can be mixed. We'll focus on the Graph API first (it's more explicit about what's happening), then show the Functional API alternative.
+
+---
+
+## 3.3 The 'Hello World' of Agents
+
+Let's build a minimal graph step by step, using the modern LangGraph API.
+
+### Step 1: Define the State
+
+The state is the memory of our graph. We use `TypedDict` with `Annotated` types to specify how updates should be merged.
+
+```python
+from typing import TypedDict, Annotated
+import operator
+
+class AgentState(TypedDict):
+    # 'operator.add' means new messages are appended, not overwritten
+    messages: Annotated[list[str], operator.add]
+```
+
+<Callout type="info">
+**What's `Annotated[list[str], operator.add]`?**
+
+This tells LangGraph how to merge state updates using a **reducer**. When a node returns `{"messages": ["new message"]}`, it should _append_ to the existing list, not replace it. This is crucial for building up conversation history.
+
+Without a reducer, each update would overwrite the previous value entirely.
+
+{/* IMAGE_PLACEHOLDER: Create a before/after comparison showing state updates. Left side labeled "Without Reducer": show a list being completely replaced (old messages disappearing, only new message remains). Right side labeled "With operator.add Reducer": show new messages being appended to the list (old messages stay, new one added to end). Use animation-style arrows and highlight the difference. Style: Educational diagram with clear visual distinction between the two approaches. */}
+
+</Callout>
+
+### Step 2: Define the Node (The Brain)
+
+Nodes are standard Python functions that take the **State** as input and return an **Update** to the state.
+
+```python
+def call_model(state: AgentState) -> dict:
+    """The 'brain' of our agent - decides what to do."""
+    # In a real agent, this would call OpenAI/Anthropic
+    # For now, we simulate a simple decision
+    last_message = state["messages"][-1]
+
+    if "hello" in last_message.lower():
+        return {"messages": ["World!"]}
+
+    return {"messages": ["I don't understand."]}
+```
+
+<Callout type="tip">
+  **Key Pattern:** Nodes receive the full state, but only return the *changes*
+  they want to make. LangGraph handles merging these changes back into the state
+  using the reducers you defined.
+</Callout>
+
+### Step 3: Build the Graph
+
+We wire the nodes and edges together using `StateGraph`.
+
+{/* IMAGE_PLACEHOLDER: Create a step-by-step visual guide showing the graph construction process. Show three frames: 1) Empty StateGraph being initialized with the schema, 2) Node being added (show the function being "plugged in" to the graph), 3) Edges being drawn connecting START → agent → END. Use a construction/assembly metaphor with pieces clicking together. Style: Instructional diagram with numbered steps and visual flow. */}
+
+```python
+from langgraph.graph import StateGraph, START, END
+
+# Initialize graph with our State schema
+builder = StateGraph(AgentState)
+
+# Add our node
+builder.add_node("agent", call_model)
+
+# Define edges: START -> agent -> END
+builder.add_edge(START, "agent")
+builder.add_edge("agent", END)
+
+# Compile the graph into a runnable application
+app = builder.compile()
+```
+
+<Callout type="warning">
+  **API Update:** In modern LangGraph, use `START` and `END` constants instead
+  of `set_entry_point()`. The `START` constant represents the graph's entry
+  point, and `END` represents termination.
+</Callout>
+
+### Step 4: Run It
+
+```python
+# Invoke with initial state
+result = app.invoke({"messages": ["Hello there"]})
+print(result["messages"])
+# Output: ['Hello there', 'World!']
+```
+
+<RealWorldExample
+  title="What Just Happened?"
+  scenario="We invoked the graph with an initial message 'Hello there'."
+  implementation="1. Graph started at START, which routes to 'agent' node. 2. Node received state: {'messages': ['Hello there']}. 3. Node returned: {'messages': ['World!']}. 4. LangGraph's reducer merged: ['Hello there'] + ['World!'] = ['Hello there', 'World!']. 5. Edge led to END, so execution stopped."
+  takeaway="The state accumulates as the graph runs. Each node sees the full history and adds to it. The reducer controls how updates are combined."
+/>
+
+---
+
+## 3.4 Complete Working Example
+
+Here's the full code you can run locally:
+
+```python
+"""hello_agent.py - Your first LangGraph agent"""
+from typing import TypedDict, Annotated
+import operator
+from langgraph.graph import StateGraph, START, END
+
+
+class AgentState(TypedDict):
+    """State schema for our simple agent."""
+    messages: Annotated[list[str], operator.add]
+
+
+def call_model(state: AgentState) -> dict:
+    """Process the last message and generate a response."""
+    last_message = state["messages"][-1]
+
+    if "hello" in last_message.lower():
+        return {"messages": ["World!"]}
+    elif "bye" in last_message.lower():
+        return {"messages": ["Goodbye! 👋"]}
+    else:
+        return {"messages": ["I don't understand that."]}
+
+
+# Build the graph
+builder = StateGraph(AgentState)
+builder.add_node("agent", call_model)
+builder.add_edge(START, "agent")
+builder.add_edge("agent", END)
+
+# Compile
+app = builder.compile()
+
+# Test it
+if __name__ == "__main__":
+    result = app.invoke({"messages": ["Hello there"]})
+    print("Messages:", result["messages"])
+    # Output: Messages: ['Hello there', 'World!']
+```
+
+---
+
+## 3.5 Visualizing the Graph
+
+One of the best features of LangGraph is the ability to visualize your logic.
+
+```python
+# Generate Mermaid diagram
+print(app.get_graph().draw_mermaid())
+```
+
+This outputs Mermaid syntax you can render:
+
+<Mermaid
+  chart={`
+graph TD
+    Start([▶️ __start__]) --> Agent[🧠 agent]
+    Agent --> End([🏁 __end__])
+    
+    style Agent fill:#bbf,stroke:#333
+`}
+/>
+
+This is a trivial linear graph. Real power comes when we add **Conditional Edges**, allowing the graph to loop back based on decisions.
+
+---
+
+## 3.6 Adding Conditional Logic (The ReAct Loop)
+
+Now let's implement the ReAct pattern from Day 01. The agent will:
+
+1. **Reason** about what to do
+2. **Act** by calling a tool (if needed)
+3. **Observe** the result
+4. **Loop** back or finish
+
+{/* IMAGE_PLACEHOLDER: Create a circular flow diagram showing the ReAct loop in action. Show four connected stages arranged in a circle: "Reason" (brain icon), "Act" (tool/wrench icon), "Observe" (eye icon), and a decision diamond "Done?" with two paths: one looping back to "Reason" and one exiting to "Finish". Add small example text bubbles at each stage showing what happens. Use arrows with motion lines to emphasize the cyclical nature. Style: Dynamic circular diagram with clear visual flow and decision point. */}
+
+```python
+from typing import TypedDict, Annotated, Literal
+import operator
+from langgraph.graph import StateGraph, START, END
+
+
+class AgentState(TypedDict):
+    """State for our ReAct agent."""
+    messages: Annotated[list[str], operator.add]
+    # Track whether we need to continue the loop
+    needs_tool: bool
+
+
+def reason(state: AgentState) -> dict:
+    """The 'brain' - decides what to do based on the message."""
+    last_message = state["messages"][-1].lower()
+
+    if "search" in last_message or "find" in last_message:
+        return {
+            "messages": ["I'll search for that..."],
+            "needs_tool": True
+        }
+    elif "calculate" in last_message:
+        return {
+            "messages": ["Let me calculate that..."],
+            "needs_tool": True
+        }
+    else:
+        return {
+            "messages": ["Here's my answer based on what I know!"],
+            "needs_tool": False
+        }
+
+
+def act(state: AgentState) -> dict:
+    """Simulate using a tool."""
+    # In a real agent, this would call actual tools
+    return {"messages": ["[Tool Result: Found 3 relevant documents]"]}
+
+
+def should_continue(state: AgentState) -> Literal["act", "__end__"]:
+    """Routing function - decides which node to go to next."""
+    if state.get("needs_tool", False):
+        return "act"
+    return END
+
+
+# Build the graph
+builder = StateGraph(AgentState)
+
+# Add nodes
+builder.add_node("reason", reason)
+builder.add_node("act", act)
+
+# Define flow
+builder.add_edge(START, "reason")
+
+# Conditional edge: after reasoning, check if we need to act
+builder.add_conditional_edges(
+    "reason",
+    should_continue,
+    {
+        "act": "act",
+        END: END
+    }
+)
+
+# After acting, go back to reason (the loop!)
+builder.add_edge("act", "reason")
+
+# Compile
+app = builder.compile()
+```
+
+<Mermaid
+  chart={`
+graph TD
+    Start([▶️ __start__]) --> Reason[🧠 reason]
+    Reason -->|"needs_tool=True"| Act[🔧 act]
+    Reason -->|"needs_tool=False"| End([🏁 __end__])
+    Act --> Reason
+    
+    style Reason fill:#f9f,stroke:#333
+    style Act fill:#bbf,stroke:#333
+`}
+/>
+
+<Callout type="success">
+  **This is the core agent pattern!** The agent reasons, decides if it needs a
+  tool, uses the tool, then reasons again with the new information. This loop
+  continues until the agent decides it's done.
+</Callout>
+
+### Testing the Loop
+
+```python
+# Test 1: No tool needed
+result = app.invoke({"messages": ["What is 2+2?"], "needs_tool": False})
+print(result["messages"])
+# ['What is 2+2?', "Here's my answer based on what I know!"]
+
+# Test 2: Tool needed
+result = app.invoke({"messages": ["Search for Python tutorials"], "needs_tool": False})
+print(result["messages"])
+# ['Search for Python tutorials', "I'll search for that...",
+#  '[Tool Result: Found 3 relevant documents]',
+#  "Here's my answer based on what I know!"]
+```
+
+Notice how the second example loops: reason → act → reason → end.
+
+---
+
+## 3.7 Using MessagesState (The Practical Approach)
+
+For real chat applications, LangGraph provides a built-in `MessagesState` that handles message management with proper reducers:
+
+```python
+from langgraph.graph import StateGraph, START, END, MessagesState
+from langchain_core.messages import HumanMessage, AIMessage
+
+
+def chatbot(state: MessagesState) -> dict:
+    """A simple chatbot node using MessagesState."""
+    # MessagesState has a 'messages' key with a built-in reducer
+    last_message = state["messages"][-1]
+
+    # Generate a response (in reality, you'd call an LLM here)
+    response = AIMessage(content=f"You said: {last_message.content}")
+
+    return {"messages": [response]}
+
+
+# Build graph with MessagesState
+builder = StateGraph(MessagesState)
+builder.add_node("chatbot", chatbot)
+builder.add_edge(START, "chatbot")
+builder.add_edge("chatbot", END)
+
+app = builder.compile()
+
+# Test with proper message types
+result = app.invoke({
+    "messages": [HumanMessage(content="Hello, agent!")]
+})
+
+for msg in result["messages"]:
+    print(f"{msg.type}: {msg.content}")
+# human: Hello, agent!
+# ai: You said: Hello, agent!
+```
+
+<Callout type="tip">
+**Why MessagesState?** It provides:
+- Built-in `add_messages` reducer that handles message deduplication
+- Proper typing for LangChain message objects
+- Compatibility with LLM integrations
+
+Use `MessagesState` for any chat-based agent.
+
+</Callout>
+
+---
+
+## 3.8 Integrating with Real LLMs
+
+Here's how to connect your graph to an actual LLM:
+
+```python
+from langgraph.graph import StateGraph, START, END, MessagesState
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+
+# Initialize the LLM
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+
+def call_llm(state: MessagesState) -> dict:
+    """Call the LLM with the current messages."""
+    # Add a system message for context
+    system = SystemMessage(content="You are a helpful assistant.")
+    messages = [system] + state["messages"]
+
+    # Call the LLM
+    response = llm.invoke(messages)
+
+    return {"messages": [response]}
+
+
+# Build the graph
+builder = StateGraph(MessagesState)
+builder.add_node("llm", call_llm)
+builder.add_edge(START, "llm")
+builder.add_edge("llm", END)
+
+app = builder.compile()
+
+# Use it
+result = app.invoke({
+    "messages": [HumanMessage(content="What's the capital of France?")]
+})
+print(result["messages"][-1].content)
+# Paris is the capital of France.
+```
+
+<Callout type="warning">
+  **API Key Required:** To run this example, set your `OPENAI_API_KEY`
+  environment variable. You can also use `ChatAnthropic` from
+  `langchain_anthropic` for Claude models.
+</Callout>
+
+---
+
+## 3.9 Using the Prebuilt ReAct Agent
+
+For rapid prototyping, LangGraph provides a prebuilt ReAct agent that handles the loop logic for you:
+
+```python
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+
+# Define tools
+@tool
+def search(query: str) -> str:
+    """Search for information on the web."""
+    # In production, this would call a real search API
+    return f"Search results for: {query}"
+
+@tool
+def calculator(expression: str) -> str:
+    """Evaluate a mathematical expression."""
+    try:
+        return str(eval(expression))
+    except Exception as e:
+        return f"Error: {e}"
+
+# Create the agent
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+agent = create_react_agent(llm, tools=[search, calculator])
+
+# Use it
+result = agent.invoke({
+    "messages": [("user", "What is 25 * 4 + 10?")]
+})
+print(result["messages"][-1].content)
+# The answer is 110.
+```
+
+<Callout type="info">
+**When to use prebuilt vs. custom graphs:**
+- **Prebuilt `create_react_agent`**: Great for prototyping and simple tool-calling agents
+- **Custom `StateGraph`**: Use when you need custom state, complex routing, or multi-agent patterns
+
+The prebuilt agent is essentially a pre-configured StateGraph with the ReAct pattern. Understanding how to build custom graphs (as we did above) helps you customize when needed.
+
+</Callout>
+
+---
+
+## 3.10 Debugging Your Graph
+
+LangGraph provides several ways to understand what's happening:
+
+### 1. Stream Events
+
+```python
+# Stream node-by-node execution
+for event in app.stream({"messages": ["Hello"]}):
+    print(f"Node: {list(event.keys())[0]}")
+    print(f"Output: {event}")
+    print("---")
+```
+
+### 2. Get Graph Structure
+
+```python
+# Inspect the graph
+graph = app.get_graph()
+print("Nodes:", list(graph.nodes.keys()))
+print("Edges:", list(graph.edges))
+```
+
+### 3. Visualize with Mermaid
+
+```python
+# Generate visualization
+mermaid_code = app.get_graph().draw_mermaid()
+print(mermaid_code)
+# Copy this to a Mermaid renderer or use in documentation
+```
+
+---
+
+## 3.11 Adding Persistence with Checkpointers
+
+One of LangGraph's most powerful features is built-in persistence. Checkpointers save the graph state after each step, enabling:
+
+- **Resumption**: Pick up where you left off after a crash
+- **Human-in-the-loop**: Pause for human approval, then continue
+- **Time travel**: Replay or branch from any previous state
+
+{/* IMAGE_PLACEHOLDER: Create a timeline visualization showing checkpointing in action. Show a horizontal timeline with checkpoint markers (like save points in a video game). Illustrate three scenarios: 1) Normal execution with checkpoints being saved at each node, 2) A crash occurring and then resumption from the last checkpoint, 3) A branch point where execution splits into two paths from a checkpoint. Use icons: floppy disk for saves, lightning bolt for crash, fork symbol for branching. Style: Game-like save point aesthetic with a technical twist. */}
+
+```python
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import StateGraph, START, END, MessagesState
+
+# Create a checkpointer (in-memory for development)
+checkpointer = MemorySaver()
+
+# Build your graph as usual
+builder = StateGraph(MessagesState)
+builder.add_node("agent", call_llm)
+builder.add_edge(START, "agent")
+builder.add_edge("agent", END)
+
+# Compile WITH the checkpointer
+app = builder.compile(checkpointer=checkpointer)
+
+# Use with a thread_id to track conversation
+config = {"configurable": {"thread_id": "user-123"}}
+
+# First message
+result = app.invoke(
+    {"messages": [("user", "My name is Alice")]},
+    config=config
+)
+
+# Later message - the agent remembers!
+result = app.invoke(
+    {"messages": [("user", "What's my name?")]},
+    config=config
+)
+print(result["messages"][-1].content)
+# Your name is Alice!
+```
+
+<Callout type="tip">
+  **Production Checkpointers:** For production, use persistent checkpointers
+  like `SqliteSaver` or `PostgresSaver` instead of `MemorySaver`. This ensures
+  state survives restarts and can be shared across instances.
+</Callout>
+
+---
+
+## 3.12 The Functional API (Alternative Approach)
+
+LangGraph 1.0 introduced the **Functional API** as an alternative to the Graph API. It uses Python decorators to add LangGraph features to regular functions—no explicit graph definition required.
+
+### When to Use the Functional API
+
+| Use Functional API When...                 | Use Graph API When...                     |
+| :----------------------------------------- | :---------------------------------------- |
+| Adding LangGraph features to existing code | Building complex multi-agent systems      |
+| Simpler, linear workflows                  | Need explicit visualization of flow       |
+| Prefer traditional Python control flow     | Complex conditional routing               |
+| Rapid prototyping                          | Team needs to understand the architecture |
+
+### Core Primitives
+
+The Functional API has two main decorators:
+
+- **`@entrypoint`**: Wraps the main workflow function, enables checkpointing
+- **`@task`**: Defines parallelizable units of work within an entrypoint
+
+```python
+from langgraph.func import entrypoint, task
+from langgraph.checkpoint.memory import MemorySaver
+
+@task
+def analyze_data(data: str) -> str:
+    """A task that can run in parallel with other tasks."""
+    # Simulate analysis
+    return f"Analysis of: {data}"
+
+@task
+def generate_report(analysis: str) -> str:
+    """Generate a report from analysis."""
+    return f"Report based on {analysis}"
+
+@entrypoint(checkpointer=MemorySaver())
+def research_workflow(topic: str) -> dict:
+    """Main workflow using regular Python control flow."""
+    # Tasks return futures - call .result() to get the value
+    analysis = analyze_data(topic).result()
+
+    # Regular Python conditionals work naturally
+    if "urgent" in topic.lower():
+        report = generate_report(analysis).result()
+        return {"analysis": analysis, "report": report}
+
+    return {"analysis": analysis}
+
+# Use it like a regular function
+result = research_workflow.invoke("AI agents")
+print(result)
+```
+
+### Human-in-the-Loop with Functional API
+
+The Functional API makes human-in-the-loop patterns particularly clean:
+
+```python
+from langgraph.func import entrypoint, task
+from langgraph.types import interrupt, Command
+from langgraph.checkpoint.memory import MemorySaver
+
+@task
+def write_draft(topic: str) -> str:
+    """Write a draft essay."""
+    return f"Draft essay about: {topic}"
+
+@entrypoint(checkpointer=MemorySaver())
+def essay_workflow(topic: str) -> dict:
+    """Workflow that pauses for human review."""
+    draft = write_draft(topic).result()
+
+    # Pause and wait for human input
+    approval = interrupt({
+        "draft": draft,
+        "action": "Please review and approve/reject"
+    })
+
+    return {
+        "draft": draft,
+        "approved": approval,
+        "status": "published" if approval else "rejected"
+    }
+
+# Start the workflow
+config = {"configurable": {"thread_id": "essay-1"}}
+result = essay_workflow.invoke("LangGraph basics", config=config)
+# Workflow pauses at interrupt...
+
+# Later, resume with human input
+from langgraph.types import Command
+result = essay_workflow.invoke(
+    Command(resume=True),  # Resume with approval
+    config=config
+)
+```
+
+<Callout type="info">
+  **Functional API Benefits:** - No need to define nodes and edges explicitly -
+  Regular Python loops and conditionals control flow - Tasks can run in parallel
+  automatically - Same checkpointing and streaming as Graph API - Easier to add
+  to existing codebases
+</Callout>
+
+---
+
+## 3.13 Subgraphs for Modular Design
+
+As your agents grow complex, **subgraphs** let you nest graphs within graphs. This enables:
+
+- **Modularity**: Reuse workflow components across projects
+- **Encapsulation**: Hide complexity behind a clean interface
+- **Team collaboration**: Different teams own different subgraphs
+
+{/* IMAGE_PLACEHOLDER: Create a nested box diagram showing subgraphs within a parent graph. Show a large outer box labeled "Parent Agent Graph" containing three smaller boxes labeled "Research Subgraph", "Analysis Subgraph", and "Reporting Subgraph". Each subgraph box should show a mini graph inside with 2-3 nodes. Use connecting arrows showing how the parent orchestrates the subgraphs. Add team icons next to each subgraph to emphasize the collaboration aspect. Style: Architectural diagram with clear hierarchy and containment relationships. */}
+
+### Creating a Subgraph
+
+```python
+from langgraph.graph import StateGraph, START, END
+from typing import TypedDict, Annotated
+import operator
+
+# Define subgraph state
+class ResearchState(TypedDict):
+    query: str
+    results: Annotated[list[str], operator.add]
+
+def search(state: ResearchState) -> dict:
+    """Search for information."""
+    return {"results": [f"Found info about: {state['query']}"]}
+
+def summarize(state: ResearchState) -> dict:
+    """Summarize search results."""
+    summary = f"Summary of {len(state['results'])} results"
+    return {"results": [summary]}
+
+# Build the subgraph
+research_builder = StateGraph(ResearchState)
+research_builder.add_node("search", search)
+research_builder.add_node("summarize", summarize)
+research_builder.add_edge(START, "search")
+research_builder.add_edge("search", "summarize")
+research_builder.add_edge("summarize", END)
+
+research_subgraph = research_builder.compile()
+```
+
+### Using Subgraphs in a Parent Graph
+
+```python
+# Parent graph state
+class AgentState(TypedDict):
+    messages: Annotated[list[str], operator.add]
+    research_query: str
+    research_results: list[str]
+
+def decide_action(state: AgentState) -> dict:
+    """Decide what action to take."""
+    last_msg = state["messages"][-1]
+    if "research" in last_msg.lower():
+        return {"research_query": last_msg}
+    return {"messages": ["I can help with research tasks."]}
+
+def do_research(state: AgentState) -> dict:
+    """Call the research subgraph."""
+    # Invoke subgraph with its expected input
+    result = research_subgraph.invoke({
+        "query": state["research_query"],
+        "results": []
+    })
+    return {"research_results": result["results"]}
+
+# Build parent graph
+builder = StateGraph(AgentState)
+builder.add_node("decide", decide_action)
+builder.add_node("research", do_research)  # Subgraph as a node
+builder.add_edge(START, "decide")
+builder.add_conditional_edges(
+    "decide",
+    lambda s: "research" if s.get("research_query") else END,
+    {"research": "research", END: END}
+)
+builder.add_edge("research", END)
+
+agent = builder.compile()
+```
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Parent Graph"
+        Start([▶️ __start__]) --> Decide[🧠 decide]
+        Decide -->|"has query"| Research[📚 research subgraph]
+        Decide -->|"no query"| End1([🏁 __end__])
+        Research --> End2([🏁 __end__])
+    end
+    
+    subgraph "Research Subgraph"
+        Search[🔍 search] --> Summarize[📝 summarize]
+    end
+    
+    Research -.->|"invokes"| Search
+    
+    style Research fill:#f9f,stroke:#333
+    style Search fill:#bbf,stroke:#333
+    style Summarize fill:#bbf,stroke:#333
+`}
+/>
+
+<Callout type="tip">
+**Subgraph Patterns:**
+- **Hierarchical**: Parent orchestrates child subgraphs
+- **Parallel**: Multiple subgraphs run concurrently
+- **Recursive**: Subgraph calls itself for iterative refinement
+
+Subgraphs are essential for multi-agent systems where each agent is its own graph.
+
+</Callout>
+
+---
+
+## 3.14 The Command Primitive
+
+The **Command** primitive combines state updates with control flow in a single return value. This is powerful for nodes that need to both update state AND decide where to go next.
+
+```python
+from langgraph.types import Command
+from langgraph.graph import StateGraph, START, END
+
+class AgentState(TypedDict):
+    messages: Annotated[list[str], operator.add]
+    next_action: str
+
+def router(state: AgentState) -> Command:
+    """Route to different nodes based on content."""
+    last_msg = state["messages"][-1].lower()
+
+    if "search" in last_msg:
+        # Update state AND route to search node
+        return Command(
+            update={"next_action": "searching"},
+            goto="search"
+        )
+    elif "calculate" in last_msg:
+        return Command(
+            update={"next_action": "calculating"},
+            goto="calculate"
+        )
+    else:
+        return Command(
+            update={"next_action": "responding"},
+            goto="respond"
+        )
+
+# Build graph - no need for add_conditional_edges!
+builder = StateGraph(AgentState)
+builder.add_node("router", router)
+builder.add_node("search", search_node)
+builder.add_node("calculate", calc_node)
+builder.add_node("respond", respond_node)
+
+builder.add_edge(START, "router")
+# Command handles routing - just add edges from action nodes
+builder.add_edge("search", END)
+builder.add_edge("calculate", END)
+builder.add_edge("respond", END)
+
+app = builder.compile()
+```
+
+<Callout type="info">
+  **Command vs Conditional Edges:** - Use **conditional edges** when routing
+  logic is separate from state updates - Use **Command** when a node needs to
+  update state AND control routing together - Command can also send messages to
+  multiple nodes with `goto=["node1", "node2"]`
+</Callout>
+
+---
+
+## 3.15 LangGraph Platform (Deployment)
+
+Building locally is great, but production agents need robust infrastructure. **LangGraph Platform** (part of LangSmith) provides deployment options for stateful, long-running agents.
+
+{/* IMAGE_PLACEHOLDER: Create a deployment architecture diagram showing three deployment options side by side. Left: "Cloud SaaS" (cloud icon with auto-scaling indicators), Center: "Self-Hosted" (server racks with Kubernetes logo), Right: "Hybrid" (combination of cloud and on-premise). Show data flow arrows and key features listed below each option. Add security badges and compliance icons. Style: Enterprise architecture diagram with professional color scheme. */}
+
+### Deployment Options
+
+| Option          | Best For                                | Features                                        |
+| :-------------- | :-------------------------------------- | :---------------------------------------------- |
+| **Cloud SaaS**  | Quick deployment, zero maintenance      | Fully managed, auto-scaling, GitHub integration |
+| **Self-Hosted** | Data sovereignty, custom infrastructure | Run on your own Kubernetes/Docker               |
+| **Hybrid**      | Enterprise compliance                   | LangSmith UI + your compute                     |
+
+### Key Platform Features
+
+- **1-Click Deploy**: Connect GitHub repo, deploy automatically
+- **Durable Execution**: Agents survive crashes and restarts
+- **Built-in Checkpointing**: State persisted across invocations
+- **Streaming APIs**: Real-time updates to clients
+- **Version Rollback**: Instantly revert to previous versions
+- **Observability**: Full tracing via LangSmith integration
+
+### Deploying to LangGraph Cloud
+
+```python
+# langgraph.json - Configuration file for deployment
+{
+  "graphs": {
+    "my_agent": "./agent.py:app"
+  },
+  "dependencies": ["langchain-openai", "langgraph"],
+  "env": ".env"
+}
+```
+
+```bash
+# Deploy using LangGraph CLI
+pip install langgraph-cli
+langgraph deploy --project my-agent
+```
+
+<Callout type="tip">
+  **Free Tier Available:** The Developer plan includes 100k node executions per
+  month for free—great for learning and hobby projects. Production workloads can
+  use Plus or Enterprise plans with higher limits and SLAs.
+</Callout>
+
+---
+
+<ProgressCheckpoint
+  title="LangGraph Basics Check"
+  questions={[
+    {
+      question: "What are the three core components of a LangGraph graph?",
+      answer:
+        "Nodes (Python functions that do work), Edges (connections defining control flow), and State (typed schema that persists across execution with reducers controlling updates).",
+    },
+    {
+      question:
+        "What does `Annotated[list[str], operator.add]` do in the state definition?",
+      answer:
+        "It defines a reducer that tells LangGraph to append new values to the list instead of replacing it. This is how conversation history accumulates across node executions.",
+    },
+    {
+      question: "How do you create a loop in LangGraph?",
+      answer:
+        "Add an edge from a later node back to an earlier node. For example: act → reason creates a loop where the agent can use tools multiple times before finishing.",
+    },
+    {
+      question:
+        "What's the difference between `add_edge` and `add_conditional_edges`?",
+      answer:
+        "`add_edge` always goes to the same next node. `add_conditional_edges` calls a routing function to decide which node to go to based on the current state.",
+    },
+    {
+      question: "What are START and END in LangGraph?",
+      answer:
+        "START is a special constant representing the graph's entry point. END represents termination. You connect START to your first node and your final nodes to END.",
+    },
+    {
+      question:
+        "When should you use create_react_agent vs. a custom StateGraph?",
+      answer:
+        "Use create_react_agent for rapid prototyping and simple tool-calling agents. Use custom StateGraph when you need custom state fields, complex routing logic, or multi-agent patterns.",
+    },
+    {
+      question:
+        "What's the difference between the Graph API and Functional API?",
+      answer:
+        "The Graph API uses StateGraph with explicit nodes and edges for complex workflows. The Functional API uses @entrypoint and @task decorators with regular Python control flow—better for simpler workflows or adding LangGraph features to existing code.",
+    },
+    {
+      question: "What is a subgraph and when would you use one?",
+      answer:
+        "A subgraph is a graph nested within another graph. Use subgraphs for modularity (reusable components), encapsulation (hiding complexity), and multi-agent systems where each agent is its own graph.",
+    },
+  ]}
+/>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Forgetting to compile the graph before running",
+      fix: "Always call `builder.compile()` to get a runnable app. The builder is just a definition; compile() creates the executable.",
+    },
+    {
+      mistake: "Returning the full state from nodes instead of just updates",
+      fix: "Nodes should return only the changes: `{'messages': ['new']}` not the entire state. LangGraph merges updates automatically.",
+    },
+    {
+      mistake: "Creating infinite loops without exit conditions",
+      fix: "Always have a path to END. Use state flags or counters to control when to stop. Set recursion_limit in config as a safety net.",
+    },
+    {
+      mistake: "Not using reducers for list fields",
+      fix: "Without `Annotated[list, operator.add]`, each node's return will overwrite the list instead of appending. Always define reducers for accumulating fields.",
+    },
+    {
+      mistake: "Using set_entry_point() instead of START",
+      fix: "The modern API uses `builder.add_edge(START, 'first_node')`. The `set_entry_point()` method is deprecated.",
+    },
+    {
+      mistake: "Not using checkpointers for stateful conversations",
+      fix: "Without a checkpointer, each invoke() starts fresh. Add `checkpointer=MemorySaver()` to compile() and use thread_id in config for persistent conversations.",
+    },
+    {
+      mistake: "Mixing Graph API and Functional API incorrectly",
+      fix: "Both APIs use the same runtime and can be mixed, but keep it simple. Use subgraphs to encapsulate Functional API workflows within Graph API parents, or vice versa.",
+    },
+    {
+      mistake: "Forgetting .result() on task returns in Functional API",
+      fix: "Tasks return futures, not values. Call `.result()` to get the actual value: `analysis = analyze_data(topic).result()`",
+    },
+  ]}
+/>
+
+---
+
+<Exercise
+  title="Build Your First ReAct Agent"
+  difficulty="intermediate"
+  objectives={[
+    "Install langgraph: `pip install langgraph langchain-core`",
+    "Create a graph with at least 2 nodes",
+    "Implement a conditional edge that creates a loop",
+    "Add proper state with a reducer for message accumulation"
+  ]}
+  hints={[
+    "Start with the simple example, then add complexity",
+    "Use print statements to see what state looks like at each step",
+    "The routing function receives the full state—use it to make decisions",
+    "Test with different inputs to verify your loop terminates correctly"
+  ]}
+>
+
+**Challenge:** Create a "research assistant" graph that:
+
+1. Takes a user question
+2. Decides if it needs to "search" (simulate with a function)
+3. If search is needed, calls the search node and loops back
+4. Limits searches to a maximum of 3 (prevent infinite loops)
+5. Returns a final answer
+
+**Starter Code:**
+
+```python
+from typing import TypedDict, Annotated, Literal
+import operator
+from langgraph.graph import StateGraph, START, END
+
+class ResearchState(TypedDict):
+    messages: Annotated[list[str], operator.add]
+    search_count: int
+    # Add more fields as needed
+
+def analyze(state: ResearchState) -> dict:
+    # Your code here: decide if search is needed
+    pass
+
+def search(state: ResearchState) -> dict:
+    # Your code here: simulate a search
+    pass
+
+def should_search(state: ResearchState) -> Literal["search", "__end__"]:
+    # Your code here: routing logic
+    pass
+
+# Build your graph here
+```
+
+**Success Criteria:**
+
+- Graph compiles without errors
+- Loop executes correctly (search → analyze → search or end)
+- Maximum 3 searches enforced
+- Final state contains all messages from the conversation
+
+</Exercise>
+
+---
+
+<Exercise
+  title="Visualize and Debug"
+  difficulty="beginner"
+  objectives={[
+    "Generate a Mermaid diagram of your graph",
+    "Use streaming to observe node-by-node execution",
+    "Identify the execution path for different inputs"
+  ]}
+>
+
+**Task:** Take the graph you built in Exercise 1 and:
+
+1. Generate its Mermaid visualization
+2. Run it with `app.stream()` instead of `app.invoke()`
+3. Print each step's output to trace the execution
+4. Test with inputs that should and shouldn't trigger the loop
+
+**Expected Output Format:**
+
+```
+Step 1: analyze
+  State: {'messages': ['User question'], 'search_count': 0}
+Step 2: search
+  State: {'messages': ['User question', 'Searching...'], 'search_count': 1}
+Step 3: analyze
+  State: {'messages': [...], 'search_count': 1}
+...
+```
+
+</Exercise>
+
+---
+
+<ModuleSummary
+  points={[
+    "LangGraph models agents as graphs: Nodes (functions) + Edges (flow) + State (typed schema)",
+    "State uses `Annotated` with reducers like `operator.add` to control how updates merge",
+    "Use `START` and `END` constants to define entry and exit points",
+    "Nodes receive full state, return only changes—LangGraph handles merging",
+    "Conditional edges enable decision-making and loops (the ReAct pattern)",
+    "MessagesState provides built-in message handling for chat applications",
+    "Use `create_react_agent` from langgraph-prebuilt for rapid prototyping",
+    "Checkpointers enable persistence, resumption, and human-in-the-loop workflows",
+    "The Functional API (@entrypoint, @task) offers a simpler alternative for existing codebases",
+    "Subgraphs enable modular, reusable workflow components for multi-agent systems",
+    "The Command primitive combines state updates with control flow routing",
+    "LangGraph Platform provides production deployment with Cloud, Self-Hosted, and Hybrid options",
+    "Always compile your graph before running: `app = builder.compile()`",
+    "Use streaming and visualization for debugging complex graphs",
+  ]}
+/>
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** LangGraph is the orchestration backbone of the
+  AgentOS capstone (Days 81-90). You'll use state graphs to coordinate multiple agents,
+  implement conditional routing for task delegation, and leverage checkpointing
+  for persistent, resumable workflows across your entire agent ecosystem. The patterns
+  you learn today will scale throughout the 90-day curriculum.
+</Callout>
+
+### Recommended Exercises
+
+Complete these exercises to reinforce the concepts from this module:
+
+- **EX-03: LangGraph Hello World** (20 min) - Build your first state graph with nodes, edges, and reducers. This exercise walks you through the fundamentals covered in this module. See the [Project Hierarchy](/modules/day-00-project-hierarchy) for full details.
+
+### POC Opportunity
+
+If you want to go deeper, try **POC-01: LangGraph State Machine** which builds a complete conversational agent with conditional routing, tool integration, and checkpointing. This POC directly prepares you for the multi-agent patterns in the capstone.
+
+---
+
+## Connection to MCP
+
+In the companion module **[Day 03: The Tooling Standard (MCP)](/modules/day-03-mcp-standard)**, you'll learn how to connect your LangGraph agents to external tools using the Model Context Protocol. MCP provides a standardized way to:
+
+- Define tools that any agent can use
+- Connect to databases, APIs, and file systems
+- Build reusable tool servers
+
+The combination of LangGraph (for orchestration) and MCP (for tools) gives you a production-ready foundation for building sophisticated agents.
+
+---
+
+### Coming Up Next
+
+In **Day 04**, we'll explore advanced patterns including:
+
+- Tool calling with real LLMs and function schemas
+- Error handling and retry policies
+- Human-in-the-loop checkpoints
+- Subgraphs for complex workflows
+
+---
+
+## Additional Resources
+
+- **[LangGraph Documentation](https://langchain-ai.github.io/langgraph/)** — Official docs with comprehensive guides
+- **[LangGraph GitHub](https://github.com/langchain-ai/langgraph)** — Source code and examples
+- **[Graph API Overview](https://docs.langchain.com/oss/python/langgraph/graph-api)** — Detailed API reference
+- **[Functional API Overview](https://docs.langchain.com/oss/python/langgraph/functional-api)** — Guide to @entrypoint and @task decorators
+- **[LangGraph Tutorials](https://langchain-ai.github.io/langgraph/tutorials/)** — Step-by-step tutorials for common patterns
+- **[Prebuilt Components Reference](https://langchain-ai.github.io/langgraph/reference/prebuilt/)** — Documentation for create_react_agent and other prebuilt components
+- **[LangGraph Platform](https://docs.smith.langchain.com/langgraph_cloud)** — Deployment documentation
+- **[LangGraph Academy](https://academy.langchain.com/)** — Free official course on LangGraph

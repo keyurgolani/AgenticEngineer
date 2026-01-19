@@ -1,0 +1,903 @@
+---
+title: "Mini Project 4: LLM Router Service"
+description: "Build an intelligent LLM routing service with fallbacks, load balancing, and cost optimization."
+week: 12
+day: 85
+---
+
+<ReadingTime minutes={45} />
+
+<SkillLevel level="advanced" description="LLM infrastructure" />
+
+<Prerequisites
+  items={[
+    "Completed Day 84 (RAG Service)",
+    "Experience with multiple LLM providers (OpenAI, Anthropic)",
+    "Understanding of API design and error handling",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Build a unified LLM gateway abstracting multiple providers",
+    "Implement intelligent routing based on task type and cost",
+    "Create automatic fallback and retry mechanisms",
+    "Design health monitoring for provider availability",
+    "Track usage statistics and costs across providers",
+  ]}
+/>
+
+<Callout type="info">
+  **Series Context:** Mini-project 4 of 5 in the 90-day curriculum. This service routes requests to the
+  optimal LLM based on task type, cost, and availability—the brain switchboard
+  of your ecosystem. Part of Month 3's advanced architectures and mastery phase.
+</Callout>
+
+{/* IMAGE_PLACEHOLDER: Create an architectural diagram showing the LLM Router as a central hub with multiple spokes connecting to different LLM providers (OpenAI, Anthropic, Ollama, LM Studio). Each spoke should be color-coded by provider type (cloud vs local). Include visual indicators for health status (green checkmarks for healthy, red X for unhealthy), cost levels ($ symbols), and routing decisions (arrows showing request flow). Place this diagram at the top of the module, right after the Callout, to give learners an immediate visual understanding of the router's role as a traffic controller. Style: Modern, clean, with icons representing different providers and animated arrows showing request routing. */}
+
+<KeyTerms
+  terms={[
+    {
+      term: "LLM Router",
+      definition:
+        "Service that intelligently routes requests to different LLM providers based on task requirements and constraints",
+    },
+    {
+      term: "Provider Fallback",
+      definition:
+        "Automatic switching to backup LLM providers when the primary is unavailable or fails",
+    },
+    {
+      term: "Cost Optimization",
+      definition:
+        "Routing simpler tasks to cheaper models (local or smaller) while reserving expensive models for complex tasks",
+    },
+    {
+      term: "Health Monitoring",
+      definition:
+        "Continuous checking of LLM provider availability to enable automatic failover",
+    },
+    {
+      term: "Task Classification",
+      definition:
+        "Categorizing requests (code, reasoning, creative) to route to the most capable model",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build a unified LLM gateway that routes requests to local (Ollama/LMStudio) or cloud (OpenAI/Anthropic) models based on task requirements, cost constraints, and availability.
+
+**Why This Matters**: Relying on a single model provider creates vendor lock-in and single points of failure. A router optimizes for cost and performance while ensuring high availability. Think of it as a smart traffic controller for your AI infrastructure—directing each request to the most appropriate "lane" based on urgency, complexity, and budget.
+
+{/* IMAGE_PLACEHOLDER: Create an analogy illustration comparing the LLM Router to a smart traffic control system. Show different types of vehicles (representing different task types: fast cars for quick queries, heavy trucks for complex reasoning, economy cars for simple tasks) being directed to different lanes (representing different LLM providers). Include traffic signals, cost indicators (toll booth signs), and speed limits to represent the routing logic. This visual metaphor will help learners understand the router's decision-making process. Place this after the "Why This Matters" section. Style: Friendly, illustrative, with clear labels and a legend explaining the metaphor. */}
+
+**Skills Showcased**:
+
+- Multi-provider LLM integration
+- Intelligent routing strategies
+- Fallback and retry logic
+- Cost tracking and optimization
+- Service health monitoring
+
+## Module Summary
+
+In this mini-project, we built a smart "switchboard" for our agents—a critical piece of infrastructure for the 90-day curriculum's advanced phase:
+
+1. **Unified API**: We created a single interface that abstracts away the differences between model providers, eliminating vendor lock-in.
+2. **Smart Routing**: We implemented logic to route tasks to the most appropriate model—sending simple coding tasks to local models and complex reasoning to GPT-4 or Claude 3.5 Sonnet.
+3. **Resilience**: We added health checks and automatic fallbacks, so if a local model crashes or an API goes down, the system seamlessly switches to a backup.
+4. **Cost Control**: We built in cost tracking and budget constraints, allowing agents to operate efficiently across the 90-day learning journey.
+
+{/* IMAGE_PLACEHOLDER: Create a decision tree flowchart showing the routing logic. Start with "Incoming Request" at the top, then branch based on: 1) prefer_local flag, 2) task_type classification, 3) cost constraints, 4) provider health status, and 5) capability matching. Each decision point should have clear yes/no branches leading to different model selections. Include example scenarios at the leaf nodes (e.g., "Simple code task + prefer_local=true + Ollama healthy → llama3.1:8b"). Place this after the Module Summary to visualize the routing algorithm. Style: Clean flowchart with color-coded decision nodes and outcome nodes. */}
+
+## Architecture
+
+{/* IMAGE_PLACEHOLDER: Create an enhanced architecture diagram showing the LLM Router Service as the central component. Include:
+1. Left side: Multiple agents (Research Agent, Code Agent, Analysis Agent) sending requests
+2. Center: Router with three main components - Smart Router (brain icon), Task Classifier (sorting icon), Health Monitor (heartbeat icon)
+3. Right side: Provider boxes with status indicators - Local LLMs (Ollama/LMStudio with green status), OpenAI (cloud icon), Anthropic (cloud icon)
+4. Visual indicators: Cost labels ($0 for local, $$$ for cloud), latency indicators (fast/slow), health status (green checkmarks/red X)
+5. Request flow arrows showing routing decisions based on task type
+6. Small dashboard panel showing real-time stats (requests/sec, cost/hour, success rate)
+
+Use a modern, clean design with color coding: green for local, blue for cloud, orange for fallback paths. Add subtle animations showing request flow. Place this before the Mermaid diagram as a more detailed visual. */}
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "LLM Router Service"
+        API[Unified API] --> Router[Smart Router]
+        Router --> Classifier[Task Classifier]
+        
+        subgraph "Providers"
+            Local[Local LLMs<br/>Ollama/LMStudio]
+            OpenAI[OpenAI API]
+            Anthropic[Anthropic API]
+        end
+        
+        Router --> Local
+        Router --> OpenAI
+        Router --> Anthropic
+        
+        Monitor[Health Monitor] --> Local
+        Monitor --> OpenAI
+        Monitor --> Anthropic
+    end
+    
+    Agents[Agent Fleet] --> API
+    
+    style Router fill:#f9f,stroke:#333
+`}
+/>
+
+---
+
+## Detailed Requirements Specification
+
+### Functional Requirements (FR)
+
+| ID    | Requirement            | Description                                                                                                     | Priority |
+| ----- | ---------------------- | --------------------------------------------------------------------------------------------------------------- | -------- |
+| FR-01 | Multi-Provider Support | The system shall support OpenAI, Anthropic, Ollama, and LM Studio as LLM providers                              | P0       |
+| FR-02 | Unified Chat API       | The system shall expose a single `/llm/chat` endpoint that abstracts provider differences                       | P0       |
+| FR-03 | Task-Based Routing     | The system shall route requests to optimal models based on task_type (general, code, reasoning, creative, fast) | P0       |
+| FR-04 | Local-First Preference | The system shall prefer local models (Ollama/LM Studio) when `prefer_local=true` and they are healthy           | P1       |
+| FR-05 | Cost-Based Filtering   | The system shall filter out models exceeding `max_cost_per_1k` when specified                                   | P1       |
+| FR-06 | Automatic Fallback     | The system shall automatically retry with alternative providers when the primary fails                          | P0       |
+| FR-07 | Health Monitoring      | The system shall track provider health status and exclude unhealthy providers from routing                      | P1       |
+| FR-08 | Usage Statistics       | The system shall track calls, tokens, costs, and latency per model                                              | P2       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement        | Target                                                                           | Measurement            |
+| ------ | ------------------ | -------------------------------------------------------------------------------- | ---------------------- |
+| NFR-01 | Routing Latency    | Model selection shall complete in < 5ms                                          | Router timing          |
+| NFR-02 | Health Check Speed | Provider health checks shall complete in < 2 seconds                             | HTTP timeout           |
+| NFR-03 | Fallback Speed     | Fallback to alternative provider shall occur within 5 seconds of primary failure | End-to-end timing      |
+| NFR-04 | Availability       | Service shall remain available if at least one provider is healthy               | Health endpoint        |
+| NFR-05 | Cost Accuracy      | Cost tracking shall be accurate within 5% of actual provider billing             | Monthly reconciliation |
+
+### API Contract
+
+#### POST /llm/chat - Send Chat Request
+
+**Request Body:**
+
+```json
+{
+  "messages": [
+    {
+      "role": "string ('system' | 'user' | 'assistant')",
+      "content": "string"
+    }
+  ],
+  "task_type": "string (default: 'general', options: 'general' | 'code' | 'reasoning' | 'creative' | 'fast')",
+  "prefer_local": "boolean (default: true)",
+  "max_cost_per_1k": "number | null (optional, USD per 1K input tokens)"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "content": "string (LLM response)",
+  "model": "string (model name used)",
+  "provider": "string (provider name)",
+  "latency_ms": "number"
+}
+```
+
+**Error Response (500):**
+
+```json
+{
+  "detail": "No suitable model available"
+}
+```
+
+#### GET /llm/health - Get Provider Health
+
+**Response (200 OK):**
+
+```json
+{
+  "ollama": "boolean",
+  "openai": "boolean",
+  "anthropic": "boolean",
+  "lmstudio": "boolean"
+}
+```
+
+#### GET /llm/stats - Get Usage Statistics
+
+**Response (200 OK):**
+
+```json
+{
+  "{provider}:{model}": {
+    "calls": "integer",
+    "input_tokens": "integer",
+    "output_tokens": "integer",
+    "total_cost": "number (USD)",
+    "avg_latency": "number (ms)"
+  }
+}
+```
+
+#### GET /llm/models - List Available Models
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "name": "string",
+    "provider": "string",
+    "capabilities": ["string"],
+    "cost_per_1k_input": "number"
+  }
+]
+```
+
+### Data Models
+
+```
+Provider Configuration:
+┌─────────────────────────────────────────────────────────────┐
+│                    ProviderConfig                            │
+├─────────────────────────────────────────────────────────────┤
+│ type: ProviderType                                          │
+│   → 'openai' | 'anthropic' | 'ollama' | 'lmstudio'         │
+│ base_url: STRING | null                                     │
+│   → Required for ollama/lmstudio                            │
+│ api_key: STRING | null                                      │
+│   → Required for openai/anthropic                           │
+│ models: List[ModelConfig]                                   │
+│ priority: INTEGER (lower = higher priority)                 │
+│ enabled: BOOLEAN                                            │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                     ModelConfig                              │
+├─────────────────────────────────────────────────────────────┤
+│ name: STRING (e.g., "gpt-4o", "llama3.1:8b")               │
+│ provider: ProviderType                                      │
+│ context_window: INTEGER (max tokens)                        │
+│ cost_per_1k_input: FLOAT (USD)                             │
+│ cost_per_1k_output: FLOAT (USD)                            │
+│ capabilities: List[STRING]                                  │
+│   → ["code", "reasoning", "creative", "fast"]              │
+│ max_tokens: INTEGER (default: 4096)                        │
+└─────────────────────────────────────────────────────────────┘
+
+Runtime State (In-Memory):
+─────────────────────────────────────────────────────────────
+health_status: Dict[provider_name, boolean]
+usage_stats: Dict["PROVIDER:MODEL", UsageStats]
+
+┌─────────────────────────────────────────────────────────────┐
+│                      UsageStats                              │
+├─────────────────────────────────────────────────────────────┤
+│ calls: INTEGER                                              │
+│ input_tokens: INTEGER                                       │
+│ output_tokens: INTEGER                                      │
+│ total_cost: FLOAT (USD)                                    │
+│ avg_latency: FLOAT (ms)                                    │
+└─────────────────────────────────────────────────────────────┘
+
+Model Selection Scoring:
+─────────────────────────────────────────────────────────────
+score = 0.0
+if prefer_local AND provider in [ollama, lmstudio]: score += 10.0
+if cost_per_1k_input == 0: score += 5.0
+else: score += 1.0 / (cost_per_1k_input * 100 + 1)
+if task_type in capabilities: score += 3.0
+score -= provider.priority * 0.5
+
+{/* INTERACTIVE_COMPONENT: Create a "Router Simulator" that allows learners to:
+1. Select task parameters (task_type, prefer_local, max_cost_per_1k, required_context)
+2. Set provider health status (toggle each provider on/off)
+3. See the scoring calculation in real-time for each model
+4. View which model gets selected and why
+5. Compare different scenarios side-by-side
+
+Display the scoring formula with live values plugged in, highlighting which factors contributed most to the final decision. Include a "Why this model?" explanation panel that breaks down the selection reasoning in plain English. This interactive tool will help learners deeply understand the routing algorithm. Place this after the Data Models section. */}
+```
+
+### Error Handling Matrix
+
+{/* IMAGE_PLACEHOLDER: Create a visual error handling flowchart showing different error scenarios and their recovery paths:
+1. "Provider Timeout" → Automatic fallback → Try next provider → Success/Failure
+2. "Rate Limit Hit" → Queue request → Retry with backoff → Success
+3. "No Model Available" → Return 500 error → User notification
+4. "Health Check Failed" → Mark unhealthy → Exclude from routing → Auto-retry after cooldown
+5. "All Fallbacks Failed" → Log incident → Alert admin → Return error
+
+Use color coding: green for success paths, yellow for retry paths, red for failure paths. Include timing indicators (e.g., "5s timeout", "30s cooldown"). Place this before the error handling table to provide visual context. Style: Flowchart with decision diamonds and action rectangles. */}
+
+| Error Code           | HTTP Status | Cause                                      | Response Body                               | Recovery Action                            |
+| -------------------- | ----------- | ------------------------------------------ | ------------------------------------------- | ------------------------------------------ |
+| NO_MODEL_AVAILABLE   | 500         | No models match criteria or all unhealthy  | `{"detail": "No suitable model available"}` | Relax constraints or check provider health |
+| PROVIDER_TIMEOUT     | 500         | LLM request timed out                      | `{"detail": "Request timed out"}`           | Automatic fallback attempted               |
+| PROVIDER_ERROR       | 500         | Provider returned error (rate limit, auth) | `{"detail": "Provider error: MESSAGE"}`     | Check API keys, rate limits                |
+| INVALID_TASK_TYPE    | 400         | Unknown task_type value                    | `{"detail": "Invalid task_type: VALUE"}`    | Use valid task type                        |
+| HEALTH_CHECK_FAILED  | N/A         | Provider health check failed               | Provider marked unhealthy                   | Automatic exclusion from routing           |
+| ALL_FALLBACKS_FAILED | 500         | Primary and all fallbacks failed           | `{"detail": "All providers failed"}`        | Manual intervention required               |
+
+### Integration Points
+
+| Service                     | Integration Type      | Purpose                                  | Data Flow                                   |
+| --------------------------- | --------------------- | ---------------------------------------- | ------------------------------------------- |
+| **Ollama**                  | HTTP API              | Local LLM inference                      | POST http://localhost:11434/api/generate    |
+| **LM Studio**               | OpenAI-compatible API | Local LLM inference                      | POST BASE_URL/v1/chat/completions           |
+| **OpenAI**                  | SDK                   | Cloud LLM inference                      | langchain_openai.ChatOpenAI                 |
+| **Anthropic**               | SDK                   | Cloud LLM inference                      | langchain_anthropic.ChatAnthropic           |
+| **Agent Services**          | HTTP Client           | Unified LLM access                       | Agent → POST /llm/chat → Response           |
+| **Prompt Library (Day 82)** | Upstream              | Prompts include model_recommendation     | Prompt → Router uses recommendation as hint |
+| **Research Agent (Day 86)** | Downstream            | Research agent uses router for LLM calls | Research Agent → LLM Router → Provider      |
+
+### Testing Requirements
+
+#### Unit Test Coverage (Minimum 85%)
+
+| Component                | Test Cases                                                                                                             |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `LLMRouter.select_model` | Task-based selection, local preference, cost filtering, capability matching, health-based exclusion, scoring algorithm |
+| `LLMRouter.invoke`       | Successful invocation, fallback on failure, usage tracking, latency recording                                          |
+| `LLMRouter.check_health` | Ollama health check, LM Studio health check, cloud provider assumptions                                                |
+| `ProviderConfig`         | Model configuration validation, priority ordering                                                                      |
+
+#### Integration Test Scenarios
+
+| Scenario             | Steps                                                       | Expected Outcome                          |
+| -------------------- | ----------------------------------------------------------- | ----------------------------------------- |
+| Local-First Routing  | Start Ollama → Request with prefer_local=true               | Ollama model selected                     |
+| Cost Constraint      | Request with max_cost_per_1k=0.001                          | Only cheap models considered              |
+| Automatic Fallback   | Stop Ollama → Request with prefer_local=true                | Falls back to cloud provider              |
+| Task-Based Selection | Request with task_type="code"                               | Model with "code" capability selected     |
+| Health Recovery      | Mark provider unhealthy → Refresh health → Provider healthy | Provider re-included in routing           |
+| Usage Tracking       | Make 10 requests → Check stats                              | Accurate call count, token estimate, cost |
+
+#### Load Test Targets
+
+| Metric                | Target                      | Test Duration |
+| --------------------- | --------------------------- | ------------- |
+| Routing throughput    | 1000 selections/second      | 5 minutes     |
+| P99 routing latency   | < 10ms                      | Under load    |
+| Concurrent requests   | 100 simultaneous            | 5 minutes     |
+| Fallback success rate | > 99% when backup available | Chaos testing |
+
+---
+
+## Core Implementation
+
+### Provider Configuration
+
+```python
+# config/providers.py
+from pydantic import BaseModel
+from typing import Dict, List, Optional
+from enum import Enum
+
+class ProviderType(str, Enum):
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+    OLLAMA = "ollama"
+    LMSTUDIO = "lmstudio"
+
+class ModelConfig(BaseModel):
+    name: str
+    provider: ProviderType
+    context_window: int
+    cost_per_1k_input: float  # USD
+    cost_per_1k_output: float
+    capabilities: List[str]  # ["code", "reasoning", "creative", "fast"]
+    max_tokens: int = 4096
+
+class ProviderConfig(BaseModel):
+    type: ProviderType
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    models: List[ModelConfig]
+    priority: int = 1  # Lower = higher priority
+    enabled: bool = True
+
+# Default configurations
+PROVIDERS = {
+    "ollama": ProviderConfig(
+        type=ProviderType.OLLAMA,
+        base_url="http://localhost:11434",
+        models=[
+            ModelConfig(
+                name="llama3.1:8b",
+                provider=ProviderType.OLLAMA,
+                context_window=8192,
+                cost_per_1k_input=0.0,
+                cost_per_1k_output=0.0,
+                capabilities=["reasoning", "code", "fast"]
+            ),
+            ModelConfig(
+                name="codellama:13b",
+                provider=ProviderType.OLLAMA,
+                context_window=16384,
+                cost_per_1k_input=0.0,
+                cost_per_1k_output=0.0,
+                capabilities=["code"]
+            )
+        ],
+        priority=1
+    ),
+    "openai": ProviderConfig(
+        type=ProviderType.OPENAI,
+        models=[
+            ModelConfig(
+                name="gpt-4o-mini",
+                provider=ProviderType.OPENAI,
+                context_window=128000,
+                cost_per_1k_input=0.00015,
+                cost_per_1k_output=0.0006,
+                capabilities=["reasoning", "code", "creative", "fast"]
+            ),
+            ModelConfig(
+                name="gpt-4o",
+                provider=ProviderType.OPENAI,
+                context_window=128000,
+                cost_per_1k_input=0.0025,  # $2.50 per 1M tokens
+                cost_per_1k_output=0.01,   # $10 per 1M tokens
+                capabilities=["reasoning", "code", "creative"]
+            )
+        ],
+        priority=2
+    ),
+    "anthropic": ProviderConfig(
+        type=ProviderType.ANTHROPIC,
+        models=[
+            ModelConfig(
+                name="claude-sonnet-4-20250514",
+                provider=ProviderType.ANTHROPIC,
+                context_window=200000,
+                cost_per_1k_input=0.003,   # $3 per 1M tokens
+                cost_per_1k_output=0.015,  # $15 per 1M tokens
+                capabilities=["reasoning", "code", "creative"]
+            )
+        ],
+        priority=2
+    )
+}
+```
+
+### LLM Router
+
+```python
+# services/router.py
+from typing import Optional, List, Dict, Any
+from config.providers import PROVIDERS, ProviderType, ModelConfig
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+from langchain_community.llms import Ollama
+import httpx
+import asyncio
+from datetime import datetime
+
+class LLMRouter:
+    """Intelligent LLM routing with fallbacks."""
+
+    def __init__(self):
+        self.providers = PROVIDERS
+        self.health_status: Dict[str, bool] = {}
+        self.usage_stats: Dict[str, Dict] = {}
+
+    async def check_health(self, provider_name: str) -> bool:
+        """Check if a provider is healthy."""
+        provider = self.providers.get(provider_name)
+        if not provider or not provider.enabled:
+            return False
+
+        try:
+            if provider.type == ProviderType.OLLAMA:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(f"{provider.base_url}/api/tags", timeout=2.0)
+                    return resp.status_code == 200
+
+            elif provider.type == ProviderType.LMSTUDIO:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(f"{provider.base_url}/v1/models", timeout=2.0)
+                    return resp.status_code == 200
+
+            # Cloud providers - assume healthy if API key exists
+            return bool(provider.api_key or True)  # Will fail on actual call if invalid
+
+        except Exception:
+            return False
+
+    async def refresh_health(self):
+        """Refresh health status for all providers."""
+        for name in self.providers:
+            self.health_status[name] = await self.check_health(name)
+
+    def select_model(
+        self,
+        task_type: str = "general",
+        prefer_local: bool = True,
+        max_cost_per_1k: float = None,
+        required_context: int = 4000,
+        required_capabilities: List[str] = None
+    ) -> Optional[ModelConfig]:
+        """Select the best model for the task."""
+
+        candidates = []
+
+        for provider_name, provider in self.providers.items():
+            if not provider.enabled:
+                continue
+
+            # Check health
+            if not self.health_status.get(provider_name, True):
+                continue
+
+            for model in provider.models:
+                # Check context window
+                if model.context_window < required_context:
+                    continue
+
+                # Check cost
+                if max_cost_per_1k and model.cost_per_1k_input > max_cost_per_1k:
+                    continue
+
+                # Check capabilities
+                if required_capabilities:
+                    if not all(cap in model.capabilities for cap in required_capabilities):
+                        continue
+
+                # Calculate score
+                score = self._calculate_score(
+                    model, provider, task_type, prefer_local
+                )
+
+                candidates.append((model, score))
+
+        if not candidates:
+            return None
+
+        # Sort by score (higher is better)
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return candidates[0][0]
+
+    def _calculate_score(
+        self,
+        model: ModelConfig,
+        provider,
+        task_type: str,
+        prefer_local: bool
+    ) -> float:
+        """Calculate model selection score."""
+        score = 0.0
+
+        # Local preference
+        if prefer_local and provider.type in [ProviderType.OLLAMA, ProviderType.LMSTUDIO]:
+            score += 10.0
+
+        # Cost efficiency (inverse of cost)
+        if model.cost_per_1k_input == 0:
+            score += 5.0
+        else:
+            score += 1.0 / (model.cost_per_1k_input * 100 + 1)
+
+        # Task-specific scoring
+        if task_type == "code" and "code" in model.capabilities:
+            score += 3.0
+        if task_type == "fast" and "fast" in model.capabilities:
+            score += 3.0
+        if task_type == "reasoning" and "reasoning" in model.capabilities:
+            score += 3.0
+
+        # Provider priority
+        score -= provider.priority * 0.5
+
+        return score
+
+    def get_client(self, model: ModelConfig):
+        """Get LangChain client for a model."""
+        provider = self.providers.get(model.provider.value)
+
+        if model.provider == ProviderType.OPENAI:
+            return ChatOpenAI(model=model.name, temperature=0.7)
+
+        elif model.provider == ProviderType.ANTHROPIC:
+            return ChatAnthropic(model=model.name, temperature=0.7)
+
+        elif model.provider == ProviderType.OLLAMA:
+            return Ollama(
+                model=model.name,
+                base_url=provider.base_url
+            )
+
+        elif model.provider == ProviderType.LMSTUDIO:
+            return ChatOpenAI(
+                model=model.name,
+                base_url=f"{provider.base_url}/v1",
+                api_key="not-needed"
+            )
+
+        raise ValueError(f"Unknown provider: {model.provider}")
+
+    async def invoke(
+        self,
+        messages: List[Dict],
+        task_type: str = "general",
+        prefer_local: bool = True,
+        max_cost_per_1k: float = None,
+        fallback: bool = True
+    ) -> Dict:
+        """Invoke LLM with automatic routing and fallback."""
+
+        # Select model
+        model = self.select_model(
+            task_type=task_type,
+            prefer_local=prefer_local,
+            max_cost_per_1k=max_cost_per_1k
+        )
+
+        if not model:
+            raise ValueError("No suitable model available")
+
+        # Try primary model
+        try:
+            client = self.get_client(model)
+            start_time = datetime.now()
+
+            response = await client.ainvoke(messages)
+
+            latency = (datetime.now() - start_time).total_seconds() * 1000
+
+            # Track usage
+            self._track_usage(model, len(str(messages)), len(response.content), latency)
+
+            return {
+                "content": response.content,
+                "model": model.name,
+                "provider": model.provider.value,
+                "latency_ms": latency
+            }
+
+        except Exception as e:
+            if not fallback:
+                raise
+
+            # Mark provider as unhealthy
+            self.health_status[model.provider.value] = False
+
+            # Try fallback
+            fallback_model = self.select_model(
+                task_type=task_type,
+                prefer_local=False  # Try cloud as fallback
+            )
+
+            if fallback_model and fallback_model.name != model.name:
+                return await self.invoke(
+                    messages,
+                    task_type=task_type,
+                    prefer_local=False,
+                    fallback=False
+                )
+
+            raise
+
+    def _track_usage(self, model: ModelConfig, input_tokens: int, output_tokens: int, latency: float):
+        """Track usage statistics."""
+        key = f"{model.provider.value}:{model.name}"
+
+        if key not in self.usage_stats:
+            self.usage_stats[key] = {
+                "calls": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_cost": 0.0,
+                "avg_latency": 0.0
+            }
+
+        stats = self.usage_stats[key]
+        stats["calls"] += 1
+        stats["input_tokens"] += input_tokens
+        stats["output_tokens"] += output_tokens
+        stats["total_cost"] += (
+            (input_tokens / 1000) * model.cost_per_1k_input +
+            (output_tokens / 1000) * model.cost_per_1k_output
+        )
+        stats["avg_latency"] = (
+            (stats["avg_latency"] * (stats["calls"] - 1) + latency) / stats["calls"]
+        )
+```
+
+### API Endpoints
+
+```python
+# routers/llm.py
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import List, Dict, Optional
+from services.router import LLMRouter
+
+router = APIRouter(prefix="/llm", tags=["llm"])
+llm_router = LLMRouter()
+
+class ChatRequest(BaseModel):
+    messages: List[Dict[str, str]]
+    task_type: str = "general"
+    prefer_local: bool = True
+    max_cost_per_1k: Optional[float] = None
+
+class ChatResponse(BaseModel):
+    content: str
+    model: str
+    provider: str
+    latency_ms: float
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """Send a chat request with automatic routing."""
+    try:
+        result = await llm_router.invoke(
+            messages=request.messages,
+            task_type=request.task_type,
+            prefer_local=request.prefer_local,
+            max_cost_per_1k=request.max_cost_per_1k
+        )
+        return ChatResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/health")
+async def health():
+    """Get provider health status."""
+    await llm_router.refresh_health()
+    return llm_router.health_status
+
+@router.get("/stats")
+def stats():
+    """Get usage statistics."""
+    return llm_router.usage_stats
+
+@router.get("/models")
+def list_models():
+    """List available models."""
+    models = []
+    for provider in llm_router.providers.values():
+        for model in provider.models:
+            models.append({
+                "name": model.name,
+                "provider": model.provider.value,
+                "capabilities": model.capabilities,
+                "cost_per_1k_input": model.cost_per_1k_input
+            })
+    return models
+```
+
+---
+
+## Usage Example
+
+{/* INTERACTIVE_COMPONENT: Create a "Cost Calculator" that shows:
+1. Input: Number of requests per day, average tokens per request
+2. Model selection: Choose between different routing strategies (always-local, always-cloud, smart-routing)
+3. Output: Estimated monthly cost breakdown by provider, total savings with smart routing
+4. Visualization: Bar chart comparing costs across strategies, pie chart showing token distribution by model
+
+Include real pricing data from the ModelConfig above. Show how smart routing with prefer_local=true can reduce costs by 80%+ for typical workloads. Add example scenarios like "100 requests/day, 500 tokens avg" with instant cost calculations. Place this before the usage code example. */}
+
+```python
+# Agent using the LLM router
+import httpx
+
+class SmartAgent:
+    def __init__(self, router_url: str = "http://localhost:8003"):
+        self.router_url = router_url
+
+    async def think(self, prompt: str, task_type: str = "reasoning") -> str:
+        """
+        Send a prompt to the LLM router with automatic model selection.
+        
+        The router will:
+        1. Classify the task based on task_type
+        2. Check provider health status
+        3. Apply cost constraints if specified
+        4. Select the optimal model using the scoring algorithm
+        5. Automatically fallback if the primary model fails
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.router_url}/llm/chat",
+                json={
+                    "messages": [{"role": "user", "content": prompt}],
+                    "task_type": task_type,
+                    "prefer_local": True  # Try local first for cost savings
+                }
+            )
+            result = response.json()
+            print(f"Used: {result['provider']}/{result['model']} ({result['latency_ms']:.0f}ms)")
+            return result["content"]
+
+# Example usage scenarios
+async def main():
+    agent = SmartAgent()
+    
+    # Simple code task → likely routes to local Ollama
+    code = await agent.think("Write a Python function to reverse a string", task_type="code")
+    
+    # Complex reasoning → might route to GPT-4 or Claude
+    analysis = await agent.think(
+        "Analyze the trade-offs between microservices and monolithic architecture",
+        task_type="reasoning"
+    )
+    
+    # Fast query → routes to fastest available model
+    quick = await agent.think("What is 2+2?", task_type="fast")
+```
+
+{/* IMAGE_PLACEHOLDER: Create a sequence diagram showing the complete request flow through the LLM Router. Show: 1) Agent sends request, 2) Router checks health status, 3) Router calculates scores for each model, 4) Router selects best model, 5) Router invokes provider, 6) Provider returns response, 7) Router tracks usage stats, 8) Router returns to agent. Include a parallel flow showing what happens during a failure: primary provider fails → router marks unhealthy → router selects fallback → retry succeeds. Use different colors for success path (green) and failure/fallback path (orange). Place this after the usage example. Style: UML sequence diagram with clear timing indicators and annotations. */}
+
+---
+
+<Exercise title="LLM Router Lab">
+  **Hands-on Challenges:**
+  
+  1. **Rate Limiting**: Add per-provider rate limiting to prevent hitting API quotas. Track requests per minute and queue excess requests.
+  
+  2. **Request Queuing**: Implement a queue system for local models to handle concurrent requests gracefully (local models typically handle one request at a time).
+  
+  3. **A/B Testing**: Add support for routing a percentage of traffic to different models for comparison. Track quality metrics to determine which model performs best for each task type.
+  
+  4. **Semantic Caching**: Implement embedding-based caching that returns cached responses for semantically similar queries (e.g., "What is Python?" and "Explain Python" should hit the same cache).
+  
+  5. **Cost Budgets**: Add daily/monthly budget limits per provider with automatic throttling when approaching limits.
+  
+  **Challenge Project**: Build a "Model Performance Dashboard" that visualizes routing decisions, costs, latency distributions, and success rates across all providers over time.
+</Exercise>
+
+{/* INTERACTIVE_COMPONENT: Create a "Model Comparator" tool that allows learners to:
+1. Enter a prompt
+2. Send it to multiple models simultaneously
+3. Compare responses side-by-side
+4. See latency, cost, and token usage for each
+5. Rate response quality
+6. View aggregated statistics showing which models excel at which task types
+
+This helps learners understand the practical differences between models and why routing matters. Include example prompts for different task types (code, reasoning, creative, fast). Place this after the Exercise section. */}
+
+---
+
+## Key Takeaways
+
+1. **Vendor Independence**: A router decouples your system from specific provider APIs, giving you flexibility to switch providers or use multiple simultaneously without changing agent code.
+
+2. **Cost Optimization**: Defaulting to free local models for simple tasks can save 80%+ on API bills. Over the 90-day course, this infrastructure enables cost-effective experimentation and learning.
+
+3. **Resiliency**: Systems break. Automatic fallbacks ensure your agents keep running when OpenAI is down or rate-limited. This is critical for production systems built in Month 3.
+
+4. **Observability**: Centralizing LLM calls gives you a single place to track usage and costs across all agents in your ecosystem—essential for the capstone projects ahead.
+
+5. **Smart Routing**: Different tasks need different models. Code generation might work fine on a local 8B model, while complex reasoning benefits from GPT-4 or Claude. The router makes this optimization automatic.
+
+{/* IMAGE_PLACEHOLDER: Create an infographic showing "LLM Router Impact Metrics" with three columns:
+1. "Without Router" - showing scattered API calls, vendor lock-in icon, single point of failure, no cost visibility
+2. "With Router" - showing centralized routing, multiple provider options, automatic fallbacks, cost dashboard
+3. "Real Impact" - showing statistics like "80% cost reduction", "99.9% uptime", "5ms routing overhead", "Zero vendor lock-in"
+
+Use icons, charts, and visual comparisons to make the benefits concrete. Include a small case study callout: "Example: 1000 requests/day, 70% routed to local models = $450/month savings". Place this after the Key Takeaways section. Style: Professional infographic with data visualization elements. */}
+
+---
+
+<ModuleSummary
+  points={[
+    "A unified LLM gateway provides vendor independence and simplifies agent code",
+    "Defaulting to free local models for simple tasks can reduce API costs by 80%+",
+    "Automatic fallbacks ensure agents keep running when providers experience outages",
+    "Centralizing LLM calls provides a single point for usage tracking and cost monitoring",
+    "Task-based routing sends requests to the most capable and cost-effective model",
+  ]}
+/>
+
+**Tomorrow**: Day 86—Mini-Project: The Research Agent.

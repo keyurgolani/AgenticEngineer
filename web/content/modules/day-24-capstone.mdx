@@ -1,0 +1,728 @@
+---
+title: "Day 24: Month 1 Capstone"
+description: "Building a complete research agent—synthesizing LLMs, prompts, RAG, and memory."
+week: 4
+day: 24
+---
+
+## Capstone: The Deep Research Agent
+
+Over the first month of this 90-day course, you've learned the fundamentals: LLMs, prompting, control loops, RAG, and memory. Now we synthesize everything into a production-quality **Deep Research Agent** that can write comprehensive reports on any topic.
+
+<ConceptVisual
+  src="/images/research_agent_workflow_hero.png"
+  alt="Research Agent Architecture"
+  caption="Coordinate a team of specialized agents to produce deep, verified research."
+/>
+
+---
+
+<Callout type="tip" title="Capstone Project">
+  This is the first major capstone of the course. Take your time to understand
+  each component—you'll extend this agent significantly in Day 25 and reference
+  these patterns throughout Months 2 and 3.
+</Callout>
+
+---
+
+## 7.1 The Challenge
+
+**Goal**: Build an agent that produces a 2,000+ word research report with:
+
+- Multiple sources cited
+- Structured sections
+- No hallucinated facts
+- Coherent narrative flow
+
+<ConceptVisual
+  src="/images/deep_research_comparison_visual.png"
+  alt="Simple Prompt vs Deep Research"
+  caption="Moving beyond simple Q&A to multi-step autonomous research workflows."
+/>
+
+**Why This Is Hard**:
+
+Think of it like writing a college research paper. You can't just ask one person for their opinion and call it done. You need to:
+
+- **Avoid shallow content**: Simple prompts are like asking ChatGPT "tell me about quantum computing"—you get Wikipedia-level summaries, not deep insights
+- **Prevent context rot**: Long-form generation is like a game of telephone—the further you get from the start, the more the LLM "forgets" earlier context
+- **Synthesize, don't concatenate**: Multiple sources need to be woven together like a narrative, not just pasted one after another
+- **Iterate for quality**: First drafts are rarely perfect—you need a "critic" to review and suggest improvements, just like peer review in academia
+
+---
+
+## 7.2 Architecture Overview
+
+We'll use a **Supervisor Pattern** with specialized workers:
+
+<ConceptVisual
+  src="/images/research_flow_animation.png"
+  alt="Information Flow Pipeline"
+  caption="Data travels from user input through planning, parallel research, writing, and critical review."
+/>
+
+<Mermaid
+  chart={`
+graph TD
+    User([User: Research Topic]) --> Planner[Planner Agent]
+    
+    Planner -->|Outline| Supervisor[Supervisor Agent]
+    
+    Supervisor -->|Section 1| R1[Researcher 1]
+    Supervisor -->|Section 2| R2[Researcher 2]
+    Supervisor -->|Section 3| R3[Researcher 3]
+    
+    R1 -->|Notes| Supervisor
+    R2 -->|Notes| Supervisor
+    R3 -->|Notes| Supervisor
+    
+    Supervisor --> Writer[Writer Agent]
+    Writer --> Critic[Critic Agent]
+    
+    Critic -->|Feedback| Writer
+    Critic -->|Approved| Final([Final Report])
+    
+    style Planner fill:#f9f,stroke:#333
+    style Supervisor fill:#bbf,stroke:#333
+    style Writer fill:#bfb,stroke:#333
+    style Critic fill:#fbb,stroke:#333
+`}
+/>
+
+**Think of it like a newsroom**: The **Planner** is the editor-in-chief deciding what stories to cover. The **Supervisor** is the managing editor coordinating reporters. The **Researchers** are investigative journalists gathering facts. The **Writer** is the staff writer crafting the article. The **Critic** is the senior editor doing final review before publication.
+
+### Agent Roles
+
+<ConceptVisual
+  src="/images/agent_roles_infographic.png"
+  alt="Agent Role Definitions"
+  caption="Each agent has distinct responsibilities, tools, and interfaces."
+/>
+
+| Agent          | Responsibility                     | Tools                  |
+| :------------- | :--------------------------------- | :--------------------- |
+| **Planner**    | Creates outline with 5-7 sections  | None (pure reasoning)  |
+| **Supervisor** | Coordinates workers, manages state | State management       |
+| **Researcher** | Searches and summarizes sources    | Web search, URL reader |
+| **Writer**     | Synthesizes notes into prose       | None (pure generation) |
+| **Critic**     | Reviews for quality and accuracy   | None (pure evaluation) |
+
+---
+
+## 7.3 Implementation
+
+<ConceptVisual
+  src="/images/state_flow_visualization.png"
+  alt="State Object lifecycle"
+  caption="The state object accumulates data as it passes through each agent stage."
+/>
+
+### Step 1: Define the State
+
+**Key Concept**: The state is like a shared whiteboard that all agents can read from and write to. Each agent adds its contribution, and the next agent builds on top of it.
+
+```python
+from typing import TypedDict, List, Annotated, Optional
+import operator
+
+class ResearchState(TypedDict):
+    # Input
+    topic: str
+
+    # Planning
+    outline: List[str]
+
+    # Research (accumulates from parallel workers)
+    section_notes: Annotated[dict, operator.ior]
+    sources: Annotated[List[str], operator.add]
+
+    # Writing
+    draft: str
+
+    # Review
+    feedback: Optional[str]
+    revision_count: int
+
+    # Output
+    final_report: str
+    status: str
+```
+
+### Step 2: The Planner Agent
+
+**Analogy**: The Planner is like an architect creating a blueprint before construction begins. It breaks down the big topic into manageable sections, ensuring comprehensive coverage without overlap.
+
+**Why structured output?** We use Pydantic models to force the LLM to return data in a predictable format—no more parsing messy text responses!
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.pydantic_v1 import BaseModel, Field
+
+class Outline(BaseModel):
+    """Structured outline for the research report."""
+    title: str = Field(description="Report title")
+    sections: List[str] = Field(description="List of section headers")
+    key_questions: List[str] = Field(description="Key questions to answer")
+
+planner_llm = ChatOpenAI(model="gpt-4o").with_structured_output(Outline)
+
+PLANNER_PROMPT = """
+You are a research planner. Create a comprehensive outline for a report on:
+
+Topic: {topic}
+
+Requirements:
+1. Create 5-7 distinct sections that cover the topic thoroughly
+2. Each section should have a clear, specific focus
+3. Include an introduction and conclusion
+4. Identify 3-5 key questions the report should answer
+
+Output a structured outline.
+"""
+
+def planner_node(state: ResearchState) -> dict:
+    """Generate the research outline."""
+    outline = planner_llm.invoke(
+        PLANNER_PROMPT.format(topic=state["topic"])
+    )
+
+    return {
+        "outline": outline.sections,
+        "status": "planning_complete"
+    }
+```
+
+### Step 3: The Researcher Agent (with Context Isolation)
+
+**Critical Pattern**: Each researcher focuses on ONE section only. This prevents context bleeding—where information from one topic contaminates another. It's like having specialized journalists: the tech reporter covers tech, the finance reporter covers finance.
+
+<ConceptVisual
+  src="/images/context_isolation_comparison.png"
+  alt="Importance of Context Isolation"
+  caption="Parallel agents perform better when their context is narrowly scoped."
+/>
+
+```python
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_community.document_loaders import WebBaseLoader
+
+search_tool = TavilySearchResults(max_results=5)
+
+RESEARCHER_PROMPT = """
+You are a research specialist. Your task is to gather information on ONE specific section.
+
+Section Topic: {section}
+
+Instructions:
+1. Search for relevant, authoritative sources
+2. Extract key facts, statistics, and quotes
+3. Note the source URL for each fact
+4. Summarize findings in bullet points
+
+Focus ONLY on this section. Do not cover other topics.
+"""
+
+def researcher_node(state: ResearchState, section: str) -> dict:
+    """Research a single section in isolation."""
+
+    # Search for information
+    search_results = search_tool.invoke(section)
+
+    # Summarize findings
+    summarizer = ChatOpenAI(model="gpt-4o-mini")
+
+    summary = summarizer.invoke(f"""
+    Summarize these search results for the section "{section}":
+
+    {search_results}
+
+    Format as bullet points with source citations.
+    """)
+
+    # Extract source URLs
+    sources = [r.get("url", "") for r in search_results if r.get("url")]
+
+    return {
+        "section_notes": {section: summary.content},
+        "sources": sources
+    }
+```
+
+### Step 4: Parallel Research Execution
+
+**Performance Boost**: Instead of researching sections sequentially (Section 1 → Section 2 → Section 3), we research them in parallel. This is like having 5 people search different library sections simultaneously instead of one person searching them one by one.
+
+**LangGraph Magic**: The `Send` function creates multiple parallel invocations. Each researcher gets its own section but shares the same base state.
+
+<ConceptVisual
+  src="/images/parallel_execution_gantt.png"
+  alt="Speedup from Parallelization"
+  caption="Running research in parallel drastically reduces total execution time."
+/>
+
+```python
+from langgraph.graph import StateGraph, END
+from langgraph.constants import Send
+
+def route_to_researchers(state: ResearchState) -> list:
+    """Fan out to parallel researcher nodes."""
+    return [
+        Send("researcher", {"section": section, **state})
+        for section in state["outline"]
+    ]
+
+# In the graph definition:
+workflow.add_conditional_edges(
+    "planner",
+    route_to_researchers,
+    ["researcher"]
+)
+```
+
+### Step 5: The Writer Agent
+
+**The Synthesis Challenge**: The Writer must weave together research notes from multiple sources into a coherent narrative. It's not just concatenation—it's storytelling with facts.
+
+**Pro Tip**: We iterate through sections one at a time, giving the Writer focused context. This prevents overwhelming the LLM with too much information at once.
+
+```python
+WRITER_PROMPT = """
+You are an expert technical writer. Write a comprehensive report section.
+
+Topic: {topic}
+Section: {section}
+Research Notes:
+{notes}
+
+Requirements:
+1. Write 300-500 words for this section
+2. Use a professional, engaging tone
+3. Include specific facts and statistics from the notes
+4. Cite sources inline using [Source: URL] format
+5. Ensure smooth transitions and logical flow
+
+Write the section now:
+"""
+
+def writer_node(state: ResearchState) -> dict:
+    """Synthesize research into a cohesive report."""
+    writer = ChatOpenAI(model="gpt-4o")
+
+    sections = []
+
+    for section in state["outline"]:
+        notes = state["section_notes"].get(section, "No notes available")
+
+        section_text = writer.invoke(
+            WRITER_PROMPT.format(
+                topic=state["topic"],
+                section=section,
+                notes=notes
+            )
+        ).content
+
+        sections.append(f"## {section}\n\n{section_text}")
+
+    # Combine into full draft
+    draft = f"# {state['topic']}\n\n" + "\n\n".join(sections)
+
+    # Add sources section
+    unique_sources = list(set(state["sources"]))
+    sources_section = "\n\n## Sources\n\n" + "\n".join(
+        f"- {url}" for url in unique_sources
+    )
+
+    return {
+        "draft": draft + sources_section,
+        "status": "draft_complete"
+    }
+```
+
+### Step 6: The Critic Agent (Reflection Pattern)
+
+**The Reflection Pattern**: This is self-critique in action. The Critic acts as a quality gate, ensuring the report meets standards before publication. Think of it as peer review in academic publishing.
+
+**Why structured feedback?** By forcing the Critic to provide a score, list issues, and make an approval decision, we get actionable feedback instead of vague comments like "this could be better."
+
+<ConceptVisual
+  src="/images/revision_loop_flowchart.png"
+  alt="Quality Control Loop"
+  caption="The system self-corrects by iterating until quality standards are met."
+/>
+
+```python
+class CriticFeedback(BaseModel):
+    """Structured feedback from the critic."""
+    score: int = Field(description="Quality score 1-10")
+    issues: List[str] = Field(description="List of issues found")
+    suggestions: List[str] = Field(description="Improvement suggestions")
+    approved: bool = Field(description="Whether the draft is ready")
+
+critic_llm = ChatOpenAI(model="gpt-4o").with_structured_output(CriticFeedback)
+
+CRITIC_PROMPT = """
+You are a senior editor reviewing a research report.
+
+Report:
+{draft}
+
+Evaluate the report on:
+1. Accuracy: Are claims supported by cited sources?
+2. Completeness: Does it cover the topic thoroughly?
+3. Clarity: Is it well-organized and easy to follow?
+4. Quality: Is the writing professional and engaging?
+
+Provide a score (1-10), list any issues, and suggest improvements.
+Approve only if score >= 8.
+"""
+
+def critic_node(state: ResearchState) -> dict:
+    """Review and provide feedback on the draft."""
+    feedback = critic_llm.invoke(
+        CRITIC_PROMPT.format(draft=state["draft"])
+    )
+
+    if feedback.approved:
+        return {
+            "final_report": state["draft"],
+            "status": "approved",
+            "feedback": None
+        }
+    else:
+        return {
+            "feedback": "\n".join(feedback.issues + feedback.suggestions),
+            "revision_count": state.get("revision_count", 0) + 1,
+            "status": "needs_revision"
+        }
+
+def should_revise(state: ResearchState) -> str:
+    """Decide whether to revise or finalize."""
+    if state["status"] == "approved":
+        return END
+    if state.get("revision_count", 0) >= 3:
+        # Max revisions reached, accept current draft
+        return "finalize"
+    return "revise"
+```
+
+### Step 7: Complete Graph Assembly
+
+**Putting It All Together**: This is where we wire up all the agents into a cohesive workflow. The graph defines the "rules of the road"—who talks to whom, and when.
+
+**Memory Checkpoint**: The `MemorySaver` allows us to pause and resume execution, inspect intermediate states, and even replay the workflow for debugging. Essential for production systems!
+
+<ConceptVisual
+  src="/images/complete_graph_visualization.png"
+  alt="Complete Agent Graph"
+  caption="The final architecture orchestrates all components into a cohesive swarm."
+/>
+
+```python
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+
+def build_research_agent():
+    workflow = StateGraph(ResearchState)
+
+    # Add nodes
+    workflow.add_node("planner", planner_node)
+    workflow.add_node("researcher", researcher_node)
+    workflow.add_node("writer", writer_node)
+    workflow.add_node("critic", critic_node)
+    workflow.add_node("revise", revision_node)
+    workflow.add_node("finalize", finalize_node)
+
+    # Set entry point
+    workflow.set_entry_point("planner")
+
+    # Add edges
+    workflow.add_conditional_edges("planner", route_to_researchers)
+    workflow.add_edge("researcher", "writer")
+    workflow.add_edge("writer", "critic")
+    workflow.add_conditional_edges(
+        "critic",
+        should_revise,
+        {
+            "revise": "revise",
+            "finalize": "finalize",
+            END: END
+        }
+    )
+    workflow.add_edge("revise", "writer")
+    workflow.add_edge("finalize", END)
+
+    # Compile with memory
+    memory = MemorySaver()
+    return workflow.compile(checkpointer=memory)
+
+# Usage
+agent = build_research_agent()
+
+result = agent.invoke({
+    "topic": "The Impact of Agentic AI on Software Engineering in 2026",
+    "outline": [],
+    "section_notes": {},
+    "sources": [],
+    "draft": "",
+    "feedback": None,
+    "revision_count": 0,
+    "final_report": "",
+    "status": "started"
+})
+
+print(result["final_report"])
+```
+
+---
+
+## 7.4 Running the Agent
+
+<ConceptVisual
+  src="/images/cli_interface_mockup.png"
+  alt="Terminal UI for Agent Execution"
+  caption="A rich CLI experience helps users trust the agent's autonomous actions."
+/>
+
+<Terminal 
+  command="python research_agent.py 'The Future of Quantum Computing'"
+  output={`🔬 Starting Deep Research Agent...
+
+📋 Planning Phase
+Generated outline with 6 sections:
+
+1.  Introduction to Quantum Computing
+2.  Current State of Quantum Hardware
+3.  Key Algorithms and Applications
+4.  Industry Leaders and Investments
+5.  Challenges and Limitations
+6.  Future Outlook and Timeline
+
+🔍 Research Phase
+Researching: Introduction to Quantum Computing... ✓
+Researching: Current State of Quantum Hardware... ✓
+Researching: Key Algorithms and Applications... ✓
+Researching: Industry Leaders and Investments... ✓
+Researching: Challenges and Limitations... ✓
+Researching: Future Outlook and Timeline... ✓
+
+Found 23 sources across all sections.
+
+✍️ Writing Phase
+Synthesizing research into report...
+Draft complete: 2,847 words
+
+📝 Review Phase
+Critic Score: 7/10
+Issues: Missing recent 2025 developments, some sections lack depth
+
+Revision 1...
+Critic Score: 9/10
+Status: APPROVED ✓
+
+📄 Final Report saved to: quantum_computing_report.md
+Word count: 3,124
+Sources cited: 18`}
+/>
+
+---
+
+## 7.5 Lab Exercise: Extend the Agent
+
+Now it's your turn to enhance the agent! These challenges will push you to think about production concerns like reliability, accuracy, and usability.
+
+<ConceptVisual
+  src="/images/challenge_upgrade_paths.png"
+  alt="Agent Skill Tree"
+  caption="Extend your agent's capabilities with these advanced modules."
+/>
+
+### Challenge 1: Add Source Verification
+
+**Real-World Problem**: Not all sources are created equal. A blog post from 2015 might be outdated. A URL might be broken. A domain might be unreliable.
+
+**Your Task**: Build a verification layer that checks:
+
+- Is the URL accessible? (HTTP 200 response)
+- Is the domain credible? (Check against a whitelist or use domain authority metrics)
+- Is the content recent? (Check publication dates)
+
+**Hint**: Use `requests` library for HTTP checks and consider integrating with services like Moz or Ahrefs for domain authority.
+
+```python
+def verify_sources_node(state: ResearchState) -> dict:
+    """Verify that cited sources are valid and accessible."""
+    verified = []
+    failed = []
+
+    for url in state["sources"]:
+        # TODO: Check if URL is accessible
+        # TODO: Check domain credibility
+        pass
+
+    return {"verified_sources": verified, "failed_sources": failed}
+```
+
+### Challenge 2: Add Fact-Checking
+
+**The Hallucination Problem**: Even with sources, LLMs can misinterpret or fabricate details. Cross-referencing is essential.
+
+**Your Task**: Build a fact-checker that:
+
+- Extracts factual claims from the draft (dates, numbers, names, events)
+- Searches for corroborating evidence from multiple independent sources
+- Flags claims that can't be verified or are contradicted
+- Assigns confidence scores to each claim
+
+**Advanced**: Use a separate LLM call to extract claims, then use web search to verify each one. Consider using structured output to get claims in a parseable format.
+
+Implement cross-reference checking:
+
+```python
+def fact_check_node(state: ResearchState) -> dict:
+    """Cross-reference claims against multiple sources."""
+    # TODO: Extract claims from draft
+    # TODO: Search for corroborating sources
+    # TODO: Flag unsupported claims
+    pass
+```
+
+### Challenge 3: Add Export Formats
+
+**User Experience**: Different audiences need different formats. Developers want Markdown for GitHub. Executives want PDF for presentations. Web teams want HTML for publishing.
+
+**Your Task**: Build an export system that generates:
+
+- **Markdown**: Clean, readable, with proper formatting and links
+- **PDF**: Professional layout with table of contents, page numbers, and citations
+- **HTML**: Styled, responsive, with syntax highlighting for code snippets
+
+**Libraries to Consider**:
+
+- `markdown-it` for Markdown processing
+- `puppeteer` or `pdfkit` for PDF generation
+- Template engines like `handlebars` for HTML
+
+Support multiple output formats:
+
+```python
+def export_node(state: ResearchState) -> dict:
+    """Export report in multiple formats."""
+    # TODO: Generate Markdown
+    # TODO: Generate PDF
+    # TODO: Generate HTML
+    pass
+```
+
+---
+
+## 7.6 Evaluation Criteria
+
+**How do you know if your agent is working well?** You need metrics! Here's how to evaluate your Deep Research Agent objectively:
+
+<ConceptVisual
+  src="/images/evaluation_dashboard_metrics.png"
+  alt="Evaluation Metrics Panel"
+  caption="Quantify your agent's performance across accuracy, speed, and depth."
+/>
+
+Test your agent with these topics and evaluate:
+
+| Metric         | Target            | How to Measure                 |
+| :------------- | :---------------- | :----------------------------- |
+| **Word Count** | 2,000+            | `len(report.split())`          |
+| **Sources**    | 10+ unique        | Count unique URLs              |
+| **Accuracy**   | No hallucinations | Manual spot-check              |
+| **Structure**  | Clear sections    | Has headers, intro, conclusion |
+| **Coherence**  | Logical flow      | Read-through test              |
+| **Time**       | < 5 minutes       | Wall clock time                |
+
+### Test Topics
+
+**Why these topics?** They're technical enough to require real research, current enough to have recent sources, and specific enough to avoid generic responses.
+
+1. "The Rise of Rust in Systems Programming"
+2. "Comparing Vector Databases for RAG Applications"
+3. "The Economics of AI Inference at Scale"
+
+**Bonus Challenge**: Try a controversial or rapidly-evolving topic like "The Impact of AI Regulation on Open Source Models" to test how well your agent handles conflicting sources and recent developments.
+
+---
+
+<Quiz
+  question="Which pattern does the Deep Research Agent use to coordinate multiple specialized workers?"
+  options={[
+    {
+      id: "a",
+      text: "Chain Pattern - sequential processing through each agent",
+      isCorrect: false,
+      explanation:
+        "The Chain Pattern processes sequentially, but our agent uses parallel research workers.",
+    },
+    {
+      id: "b",
+      text: "Supervisor Pattern - a central coordinator managing specialized workers",
+      isCorrect: true,
+      explanation:
+        "Correct! The Supervisor Pattern coordinates the Planner, Researchers, Writer, and Critic agents.",
+    },
+    {
+      id: "c",
+      text: "Peer-to-Peer Pattern - agents communicate directly with each other",
+      isCorrect: false,
+      explanation:
+        "Peer-to-peer has no central coordinator; our agent uses a Supervisor to manage state.",
+    },
+    {
+      id: "d",
+      text: "Broadcast Pattern - all agents receive the same input simultaneously",
+      isCorrect: false,
+      explanation:
+        "While researchers work in parallel, they receive different sections, not the same input.",
+    },
+  ]}
+  hint="Look at the architecture diagram—which agent coordinates all the others?"
+/>
+
+---
+
+## 📚 Month 1 Summary
+
+Congratulations! You've completed the first month of your 90-day journey. Let's reflect on what you've mastered:
+
+<ConceptVisual
+  src="/images/month1_progress_tracker.png"
+  alt="Month 1 Complete"
+  caption="You've mastered the building blocks of AI engineering!"
+/>
+
+You've now mastered the foundations of agentic AI:
+
+| Week | Focus Area             | Key Skills                                                |
+| :--- | :--------------------- | :-------------------------------------------------------- |
+| 1    | Foundations            | Agentic mindset, LLM landscape, prompt engineering        |
+| 2    | Control & Retrieval    | Control loops, ReAct pattern, RAG fundamentals            |
+| 3    | Memory & Context       | Memory systems, context management, conversation handling |
+| 4    | Integration & Capstone | Synthesis, production patterns, Deep Research Agent       |
+
+---
+
+## 🔗 Further Reading
+
+- [LangGraph Multi-Agent Tutorial](https://langchain-ai.github.io/langgraph/tutorials/multi_agent/)
+- [Deep Research with AI - Anthropic](https://www.anthropic.com/research)
+- [Building Research Agents - LangChain Blog](https://blog.langchain.dev/)
+
+**Next Month**: We dive into multi-agent systems and production engineering—orchestration patterns, security, observability, and reliability. You'll learn how to scale from one agent to many, handle failures gracefully, and deploy to production with confidence.
+
+**What to Expect in Month 2**:
+
+- **Week 5**: Multi-agent orchestration patterns (hierarchical, peer-to-peer, swarm)
+- **Week 6**: Security and authentication for agent systems
+- **Week 7**: Observability, logging, and debugging distributed agents
+- **Week 8**: Reliability patterns, error handling, and the second capstone project
+
+<ConceptVisual
+  src="/images/month2_roadmap_preview.png"
+  alt="Roadmap: Month 2"
+  caption="Next up: Orchestrating swarms of agents to solve complex problems."
+/>

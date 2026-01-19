@@ -1,0 +1,1817 @@
+---
+title: "Mini Project 2: Agent Memory Service"
+description: "Build a persistent memory system with short-term, long-term, and episodic memory for your agent fleet."
+week: 12
+day: 83
+---
+
+<ReadingTime minutes={50} />
+
+<SkillLevel level="advanced" description="Memory systems" />
+
+<Prerequisites
+  items={[
+    "Completed Day 82 (Prompt Library)",
+    "Understanding of Redis and PostgreSQL basics",
+    "Familiarity with vector embeddings concepts",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Implement three-tier memory architecture (STM, LTM, Episodic)",
+    "Build semantic search using sentence-transformers embeddings",
+    "Create memory consolidation pipelines",
+    "Design APIs for memory storage and retrieval",
+    "Integrate memory with agent workflows",
+  ]}
+/>
+
+<Callout type="info">
+  **Series Context:** This is mini-project 2 of 5 in the 90-day curriculum. You're building the memory
+  layer that will give your agents persistent context across conversations and
+  sessions—a critical component for production-grade agentic systems.
+</Callout>
+
+{/* IMAGE_PLACEHOLDER: Create a conceptual illustration showing three interconnected memory systems as brain-like structures: 
+- Left: "Short-Term Memory" (Redis) shown as a fast-access cache with glowing connections, labeled with "Session Context" and "4-hour TTL"
+- Center: "Long-Term Memory" (PostgreSQL) depicted as a structured database with vector embeddings radiating outward, labeled "Facts & Preferences"
+- Right: "Episodic Memory" shown as a timeline of experience nodes, labeled "Past Interactions"
+- Arrows showing data flow from STM → Consolidation Process → LTM
+- Color scheme: Redis in red/orange (fast), PostgreSQL in green (persistent), Episodic in blue (temporal)
+- Place this illustration prominently after the callout to establish the mental model early */}
+
+<KeyTerms
+  terms={[
+    {
+      term: "Short-Term Memory",
+      definition:
+        "Fast, session-scoped storage (Redis) for current conversation context and working state",
+    },
+    {
+      term: "Long-Term Memory",
+      definition:
+        "Persistent storage (PostgreSQL + vectors) for facts, preferences, and knowledge that survives sessions",
+    },
+    {
+      term: "Episodic Memory",
+      definition:
+        "Records of past interactions and experiences, enabling agents to learn from history",
+    },
+    {
+      term: "Memory Consolidation",
+      definition:
+        "Background process that extracts facts and preferences from conversations into long-term storage",
+    },
+    {
+      term: "Semantic Search",
+      definition:
+        "Finding memories by meaning similarity using vector embeddings rather than keyword matching",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build a memory service that provides short-term (conversation), long-term (facts), and episodic (experiences) memory for agents. This enables agents to remember user preferences, learn from past interactions, and maintain context.
+
+**Why This Matters**: Stateless agents forget everything between calls. Memory transforms agents from tools into assistants that truly understand users over time.
+
+**Skills Showcased**:
+
+- Memory architecture patterns
+- Vector embeddings for semantic search
+- Redis for fast access
+- PostgreSQL for persistence
+- Memory consolidation strategies
+
+## Module Summary
+
+In this mini-project, we built a comprehensive memory service that gives agents a "brain" with three distinct memory types:
+
+1. **Short-Term Memory (Redis)**: For immediate context and conversation history.
+2. **Long-Term Memory (PostgreSQL + Vectors)**: For persistent facts, preferences, and knowledge.
+3. **Episodic Memory**: For remembering past interactions and outcomes.
+
+We also implemented a consolidation background job to process finished sessions and distill them into long-term knowledge, mimicking human memory consolidation during sleep.
+
+---
+
+## Architecture
+
+{/* IMAGE_PLACEHOLDER: Create a comprehensive system architecture diagram showing:
+- Central "Memory Service" hub with FastAPI server
+- Three distinct storage systems branching out: Redis (STM), PostgreSQL with pgvector (LTM), and Event Store (Episodic)
+- Multiple agent instances connecting to the service via HTTP/REST
+- Background consolidation worker with scheduled job indicator
+- Data flow arrows showing: agents → API → storage systems
+- Consolidation flow: STM → Consolidator → LTM + Episodic
+- Include technology logos (Redis, PostgreSQL, FastAPI)
+- Show latency targets on each connection (< 10ms for Redis, < 200ms for PostgreSQL)
+- Use a modern cloud architecture style with clean lines and professional icons
+- Color code by memory type: red for STM, green for LTM, blue for Episodic
+- Place this before the Mermaid diagram as a high-level overview */}
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Memory Service"
+        API[FastAPI Server]
+        
+        subgraph "Memory Types"
+            STM[Short-Term Memory<br/>Redis]
+            LTM[Long-Term Memory<br/>PostgreSQL + Vectors]
+            EM[Episodic Memory<br/>Event Store]
+        end
+        
+        API --> STM
+        API --> LTM
+        API --> EM
+    end
+    
+    subgraph "Agents"
+        A1[Agent 1] -->|store/recall| API
+        A2[Agent 2] -->|store/recall| API
+    end
+    
+    Consolidator[Memory Consolidator<br/>Background Job] --> STM
+    Consolidator --> LTM
+    
+    style STM fill:#f66,stroke:#333
+    style LTM fill:#6f6,stroke:#333
+    style EM fill:#66f,stroke:#333
+`}
+/>
+
+---
+
+## Memory Types Explained
+
+Think of this like human memory: **short-term memory** is your working consciousness (what you're thinking about right now), **long-term memory** is your knowledge base (facts you've learned), and **episodic memory** is your autobiography (experiences you remember).
+
+{/* IMAGE_PLACEHOLDER: Create an infographic comparing human memory to agent memory systems:
+- Top row: Human brain with three highlighted regions (working memory, semantic memory, episodic memory)
+- Bottom row: Corresponding technical implementations (Redis, PostgreSQL+Vectors, Event Store)
+- Visual connections showing the parallels between biological and artificial memory
+- Include icons: brain neurons → Redis cache, library/books → database tables, photo album → event timeline
+- Use a warm, educational color palette to make the analogy clear and approachable
+- Place this before the comparison table to provide context */}
+
+| Type           | Purpose                        | Storage              | Retention             | Human Analogy |
+| -------------- | ------------------------------ | -------------------- | --------------------- | ------------- |
+| **Short-Term** | Current conversation context   | Redis                | Session-based (hours) | Working memory—what you're actively thinking about |
+| **Long-Term**  | Facts, preferences, knowledge  | PostgreSQL + Vectors | Permanent             | Semantic memory—facts you've learned over time |
+| **Episodic**   | Past interactions, experiences | Event store          | Permanent             | Autobiographical memory—specific experiences you recall |
+
+---
+
+## Detailed Requirements Specification
+
+### Functional Requirements (FR)
+
+| ID    | Requirement               | Description                                                                                                    | Priority |
+| ----- | ------------------------- | -------------------------------------------------------------------------------------------------------------- | -------- |
+| FR-01 | Short-Term Memory Storage | The system shall store conversation messages in Redis with configurable TTL (default 4 hours) per user/session | P0       |
+| FR-02 | Context Window Retrieval  | The system shall return conversation history that fits within a specified token limit (default 4000 tokens)    | P0       |
+| FR-03 | Long-Term Memory Storage  | The system shall persist facts, preferences, and knowledge with vector embeddings in PostgreSQL                | P0       |
+| FR-04 | Semantic Memory Recall    | The system shall retrieve memories using cosine similarity search with configurable threshold (default 0.5)    | P0       |
+| FR-05 | Episodic Memory Recording | The system shall record interaction episodes with summary, outcome, duration, and searchable embeddings        | P1       |
+| FR-06 | Memory Consolidation      | The system shall extract facts and preferences from completed sessions and store them as long-term memories    | P1       |
+| FR-07 | Working Memory            | The system shall support key-value storage for current task context within a session                           | P1       |
+| FR-08 | Memory Merging            | The system shall merge highly similar memories (>85% similarity) to prevent duplication                        | P2       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement          | Target                                                                                     | Measurement                  |
+| ------ | -------------------- | ------------------------------------------------------------------------------------------ | ---------------------------- |
+| NFR-01 | STM Latency          | Message storage and retrieval shall complete in < 10ms (p95)                               | Redis operation timing       |
+| NFR-02 | LTM Recall Latency   | Semantic search shall complete in < 200ms for up to 10,000 memories per user               | Query timing with embeddings |
+| NFR-03 | Embedding Generation | Embedding generation shall complete in < 100ms per text chunk                              | sentence-transformers timing |
+| NFR-04 | Data Durability      | Long-term memories shall survive service restarts with zero data loss                      | PostgreSQL persistence       |
+
+{/* IMAGE_PLACEHOLDER: Create an interactive visualization concept for "How Semantic Search Works":
+- Show a user query "What does the user like for breakfast?" being converted to a vector embedding (visualized as a point in 3D space)
+- Display several memory embeddings as other points in the same space
+- Highlight the closest memories with connecting lines showing cosine similarity scores
+- Animate the search process: query → embedding → similarity calculation → ranked results
+- Include a small code snippet overlay showing the actual similarity calculation
+- Use a dark theme with glowing vector points and similarity scores
+- This would be perfect as an interactive component where users can input different queries and see the semantic matching in action
+- Place this in the NFR section to illustrate the performance requirements */}
+| NFR-05 | Session Isolation    | Memory operations shall be isolated per user_id and session_id with no cross-contamination | Integration tests            |
+
+### API Contract
+
+#### POST /memory/USER_ID/sessions/SESSION_ID/messages - Add Message
+
+**Request Body:**
+
+```json
+{
+  "role": "string (required: 'user' | 'assistant' | 'system')",
+  "content": "string (required)",
+  "metadata": {
+    "key": "any (optional)"
+  }
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "status": "stored"
+}
+```
+
+#### GET /memory/USER_ID/sessions/SESSION_ID/messages - Get Messages
+
+**Query Parameters:**
+
+- `limit` (optional, default: 20): Maximum messages to return
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "role": "string",
+    "content": "string",
+    "timestamp": "ISO8601 datetime",
+    "metadata": {}
+  }
+]
+```
+
+#### GET /memory/USER_ID/sessions/SESSION_ID/context - Get Context Window
+
+**Query Parameters:**
+
+- `max_tokens` (optional, default: 4000): Maximum tokens for context
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "role": "string",
+    "content": "string",
+    "timestamp": "ISO8601 datetime",
+    "metadata": {}
+  }
+]
+```
+
+#### POST /memory/USER_ID/long-term - Store Long-Term Memory
+
+**Request Body:**
+
+```json
+{
+  "content": "string (required)",
+  "memory_type": "string (default: 'fact', options: 'fact' | 'preference' | 'knowledge')",
+  "importance": "number (0.0-1.0, default: 0.5)"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "integer",
+  "status": "stored"
+}
+```
+
+#### POST /memory/USER_ID/long-term/recall - Recall Memories
+
+**Request Body:**
+
+```json
+{
+  "query": "string (required)",
+  "memory_type": "string (optional)",
+  "top_k": "integer (default: 5)"
+}
+```
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "integer",
+    "content": "string",
+    "summary": "string",
+    "memory_type": "string",
+    "importance": "number",
+    "similarity": "number (0.0-1.0)",
+    "created_at": "ISO8601 datetime"
+  }
+]
+```
+
+#### POST /memory/USER_ID/sessions/SESSION_ID/consolidate - Consolidate Session
+
+**Response (200 OK):**
+
+```json
+{
+  "status": "completed",
+  "facts_extracted": "integer",
+  "preferences_extracted": "integer",
+  "episode_created": "boolean"
+}
+```
+
+#### GET /memory/USER_ID/episodes - Get Episodes
+
+**Query Parameters:**
+
+- `episode_type` (optional): Filter by type
+- `limit` (optional, default: 10): Maximum episodes to return
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "integer",
+    "summary": "string",
+    "outcome": "string"
+  }
+]
+```
+
+### Data Models
+
+{/* IMAGE_PLACEHOLDER: Create an entity-relationship diagram showing the three main tables:
+- LongTermMemory table with all fields clearly labeled
+- EpisodicMemory table with temporal relationships highlighted
+- MemoryConsolidation table showing the processing pipeline
+- Visual connections showing foreign key relationships
+- Color-code by memory type (facts=green, preferences=blue, episodes=purple)
+- Include sample data in each table to make it concrete
+- Add visual indicators for indexed fields (lightning bolt icon)
+- Show the Redis key structure as a separate "virtual table" with TTL indicators
+- Use a clean, modern database diagram style with icons for data types
+- Place this before the ASCII table diagrams to provide visual context */}
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    LongTermMemory                            │
+├─────────────────────────────────────────────────────────────┤
+│ id: INTEGER PRIMARY KEY                                      │
+│ user_id: VARCHAR(100) NOT NULL [indexed]                    │
+│ agent_id: VARCHAR(100) [indexed]                            │
+│ memory_type: VARCHAR(50) [indexed]                          │
+│   → 'fact' | 'preference' | 'knowledge'                     │
+│ content: TEXT NOT NULL                                      │
+│ summary: TEXT                                               │
+│ embedding_json: TEXT (JSON array of floats, 384 dimensions) │
+│ importance: FLOAT DEFAULT 0.5 (range: 0.0-1.0)             │
+│ access_count: INTEGER DEFAULT 0                             │
+│ last_accessed: DATETIME                                     │
+│ source_type: VARCHAR(50)                                    │
+│   → 'conversation' | 'document' | 'explicit' | 'consolidation' │
+│ source_id: VARCHAR(100)                                     │
+│ created_at: DATETIME                                        │
+│ updated_at: DATETIME                                        │
+├─────────────────────────────────────────────────────────────┤
+│ INDEX: idx_user_type (user_id, memory_type)                 │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    EpisodicMemory                            │
+├─────────────────────────────────────────────────────────────┤
+│ id: INTEGER PRIMARY KEY                                      │
+│ user_id: VARCHAR(100) NOT NULL [indexed]                    │
+│ agent_id: VARCHAR(100) [indexed]                            │
+│ session_id: VARCHAR(100) [indexed]                          │
+│ episode_type: VARCHAR(50)                                   │
+│   → 'conversation' | 'task' | 'error'                       │
+│ summary: TEXT NOT NULL                                      │
+│ details: JSON                                               │
+│ outcome: VARCHAR(50)                                        │
+│   → 'success' | 'failure' | 'partial' | 'completed'         │
+│ user_feedback: TEXT                                         │
+│ embedding_json: TEXT (JSON array of floats)                 │
+│ started_at: DATETIME NOT NULL                               │
+│ ended_at: DATETIME                                          │
+│ duration_seconds: INTEGER                                   │
+│ created_at: DATETIME                                        │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                  MemoryConsolidation                         │
+├─────────────────────────────────────────────────────────────┤
+│ id: INTEGER PRIMARY KEY                                      │
+│ user_id: VARCHAR(100) [indexed]                             │
+│ source_type: VARCHAR(50)                                    │
+│ memories_processed: INTEGER                                 │
+│ memories_created: INTEGER                                   │
+│ memories_merged: INTEGER                                    │
+│ started_at: DATETIME                                        │
+│ completed_at: DATETIME                                      │
+│ status: VARCHAR(50)                                         │
+│   → 'running' | 'completed' | 'failed'                      │
+└─────────────────────────────────────────────────────────────┘
+
+Redis Key Structure (Short-Term Memory):
+─────────────────────────────────────────
+stm:{user_id}:{session_id}:messages     → LIST of JSON messages
+stm:{user_id}:{session_id}:working:{key} → JSON value
+stm:{user_id}:{session_id}:summary      → STRING
+TTL: 14400 seconds (4 hours)
+```
+
+### Error Handling Matrix
+
+| Error Code           | HTTP Status | Cause                                 | Response Body                                 | Recovery Action                        |
+| -------------------- | ----------- | ------------------------------------- | --------------------------------------------- | -------------------------------------- |
+| REDIS_UNAVAILABLE    | 503         | Redis connection failed               | `{"detail": "Short-term memory unavailable"}` | Retry with backoff, check Redis health |
+| DATABASE_ERROR       | 500         | PostgreSQL query failed               | `{"detail": "Internal server error"}`         | Retry with backoff                     |
+| EMBEDDING_FAILED     | 500         | sentence-transformers model error     | `{"detail": "Failed to generate embedding"}`  | Retry, check model availability        |
+| USER_NOT_FOUND       | 404         | No memories exist for user            | `{"detail": "No memories found for user"}`    | Create memories first                  |
+| INVALID_MEMORY_TYPE  | 400         | Unknown memory_type value             | `{"detail": "Invalid memory_type: VALUE"}`    | Use valid type                         |
+| CONSOLIDATION_FAILED | 500         | LLM extraction failed                 | `{"detail": "Consolidation failed: REASON"}`  | Retry, check LLM availability          |
+| SESSION_EMPTY        | 200         | No messages in session to consolidate | `{"status": "no_messages"}`                   | Normal response, no action needed      |
+
+### Integration Points
+
+| Service                     | Integration Type | Purpose                                         | Data Flow                                |
+| --------------------------- | ---------------- | ----------------------------------------------- | ---------------------------------------- |
+| **Redis**                   | Data Store       | Short-term memory, session state                | Read/Write via redis-py client           |
+| **PostgreSQL**              | Data Store       | Long-term and episodic memory persistence       | Read/Write via SQLAlchemy ORM            |
+| **sentence-transformers**   | Embedding Model  | Generate 384-dim embeddings for semantic search | Text → all-MiniLM-L6-v2 → Vector         |
+| **OpenAI/LLM**              | Consolidation    | Extract facts/preferences from conversations    | Messages → GPT-4o-mini → Structured JSON |
+| **Agent Services**          | HTTP Client      | Store/recall memories during conversations      | Agent → Memory API → Context enrichment  |
+| **Prompt Library (Day 37)** | Parallel         | Agents use both services independently          | No direct integration                    |
+
+### Testing Requirements
+
+#### Unit Test Coverage (Minimum 85%)
+
+| Component               | Test Cases                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `ShortTermMemory`       | Add message, get messages with limit, context window token limiting, working memory CRUD, session end data export              |
+| `LongTermMemoryService` | Store with auto-embedding, recall with similarity threshold, get by type, update importance, merge memories, forget operations |
+| `EpisodicMemoryService` | Record episode with duration calculation, recall similar episodes, get successful episodes, add feedback                       |
+| `EmbeddingService`      | Embed single text, embed batch, cosine similarity calculation, find similar with threshold                                     |
+| `MemoryConsolidator`    | Extract facts from conversation, extract preferences, summarize session, merge similar memories                                |
+
+#### Integration Test Scenarios
+
+| Scenario                 | Steps                                                                   | Expected Outcome                                              |
+| ------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Full Conversation Flow   | Add 10 messages → Get context (4000 tokens) → End session → Consolidate | Messages stored, context truncated correctly, facts extracted |
+| Semantic Recall Accuracy | Store 5 related memories + 5 unrelated → Query related topic            | Related memories returned with similarity > 0.5               |
+| Memory Consolidation     | Create session with user facts → Consolidate → Query LTM                | Facts appear in long-term memory                              |
+| Episode Recording        | Start task → Complete with outcome → Query similar episodes             | Episode recorded with correct duration                        |
+| Cross-Session Memory     | Session 1: Store preference → Session 2: Recall                         | Preference persists across sessions                           |
+| Memory Merging           | Store 3 highly similar memories → Run merge → Count memories            | Memories merged into 1                                        |
+
+#### Load Test Targets
+
+| Metric                 | Target               | Test Duration |
+| ---------------------- | -------------------- | ------------- |
+| STM write throughput   | 1000 messages/second | 5 minutes     |
+| LTM recall throughput  | 100 queries/second   | 5 minutes     |
+| P99 STM latency        | < 20ms               | Under load    |
+| P99 LTM recall latency | < 500ms              | Under load    |
+| Embedding generation   | 50 texts/second      | 5 minutes     |
+
+---
+
+## Step-by-Step Implementation
+
+### Phase 1: Project Setup (15 minutes)
+
+```bash
+mkdir memory-service
+cd memory-service
+python -m venv venv
+source venv/bin/activate
+
+pip install fastapi uvicorn sqlalchemy asyncpg redis sentence-transformers numpy pydantic python-dotenv
+```
+
+#### Project Structure
+
+```
+memory-service/
+├── .env
+├── main.py
+├── models/
+│   ├── __init__.py
+│   ├── database.py
+│   └── schemas.py
+├── services/
+│   ├── __init__.py
+│   ├── short_term.py
+│   ├── long_term.py
+│   ├── episodic.py
+│   ├── embeddings.py
+│   └── consolidator.py
+├── routers/
+│   ├── __init__.py
+│   └── memory.py
+└── tests/
+    └── test_memory.py
+```
+
+---
+
+### Phase 2: Database Models (20 minutes)
+
+```python
+# models/database.py
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON, Float, ForeignKey, Index
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.dialects.postgresql import ARRAY
+from datetime import datetime
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./memory.db")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class LongTermMemory(Base):
+    """Persistent facts and knowledge."""
+    __tablename__ = "long_term_memories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(100), index=True, nullable=False)
+    agent_id = Column(String(100), index=True)
+
+    # Memory content
+    memory_type = Column(String(50), index=True)  # fact, preference, knowledge
+    content = Column(Text, nullable=False)
+    summary = Column(Text)  # Condensed version
+
+    # Vector embedding for semantic search
+    embedding = Column(ARRAY(Float), nullable=True)  # For PostgreSQL
+    # For SQLite, store as JSON string
+    embedding_json = Column(Text, nullable=True)
+
+    # Metadata
+    importance = Column(Float, default=0.5)  # 0-1 importance score
+    access_count = Column(Integer, default=0)
+    last_accessed = Column(DateTime, default=datetime.utcnow)
+
+    # Source tracking
+    source_type = Column(String(50))  # conversation, document, explicit
+    source_id = Column(String(100))
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_user_type', 'user_id', 'memory_type'),
+    )
+
+class EpisodicMemory(Base):
+    """Past interactions and experiences."""
+    __tablename__ = "episodic_memories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(100), index=True, nullable=False)
+    agent_id = Column(String(100), index=True)
+    session_id = Column(String(100), index=True)
+
+    # Episode content
+    episode_type = Column(String(50))  # conversation, task, error
+    summary = Column(Text, nullable=False)
+    details = Column(JSON)  # Full episode data
+
+    # Outcome tracking
+    outcome = Column(String(50))  # success, failure, partial
+    user_feedback = Column(Text)
+
+    # Embedding for similarity search
+    embedding_json = Column(Text, nullable=True)
+
+    # Temporal data
+    started_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime)
+    duration_seconds = Column(Integer)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class MemoryConsolidation(Base):
+    """Track memory consolidation jobs."""
+    __tablename__ = "memory_consolidations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(100), index=True)
+
+    source_type = Column(String(50))  # short_term, episodic
+    memories_processed = Column(Integer)
+    memories_created = Column(Integer)
+    memories_merged = Column(Integer)
+
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime)
+    status = Column(String(50))  # running, completed, failed
+
+Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+---
+
+### Phase 3: Embedding Service (20 minutes)
+
+{/* IMAGE_PLACEHOLDER: Create a visual explanation of the sentence-transformers embedding process:
+- Left side: Input text "User prefers morning coffee with oat milk"
+- Center: Neural network visualization showing the all-MiniLM-L6-v2 model processing the text
+- Right side: Output 384-dimensional vector (show first 10 dimensions with values, then "..." for remaining)
+- Below: Two example embeddings being compared with cosine similarity formula and result
+- Include a small comparison showing similar texts have high similarity (0.85+) and unrelated texts have low similarity (< 0.3)
+- Use a technical but accessible style with annotations
+- Place this at the start of Phase 3 to explain what embeddings are before diving into code */}
+
+```python
+# services/embeddings.py
+from sentence_transformers import SentenceTransformer
+import numpy as np
+from typing import List, Union
+import json
+
+class EmbeddingService:
+    """Generate and compare embeddings for semantic memory search."""
+
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+        self.model = SentenceTransformer(model_name)
+        self.dimension = self.model.get_sentence_embedding_dimension()
+
+    def embed(self, text: Union[str, List[str]]) -> np.ndarray:
+        """Generate embedding(s) for text."""
+        if isinstance(text, str):
+            text = [text]
+
+        embeddings = self.model.encode(text, convert_to_numpy=True)
+        return embeddings
+
+    def embed_to_json(self, text: str) -> str:
+        """Generate embedding and return as JSON string (for SQLite)."""
+        embedding = self.embed(text)[0]
+        return json.dumps(embedding.tolist())
+
+    def json_to_embedding(self, json_str: str) -> np.ndarray:
+        """Convert JSON string back to numpy array."""
+        return np.array(json.loads(json_str))
+
+    def cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Calculate cosine similarity between two embeddings."""
+        return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+
+    def find_similar(
+        self,
+        query_embedding: np.ndarray,
+        candidates: List[tuple],  # [(id, embedding_json), ...]
+        top_k: int = 5,
+        threshold: float = 0.5
+    ) -> List[tuple]:
+        """Find most similar memories."""
+        results = []
+
+        for memory_id, embedding_json in candidates:
+            if not embedding_json:
+                continue
+
+            candidate_embedding = self.json_to_embedding(embedding_json)
+            similarity = self.cosine_similarity(query_embedding, candidate_embedding)
+
+            if similarity >= threshold:
+                results.append((memory_id, similarity))
+
+        # Sort by similarity descending
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:top_k]
+
+# Singleton instance
+_embedding_service = None
+
+def get_embedding_service() -> EmbeddingService:
+    global _embedding_service
+    if _embedding_service is None:
+        _embedding_service = EmbeddingService()
+    return _embedding_service
+```
+
+---
+
+### Phase 4: Short-Term Memory (Redis) (25 minutes)
+
+```python
+# services/short_term.py
+import redis
+import json
+from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta
+import os
+
+class ShortTermMemory:
+    """Fast, session-based memory using Redis."""
+
+    def __init__(self, redis_url: str = None):
+        self.redis_url = redis_url or os.getenv("REDIS_URL", "redis://localhost:6379")
+        self.client = redis.from_url(self.redis_url, decode_responses=True)
+        self.default_ttl = 3600 * 4  # 4 hours
+
+    def _key(self, user_id: str, session_id: str, suffix: str = "") -> str:
+        """Generate Redis key."""
+        base = f"stm:{user_id}:{session_id}"
+        return f"{base}:{suffix}" if suffix else base
+
+    # Conversation History
+    def add_message(
+        self,
+        user_id: str,
+        session_id: str,
+        role: str,
+        content: str,
+        metadata: Dict[str, Any] = None
+    ):
+        """Add a message to conversation history."""
+        key = self._key(user_id, session_id, "messages")
+
+        message = {
+            "role": role,
+            "content": content,
+            "timestamp": datetime.utcnow().isoformat(),
+            "metadata": metadata or {}
+        }
+
+        self.client.rpush(key, json.dumps(message))
+        self.client.expire(key, self.default_ttl)
+
+    def get_messages(
+        self,
+        user_id: str,
+        session_id: str,
+        limit: int = 20
+    ) -> List[Dict]:
+        """Get recent conversation messages."""
+        key = self._key(user_id, session_id, "messages")
+
+        # Get last N messages
+        messages = self.client.lrange(key, -limit, -1)
+        return [json.loads(m) for m in messages]
+
+    def get_context_window(
+        self,
+        user_id: str,
+        session_id: str,
+        max_tokens: int = 4000
+    ) -> List[Dict]:
+        """Get messages that fit within token limit."""
+        messages = self.get_messages(user_id, session_id, limit=50)
+
+        # Rough token estimation (4 chars per token)
+        result = []
+        total_chars = 0
+        max_chars = max_tokens * 4
+
+        for msg in reversed(messages):
+            msg_chars = len(msg["content"])
+            if total_chars + msg_chars > max_chars:
+                break
+            result.insert(0, msg)
+            total_chars += msg_chars
+
+        return result
+
+    # Working Memory (current task context)
+    def set_working_memory(
+        self,
+        user_id: str,
+        session_id: str,
+        key: str,
+        value: Any
+    ):
+        """Store working memory item."""
+        redis_key = self._key(user_id, session_id, f"working:{key}")
+        self.client.set(redis_key, json.dumps(value), ex=self.default_ttl)
+
+    def get_working_memory(
+        self,
+        user_id: str,
+        session_id: str,
+        key: str
+    ) -> Any:
+        """Retrieve working memory item."""
+        redis_key = self._key(user_id, session_id, f"working:{key}")
+        value = self.client.get(redis_key)
+        return json.loads(value) if value else None
+
+    def get_all_working_memory(
+        self,
+        user_id: str,
+        session_id: str
+    ) -> Dict[str, Any]:
+        """Get all working memory items."""
+        pattern = self._key(user_id, session_id, "working:*")
+        keys = self.client.keys(pattern)
+
+        result = {}
+        for key in keys:
+            item_key = key.split(":")[-1]
+            value = self.client.get(key)
+            if value:
+                result[item_key] = json.loads(value)
+
+        return result
+
+    # Session Summary
+    def set_session_summary(
+        self,
+        user_id: str,
+        session_id: str,
+        summary: str
+    ):
+        """Store session summary for consolidation."""
+        key = self._key(user_id, session_id, "summary")
+        self.client.set(key, summary, ex=self.default_ttl * 2)
+
+    def get_session_summary(
+        self,
+        user_id: str,
+        session_id: str
+    ) -> Optional[str]:
+        """Get session summary."""
+        key = self._key(user_id, session_id, "summary")
+        return self.client.get(key)
+
+    # Session Management
+    def end_session(self, user_id: str, session_id: str) -> Dict:
+        """End session and return data for consolidation."""
+        messages = self.get_messages(user_id, session_id, limit=100)
+        working_memory = self.get_all_working_memory(user_id, session_id)
+        summary = self.get_session_summary(user_id, session_id)
+
+        # Clean up (optional - let TTL handle it)
+        # pattern = self._key(user_id, session_id, "*")
+        # for key in self.client.keys(pattern):
+        #     self.client.delete(key)
+
+        return {
+            "messages": messages,
+            "working_memory": working_memory,
+            "summary": summary,
+            "ended_at": datetime.utcnow().isoformat()
+        }
+
+    def list_active_sessions(self, user_id: str) -> List[str]:
+        """List active sessions for a user."""
+        pattern = f"stm:{user_id}:*:messages"
+        keys = self.client.keys(pattern)
+
+        sessions = set()
+        for key in keys:
+            parts = key.split(":")
+            if len(parts) >= 3:
+                sessions.add(parts[2])
+
+        return list(sessions)
+```
+
+---
+
+### Phase 5: Long-Term Memory (25 minutes)
+
+```python
+# services/long_term.py
+from sqlalchemy.orm import Session
+from models.database import LongTermMemory
+from services.embeddings import get_embedding_service
+from typing import List, Dict, Any, Optional
+from datetime import datetime
+import json
+
+class LongTermMemoryService:
+    """Persistent memory with semantic search."""
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.embeddings = get_embedding_service()
+
+    def store(
+        self,
+        user_id: str,
+        content: str,
+        memory_type: str = "fact",
+        agent_id: str = None,
+        importance: float = 0.5,
+        source_type: str = "conversation",
+        source_id: str = None,
+        summary: str = None
+    ) -> LongTermMemory:
+        """Store a new long-term memory."""
+
+        # Generate embedding
+        embedding_json = self.embeddings.embed_to_json(content)
+
+        memory = LongTermMemory(
+            user_id=user_id,
+            agent_id=agent_id,
+            memory_type=memory_type,
+            content=content,
+            summary=summary or content[:200],
+            embedding_json=embedding_json,
+            importance=importance,
+            source_type=source_type,
+            source_id=source_id
+        )
+
+        self.db.add(memory)
+        self.db.commit()
+        self.db.refresh(memory)
+
+        return memory
+
+    def recall(
+        self,
+        user_id: str,
+        query: str,
+        memory_type: str = None,
+        top_k: int = 5,
+        threshold: float = 0.5
+    ) -> List[Dict]:
+        """Recall memories semantically similar to query."""
+
+        # Generate query embedding
+        query_embedding = self.embeddings.embed(query)[0]
+
+        # Get candidate memories
+        query_obj = self.db.query(
+            LongTermMemory.id,
+            LongTermMemory.embedding_json
+        ).filter(LongTermMemory.user_id == user_id)
+
+        if memory_type:
+            query_obj = query_obj.filter(LongTermMemory.memory_type == memory_type)
+
+        candidates = query_obj.all()
+
+        # Find similar
+        similar = self.embeddings.find_similar(
+            query_embedding,
+            candidates,
+            top_k=top_k,
+            threshold=threshold
+        )
+
+        # Fetch full memories
+        results = []
+        for memory_id, similarity in similar:
+            memory = self.db.query(LongTermMemory).filter(
+                LongTermMemory.id == memory_id
+            ).first()
+
+            if memory:
+                # Update access stats
+                memory.access_count += 1
+                memory.last_accessed = datetime.utcnow()
+
+                results.append({
+                    "id": memory.id,
+                    "content": memory.content,
+                    "summary": memory.summary,
+                    "memory_type": memory.memory_type,
+                    "importance": memory.importance,
+                    "similarity": similarity,
+                    "created_at": memory.created_at.isoformat()
+                })
+
+        self.db.commit()
+        return results
+
+    def get_by_type(
+        self,
+        user_id: str,
+        memory_type: str,
+        limit: int = 10
+    ) -> List[LongTermMemory]:
+        """Get memories by type, ordered by importance."""
+        return self.db.query(LongTermMemory).filter(
+            LongTermMemory.user_id == user_id,
+            LongTermMemory.memory_type == memory_type
+        ).order_by(
+            LongTermMemory.importance.desc()
+        ).limit(limit).all()
+
+    def get_recent(
+        self,
+        user_id: str,
+        limit: int = 10
+    ) -> List[LongTermMemory]:
+        """Get most recently accessed memories."""
+        return self.db.query(LongTermMemory).filter(
+            LongTermMemory.user_id == user_id
+        ).order_by(
+            LongTermMemory.last_accessed.desc()
+        ).limit(limit).all()
+
+    def update_importance(
+        self,
+        memory_id: int,
+        importance: float
+    ):
+        """Update memory importance score."""
+        memory = self.db.query(LongTermMemory).filter(
+            LongTermMemory.id == memory_id
+        ).first()
+
+        if memory:
+            memory.importance = max(0, min(1, importance))
+            self.db.commit()
+
+    def merge_memories(
+        self,
+        memory_ids: List[int],
+        merged_content: str,
+        merged_summary: str
+    ) -> LongTermMemory:
+        """Merge multiple memories into one."""
+        memories = self.db.query(LongTermMemory).filter(
+            LongTermMemory.id.in_(memory_ids)
+        ).all()
+
+        if not memories:
+            raise ValueError("No memories found to merge")
+
+        # Create merged memory
+        merged = LongTermMemory(
+            user_id=memories[0].user_id,
+            agent_id=memories[0].agent_id,
+            memory_type=memories[0].memory_type,
+            content=merged_content,
+            summary=merged_summary,
+            embedding_json=self.embeddings.embed_to_json(merged_content),
+            importance=max(m.importance for m in memories),
+            source_type="consolidation",
+            source_id=",".join(str(m.id) for m in memories)
+        )
+
+        self.db.add(merged)
+
+        # Mark old memories as merged (or delete)
+        for memory in memories:
+            self.db.delete(memory)
+
+        self.db.commit()
+        self.db.refresh(merged)
+
+        return merged
+
+    def forget(
+        self,
+        user_id: str,
+        memory_id: int = None,
+        memory_type: str = None,
+        older_than_days: int = None
+    ):
+        """Remove memories (selective forgetting)."""
+        query = self.db.query(LongTermMemory).filter(
+            LongTermMemory.user_id == user_id
+        )
+
+        if memory_id:
+            query = query.filter(LongTermMemory.id == memory_id)
+
+        if memory_type:
+            query = query.filter(LongTermMemory.memory_type == memory_type)
+
+        if older_than_days:
+            from datetime import timedelta
+            cutoff = datetime.utcnow() - timedelta(days=older_than_days)
+            query = query.filter(LongTermMemory.last_accessed < cutoff)
+
+        deleted = query.delete()
+        self.db.commit()
+
+        return deleted
+```
+
+---
+
+### Phase 6: Episodic Memory (20 minutes)
+
+```python
+# services/episodic.py
+from sqlalchemy.orm import Session
+from models.database import EpisodicMemory
+from services.embeddings import get_embedding_service
+from typing import List, Dict, Any, Optional
+from datetime import datetime
+
+class EpisodicMemoryService:
+    """Store and recall past experiences/interactions."""
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.embeddings = get_embedding_service()
+
+    def record_episode(
+        self,
+        user_id: str,
+        session_id: str,
+        episode_type: str,
+        summary: str,
+        details: Dict[str, Any] = None,
+        outcome: str = None,
+        started_at: datetime = None,
+        ended_at: datetime = None,
+        agent_id: str = None
+    ) -> EpisodicMemory:
+        """Record a new episode."""
+
+        # Calculate duration
+        duration = None
+        if started_at and ended_at:
+            duration = int((ended_at - started_at).total_seconds())
+
+        episode = EpisodicMemory(
+            user_id=user_id,
+            agent_id=agent_id,
+            session_id=session_id,
+            episode_type=episode_type,
+            summary=summary,
+            details=details or {},
+            outcome=outcome,
+            embedding_json=self.embeddings.embed_to_json(summary),
+            started_at=started_at or datetime.utcnow(),
+            ended_at=ended_at,
+            duration_seconds=duration
+        )
+
+        self.db.add(episode)
+        self.db.commit()
+        self.db.refresh(episode)
+
+        return episode
+
+    def recall_similar(
+        self,
+        user_id: str,
+        query: str,
+        episode_type: str = None,
+        top_k: int = 5
+    ) -> List[Dict]:
+        """Recall episodes similar to a query."""
+
+        query_embedding = self.embeddings.embed(query)[0]
+
+        # Get candidates
+        query_obj = self.db.query(
+            EpisodicMemory.id,
+            EpisodicMemory.embedding_json
+        ).filter(EpisodicMemory.user_id == user_id)
+
+        if episode_type:
+            query_obj = query_obj.filter(EpisodicMemory.episode_type == episode_type)
+
+        candidates = query_obj.all()
+
+        # Find similar
+        similar = self.embeddings.find_similar(
+            query_embedding,
+            candidates,
+            top_k=top_k,
+            threshold=0.4
+        )
+
+        # Fetch full episodes
+        results = []
+        for episode_id, similarity in similar:
+            episode = self.db.query(EpisodicMemory).filter(
+                EpisodicMemory.id == episode_id
+            ).first()
+
+            if episode:
+                results.append({
+                    "id": episode.id,
+                    "summary": episode.summary,
+                    "episode_type": episode.episode_type,
+                    "outcome": episode.outcome,
+                    "details": episode.details,
+                    "similarity": similarity,
+                    "started_at": episode.started_at.isoformat()
+                })
+
+        return results
+
+    def get_recent_episodes(
+        self,
+        user_id: str,
+        episode_type: str = None,
+        limit: int = 10
+    ) -> List[EpisodicMemory]:
+        """Get recent episodes."""
+        query = self.db.query(EpisodicMemory).filter(
+            EpisodicMemory.user_id == user_id
+        )
+
+        if episode_type:
+            query = query.filter(EpisodicMemory.episode_type == episode_type)
+
+        return query.order_by(
+            EpisodicMemory.started_at.desc()
+        ).limit(limit).all()
+
+    def get_successful_episodes(
+        self,
+        user_id: str,
+        episode_type: str = None,
+        limit: int = 5
+    ) -> List[EpisodicMemory]:
+        """Get successful past episodes for learning."""
+        query = self.db.query(EpisodicMemory).filter(
+            EpisodicMemory.user_id == user_id,
+            EpisodicMemory.outcome == "success"
+        )
+
+        if episode_type:
+            query = query.filter(EpisodicMemory.episode_type == episode_type)
+
+        return query.order_by(
+            EpisodicMemory.started_at.desc()
+        ).limit(limit).all()
+
+    def add_feedback(
+        self,
+        episode_id: int,
+        feedback: str,
+        outcome: str = None
+    ):
+        """Add user feedback to an episode."""
+        episode = self.db.query(EpisodicMemory).filter(
+            EpisodicMemory.id == episode_id
+        ).first()
+
+        if episode:
+            episode.user_feedback = feedback
+            if outcome:
+                episode.outcome = outcome
+            self.db.commit()
+```
+
+---
+
+### Phase 7: Memory Consolidation (25 minutes)
+
+{/* IMAGE_PLACEHOLDER: Create a visual representation of the memory consolidation process:
+- Top: Raw conversation messages flowing in (show 5-6 example messages)
+- Middle: LLM processing step with "GPT-4o-mini" analyzing the conversation
+- Three output streams branching out:
+  1. Facts extracted (e.g., "User is a software engineer in Seattle")
+  2. Preferences extracted (e.g., "Prefers concise explanations")
+  3. Episode summary (e.g., "Discussed memory architecture patterns")
+- Bottom: These being stored in LTM and Episodic Memory databases
+- Show the consolidation happening "during sleep" (background job) with a moon icon
+- Use a flow diagram style with clear visual separation between stages
+- Include example data at each stage to make it concrete
+- Place this at the start of Phase 7 to explain the consolidation concept */}
+
+```python
+# services/consolidator.py
+from sqlalchemy.orm import Session
+from models.database import LongTermMemory, EpisodicMemory, MemoryConsolidation
+from services.short_term import ShortTermMemory
+from services.long_term import LongTermMemoryService
+from services.episodic import EpisodicMemoryService
+from services.embeddings import get_embedding_service
+from langchain_openai import ChatOpenAI
+from datetime import datetime
+from typing import List, Dict
+
+class MemoryConsolidator:
+    """Consolidate short-term memories into long-term storage."""
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.stm = ShortTermMemory()
+        self.ltm = LongTermMemoryService(db)
+        self.episodic = EpisodicMemoryService(db)
+        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+
+    async def consolidate_session(
+        self,
+        user_id: str,
+        session_id: str
+    ) -> Dict:
+        """Consolidate a session's memories."""
+
+        # Start consolidation record
+        consolidation = MemoryConsolidation(
+            user_id=user_id,
+            source_type="short_term",
+            status="running"
+        )
+        self.db.add(consolidation)
+        self.db.commit()
+
+        try:
+            # Get session data
+            session_data = self.stm.end_session(user_id, session_id)
+            messages = session_data["messages"]
+
+            if not messages:
+                consolidation.status = "completed"
+                consolidation.memories_processed = 0
+                self.db.commit()
+                return {"status": "no_messages"}
+
+            # Extract facts and preferences
+            facts = await self._extract_facts(messages)
+            preferences = await self._extract_preferences(messages)
+
+            # Store long-term memories
+            memories_created = 0
+
+            for fact in facts:
+                self.ltm.store(
+                    user_id=user_id,
+                    content=fact["content"],
+                    memory_type="fact",
+                    importance=fact.get("importance", 0.5),
+                    source_type="consolidation",
+                    source_id=session_id
+                )
+                memories_created += 1
+
+            for pref in preferences:
+                self.ltm.store(
+                    user_id=user_id,
+                    content=pref["content"],
+                    memory_type="preference",
+                    importance=pref.get("importance", 0.7),
+                    source_type="consolidation",
+                    source_id=session_id
+                )
+                memories_created += 1
+
+            # Create episode record
+            episode_summary = await self._summarize_session(messages)
+            self.episodic.record_episode(
+                user_id=user_id,
+                session_id=session_id,
+                episode_type="conversation",
+                summary=episode_summary,
+                details={"message_count": len(messages)},
+                outcome="completed",
+                started_at=datetime.fromisoformat(messages[0]["timestamp"]),
+                ended_at=datetime.fromisoformat(messages[-1]["timestamp"])
+            )
+
+            # Update consolidation record
+            consolidation.memories_processed = len(messages)
+            consolidation.memories_created = memories_created
+            consolidation.completed_at = datetime.utcnow()
+            consolidation.status = "completed"
+            self.db.commit()
+
+            return {
+                "status": "completed",
+                "facts_extracted": len(facts),
+                "preferences_extracted": len(preferences),
+                "episode_created": True
+            }
+
+        except Exception as e:
+            consolidation.status = "failed"
+            self.db.commit()
+            raise e
+
+    async def _extract_facts(self, messages: List[Dict]) -> List[Dict]:
+        """Extract factual information from conversation."""
+        conversation = "\n".join([
+            f"{m['role']}: {m['content']}" for m in messages
+        ])
+
+        prompt = f"""Extract factual information about the user from this conversation.
+Return only concrete facts (name, location, job, preferences stated as facts).
+
+Conversation:
+{conversation[:3000]}
+
+Return as JSON array:
+[{{"content": "fact text", "importance": 0.0-1.0}}]
+
+Only include clear facts, not inferences."""
+
+        response = await self.llm.ainvoke(prompt)
+
+        try:
+            import json
+            return json.loads(response.content)
+        except:
+            return []
+
+    async def _extract_preferences(self, messages: List[Dict]) -> List[Dict]:
+        """Extract user preferences from conversation."""
+        conversation = "\n".join([
+            f"{m['role']}: {m['content']}" for m in messages
+        ])
+
+        prompt = f"""Extract user preferences from this conversation.
+Look for likes, dislikes, preferred styles, communication preferences.
+
+Conversation:
+{conversation[:3000]}
+
+Return as JSON array:
+[{{"content": "preference description", "importance": 0.0-1.0}}]"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        try:
+            import json
+            return json.loads(response.content)
+        except:
+            return []
+
+    async def _summarize_session(self, messages: List[Dict]) -> str:
+        """Create a summary of the session."""
+        conversation = "\n".join([
+            f"{m['role']}: {m['content']}" for m in messages[-20:]  # Last 20 messages
+        ])
+
+        prompt = f"""Summarize this conversation in 2-3 sentences.
+Focus on what was discussed and any outcomes.
+
+Conversation:
+{conversation}"""
+
+        response = await self.llm.ainvoke(prompt)
+        return response.content
+
+    async def merge_similar_memories(
+        self,
+        user_id: str,
+        similarity_threshold: float = 0.85
+    ) -> int:
+        """Find and merge highly similar memories."""
+        embeddings = get_embedding_service()
+
+        # Get all memories
+        memories = self.db.query(LongTermMemory).filter(
+            LongTermMemory.user_id == user_id
+        ).all()
+
+        merged_count = 0
+        processed_ids = set()
+
+        for memory in memories:
+            if memory.id in processed_ids:
+                continue
+
+            # Find similar memories
+            query_embedding = embeddings.json_to_embedding(memory.embedding_json)
+            candidates = [
+                (m.id, m.embedding_json)
+                for m in memories
+                if m.id != memory.id and m.id not in processed_ids
+            ]
+
+            similar = embeddings.find_similar(
+                query_embedding,
+                candidates,
+                top_k=5,
+                threshold=similarity_threshold
+            )
+
+            if similar:
+                # Merge memories
+                similar_ids = [memory.id] + [s[0] for s in similar]
+                similar_memories = [m for m in memories if m.id in similar_ids]
+
+                # Create merged content
+                merged_content = await self._merge_content(
+                    [m.content for m in similar_memories]
+                )
+
+                self.ltm.merge_memories(
+                    similar_ids,
+                    merged_content,
+                    merged_content[:200]
+                )
+
+                processed_ids.update(similar_ids)
+                merged_count += 1
+
+        return merged_count
+
+    async def _merge_content(self, contents: List[str]) -> str:
+        """Merge multiple memory contents into one."""
+        prompt = f"""Merge these related memories into a single, comprehensive memory:
+
+{chr(10).join(f'- {c}' for c in contents)}
+
+Create a single, clear statement that captures all the information."""
+
+        response = await self.llm.ainvoke(prompt)
+        return response.content
+```
+
+---
+
+### Phase 8: API Routes (20 minutes)
+
+```python
+# routers/memory.py
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from models.database import get_db
+from services.short_term import ShortTermMemory
+from services.long_term import LongTermMemoryService
+from services.episodic import EpisodicMemoryService
+from services.consolidator import MemoryConsolidator
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+
+router = APIRouter(prefix="/memory", tags=["memory"])
+
+# Request/Response models
+class MessageRequest(BaseModel):
+    role: str
+    content: str
+    metadata: Optional[Dict[str, Any]] = None
+
+class StoreMemoryRequest(BaseModel):
+    content: str
+    memory_type: str = "fact"
+    importance: float = 0.5
+
+class RecallRequest(BaseModel):
+    query: str
+    memory_type: Optional[str] = None
+    top_k: int = 5
+
+# Short-term memory endpoints
+@router.post("/{user_id}/sessions/{session_id}/messages")
+def add_message(
+    user_id: str,
+    session_id: str,
+    message: MessageRequest
+):
+    """Add message to conversation history."""
+    stm = ShortTermMemory()
+    stm.add_message(user_id, session_id, message.role, message.content, message.metadata)
+    return {"status": "stored"}
+
+@router.get("/{user_id}/sessions/{session_id}/messages")
+def get_messages(
+    user_id: str,
+    session_id: str,
+    limit: int = 20
+):
+    """Get conversation history."""
+    stm = ShortTermMemory()
+    return stm.get_messages(user_id, session_id, limit)
+
+@router.get("/{user_id}/sessions/{session_id}/context")
+def get_context(
+    user_id: str,
+    session_id: str,
+    max_tokens: int = 4000
+):
+    """Get context window for LLM."""
+    stm = ShortTermMemory()
+    return stm.get_context_window(user_id, session_id, max_tokens)
+
+# Long-term memory endpoints
+@router.post("/{user_id}/long-term")
+def store_long_term(
+    user_id: str,
+    memory: StoreMemoryRequest,
+    db: Session = Depends(get_db)
+):
+    """Store a long-term memory."""
+    ltm = LongTermMemoryService(db)
+    result = ltm.store(
+        user_id=user_id,
+        content=memory.content,
+        memory_type=memory.memory_type,
+        importance=memory.importance
+    )
+    return {"id": result.id, "status": "stored"}
+
+@router.post("/{user_id}/long-term/recall")
+def recall_memories(
+    user_id: str,
+    request: RecallRequest,
+    db: Session = Depends(get_db)
+):
+    """Recall semantically similar memories."""
+    ltm = LongTermMemoryService(db)
+    return ltm.recall(
+        user_id=user_id,
+        query=request.query,
+        memory_type=request.memory_type,
+        top_k=request.top_k
+    )
+
+# Episodic memory endpoints
+@router.get("/{user_id}/episodes")
+def get_episodes(
+    user_id: str,
+    episode_type: Optional[str] = None,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """Get recent episodes."""
+    episodic = EpisodicMemoryService(db)
+    episodes = episodic.get_recent_episodes(user_id, episode_type, limit)
+    return [{"id": e.id, "summary": e.summary, "outcome": e.outcome} for e in episodes]
+
+@router.post("/{user_id}/episodes/recall")
+def recall_episodes(
+    user_id: str,
+    request: RecallRequest,
+    db: Session = Depends(get_db)
+):
+    """Recall similar past episodes."""
+    episodic = EpisodicMemoryService(db)
+    return episodic.recall_similar(user_id, request.query, top_k=request.top_k)
+
+# Consolidation endpoints
+@router.post("/{user_id}/sessions/{session_id}/consolidate")
+async def consolidate_session(
+    user_id: str,
+    session_id: str,
+    db: Session = Depends(get_db)
+):
+    """Consolidate session memories."""
+    consolidator = MemoryConsolidator(db)
+    return await consolidator.consolidate_session(user_id, session_id)
+```
+
+---
+
+### Phase 9: Main Application (10 minutes)
+
+```python
+# main.py
+from fastapi import FastAPI
+from routers import memory
+from models.database import Base, engine
+
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(
+    title="Agent Memory Service",
+    description="Persistent memory for your agent fleet",
+    version="1.0.0"
+)
+
+app.include_router(memory.router)
+
+@app.get("/health")
+def health():
+    return {"status": "healthy", "service": "memory-service"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8002, reload=True)
+```
+
+---
+
+## Usage Example
+
+{/* IMAGE_PLACEHOLDER: Create a sequence diagram showing a complete memory-aware conversation flow:
+1. User sends message → Agent stores in STM
+2. Agent queries LTM for relevant memories (show semantic search)
+3. Agent queries Episodic for similar past interactions
+4. Agent generates response using context
+5. Agent stores response in STM
+6. Session ends → Consolidation process extracts facts → Stores in LTM
+7. Episode created in Episodic Memory
+Use swimlanes for User, Agent, STM (Redis), LTM (PostgreSQL), and Consolidator
+Include timing annotations (e.g., "< 10ms", "< 200ms")
+Show data payloads at each step
+Use a modern, clean style with icons for each component
+Place this before the code example to show the big picture */}
+
+```python
+# Example: Agent using memory service
+from services.short_term import ShortTermMemory
+from services.long_term import LongTermMemoryService
+from services.episodic import EpisodicMemoryService
+
+class MemoryAwareAgent:
+    def __init__(self, user_id: str, session_id: str, db):
+        self.user_id = user_id
+        self.session_id = session_id
+        self.stm = ShortTermMemory()
+        self.ltm = LongTermMemoryService(db)
+        self.episodic = EpisodicMemoryService(db)
+
+    async def process_message(self, user_message: str) -> str:
+        # Store user message
+        self.stm.add_message(self.user_id, self.session_id, "user", user_message)
+
+        # Recall relevant long-term memories
+        memories = self.ltm.recall(self.user_id, user_message, top_k=3)
+
+        # Recall similar past episodes
+        episodes = self.episodic.recall_similar(self.user_id, user_message, top_k=2)
+
+        # Build context
+        context = self._build_context(memories, episodes)
+
+        # Get conversation history
+        history = self.stm.get_context_window(self.user_id, self.session_id)
+
+        # Generate response (your LLM call here)
+        response = await self._generate_response(user_message, context, history)
+
+        # Store assistant response
+        self.stm.add_message(self.user_id, self.session_id, "assistant", response)
+
+        return response
+
+    def _build_context(self, memories, episodes) -> str:
+        context_parts = []
+
+        if memories:
+            context_parts.append("Relevant memories:")
+            for m in memories:
+                context_parts.append(f"- {m['content']}")
+
+        if episodes:
+            context_parts.append("\nSimilar past interactions:")
+            for e in episodes:
+                context_parts.append(f"- {e['summary']} (outcome: {e['outcome']})")
+
+        return "\n".join(context_parts)
+```
+
+---
+
+<Exercise title="Memory Service Lab">
+  1. **GDPR Compliance**: Add a `/memory/USER_ID/forget` endpoint that allows users to delete all their memories across all three storage systems
+  2. **Memory Decay**: Implement automatic importance reduction over time for memories that aren't accessed (simulate forgetting)
+  3. **Memory Tagging**: Add a tagging system for memories with tag-based retrieval and tag clouds
+  4. **Memory Reflection**: Implement a background job where the agent periodically reviews its memories, identifies contradictions, and updates outdated information
+  5. **Challenge**: Build a memory visualization dashboard that shows the agent's memory graph—facts connected by semantic similarity, with episodic memories as timeline markers
+
+{/* IMAGE_PLACEHOLDER: Create a mockup of a "Memory Visualization Dashboard" showing:
+- Left panel: Timeline of episodic memories with outcome indicators (success/failure)
+- Center: 3D graph visualization of long-term memories as nodes, connected by similarity edges
+- Right panel: Recent short-term memory (conversation history)
+- Top: Stats showing memory counts, consolidation status, and health metrics
+- Interactive elements: hover states, zoom controls, filter options
+- Use a dark theme with colorful memory nodes
+- This serves as inspiration for the challenge exercise
+- Place this within or after the Exercise component */}
+</Exercise>
+
+---
+
+## Key Takeaways
+
+1. **Three memory types** serve different purposes: STM for immediate context, LTM for persistent knowledge, and Episodic for learning from past experiences
+2. **Semantic search with embeddings** enables intelligent recall beyond keyword matching—agents can find relevant memories by meaning, not just exact words
+3. **Memory consolidation** mimics human sleep—background processing that transforms raw conversations into structured, lasting knowledge
+4. **Memory architecture patterns** from this project apply to any stateful agent system, whether you're building chatbots, autonomous agents, or multi-agent systems
+5. **Performance matters**: Redis for < 10ms STM access, optimized vector search for < 200ms LTM recall—these targets ensure memory doesn't become a bottleneck
+
+{/* IMAGE_PLACEHOLDER: Create a "Memory Service in Production" architecture diagram showing:
+- Multiple agent instances connecting to the centralized memory service
+- Load balancer distributing requests
+- Redis cluster for high-availability STM
+- PostgreSQL with read replicas for LTM scaling
+- Background consolidation workers processing sessions
+- Monitoring and metrics collection
+- Include performance metrics callouts (latency, throughput)
+- Show data flow with arrows and timing annotations
+- Use a professional cloud architecture diagram style
+- Place this in the Key Takeaways section to show production considerations */}
+
+---
+
+<ModuleSummary
+  points={[
+    "Three memory types serve different purposes: STM for conversation, LTM for facts, Episodic for experiences",
+    "Semantic search with embeddings enables intelligent recall beyond keyword matching",
+    "Memory consolidation transforms conversations into lasting knowledge",
+    "Redis provides fast session-scoped storage while PostgreSQL handles persistence",
+    "Memory decay and merging prevent information overload",
+  ]}
+/>
+
+**Tomorrow**: Day 84—Mini-Project: The RAG Service.

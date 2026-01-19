@@ -1,0 +1,1168 @@
+---
+title: "Day 36: The AGENTS.md Standard"
+description: "Documenting agent capabilities for humans and machines alike."
+week: 5
+day: 36
+---
+
+<ReadingTime minutes={35} />
+
+<SkillLevel level="intermediate" description="Documentation and standards" />
+
+<Prerequisites
+  items={[
+    "Understanding of agent capabilities and limitations",
+    "Familiarity with Markdown documentation",
+    "Completed Days 1-35 (agent architecture concepts)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Understand the purpose and structure of AGENTS.md files",
+    "Document agent capabilities, limitations, and boundaries clearly",
+    "Create machine-readable metadata for agent-to-agent discovery",
+    "Apply best practices from analysis of 2,500+ repositories",
+    "Write effective AGENTS.md for different agent types",
+    "Implement security documentation patterns for production agents",
+    "Configure hierarchical AGENTS.md for monorepos and multi-agent systems",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "AGENTS.md",
+      definition:
+        "An open standard file that documents AI agent capabilities, limitations, and usage—like README.md but for AI agents. Adopted by 60,000+ projects.",
+    },
+    {
+      term: "Capability Boundary",
+      definition:
+        "Clear documentation of what an agent can and cannot do, essential for trust and safety",
+    },
+    {
+      term: "Machine-Readable Metadata",
+      definition:
+        "Structured data (JSON/YAML) embedded in AGENTS.md that other systems can parse programmatically",
+    },
+    {
+      term: "Agentic AI Foundation (AAIF)",
+      definition:
+        "Linux Foundation initiative stewarding AGENTS.md, MCP, and goose as open standards for AI agent interoperability",
+    },
+    {
+      term: "Hierarchical Instructions",
+      definition:
+        "AGENTS.md files at multiple directory levels, where closer files override parent instructions",
+    },
+  ]}
+/>
+
+---
+
+## Why Document Agents?
+
+As agents become more complex and numerous, we need a standard way to describe what they can do. The `AGENTS.md` file serves as a "user manual" that both humans and other AI systems can understand.
+
+{/* IMAGE_PLACEHOLDER: Create an illustration showing the evolution from fragmented agent documentation to unified AGENTS.md standard. Show multiple scattered config files (.cursorrules, CLAUDE.md, .gemini/settings.json) on the left with confused developer, transforming into a single clean AGENTS.md file on the right with confident developer. Use a before/after split-screen layout with arrows showing consolidation. Style: Modern, clean illustration with subtle gradients. */}
+
+> **Key Insight**: A well-documented agent is a trustworthy agent. Clear boundaries and capabilities build confidence.
+
+The problem before AGENTS.md was fragmentation. Different tools required different configuration files: `.cursorrules` for Cursor, `CLAUDE.md` for Claude, `.gemini/settings.json` for Gemini CLI. Developers juggled multiple redundant files that all needed separate updates.
+
+AGENTS.md emerged as the unified solution—a single, predictable location where any AI coding agent can find the instructions it needs.
+
+<Callout type="tip">
+  **Real-World Impact:** According to [research on standardizing agent behavior](https://ericmjl.github.io/data-science-bootstrap-notes/ai/agents/), teams using AGENTS.md report 40% faster onboarding for new AI tools and 60% reduction in configuration errors across their development workflow.
+</Callout>
+
+---
+
+## 12.1 The AGENTS.md Standard
+
+{/* IMAGE_PLACEHOLDER: Create a detailed blueprint-style diagram showing the anatomy of an AGENTS.md file. Display a document with labeled sections (Overview, Capabilities, Limitations, Security, etc.) with callout boxes explaining each section's purpose. Use a technical blueprint aesthetic with grid background, measurement lines, and annotations. Include icons for each section (shield for security, checklist for capabilities, warning sign for limitations). Style: Technical blueprint with blue/white color scheme. */}
+
+![Agents.md Blueprint](/images/agents_md_blueprint.png)
+
+The `AGENTS.md` file is an open standard for documenting AI agent capabilities. **Adopted by over 60,000 repositories on GitHub**, it provides a predictable location where you document context, instructions, and preferences that agents need to work effectively.
+
+<Callout type="info">
+  **Industry Adoption:** In December 2025, AGENTS.md was contributed to the
+  Agentic AI Foundation (AAIF) under the Linux Foundation, alongside MCP and
+  goose. Platinum members include AWS, Anthropic, Block, Google, Microsoft, and
+  OpenAI—signaling its importance as *the* industry standard for agent
+  documentation.
+</Callout>
+
+### Why Separate from README.md?
+
+README files are for humans: quick starts, project descriptions, and contribution guidelines. AGENTS.md complements this by containing the extra, sometimes detailed context coding agents need.
+
+{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison infographic showing README.md vs AGENTS.md. Left side shows README.md with human icons, project overview text, and "Getting Started" sections. Right side shows AGENTS.md with robot/AI icons, code snippets, command-line examples, and security boundaries. Use contrasting colors (warm for human, cool for machine). Include visual metaphor: README as a welcome brochure, AGENTS.md as an operations manual. Style: Clean, modern infographic with icons and clear visual hierarchy. */}
+
+| README.md               | AGENTS.md           |
+| :---------------------- | :------------------ |
+| Human-focused           | Machine-focused     |
+| Project overview        | Build/test commands |
+| Getting started         | Code style rules    |
+| Contribution guidelines | Security boundaries |
+| High-level architecture | Exact command flags |
+
+The separation keeps READMEs concise while giving agents precise, actionable guidance.
+
+### Universal Agent Compatibility
+
+One AGENTS.md works across a growing ecosystem of AI coding agents:
+
+{/* IMAGE_PLACEHOLDER: Create an animated hub-and-spoke diagram showing AGENTS.md at the center with connections radiating out to various AI coding tools. Center: Large AGENTS.md file icon with glow effect. Spokes: Icons for OpenAI Codex, GitHub Copilot, Google Jules, Cursor, Aider, Factory, Windsurf, goose, and Devin arranged in a circle. Add subtle pulse animation on connections to show data flow. Include small checkmarks on each tool icon. Style: Modern tech diagram with dark background, neon accents, and smooth animations. */}
+
+<Mermaid
+  chart={`
+graph TB
+    A[AGENTS.md] --> B[OpenAI Codex]
+    A --> C[GitHub Copilot]
+    A --> D[Google Jules]
+    A --> E[Cursor]
+    A --> F[Aider]
+    A --> G[Factory]
+    A --> H[Windsurf]
+    A --> I[goose]
+    A --> J[Devin]
+    
+    style A fill:#10b981,stroke:#059669,color:#fff
+`}
+/>
+
+### Core Sections
+
+```markdown
+# Agent Name
+
+## Overview
+
+Brief description of what this agent does.
+
+## Setup Commands
+
+- Install deps: `pnpm install`
+- Start dev server: `pnpm dev`
+- Run tests: `pnpm test`
+
+## Code Style
+
+- TypeScript strict mode
+- Single quotes, no semicolons
+- Use functional patterns where possible
+
+## Capabilities
+
+- What the agent CAN do
+- Tools it has access to
+- Data sources it can query
+
+## Limitations
+
+- What the agent CANNOT do
+- Boundaries and restrictions
+- Known failure modes
+
+## Security Boundaries
+
+- File access permissions
+- Network restrictions
+- Credential handling rules
+
+## Testing Instructions
+
+- How to run tests
+- Coverage requirements
+- CI/CD integration
+
+## PR Instructions
+
+- Commit message format
+- Review requirements
+- Merge criteria
+```
+
+---
+
+## 12.2 Complete AGENTS.md Template
+
+Here's a production-ready template that incorporates lessons from analyzing thousands of repositories:
+
+```markdown
+# Research Assistant Agent
+
+## Overview
+
+An AI agent specialized in conducting research on technical topics,
+synthesizing information from multiple sources, and producing
+structured reports.
+
+## Version
+
+- Agent Version: 2.1.0
+- Last Updated: 2025-01-15
+- Maintainer: engineering@company.com
+- Changelog: See CHANGELOG.md
+
+## Tech Stack
+
+- **Framework**: LangGraph 0.2.x
+- **LLM**: GPT-4o (primary), Claude 3.5 Sonnet (fallback)
+- **Vector DB**: ChromaDB
+- **Search**: Tavily API
+- **Language**: Python 3.11+
+```
+
+## Capabilities
+
+### Core Functions
+
+- [x] Web search and information retrieval
+- [x] Document summarization
+- [x] Multi-source synthesis
+- [x] Citation generation
+- [x] Structured report writing
+
+### Tools Available
+
+| Tool         | Description               | Rate Limit |
+| :----------- | :------------------------ | :--------- |
+| `web_search` | Search the web via Tavily | 100/hour   |
+| `read_url`   | Fetch and parse web pages | 50/hour    |
+| `summarize`  | Summarize long documents  | No limit   |
+| `cite`       | Generate citations        | No limit   |
+
+### Data Access
+
+- Public web content
+- Company knowledge base (read-only)
+- Research paper databases (via API)
+
+## Limitations
+
+### Cannot Do
+
+- Access private/authenticated websites
+- Modify any databases or files
+- Execute arbitrary code
+- Access real-time data (stock prices, etc.)
+- Process images or videos
+
+### Known Issues
+
+- May struggle with highly technical jargon in niche fields
+- Citation format may need manual verification
+- Rate limits may cause delays on large research tasks
+
+### Boundaries
+
+- Maximum report length: 5,000 words
+- Maximum sources per report: 20
+- Timeout: 10 minutes per research task
+
+## Security
+
+### Authentication
+
+- Requires valid API key in `X-Agent-Key` header
+- Rate limited to 100 requests/day per key
+- Keys rotate every 90 days
+
+### Permission Boundaries
+
+| Resource       | Permission | Notes            |
+| :------------- | :--------- | :--------------- |
+| Web URLs       | Read       | Public only      |
+| Knowledge Base | Read       | No PII access    |
+| File System    | None       | Sandboxed        |
+| Databases      | None       | No direct access |
+| Credentials    | None       | Never exposed    |
+
+### Audit Trail
+
+- All requests logged with timestamp, user, action
+- Logs retained for 90 days
+- Available via `/audit` endpoint
+
+## Usage
+
+### Basic Request
+
+```json
+{
+  "task": "research",
+  "topic": "Quantum computing applications in cryptography",
+  "depth": "comprehensive",
+  "format": "markdown"
+}
+```
+
+### Configuration Options
+
+| Option            | Type   | Default    | Description                          |
+| :---------------- | :----- | :--------- | :----------------------------------- |
+| `depth`           | string | "standard" | "quick", "standard", "comprehensive" |
+| `format`          | string | "markdown" | "markdown", "json", "html"           |
+| `max_sources`     | int    | 10         | Maximum sources to cite              |
+| `include_summary` | bool   | true       | Include executive summary            |
+
+## Examples
+
+### Example 1: Quick Research
+
+**Input:**
+
+```json
+{ "task": "research", "topic": "MCP protocol", "depth": "quick" }
+```
+
+**Output:**
+
+```markdown
+# MCP Protocol Overview
+
+The Model Context Protocol (MCP) is an open standard...
+[500-word summary with 3 sources]
+```
+
+### Example 2: Comprehensive Report
+
+**Input:**
+
+```json
+{
+  "task": "research",
+  "topic": "AI agents in healthcare",
+  "depth": "comprehensive",
+  "max_sources": 15
+}
+```
+
+**Output:**
+
+```markdown
+# AI Agents in Healthcare: A Comprehensive Analysis
+
+## Executive Summary
+
+...
+
+## 1. Introduction
+
+...
+
+[3000-word report with 15 sources]
+```
+
+## Error Handling
+
+### Error Codes
+
+| Code   | Meaning             | Resolution                  |
+| :----- | :------------------ | :-------------------------- |
+| `E001` | Rate limit exceeded | Wait and retry              |
+| `E002` | Invalid topic       | Provide clearer topic       |
+| `E003` | Timeout             | Reduce scope or retry       |
+| `E004` | Source unavailable  | Agent will use alternatives |
+
+### Retry Policy
+
+- Automatic retry: 3 attempts with exponential backoff
+- Manual retry: Available via `retry` endpoint
+
+## Observability
+
+### Health Check
+
+```bash
+GET /health
+# Returns: {"status": "healthy", "version": "2.1.0"}
+```
+
+### Metrics Exposed
+
+- `agent_requests_total` - Total requests by status
+- `agent_latency_seconds` - Request latency histogram
+- `agent_tokens_used` - Token consumption counter
+- `agent_sources_retrieved` - Sources per request
+
+## Changelog
+
+### v2.1.0 (2025-01-15)
+
+- Added comprehensive research depth option
+- Improved citation accuracy
+- Added fallback to Claude 3.5 Sonnet
+
+### v2.0.0 (2025-11-15)
+
+- Migrated to LangGraph
+- Added streaming support
+- Breaking: Changed request format
+
+## Contact
+
+- Issues: github.com/company/research-agent/issues
+- Slack: #research-agent-support
+- Email: agent-support@company.com
+
+```
+
+---
+
+## 12.3 Best Practices from 2,500+ Repositories
+
+GitHub analyzed over 2,500 repositories with AGENTS.md files. Here are the key findings that separate effective documentation from ineffective:
+
+{/* IMAGE_PLACEHOLDER: Create a data visualization showing key statistics from the GitHub analysis. Use a dashboard-style layout with: 1) Pie chart showing adoption rates across different agent types, 2) Bar chart comparing effectiveness metrics (specificity, completeness, security documentation), 3) Heat map showing most common sections included, 4) Success rate indicator showing correlation between documentation quality and agent performance. Include callout boxes with key insights. Style: Professional data dashboard with charts, graphs, and statistics in a clean, modern design. */}
+```
+
+<Callout type="success">
+  **Key Finding:** The analysis showed a clear pattern: provide your agent a
+  specific job or persona, exact commands to run, well-defined boundaries to
+  follow, and clear examples of good output.
+</Callout>
+
+### What Works
+
+1. **Specific Tech Stack Versions**
+
+   ```markdown
+   ## Tech Stack
+
+   - React 18.2.0
+   - TypeScript 5.3
+   - Node.js 20 LTS
+   ```
+
+   Not just "React" but the specific version. Agents need precision.
+
+2. **Executable Commands with Exact Flags**
+
+   ```markdown
+   ## Commands
+
+   - `pnpm install --filter PROJECT_NAME` - Install deps for package
+   - `pnpm turbo run test --filter PROJECT_NAME` - Run package tests
+   - `pnpm vitest run -t "TEST_NAME"` - Run specific test
+   ```
+
+3. **Clear Boundaries with Explicit Prohibitions**
+
+   ```markdown
+   ## Do NOT
+
+   - Modify package.json without approval
+   - Delete test files
+   - Change authentication logic
+   - Commit directly to main branch
+   - Rotate API keys without notifying security
+   ```
+
+4. **Testing Procedures with Success Criteria**
+
+   ```markdown
+   ## Testing
+
+   1. Run `npm test` before committing
+   2. Ensure coverage > 80%
+   3. All E2E tests must pass
+   4. Fix any test or type errors until suite is green
+   5. Add tests for code you change, even if nobody asked
+   ```
+
+5. **PR and Commit Guidelines**
+
+   ```markdown
+   ## PR Instructions
+
+   - Title format: [PROJECT_NAME] Title
+   - Always run `pnpm lint` and `pnpm test` before committing
+   - Include test coverage report in PR description
+   ```
+
+### What Doesn't Work
+
+| Anti-Pattern                        | Why It Fails                              | Better Approach                                          |
+| :---------------------------------- | :---------------------------------------- | :------------------------------------------------------- |
+| Vague descriptions ("handles data") | Agent can't determine actual capabilities | "Queries PostgreSQL with read-only access, max 10k rows" |
+| Missing version information         | Can't tell if docs match current agent    | Include agent version, last updated, framework versions  |
+| No examples                         | Users guess at input format               | Provide 2+ examples with actual input/output             |
+| Only capabilities, no limitations   | Users attempt impossible tasks            | Explicitly list what agent CANNOT do                     |
+| Abstract guidelines                 | Agent can't execute them                  | Use concrete, copy-pasteable commands                    |
+
+---
+
+## 12.4 Hierarchical AGENTS.md for Monorepos
+
+For large codebases, OpenAI Codex and other agents support hierarchical instruction files. The OpenAI repository itself has **88 AGENTS.md files** across different directories.
+
+{/* IMAGE_PLACEHOLDER: Create an interactive file tree visualization showing hierarchical AGENTS.md structure. Display a monorepo directory tree with AGENTS.md files at multiple levels (root, services/, services/payments/). Use color coding to show precedence levels (global=blue, project=purple, subdirectory=pink, override=red). Add arrows showing inheritance and override flow. Include expandable/collapsible nodes. Style: Interactive file explorer with syntax highlighting and visual hierarchy indicators. */}
+
+### How Hierarchical Discovery Works
+
+<Mermaid
+  chart={`
+graph TD
+    A["~/.codex/AGENTS.md"] -->|Global defaults| B["/repo/AGENTS.md"]
+    B -->|Project rules| C["/repo/services/AGENTS.md"]
+    C -->|Service-specific| D["/repo/services/payments/AGENTS.override.md"]
+    
+    D -->|Final instructions| E[Agent]
+    
+    style A fill:#6366f1,stroke:#4f46e5,color:#fff
+    style B fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    style C fill:#a855f7,stroke:#9333ea,color:#fff
+    style D fill:#d946ef,stroke:#c026d3,color:#fff
+    style E fill:#10b981,stroke:#059669,color:#fff
+`}
+/>
+
+**Precedence order (later overrides earlier):**
+
+1. **Global scope**: `~/.codex/AGENTS.md` - Your personal defaults
+2. **Project root**: `/repo/AGENTS.md` - Repository-wide rules
+3. **Subdirectories**: Nested AGENTS.md files along the path
+4. **Override files**: `AGENTS.override.md` takes precedence at any level
+
+### Example: Global Defaults
+
+Create persistent defaults that every repository inherits:
+
+```markdown
+# ~/.codex/AGENTS.md
+
+## Working Agreements
+
+- Always run `npm test` after modifying JavaScript files
+- Prefer `pnpm` when installing dependencies
+- Ask for confirmation before adding new production dependencies
+- Never commit secrets or API keys
+- Use conventional commit messages
+```
+
+### Example: Project Override
+
+```markdown
+# /repo/services/payments/AGENTS.override.md
+
+## Payments Service Rules
+
+- Use `make test-payments` instead of `npm test`
+- Never rotate API keys without notifying #security channel
+- All changes require security review
+- PCI compliance: no logging of card data
+```
+
+<Callout type="warning">
+  **Size Limits:** Codex stops adding files once combined size reaches 32 KiB by
+  default. For larger instruction sets, split across nested directories or
+  increase `project_doc_max_bytes` in your config.
+</Callout>
+
+---
+
+## 12.5 AGENTS.md for Different Agent Types
+
+### Coding Agent
+
+```markdown
+# Code Assistant Agent
+
+## Capabilities
+
+- Code generation in Python, JavaScript, TypeScript
+- Code review and suggestions
+- Bug fixing and test generation
+- Documentation writing
+
+## Coding Standards
+
+- Follow project's ESLint/Prettier config
+- Use TypeScript strict mode
+- Write tests for new functions
+- Add JSDoc comments for public APIs
+```
+
+## File Access
+
+| Directory      | Permission | Notes                |
+| :------------- | :--------- | :------------------- |
+| `src/`         | Read/Write | Main source code     |
+| `tests/`       | Read/Write | Test files           |
+| `docs/`        | Read/Write | Documentation        |
+| `.env`         | None       | Never access         |
+| `package.json` | Read only  | No modifications     |
+| `.github/`     | None       | CI configs protected |
+
+## Code Review Checklist
+
+- [ ] No hardcoded secrets
+- [ ] Error handling present
+- [ ] Types are explicit
+- [ ] Tests included
+- [ ] No console.log in production code
+
+```
+
+```
+
+### Data Analysis Agent
+
+```markdown
+# Data Analyst Agent
+
+## Capabilities
+
+- SQL query generation and execution
+- Statistical analysis
+- Data visualization
+- Report generation
+
+## Data Access
+
+- Read: analytics_db (all tables)
+- Read: warehouse.public schema
+- No write access to any database
+
+## Query Limits
+
+- Max rows returned: 10,000
+- Query timeout: 30 seconds
+- No DELETE, UPDATE, or DROP statements
+- No access to PII columns (email, phone, ssn)
+
+## Output Formats
+
+- Tables: Markdown or CSV
+- Charts: PNG or SVG
+- Reports: Markdown with embedded charts
+```
+
+### Customer Support Agent
+
+```markdown
+# Support Agent
+
+## Capabilities
+
+- Answer product questions
+- Troubleshoot common issues
+- Create support tickets
+- Escalate to human agents
+
+## Knowledge Sources
+
+- Product documentation (v2.x only)
+- FAQ database
+- Previous ticket resolutions (anonymized)
+
+## Escalation Triggers
+
+- Customer requests human agent
+- Issue unresolved after 3 attempts
+- Sensitive topics (billing disputes, legal)
+- Angry/frustrated customer detected
+- Any mention of lawsuit or regulatory complaint
+
+## Response Guidelines
+
+- Always greet by name if available
+- Acknowledge the issue before solving
+- Provide step-by-step instructions
+- Offer follow-up assistance
+- Never promise refunds without approval
+```
+
+---
+
+## 12.6 Security Documentation Patterns
+
+Security researchers have identified several vulnerabilities in agent systems that proper documentation can help prevent. Your AGENTS.md should explicitly address security boundaries.
+
+{/* IMAGE_PLACEHOLDER: Create a security boundary visualization showing concentric circles of trust. Center: Agent core with minimal permissions. Inner ring: Read-only file access with specific directories. Middle ring: Network access with allowlist. Outer ring: Prohibited actions (shell commands, credential access, external IPs). Use shield icons, lock symbols, and warning signs. Color code by risk level (green=safe, yellow=caution, red=prohibited). Style: Security diagram with clear visual hierarchy and risk indicators. */}
+
+<Callout type="error">
+  **Security First:** Every tool your agent can access is a trust boundary. Some
+  tools are read-only (safe), some can modify systems (dangerous), some can
+  delete things (catastrophic). Document these boundaries explicitly.
+</Callout>
+
+### Security Section Template
+
+```markdown
+## Security Boundaries
+
+### Authentication & Authorization
+
+- Agent authenticates via service account `agent-prod@company.iam`
+- Scoped to `read:repos`, `write:issues` permissions only
+- No access to admin endpoints
+- Token rotation: Every 24 hours
+```
+
+### Network Boundaries
+
+| Destination             | Allowed        | Protocol |
+| :---------------------- | :------------- | :------- |
+| api.company.com         | Yes            | HTTPS    |
+| \*.internal.company.com | Yes            | HTTPS    |
+| External APIs           | Allowlist only | HTTPS    |
+| Raw IP addresses        | No             | -        |
+
+### Data Handling
+
+- PII: Never log, never store, mask in outputs
+- Credentials: Never echo, never include in responses
+- User data: Process in memory only, no persistence
+- Audit: All actions logged to security SIEM
+
+### Prohibited Actions
+
+- Executing shell commands outside sandbox
+- Accessing environment variables directly
+- Making requests to non-allowlisted domains
+- Storing user data beyond session
+- Bypassing rate limits via any method
+
+---
+
+## 12.7 Machine-Readable AGENTS.md
+
+For agent-to-agent communication and automated discovery, include structured metadata that orchestrators can parse programmatically:
+
+{/* IMAGE_PLACEHOLDER: Create a split-view diagram showing human-readable vs machine-readable AGENTS.md. Left side: Traditional markdown with formatted text, headers, and lists (human eye icon). Right side: Same content with highlighted JSON/YAML metadata blocks, schema definitions, and structured data (robot/parser icon). Show arrows indicating how parsers extract structured data. Include code syntax highlighting for the metadata blocks. Style: Technical comparison diagram with code editor aesthetic and clear visual separation. */}
+
+```markdown
+# Research Agent
+
+<!-- AGENT_METADATA
+{
+  "name": "research-agent",
+  "version": "2.1.0",
+  "capabilities": ["web_search", "summarize", "cite"],
+  "mcp_compatible": true,
+  "discovery": {
+    "tags": ["research", "analysis", "reports"],
+    "category": "knowledge-worker"
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "topic": {"type": "string", "description": "Research topic"},
+      "depth": {"type": "string", "enum": ["quick", "standard", "comprehensive"]}
+    },
+    "required": ["topic"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "report": {"type": "string"},
+      "sources": {"type": "array", "items": {"type": "string"}},
+      "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+    }
+  },
+  "rate_limits": {
+    "requests_per_hour": 100,
+    "tokens_per_request": 10000
+  },
+  "health_endpoint": "/health",
+  "metrics_endpoint": "/metrics"
+}
+-->
+
+## Overview
+
+Human-readable description follows the metadata block...
+```
+
+### Why Machine-Readable Metadata Matters
+
+An orchestrator agent can parse this metadata to:
+
+1. **Discover capabilities** without reading the full document
+2. **Validate inputs** against the schema before invocation
+3. **Route tasks** to appropriate agents based on tags
+4. **Monitor health** via documented endpoints
+5. **Respect rate limits** automatically
+
+{/* IMAGE_PLACEHOLDER: Create an interactive workflow diagram showing how an orchestrator uses machine-readable metadata. Show: 1) Orchestrator scanning multiple AGENTS.md files, 2) Parsing JSON metadata blocks, 3) Building capability registry, 4) Matching user request to agent capabilities, 5) Validating input against schema, 6) Routing request to appropriate agent. Use animated arrows showing data flow. Include code snippets at each step. Style: Technical workflow diagram with animation, code blocks, and clear step-by-step progression. */}
+
+<Callout type="tip">
+  **Interactive Tool Idea:** An AGENTS.md validator that parses your file, checks for required sections, validates JSON metadata schemas, and provides a completeness score with suggestions for improvement.
+</Callout>
+
+````
+
+---
+
+## 12.8 Agent Discovery and Orchestration
+
+AGENTS.md enables sophisticated multi-agent orchestration by providing a standard way for agents to discover and understand each other.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant O as Orchestrator
+    participant R as Registry
+    participant A1 as Research Agent
+    participant A2 as Code Agent
+    participant A3 as Review Agent
+
+    O->>R: Query agents with "research" capability
+    R->>R: Parse AGENTS.md metadata
+    R-->>O: Return Research Agent
+
+    O->>A1: Invoke with task
+    A1-->>O: Research results
+
+    O->>R: Query agents with "code" capability
+    R-->>O: Return Code Agent
+
+    O->>A2: Generate code from research
+    A2-->>O: Generated code
+
+    O->>A3: Review generated code
+    A3-->>O: Review feedback
+`}
+/>
+
+### Agent Registry Pattern
+
+```python
+import yaml
+import re
+from pathlib import Path
+
+class AgentRegistry:
+    def __init__(self):
+        self.agents = {}
+
+    def register_from_agents_md(self, path: Path):
+        """Parse AGENTS.md and register agent metadata."""
+        content = path.read_text()
+
+        # Extract metadata from HTML comment
+        match = re.search(
+            r'<!--\s*AGENT_METADATA\s*(.*?)\s*-->',
+            content,
+            re.DOTALL
+        )
+
+        if match:
+            metadata = yaml.safe_load(match.group(1))
+            self.agents[metadata['name']] = {
+                'metadata': metadata,
+                'path': path,
+                'capabilities': metadata.get('capabilities', []),
+                'tags': metadata.get('discovery', {}).get('tags', [])
+            }
+````
+
+    def find_by_capability(self, capability: str) -> list:
+        """Find all agents with a specific capability."""
+        return [
+            agent for agent in self.agents.values()
+            if capability in agent['capabilities']
+        ]
+
+    def find_by_tag(self, tag: str) -> list:
+        """Find all agents matching a tag."""
+        return [
+            agent for agent in self.agents.values()
+            if tag in agent['tags']
+        ]
+
+# Usage
+
+registry = AgentRegistry()
+registry.register_from_agents_md(Path("agents/research/AGENTS.md"))
+registry.register_from_agents_md(Path("agents/code/AGENTS.md"))
+
+# Find agent for research task
+
+research_agents = registry.find_by_capability("web_search")
+
+```
+
+---
+
+## 12.9 AGENTS.md in the Standards Ecosystem
+```
+
+AGENTS.md is part of a broader movement toward standardizing AI agent interactions, now governed by the Agentic AI Foundation (AAIF):
+
+{/* IMAGE_PLACEHOLDER: Create an ecosystem map showing how AGENTS.md fits into the broader AI standards landscape. Center: AAIF logo with four pillars (AGENTS.md, MCP, A2A, goose). Around it: Show how each standard connects to different aspects (documentation, tool integration, agent communication, implementation). Include logos/icons for major adopters (AWS, Anthropic, Google, Microsoft, OpenAI). Use connecting lines to show relationships and dependencies. Style: Professional ecosystem diagram with organizational logos, clear hierarchy, and relationship indicators. */}
+
+| Standard      | Purpose                                 | Scope                    | Adoption         |
+| :------------ | :-------------------------------------- | :----------------------- | :--------------- |
+| **AGENTS.md** | Document agent capabilities             | Repository/project level | 60,000+ projects |
+| **MCP**       | Standardize agent-to-tool communication | Runtime protocol         | 10,000+ servers  |
+| **A2A**       | Enable agent-to-agent collaboration     | Inter-agent protocol     | 50+ partners     |
+| **goose**     | Vendor-neutral agent framework          | Reference implementation | Apache 2.0       |
+
+<Callout type="info">
+  **Complementary Standards:** AGENTS.md documents *what* an agent can do. MCP
+  defines *how* it connects to tools. A2A defines *how* agents talk to each
+  other. A well-architected system uses all three together.
+</Callout>
+
+### The AAIF Stack
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Documentation Layer"
+        A[AGENTS.md]
+    end
+    
+    subgraph "Protocol Layer"
+        B[MCP - Tool Integration]
+        C[A2A - Agent Communication]
+    end
+    
+    subgraph "Implementation Layer"
+        D[goose Framework]
+        E[Custom Agents]
+    end
+    
+    A --> B
+    A --> C
+    B --> D
+    C --> D
+    B --> E
+    C --> E
+    
+    style A fill:#10b981,stroke:#059669,color:#fff
+    style B fill:#6366f1,stroke:#4f46e5,color:#fff
+    style C fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    style D fill:#f59e0b,stroke:#d97706,color:#fff
+    style E fill:#f59e0b,stroke:#d97706,color:#fff
+`}
+/>
+
+---
+
+## 12.10 Versioning Your Agent Documentation
+
+As your agent evolves, your documentation must evolve with it. Here's how to version AGENTS.md effectively:
+
+### Semantic Versioning for Agents
+
+```markdown
+## Version
+
+- **Agent Version**: 2.1.0
+- **AGENTS.md Version**: 2.1.0 (keep in sync)
+- **Last Updated**: 2025-01-15
+- **Breaking Changes Since**: 2.0.0
+
+### Version History
+
+| Version | Date       | Changes                          |
+| :------ | :--------- | :------------------------------- |
+| 2.1.0   | 2025-01-15 | Added comprehensive depth option |
+| 2.0.0   | 2025-11-15 | Breaking: New request format     |
+| 1.5.0   | 2025-09-01 | Added citation tool              |
+```
+
+### When to Update
+
+- **Patch (2.1.x)**: Documentation fixes, clarifications
+- **Minor (2.x.0)**: New capabilities, new tools, expanded access
+- **Major (x.0.0)**: Breaking changes to input/output schemas, removed capabilities
+
+---
+
+## 12.11 Migrating to AGENTS.md
+
+If you have existing agent configuration files, migration is straightforward:
+
+```bash
+# Rename your primary file
+mv AGENT.md AGENTS.md
+
+# Create symbolic link for backward compatibility
+ln -s AGENTS.md AGENT.md
+
+# For Cursor users
+ln -s AGENTS.md .cursorrules
+
+# For Claude users
+ln -s AGENTS.md CLAUDE.md
+```
+
+### Tool-Specific Configuration
+
+Some tools need additional configuration to recognize AGENTS.md:
+
+**Aider** (`.aider.conf.yml`):
+
+```yaml
+read: AGENTS.md
+```
+
+**Gemini CLI** (`.gemini/settings.json`):
+
+```json
+{
+  "contextFileName": "AGENTS.md"
+}
+```
+
+**OpenAI Codex** (`~/.codex/config.toml`):
+
+```toml
+# Add fallback filenames if using legacy names
+project_doc_fallback_filenames = ["TEAM_GUIDE.md", ".agents.md"]
+project_doc_max_bytes = 65536
+```
+
+---
+
+## 🧪 Lab Exercise: Document Your Agent
+
+{/* IMAGE_PLACEHOLDER: Create an interactive AGENTS.md builder interface mockup. Show a form-based UI with sections for: Overview (text input), Capabilities (checklist), Limitations (list builder), Security Boundaries (permission matrix), Examples (code editor). Include a live preview pane on the right showing the generated AGENTS.md. Add validation indicators (green checkmarks, yellow warnings) for completeness. Include export buttons for different formats. Style: Modern web application UI with split-pane layout, form controls, and live preview. */}
+
+<Exercise
+  title="Create a Production AGENTS.md File"
+  difficulty="intermediate"
+  objectives={[
+    "Document an agent with all standard sections",
+    "Include specific capabilities AND limitations",
+    "Add security boundaries and permission documentation",
+    "Include machine-readable metadata for programmatic access",
+    "Create hierarchical documentation for a monorepo structure"
+  ]}
+  hints={[
+    "Be specific about versions—'React 18.2' not just 'React'",
+    "Limitations are as important as capabilities for building trust",
+    "Include at least 2 usage examples with expected outputs",
+    "Document security boundaries explicitly—what can and cannot be accessed",
+    "Add machine-readable metadata in HTML comments for orchestration"
+  ]}
+>
+
+**Objective**: Create a comprehensive AGENTS.md for an agent you've built or plan to build.
+
+**Requirements:**
+
+1. Include all standard sections (Overview, Version, Tech Stack, Capabilities, Limitations, Security, Usage, Examples, Error Handling, Observability)
+2. Be specific about capabilities AND limitations
+3. Document security boundaries with a permission table
+4. Provide at least 2 usage examples with input/output
+5. Include error handling documentation
+6. Add machine-readable metadata in an HTML comment block
+7. **Bonus**: Create a nested AGENTS.override.md for a specific subdirectory
+
+Use the template structure shown earlier in this module as your starting point.
+
+<Callout type="tip">
+  **Interactive Tool Suggestion:** Build an AGENTS.md generator that prompts you for each section, validates completeness, checks JSON schema syntax, and exports a production-ready file. This could be a great mini-project to practice what you've learned!
+</Callout>
+
+</Exercise>
+
+---
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Vague capability descriptions like 'handles data'",
+      why: "Doesn't help users or other agents understand what the agent actually does",
+      correct:
+        "Be specific: 'Queries PostgreSQL databases with read-only access, max 10,000 rows per query'",
+    },
+    {
+      mistake: "Missing version information",
+      why: "Users can't tell if documentation matches the agent they're using",
+      correct:
+        "Include agent version, last updated date, and framework versions",
+    },
+    {
+      mistake: "No examples in the documentation",
+      why: "Users have to guess at correct input format and expected outputs",
+      correct:
+        "Provide at least 2 examples with actual input JSON and expected output",
+    },
+    {
+      mistake: "Documenting only capabilities, not limitations",
+      why: "Users will try things the agent can't do and lose trust when it fails",
+      correct: "Explicitly list what the agent CANNOT do—this builds trust",
+    },
+    {
+      mistake: "Missing security boundaries documentation",
+      why: "Creates vulnerabilities and unclear trust boundaries in production",
+      correct:
+        "Document file access, network permissions, and data handling rules explicitly",
+    },
+    {
+      mistake: "Using abstract guidelines instead of executable commands",
+      why: "Agents need precise, copy-pasteable instructions they can run",
+      correct:
+        "Use exact commands with flags: 'pnpm turbo run test --filter PROJECT_NAME'",
+    },
+  ]}
+/>
+
+---
+
+<ProgressCheckpoint
+  title="AGENTS.md Mastery Check"
+  questions={[
+    {
+      question: "Why include machine-readable metadata in AGENTS.md?",
+      answer:
+        "Machine-readable metadata (JSON/YAML in HTML comments) enables agent-to-agent discovery and orchestration. An orchestrator agent can parse the metadata to understand what tools are available, their schemas, and rate limits without human intervention. This is essential for building multi-agent systems.",
+    },
+    {
+      question: "What makes limitations documentation valuable?",
+      answer:
+        "Clear limitations build trust by setting accurate expectations. Users won't attempt impossible tasks, and when failures occur, they can quickly determine if it's a bug or expected behavior. It also helps with security by documenting access boundaries explicitly.",
+    },
+    {
+      question: "How does AGENTS.md differ from API documentation?",
+      answer:
+        "AGENTS.md documents the agent's cognitive capabilities and boundaries, not just its API. It includes what the agent understands, how it reasons, what it refuses to do, security boundaries, and guidance for effective interaction—things traditional API docs don't cover.",
+    },
+    {
+      question: "How do hierarchical AGENTS.md files work in monorepos?",
+      answer:
+        "Agents read AGENTS.md files from global (~/.codex/) through project root down to the current directory. Files closer to the working directory override earlier ones. AGENTS.override.md takes precedence at any level. This allows global defaults with project and directory-specific overrides.",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "AGENTS.md is the industry standard for documenting AI agent capabilities, adopted by 60,000+ projects and governed by the Agentic AI Foundation",
+    "Specificity matters—include versions, rate limits, exact commands, and concrete boundaries",
+    "Security documentation is essential: document file access, network boundaries, and data handling rules",
+    "Examples are critical for understanding correct usage patterns—provide at least 2 with input/output",
+    "Machine-readable metadata enables agent-to-agent discovery and orchestration in multi-agent systems",
+    "Hierarchical AGENTS.md files support monorepos with global defaults and directory-specific overrides",
+    "Limitations documentation is as important as capabilities for building trust and setting expectations",
+    "AGENTS.md complements MCP (tool integration) and A2A (agent communication) in the AAIF standards ecosystem",
+  ]}
+/>
+
+---
+
+## 🔗 Further Reading
+
+- [AGENTS.md Official Site](https://agents.md/)
+- [How to Write a Great AGENTS.md - GitHub Blog](https://github.blog/ai-and-ml/github-copilot/how-to-write-a-great-agents-md/)
+- [Agentic AI Foundation (AAIF)](https://agenticaifoundation.org/)
+- [OpenAI Codex AGENTS.md Guide](https://developers.openai.com/codex/guides/agents-md/)
+- [AGENTS.md on GitHub - 60k+ Examples](https://github.com/search?q=filename%3AAGENTS.md&type=code)
+- [MCP Specification](https://modelcontextprotocol.io/)
+
+---
+
+**Next**: Day 37 continues our journey through Month 2 with advanced multi-agent orchestration patterns, building on the documentation standards you've learned today.

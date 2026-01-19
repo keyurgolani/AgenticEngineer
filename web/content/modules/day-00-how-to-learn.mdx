@@ -7,9 +7,17 @@ day: 0
 
 <ReadingTime minutes={8} />
 
+<SkillLevel level="beginner" description="Guidance for all skill levels" />
+
 # How to Use This Course
 
 This guide will help you navigate the course effectively, whether you're a complete beginner to AI or an experienced developer looking to level up.
+
+<ConceptVisual
+  src="/images/learning_paths_hero_concept.png"
+  alt="Course Learning Paths"
+  caption="Choose your path: Beginner, Intermediate, or Advanced."
+/>
 
 ---
 
@@ -20,22 +28,86 @@ This guide will help you navigate the course effectively, whether you're a compl
   then follow the recommended path below.
 </Callout>
 
+### Quick Self-Assessment
+
+Answer these questions honestly to determine your starting point:
+
+<ConceptVisual
+  src="/images/path_decision_tree_flowchart.png"
+  alt="Learning Path Decision Tree"
+  caption="Find your starting point based on your experience level."
+/>
+
+<Quiz
+  question="Which statement best describes your AI experience?"
+  options={[
+    "I've heard of ChatGPT but haven't used APIs",
+    "I've called LLM APIs but haven't built agents",
+    "I've built simple agents and want production patterns",
+    "I've deployed agents to production and want advanced techniques",
+  ]}
+  correctIndex={-1}
+  explanation="There's no wrong answer—this helps you find your starting point. Options 0-1: Start with Month 1 Foundations (Weeks 1-4). Option 2: Start with Month 2 Multi-Agent Systems (Weeks 5-8). Option 3: Jump to Month 3 Advanced Architectures (Weeks 9-12)."
+/>
+
+<ProgressCheckpoint
+  title="Where Should You Start?"
+  questions={[
+    {
+      question: "Can you explain what a 'token' is in the context of LLMs?",
+      answer:
+        "If yes → You likely have AI/ML familiarity. If no → Start with AI Foundations.",
+    },
+    {
+      question:
+        "Have you built an application that calls an LLM API (OpenAI, Anthropic, etc.)?",
+      answer:
+        "If yes → You're ready for agent concepts. If no → Complete Environment Setup first.",
+    },
+    {
+      question: "Do you know what LangGraph or LangChain are?",
+      answer:
+        "If yes → You may be able to skip to Month 2 (Weeks 5-8). If no → Follow the standard path.",
+    },
+  ]}
+/>
+
 ### 🌱 Complete Beginner
 
 _"I've heard of ChatGPT but don't know how it works"_
+
+<ConceptVisual
+  src="/images/beginner_roadmap_illustration.png"
+  alt="Beginner Learning Roadmap"
+  caption="Your 30-day foundation: From core concepts to your first agent."
+/>
 
 **Start here:**
 
 1. **Day 00: AI Foundations** — Essential concepts explained simply
 2. **Day 00: Glossary** — Bookmark this for reference
 3. **Day 00: Environment Setup** — Get your tools ready
-4. Then proceed through Week 1 in order
+4. Then proceed through Month 1 (Weeks 1-4) in order
 
-**Time estimate:** 6-8 weeks at 1-2 hours/day
+**Time estimate:** 12-16 weeks at 1-2 hours/day
+
+<Callout type="tip">
+  **Think of it like learning to cook:** You wouldn't start with a five-course
+  meal. First, you learn what ingredients are (tokens, prompts), then basic
+  techniques (API calls), then simple recipes (single agents), and finally
+  complex dishes (multi-agent systems). This course follows the same
+  progression.
+</Callout>
 
 ### 🌿 Familiar with AI/ML
 
 _"I've used LLMs and understand prompting basics"_
+
+<ConceptVisual
+  src="/images/intermediate_accelerated_path.png"
+  alt="Intermediate Fast-Track"
+  caption="Skip the basics and focus on building complex agentic systems."
+/>
 
 **Start here:**
 
@@ -44,26 +116,52 @@ _"I've used LLMs and understand prompting basics"_
 3. **Day 01: The Anatomy of an Agent** — Core concepts
 4. Proceed through the course, skipping sections you already know
 
-**Time estimate:** 4-5 weeks at 1-2 hours/day
+**Time estimate:** 8-10 weeks at 1-2 hours/day
+
+<Callout type="tip">
+  **Like upgrading from home cooking to restaurant-level:** You know the basics,
+  but now you're learning professional techniques, kitchen organization
+  (architecture patterns), food safety (security), and how to run a kitchen
+  brigade (multi-agent orchestration).
+</Callout>
 
 ### 🌳 Experienced Developer
 
 _"I've built LLM applications and want production patterns"_
 
+<ConceptVisual
+  src="/images/advanced_production_path.png"
+  alt="Advanced Production Path"
+  caption="Jump straight to enterprise architectures and production engineering."
+/>
+
 **Start here:**
 
 1. **Day 00: Environment Setup** — Ensure compatible versions
-2. Jump to **Week 2: The Agentic Toolkit** — LangGraph, MCP
-3. Focus on **Week 3: Production Engineering** — Security, observability
-4. Build the **Capstone Projects** in Week 4
+2. Jump to **Month 2 (Weeks 5-8): Multi-Agent Systems** — Orchestration, LangGraph advanced patterns
+3. Focus on **Production Engineering** — Security, observability, reliability
+4. Build the **Capstone Projects** in Month 3 (Weeks 9-12)
 
-**Time estimate:** 2-3 weeks at 1-2 hours/day
+**Time estimate:** 4-6 weeks at 1-2 hours/day
+
+<Callout type="tip">
+  **Like becoming an executive chef:** You've cooked professionally, but now
+  you're learning to design menus (system architecture), manage multiple
+  kitchens (distributed agents), ensure consistency at scale (production
+  patterns), and handle health inspections (security & compliance).
+</Callout>
 
 ---
 
 ## Understanding the Module Structure
 
 Each module follows a consistent structure to help you learn effectively:
+
+<ConceptVisual
+  src="/images/module_anatomy_diagram.png"
+  alt="Module Anatomy"
+  caption="How each module is structured for maximum learning efficiency."
+/>
 
 ### At the Start of Each Module
 
@@ -98,6 +196,96 @@ Each module follows a consistent structure to help you learn effectively:
 
 ## Learning Strategies
 
+### The 70/20/10 Rule for Agent Development
+
+For each module, aim for this balance:
+
+- **70% Building:** Actually write and run code
+- **20% Reading:** Understand concepts and patterns
+- **10% Reviewing:** Reflect on what worked and what didn't
+
+<ConceptVisual
+  src="/images/learning_rule_graph_70_20_10.png"
+  alt="70/20/10 Learning Rule"
+  caption="The golden ratio for mastery: 70% Coding, 20% Reading, 10% Reviewing."
+/>
+
+<Callout type="important">
+  **Active Learning is Essential:** Reading about agents won't make you an agent
+  developer. You must build, break, and debug to truly understand. Budget at
+  least 2x the reading time for hands-on practice.
+</Callout>
+
+### Evidence-Based Learning Techniques
+
+Research shows these techniques dramatically improve retention and understanding:
+
+<ConceptVisual
+  src="/images/learning_techniques_mastery_infographic.png"
+  alt="Evidence-Based Learning Techniques"
+  caption="Active Recall, Spaced Repetition, and Metacognition significantly boost retention."
+/>
+
+<ConceptIntro
+  term="Active Recall"
+  simple="Instead of re-reading notes, close them and try to remember what you learned. This forces your brain to strengthen memory pathways."
+  technical="Active recall is a learning strategy that involves retrieving information from memory rather than passively reviewing it. Studies show it can improve retention by up to 50% compared to passive review methods."
+/>
+
+<ConceptIntro
+  term="Spaced Repetition"
+  simple="Review material at increasing intervals—1 day, 3 days, 1 week, 2 weeks. Each review strengthens the memory before it fades."
+  technical="Spaced repetition leverages the psychological spacing effect, where information is more effectively retained when revisited at gradually lengthening intervals. This technique is particularly effective for retaining technical concepts long-term."
+/>
+
+<RealWorldExample
+  title="Spaced Repetition in Practice"
+  scenario="You just completed Day 15 on RAG (Retrieval-Augmented Generation). The concepts make sense now, but will you remember them in a month?"
+  approach="Review the module summary tomorrow (Day 16), then again on Day 18, Day 22, and Day 29. Each time, try to recall the key concepts before looking at your notes. This takes just 5-10 minutes per review but dramatically improves long-term retention."
+  outcome="When you reach Month 2 and need to apply RAG in a multi-agent system, the concepts will feel familiar and accessible rather than requiring you to relearn everything from scratch."
+/>
+
+<ConceptIntro
+  term="The Feynman Technique"
+  simple="Explain a concept as if teaching it to a beginner. If you can't explain it simply, you don't understand it well enough."
+  technical="Named after physicist Richard Feynman, this technique involves: (1) choosing a concept, (2) explaining it in plain language, (3) identifying gaps in your explanation, and (4) simplifying and using analogies. It's particularly effective for complex programming concepts."
+/>
+
+<ConceptIntro
+  term="Interleaving Practice"
+  simple="Instead of practicing one skill repeatedly (blocked practice), mix different but related topics in the same study session. This feels harder but leads to better long-term retention."
+  technical="Interleaving forces the brain to continuously retrieve different strategies and discriminate between problem types. Research shows it improves transfer of learning to new situations by up to 43% compared to blocked practice, though it may feel less productive in the moment."
+/>
+
+<RealWorldExample
+  title="Interleaving for Agent Development"
+  scenario="You're in Week 3, learning about prompt engineering, tool calling, and error handling."
+  approach="Instead of spending Monday on prompts, Tuesday on tools, and Wednesday on errors, mix them: spend 30 minutes on prompt patterns, 30 minutes implementing a tool, 30 minutes adding error handling, then repeat. Alternate between reading, coding, and debugging across all three topics."
+  outcome="This feels more challenging than focusing on one topic at a time, but you'll develop better pattern recognition and be able to apply these skills more flexibly when building real agents. You'll also discover how these concepts interconnect naturally."
+/>
+
+<ConceptIntro
+  term="Metacognition"
+  simple="Thinking about your own thinking. Regularly ask yourself: 'Do I actually understand this, or am I just familiar with it?' This self-awareness helps you identify gaps before they become problems."
+  technical="Metacognition involves monitoring and regulating your cognitive processes. In programming education, metacognitive skills include planning approaches before coding, monitoring comprehension during learning, and evaluating solutions after implementation. Studies show explicit metacognitive training improves debugging skills and problem-solving efficiency."
+/>
+
+<ConceptIntro
+  term="Elaborative Interrogation"
+  simple="Ask 'why' and 'how' questions about what you're learning. Don't just accept that something works—understand why it works."
+  technical="Elaborative interrogation involves generating explanations for facts and concepts. When learning that 'LangGraph uses a state machine pattern,' ask 'Why is a state machine appropriate for agents?' This creates deeper encoding and stronger memory traces than passive reading."
+/>
+
+**How to apply these in this course:**
+
+1. **After each module:** Close the page and write down the 3 most important concepts from memory (Active Recall)
+2. **Weekly review:** Revisit completed modules briefly—just 10 minutes per module (Spaced Repetition)
+3. **Teach it:** Explain concepts to a colleague, rubber duck, or in a blog post (Feynman Technique)
+4. **Use the checkpoints:** They're designed for active recall—don't peek at answers
+5. **Mix your practice:** When doing exercises, alternate between different types—don't do all LangGraph exercises, then all prompt exercises. Mix them up (Interleaving)
+6. **Ask "why" constantly:** When you see a pattern or technique, ask yourself why it works that way (Elaborative Interrogation)
+7. **Self-check regularly:** Before moving on, ask "Can I explain this without looking?" If not, review (Metacognition)
+
 ### For Conceptual Modules (Days 01-02)
 
 1. **Read actively** — Don't just skim; engage with the analogies
@@ -112,12 +300,74 @@ Each module follows a consistent structure to help you learn effectively:
 3. **Break things** — Modify code to see what happens
 4. **Build the exercises** — Hands-on practice is essential
 
-### For Project Modules (Days 08, 10, 15, 17, 22)
+### For Project Modules
 
 1. **Plan first** — Sketch your architecture before coding
 2. **Start simple** — Get a minimal version working, then enhance
 3. **Debug systematically** — Use print statements and LangSmith
 4. **Document your work** — Future you will thank present you
+
+### Developing a Growth Mindset for Agent Development
+
+Building AI agents is challenging—you'll encounter bugs, confusing errors, and concepts that don't click immediately. This is normal and expected.
+
+<ConceptVisual
+  src="/images/growth_mindset_comparison.png"
+  alt="Fixed vs Growth Mindset"
+  caption="Reframing frustrations as learning opportunities."
+/>
+
+<Callout type="info">
+  **Embrace productive struggle:** Research shows that the difficulty you feel
+  when learning something new is actually a sign that learning is happening. If
+  everything feels easy, you're probably not growing.
+</Callout>
+
+<RealWorldExample
+  title="Productive Struggle in Action"
+  scenario="You're on Day 25, building your first LangGraph agent. You've been debugging the same state management issue for 45 minutes. You're frustrated and starting to think 'maybe I'm not cut out for this.'"
+  approach="Recognize this as productive struggle. Take a 5-minute break, then approach it systematically: (1) Print the state at each node, (2) Check the LangSmith trace, (3) Compare your code to the example, (4) Ask yourself 'what am I assuming that might be wrong?' This is exactly how professional developers work."
+  outcome="You discover the issue was a simple type mismatch in your state schema. More importantly, you've developed debugging skills and resilience that will serve you throughout the course and your career. The struggle was the learning."
+/>
+
+**Mindset shifts for success:**
+
+- **"I don't understand this yet"** instead of "I don't understand this"
+- **"This error is teaching me something"** instead of "This is broken"
+- **"Let me try a different approach"** instead of "This doesn't work"
+- **"I need to review the prerequisites"** instead of "I'm not smart enough"
+
+### Time Management: The Pomodoro Technique
+
+For focused learning sessions, use the Pomodoro Technique:
+
+<ConceptVisual
+  src="/images/pomodoro_cycle_timeline.png"
+  alt="Pomodoro Technique"
+  caption="Cycle: 25m Focus -> 5m Break. Repeat 4x, then Long Break (15-30m)."
+/>
+
+<RealWorldExample
+  title="Pomodoro for Agent Development"
+  scenario="You're working through a complex LangGraph module with multiple code examples."
+  approach="Set a 25-minute timer. Focus entirely on the module—no Slack, no email. When the timer rings, take a 5-minute break (stretch, get water). After 4 pomodoros (2 hours), take a longer 15-30 minute break."
+  outcome="You'll maintain deep focus, avoid burnout, and actually retain more than marathon study sessions. Most learners complete modules faster with better comprehension using this method."
+/>
+
+**Recommended Pomodoro structure for this course:**
+
+| Pomodoro | Activity                                      |
+| :------- | :-------------------------------------------- |
+| 1        | Read the module content, engage with diagrams |
+| 2        | Type and run the code examples                |
+| 3        | Complete the exercises                        |
+| 4        | Review checkpoint questions, take notes       |
+
+<Callout type="tip">
+  **Pro tip:** Use the 5-minute breaks to let concepts "settle." Your brain
+  continues processing information during rest periods—this is when connections
+  form.
+</Callout>
 
 ---
 
@@ -154,31 +404,41 @@ Use the hints if you're stuck, but try without them first.
 
 ## Recommended Schedule
 
-### Intensive Track (4 weeks)
+<ConceptVisual
+  src="/images/learning_schedule_comparison.png"
+  alt="Learning Tracks Comparison"
+  caption="Choose the pace that works for you: Intensive, Standard, or Extended."
+/>
+
+### Intensive Track (6 weeks)
 
 For those who can dedicate 3-4 hours daily:
 
-| Week | Focus       | Modules    |
-| :--- | :---------- | :--------- |
-| 1    | Foundations | Days 00-07 |
-| 2    | Frameworks  | Days 08-14 |
-| 3    | Production  | Days 15-21 |
-| 4    | Projects    | Days 22-30 |
+| Weeks | Focus                    | Modules    |
+| :---- | :----------------------- | :--------- |
+| 1-2   | Foundations & Core       | Days 01-30 |
+| 3-4   | Multi-Agent & Production | Days 31-60 |
+| 5-6   | Advanced & Capstones     | Days 61-90 |
 
-### Standard Track (8 weeks)
+### Standard Track (12 weeks)
 
 For those with 1-2 hours daily:
 
-| Weeks | Focus       | Modules    |
-| :---- | :---------- | :--------- |
-| 1-2   | Foundations | Days 00-07 |
-| 3-4   | Frameworks  | Days 08-14 |
-| 5-6   | Production  | Days 15-21 |
-| 7-8   | Projects    | Days 22-30 |
+| Weeks | Focus                             | Modules    |
+| :---- | :-------------------------------- | :--------- |
+| 1-4   | Month 1: Foundations & Core       | Days 01-30 |
+| 5-8   | Month 2: Multi-Agent & Production | Days 31-60 |
+| 9-12  | Month 3: Advanced & Capstones     | Days 61-90 |
 
-### Weekend Warrior (12 weeks)
+### Extended Track (24 weeks)
 
-For those learning on weekends only:
+For those learning on weekends only or with limited time:
+
+| Weeks | Focus                             | Modules    |
+| :---- | :-------------------------------- | :--------- |
+| 1-8   | Month 1: Foundations & Core       | Days 01-30 |
+| 9-16  | Month 2: Multi-Agent & Production | Days 31-60 |
+| 17-24 | Month 3: Advanced & Capstones     | Days 61-90 |
 
 Spend one weekend per module, focusing on:
 
@@ -224,12 +484,22 @@ Spend one weekend per module, focusing on:
 
 ## Your Learning Toolkit
 
+<ConceptVisual
+  src="/images/developer_toolkit_setup.png"
+  alt="Developer's Learning Toolkit"
+  caption="Set up your environment for success: Code, Docs, and Terminals ready."
+/>
+
 ### Essential Bookmarks
 
-- **Day 00: Glossary** — Quick reference for all terms
-- **Day 00: AI Foundations** — Review when concepts feel fuzzy
-- **LangGraph Docs** — Official reference for framework details
-- **MCP Docs** — Protocol specification and examples
+- **[Glossary](/modules/day-00-glossary)** — Quick reference for all terms
+- **[AI Foundations](/modules/day-00-foundations)** — Review when concepts feel fuzzy
+- **[LangGraph Docs](https://langchain-ai.github.io/langgraph/)** — Official reference for framework details (now v1.0 stable)
+- **[MCP Docs](https://modelcontextprotocol.io/)** — Protocol specification and examples
+- **[LangSmith](https://smith.langchain.com/)** — Debugging and tracing platform (essential for production)
+- **[OpenAI Cookbook](https://cookbook.openai.com/)** — Practical code examples
+- **[Anthropic Prompt Library](https://docs.anthropic.com/en/prompt-library/library)** — Production-tested prompts
+- **[Awesome LangGraph](https://github.com/langchain-ai/langgraph/discussions)** — Community examples and patterns
 
 ### Recommended Setup
 
@@ -244,12 +514,24 @@ Spend one weekend per module, focusing on:
   points={[
     "Choose your learning path based on your current skill level",
     "Each module has a consistent structure—learn to use it",
+    "Use evidence-based techniques: Active Recall, Spaced Repetition, Interleaving, and the Feynman Technique",
+    "Practice metacognition—regularly ask yourself if you truly understand or just recognize the material",
+    "Apply the Pomodoro Technique for focused 25-minute learning sessions",
     "Type code, don't copy-paste; break things to understand them",
     "Complete checkpoints honestly—they reveal gaps in understanding",
+    "Embrace productive struggle—difficulty is a sign of learning",
     "Use the Glossary and Foundations modules as ongoing references",
   ]}
 />
 
 ---
 
-**Ready to begin?** Head to [Day 00: AI Foundations](/modules/day-00-foundations) if you're new to AI, or [Day 01: The Anatomy of an Agent](/modules/day-01-interface-of-agentic-ai) if you're ready to dive in.
+**Ready to begin?** Head to [AI Foundations](/modules/day-00-foundations) if you're new to AI, or [Environment Setup](/modules/day-00-course-setup) to prepare your development environment.
+
+---
+
+## Related Day 00 Modules
+
+- **[AI Foundations](/modules/day-00-foundations)** — Essential concepts for beginners
+- **[Environment Setup](/modules/day-00-course-setup)** — Get your tools ready
+- **[Glossary](/modules/day-00-glossary)** — Quick reference for all terminology

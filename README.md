@@ -1,20 +1,21 @@
 # Agentic Engineer
 
-🌐 **Live Site Coming Soon**: [agenticengineer.keyurgolani.name](https://agenticengineer.keyurgolani.name)
+🌐 **Live Site**: [agenticengineer.keyurgolani.name](https://agenticengineer.keyurgolani.name)
 
-**The Comprehensive 30-Day Course on Building Production-Grade AI Agents.**
+**The Comprehensive 3-Month Course on Building Production-Grade AI Agents.**
 
 From "Hello World" to "Autonomous Swarms" — Learn to architect, build, and deploy intelligent agentic systems using LangGraph, MCP, Vector Databases, and Agentic Design Patterns.
 
 ## 🚀 Features
 
-- **30-Day Curriculum**: Structured modules covering Foundations, Tool Use, Orchestration, Production Engineering, and Advanced Architectures.
-- **5 Capstone Projects**:
-  - **Deep Research Algorithm**: Recursive planner/researcher/writer graph.
-  - **K8s Evaluation Operator**: Autonomous infrastructure debugger.
-  - **Local-First Privacy Analyst**: Secure, sandboxed data analysis.
-  - **Refactoring Swarm**: LibCST-based automated code maintenance.
-  - **Forensics Team**: Multi-agent security investigation.
+- **90-Day Curriculum (3 Months)**:
+  - **Month 1**: Foundations & Core Concepts (LLM fundamentals, agent architectures, RAG, memory)
+  - **Month 2**: Multi-Agent Systems & Production Engineering (orchestration, security, observability)
+  - **Month 3**: Advanced Architectures & Mastery (swarms, enterprise deployment, capstone)
+- **12 Hands-On Projects**:
+  - **3 Major Capstone Projects**: Deep Research Agent, K8s Operator Agent, AgentOS Ecosystem
+  - **4 Specialized Projects**: Privacy Analyst, Refactoring Agent, Forensics Swarm, Domain Swarm
+  - **5 Mini-Projects**: Prompt Library, Memory Service, RAG Service, LLM Router, Research Agent
 - **Interactive Learning**:
   - **Live Code Blocks**: Syntax highlighting, copy-to-clipboard, file tree views.
   - **Visualizations**: Interactive diagrams (Mermaid, Transformers) and rich illustrations.
@@ -96,7 +97,7 @@ docker compose -f docker-compose.dev.yml up --build
 │   │   ├── modules/        # Course Content Pages
 │   │   └── api/            # API Routes
 │   ├── components/         # React UI Library (shadcn)
-│   ├── content/modules/    # MDX Course Material (Day 01-31)
+│   ├── content/modules/    # MDX Course Material (Day 00-90)
 │   ├── lib/                # Core Utilities
 │   └── public/             # Static Assets (Images, Illustrations)
 ├── infra/                  # Infrastructure (Docker, K8s)
