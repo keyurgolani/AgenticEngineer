@@ -1,0 +1,26 @@
+#!/bin/sh
+# Pre-commit hook: Run lint and tests before committing
+
+echo "🔍 Running pre-commit checks..."
+
+# Change to web directory
+cd web
+
+# Run linter
+echo "📝 Running ESLint..."
+npm run lint
+if [ $? -ne 0 ]; then
+    echo "❌ Linting failed. Please fix the errors before committing."
+    exit 1
+fi
+
+# Run tests
+echo "🧪 Running tests..."
+npm run test
+if [ $? -ne 0 ]; then
+    echo "❌ Tests failed. Please fix the failing tests before committing."
+    exit 1
+fi
+
+echo "✅ Pre-commit checks passed!"
+exit 0
