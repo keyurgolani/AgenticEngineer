@@ -52,12 +52,36 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to start learning.
 
+### Git Hooks Setup (Recommended)
+
+To enable pre-commit and pre-push validation hooks:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This will automatically run linting, tests, and builds before commits/pushes to catch issues early.
+
 ### Production Build
 
 ```bash
 cd web
 npm run build
 npm start
+```
+
+### Available Scripts
+
+All commands run from the `web/` directory:
+
+```bash
+npm run dev          # Start development server
+npm run build        # Production build
+npm start            # Start production server
+npm run lint         # Run ESLint
+npm run test         # Run tests (single run)
+npm run test:watch   # Run tests in watch mode
+npm run verify       # Verify build integrity
 ```
 
 ## 📦 Deployment
