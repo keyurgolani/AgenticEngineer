@@ -878,7 +878,25 @@ Return JSON: {"action": "ADD|UPDATE|DELETE|NOOP", "target_id": "...", "merged_co
 
 ### Summarization for Long Conversations
 
-{/* IMAGE_PLACEHOLDER: Create an animated visualization showing conversation summarization as a compression process. Show a long conversation thread as a series of message bubbles that grows until it hits a token limit threshold (visualize as a progress bar filling up). When the limit is reached, animate the older half of messages being "compressed" into a summary box (like files being zipped). Show the summary prepended to the remaining messages, creating space for new messages. Include a token counter showing how summarization reduces token usage while preserving key information. Visualize the rolling summarization pattern: every N messages triggers a summarization cycle. Use a "memory consolidation during sleep" metaphor where older memories get compressed into summaries while recent memories stay detailed. Add an interactive slider where learners can adjust the max_tokens threshold and see how it affects summarization frequency. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant New as New Msgs
+    participant Hist as History
+    participant Summ as Summarizer
+    participant Context as Context
+
+    Note over Context: Context Full (2000 tokens)
+    New->>Context: Add 10 new messages
+    Context->>Summ: Trigger Summary limit
+    Summ->>Hist: Read oldest 1000 tokens
+    Summ->>Summ: Compress to 150 tokens
+    Summ->>Context: Replace old msgs with Summary
+    Context-->>Context: Space freed (850 tokens)
+
+`}
+caption="Rolling Summarization: Compressing history to maintain context."
+/>
 
 When conversations grow long, summarization helps maintain context without exceeding token limits:
 
@@ -955,7 +973,22 @@ Summary:"""
 
 ## 6.6 LangGraph Checkpointing for Conversation Memory
 
-{/* IMAGE_PLACEHOLDER: Create an interactive visualization of LangGraph's checkpointing system. Show a conversation thread as a branching timeline where each checkpoint is a node. Visualize: (1) Thread creation with a unique thread_id, (2) Messages being added and state being saved at each step (show the checkpoint being written to storage), (3) Multiple threads for the same user running in parallel, (4) Time travel: ability to fork from any checkpoint and create alternate timelines. Include a database visualization showing how checkpoints are stored (thread_id, checkpoint_id, state blob, metadata). Animate the persistence cycle: invoke() → process → save checkpoint → return result. Show the difference between MemorySaver (in-memory, lost on restart) and SqliteSaver/PostgresSaver (persistent, survives restarts). Use a "save game" metaphor from video games where you can save progress and reload from any point. Add an interactive component where learners can simulate creating threads, adding messages, and seeing checkpoints being created. */}
+<Mermaid
+  chart={`
+gitGraph
+    commit id: "Initial"
+    commit id: "Msg 1"
+    branch "fork-1"
+    commit id: "Msg 2a"
+    commit id: "Msg 3a"
+    checkout main
+    commit id: "Msg 2b"
+    commit id: "Msg 3b"
+    branch "fork-2"
+    commit id: "Msg 4c"
+`}
+  caption="Checkpointing: Time-travel and branching for conversations."
+/>
 
 <Callout type="info">
   **Connection to Day 03:** LangGraph's checkpointing system provides built-in
@@ -1056,7 +1089,33 @@ for snapshot in graph.get_state_history(config):
 
 ## 6.6.1 LangGraph Store for Cross-Thread Memory
 
-{/* IMAGE_PLACEHOLDER: Create a comparison diagram showing Checkpointer vs Store side-by-side. Left side: Checkpointer with multiple thread timelines (thread-1, thread-2, thread-3) each with their own isolated state and checkpoints. Right side: Store with a shared knowledge base that all threads can access (user preferences, facts, settings). Show data flow: Thread 1 writes a preference to Store → Thread 2 reads the same preference. Visualize namespaces as folders organizing data by user and category. Include a practical example: user sets coding preference in Thread 1 (morning conversation) → preference is stored in Store → user asks for code help in Thread 2 (afternoon conversation) → agent retrieves preference from Store and personalizes response. Use a "personal locker vs shared library" metaphor: checkpoints are your personal locker (only you can access), Store is the shared library (everyone can access). Add an interactive component showing how semantic search works in the Store with embedding visualization. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Threads (Checkpoints)"
+        T1[Thread 1\n(Short Term)]
+        T2[Thread 2\n(Short Term)]
+        T3[Thread 3\n(Short Term)]
+    end
+
+    subgraph "Store (Long Term)"
+        User[User Profile\n- Preferences\n- Facts]
+        Domain[Domain Knowledge\n- Concepts]
+    end
+
+    T1 -->|Read/Write| User
+    T2 -->|Read/Write| User
+    T3 -->|Read| Domain
+
+    style T1 fill:#e3f2fd
+    style T2 fill:#e3f2fd
+    style T3 fill:#e3f2fd
+    style User fill:#c8e6c9
+    style Domain fill:#fff9c4
+
+`}
+caption="Store vs Checkpointers: Cross-thread vs Within-thread memory."
+/>
 
 <Callout type="warning">
   **New in LangGraph (2024):** LangGraph now provides a built-in **Store API**
@@ -1153,7 +1212,21 @@ result = graph.invoke({"query": "Help me write code"}, config)
 
 ## 6.7 Graph-Based Memory
 
-{/* IMAGE_PLACEHOLDER: Create an interactive graph visualization showing entities as nodes and relationships as edges. Start with a simple example: Alice (Person) → works_with → Bob (Person), Bob → reports_to → Carol (Person), Alice → works_on → Project X (Project). Animate a query: "Who does Alice's manager report to?" Show the graph traversal: start at Alice → follow works_with edge → reach Bob → follow reports_to edge → reach Carol. Highlight the path in the graph. Compare this with a vector search visualization showing how vector search might miss the connection. Include a more complex example with multiple entity types (People, Projects, Locations, Organizations) and relationship types (works_at, located_in, manages, collaborates_with). Make it interactive: let learners click on nodes to see properties, click on edges to see relationship details, and adjust traversal depth to see how subgraph extraction works. Use a "social network" or "mind map" metaphor. Add a comparison panel showing the same query answered by vector-only vs graph-based memory to demonstrate the difference. */}
+<Mermaid
+  chart={`
+graph LR
+    Alice((Alice)) -- works_with --> Bob((Bob))
+    Bob -- reports_to --> Carol((Carol))
+    Alice -- works_on --> ProjectX[Project X]
+    
+    subgraph Query["Who manages Alice's manager?"]
+        Path[Alice -> Bob -> Carol]
+    end
+    
+    style Path stroke:#f00,stroke-width:2px,fill:none
+`}
+  caption="Graph Memory: Connecting entities for relational reasoning."
+/>
 
 Graph memory represents information as entities (nodes) and relationships (edges), enabling complex relational reasoning that vector-only approaches struggle with.
 
@@ -1455,7 +1528,30 @@ sequenceDiagram
 
 ## 6.8 The Unified Memory System
 
-{/* IMAGE_PLACEHOLDER: Create a comprehensive system architecture diagram showing all four memory types integrated together. Design it as a layered architecture: (1) Top layer: Agent interface receiving queries, (2) Memory orchestration layer: build_context() method deciding which memories to retrieve, (3) Four memory stores in parallel: Working (in-process), Episodic (ChromaDB), Semantic (ChromaDB collections), Procedural (JSON + ChromaDB), (4) Storage layer: disk persistence. Show data flows: query comes in → orchestrator queries all relevant memory types in parallel → results are combined into unified context → context is passed to LLM. Include a timeline showing the lifecycle: start_task() → record_action() → complete_task() → memories are consolidated and distributed to appropriate stores. Visualize the selective retrieval: not all memories are included, only relevant ones based on the query. Use a "mission control dashboard" metaphor where different memory systems are monitoring stations providing different types of information. Add metrics showing token usage with vs without selective retrieval. */}
+<Mermaid
+  chart={`
+graph TD
+    Query[User Query] --> Orch[Memory Orchestrator]
+    
+    Orch -->|Current Task| WM[Working Memory]
+    Orch -->|Similar Events| Episodic[Episodic Memory]
+    Orch -->|Facts/Prefs| Semantic[Semantic Memory]
+    Orch -->|How-To| Proc[Procedural Memory]
+    
+    WM --> Context[Unified Context]
+    Episodic --> Context
+    Semantic --> Context
+    Proc --> Context
+    
+    Context --> LLM[LLM Response]
+    
+    style WM fill:#f9f
+    style Episodic fill:#bbf
+    style Semantic fill:#bfb
+    style Proc fill:#ff9
+`}
+  caption="Unified Memory Architecture: Integrating all memory systems."
+/>
 
 Combine all memory types into a coherent system:
 
@@ -1551,7 +1647,24 @@ class AgentMemorySystem:
 
 ## 6.9 Memory-Augmented Agent
 
-{/* IMAGE_PLACEHOLDER: Create an end-to-end flow diagram showing a complete memory-augmented agent in action. Show a user query entering the system → agent starts task (working memory initialized) → memory context is built (queries all memory types) → LLM generates response using memory context → task completes (episode stored, facts extracted, patterns learned) → working memory cleared. Include a split-screen comparison: left side shows an agent WITHOUT memory (every query starts fresh, no personalization), right side shows the SAME agent WITH memory (remembers context, personalizes responses, learns from past interactions). Visualize the memory context being injected into the system prompt. Show concrete examples: Query 1: "I prefer Python" → stored in semantic memory. Query 2: "Help me write code" → agent retrieves Python preference and provides Python examples. Query 3: "I had trouble with imports last time" → agent recalls episodic memory and suggests solutions. Use a "personal assistant evolution" metaphor showing the agent getting smarter over time as memories accumulate. */}
+<Mermaid
+  chart={`
+flowchart LR
+    Start([User Input]) --> Context[Build Context]
+    Context --> LLM[LLM Generation]
+    LLM --> Action[Execute Action]
+    Action --> Learn[Extract Learnings]
+    
+    Learn -->|Update| Episodic[(Episodic DB)]
+    Learn -->|Update| Semantic[(Semantic DB)]
+    Learn -->|Update| Procedural[(Procedural DB)]
+    
+    Episodic -.->|Retrieval| Context
+    Semantic -.->|Retrieval| Context
+    Procedural -.->|Retrieval| Context
+`}
+  caption="End-to-End Flow: The learning cycle of a memory-augmented agent."
+/>
 
 Integrate the memory system with our agent:
 

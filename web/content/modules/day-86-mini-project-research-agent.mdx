@@ -69,7 +69,24 @@ day: 86
 
 **Why This Matters**: Agents without web access are hallucination-prone and outdated. A research service gives them live access to the world, turning them into capable analysts.
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing a research agent as a detective with a magnifying glass, examining multiple web sources (represented as documents/screens) and connecting them with lines to form a synthesized answer. The agent should be shown iteratively refining queries, with a feedback loop visualization. Place this at the top of the Project Overview section to establish the mental model of iterative research. */}
+<Mermaid
+  chart={`
+graph LR
+    Agent[🕵️ Detective Agent] -->|Reads| Doc1[Source 1]
+    Agent -->|Reads| Doc2[Source 2]
+    Agent -->|Reads| Doc3[Source 3]
+    
+    Doc1 -->|Clue| Synth[Synthesis]
+    Doc2 -->|Fact| Synth
+    Doc3 -->|Gap| Synth
+    
+    Synth -->|Refine| Agent
+    
+    style Agent fill:#fff9c4,stroke:#fbc02d
+    style Synth fill:#e1bee7,stroke:#4a148c
+`}
+  caption="The Research Loop: Read, Synthesize, Refine, Repeat."
+/>
 
 **Real-World Analogy**: Think of your research agent as a skilled investigative journalist. Just as a journalist doesn't rely on a single source, your agent queries multiple search engines, cross-references information, identifies gaps in knowledge, and asks follow-up questions. The iterative research loop mirrors how humans naturally research—we read, identify what we don't know, search again, and synthesize findings into a coherent narrative with proper attribution.
 
@@ -90,11 +107,51 @@ In this final mini-project, we built a research specialist agent:
 3. **Synthesis & Citation**: The agent synthesizes information from dozens of sources into a coherent answer, carefully citing its sources so users can verify the truth.
 4. **Service Architecture**: We packaged this as a standalone service, so any other agent in our fleet can request "Research this topic" and get a comprehensive report.
 
-{/* IMAGE_PLACEHOLDER: Create a flow diagram showing the iterative research cycle: (1) Initial Query → (2) Search Multiple Sources → (3) Synthesize Findings → (4) Identify Gaps → (5) Generate Follow-up Queries → Loop back to (2) or (6) Generate Final Answer with Citations. Use different colors for each phase and show example queries/findings at each step. Place this after the Module Summary to visualize the complete research workflow. */}
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Query
+    Query --> Search
+    Search --> Synthesize
+    
+    Synthesize --> Check{Sufficient?}
+    Check -->|No| Gaps[Identify Gaps]
+    Gaps --> FollowUp[Gen Queries]
+    FollowUp --> Search
+    
+    Check -->|Yes| Final[Final Answer]
+    Final --> [*]
+`}
+  caption="Iterative Research Process: From initial query to final answer."
+/>
 
 ## Architecture
 
-{/* IMAGE_PLACEHOLDER: Create a detailed system architecture diagram showing: (1) Agent Fleet making requests to Research API, (2) Query Planner analyzing the question, (3) Web Searcher with dual paths to SearXNG (self-hosted, free) and Tavily (cloud, paid) with automatic fallback arrows, (4) Content Scraper extracting information, (5) Answer Synthesizer (highlighted) combining sources, (6) Citation Builder linking facts to URLs. Include visual indicators for data flow, iteration loops, and the fallback mechanism. Use color coding: green for free/self-hosted, blue for paid services, purple for synthesis. Place this before the Mermaid diagram as a more detailed visual reference. */}
+<Mermaid
+  chart={`
+graph TB
+    Agent[Agent Fleet] -->|Request| API[Research API]
+    
+    subgraph Service
+        API --> Planner[Query Planner]
+        Planner --> Searcher[Web Searcher]
+        
+        Searcher -->|Primary| SearXNG[SearXNG<br/>Self-hosted]
+        Searcher -->|Fallback| Tavily[Tavily<br/>Paid API]
+        
+        SearXNG --> Scraper[Scraper]
+        Tavily --> Scraper
+        
+        Scraper --> Synth[Synthesizer]
+        Synth --> Citations[Citation Builder]
+    end
+    
+    style SearXNG fill:#e8f5e9,stroke:#2e7d32
+    style Tavily fill:#e3f2fd,stroke:#0277bd
+    style Synth fill:#f3e5f5,stroke:#7b1fa2
+`}
+  caption="System Architecture: Dual-provider search strategy."
+/>
 
 <Mermaid
   chart={`
@@ -127,7 +184,13 @@ graph TB
 
 ## Detailed Requirements Specification
 
-{/* IMAGE_PLACEHOLDER: Create an interactive requirements matrix visualization showing FR (Functional Requirements) and NFR (Non-Functional Requirements) as two interconnected layers. Use a grid layout with priority indicators (P0=red, P1=orange, P2=yellow) for FRs and performance targets (green checkmarks for met, yellow warnings for at-risk) for NFRs. Include hover states that show requirement details. Place this at the top of the Detailed Requirements section to provide a visual overview of system requirements. */}
+| Requirement        | Priority | Fr    | Nfr    | Status |
+| :----------------- | :------- | :---- | :----- | :----- |
+| **Multi-Provider** | P0       | FR-01 |        | ✅ Met |
+| **Iterative Loop** | P0       | FR-02 | NFR-01 | ✅ Met |
+| **Synthesis**      | P0       | FR-04 | NFR-05 | ✅ Met |
+| **Citations**      | P0       | FR-05 | NFR-04 | ✅ Met |
+| **Quick Search**   | P2       | FR-07 | NFR-02 | ✅ Met |
 
 ### Functional Requirements (FR)
 
@@ -154,16 +217,38 @@ graph TB
 
 ### API Contract
 
-{/* INTERACTIVE_COMPONENT: Create a "Research Agent Playground" component that allows learners to:
-1. Input a research question
-2. Configure max_iterations (1-5 slider) and sources_per_iteration (1-10 slider)
-3. Click "Start Research" to simulate the iterative process
-4. Display animated progress showing: Current iteration, queries being executed, sources found, synthesis in progress
-5. Show final answer with clickable citation numbers that highlight the corresponding source
-6. Display metrics: total sources consulted, iterations performed, time elapsed
-7. Include example questions: "How do transformers work?", "What is LangGraph?", "Compare RAG vs fine-tuning"
-This interactive demo helps learners understand the iterative research flow before implementing it.
-Place this after the API Contract heading to provide hands-on experience with the research API. */}
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Playground UI"
+        Config[Configuration<br/>Iterations: 1-5<br/>Sources: 1-10]
+        Input[User Question]
+        Button[Start Research]
+        
+        Config --> Button
+        Input --> Button
+        
+        Button --> Progress[Progress Monitor]
+    end
+    
+    subgraph "Execution Flow"
+        Progress --> Queries[Executing Queries...]
+        Queries --> Sources[Reading Sources...]
+        Sources --> Synth[Synthesizing...]
+        Synth --> Loop{Iterations<br/>Remaining?}
+        
+        Loop -->|Yes| Queries
+        Loop -->|No| Answer[Final Answer]
+    end
+    
+    Answer --> Citations[Clickable Citations]
+    
+    style Config fill:#e1f5fe,stroke:#01579b
+    style Button fill:#4caf50,stroke:#1b5e20,color:white
+    style Answer fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Research Agent Playground: The interactive flow from configuration to cited answers."
+/>
 
 #### POST /research/ - Conduct Research
 
@@ -303,7 +388,22 @@ Implementations:
 
 ### Testing Requirements
 
-{/* IMAGE_PLACEHOLDER: Create a testing pyramid diagram specifically for the Research Agent. Bottom layer (Unit Tests - 85% coverage): SearchProvider, ResearchAgent methods, citation extraction. Middle layer (Integration Tests): Full research flow, provider fallback, iterative refinement. Top layer (Load Tests): Concurrent requests, throughput, latency under load. Use different colors for each layer and show example test counts. Include a "Test Coverage Dashboard" mockup showing 85%+ coverage with green indicators. Place this before the unit test table to establish the testing strategy. */}
+<Mermaid
+  chart={`
+graph TD
+    Load[Load Tests<br/>Throughput/Latency]
+    Integ[Integration Tests<br/>Full Flow/Fallback]
+    Unit[Unit Tests<br/>Providers/Synthesis]
+    
+    Load --> Integ
+    Integ --> Unit
+    
+    style Load fill:#ef9a9a,stroke:#c62828
+    style Integ fill:#fff59d,stroke:#fbc02d
+    style Unit fill:#a5d6a7,stroke:#2e7d32
+`}
+  caption="Testing Pyramid: Strategy for robust research agents."
+/>
 
 #### Unit Test Coverage (Minimum 85%)
 
@@ -365,7 +465,21 @@ server:
 
 ### Search Service
 
-{/* IMAGE_PLACEHOLDER: Create a comparison infographic showing SearXNG vs Tavily side-by-side. For SearXNG: show self-hosted server icon, "Free" badge, "Privacy-focused" label, aggregates from Google/Bing/DuckDuckGo. For Tavily: show cloud icon, "Paid API" badge, "Deep Crawling" label, AI-optimized results. Include a decision tree: "Simple query?" → SearXNG, "Complex research?" → Tavily, "SearXNG down?" → Auto-fallback to Tavily. Place this before the code to help learners understand when to use each provider. */}
+<Mermaid
+  chart={`
+graph TD
+    Query[Query] --> Type{Complex?}
+    
+    Type -->|No| SearXNG[SearXNG<br/>Free/Private]
+    Type -->|Yes| Tavily[Tavily<br/>Paid/Deep]
+    
+    SearXNG -->|Fail| Tavily
+    
+    style SearXNG fill:#e8f5e9,stroke:#2e7d32
+    style Tavily fill:#e3f2fd,stroke:#0277bd
+`}
+  caption="Provider Strategy: Balancing cost and depth."
+/>
 
 ```python
 # services/search.py
@@ -486,7 +600,34 @@ class SearchService:
 
 ### Research Agent
 
-{/* IMAGE_PLACEHOLDER: Create an animated sequence diagram showing the iterative research process with a concrete example. Show: Question: "How do transformers work?" → Iteration 1: Search "transformer architecture" → Synthesize: "Found attention mechanism info, but missing training details" → Iteration 2: Search "transformer training process" → Synthesize: "Now have architecture + training, but unclear about applications" → Iteration 3: Search "transformer applications NLP" → Final Answer with [1][2][3] citations. Use progressive disclosure to show how knowledge builds across iterations. Place this before the code to demonstrate the iterative refinement concept. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Agent
+    participant Web
+    
+    loop Iteration 1
+        Agent->>Web: Search "Transformer Arch"
+        Web-->>Agent: Results (Architecture)
+        Agent->>Agent: Synthesize (Missing: Training)
+    end
+    
+    loop Iteration 2
+        Agent->>Web: Search "Transformer Training"
+        Web-->>Agent: Results (Training)
+        Agent->>Agent: Synthesize (Missing: Apps)
+    end
+    
+    loop Iteration 3
+        Agent->>Web: Search "Transformer NLP Apps"
+        Web-->>Agent: Results (Applications)
+        Agent->>Agent: Synthesize (Complete)
+    end
+    
+    Agent->>Agent: Final Answer + Citations
+`}
+  caption="Progressive Disclosure: Building knowledge iteratively."
+/>
 
 ```python
 # services/research_agent.py
@@ -713,7 +854,26 @@ async def quick_search(question: str):
 
 ## SearXNG Setup (Self-Hosted)
 
-{/* IMAGE_PLACEHOLDER: Create a Docker deployment diagram showing the SearXNG container architecture. Show: (1) Docker host with SearXNG container, (2) Port mapping 8888:8080, (3) Volume mount for configuration, (4) Connections to external search engines (Google, Bing, DuckDuckGo) with privacy shield icons, (5) Your Research Agent connecting to localhost:8888. Include visual indicators for data flow and privacy boundaries. Place this before the docker-compose.yml to help learners understand the deployment architecture. */}
+<Mermaid
+  chart={`
+graph LR
+    Agent[Research Agent] -->|HTML/8888| Docker[Docker Host]
+    
+    subgraph Docker Host
+        SearXNG[SearXNG Container]
+        Vol[(Config Vol)]
+    end
+    
+    Docker -->|Port 8080| SearXNG
+    SearXNG --> Vol
+    
+    SearXNG -->|External| Google
+    SearXNG -->|External| Bing
+    
+    style SearXNG fill:#e1f5fe,stroke:#01579b
+`}
+  caption="Deployment: Self-hosted privacy with Docker."
+/>
 
 ```yaml
 # docker-compose.searxng.yml
@@ -737,9 +897,10 @@ docker-compose -f docker-compose.searxng.yml up -d
 ```
 
 <Callout type="tip">
-  **Pro Tip**: SearXNG aggregates results from multiple search engines, providing
-  better coverage than any single provider. It also respects your privacy by not
-  tracking searches or storing personal data—ideal for sensitive research queries.
+  **Pro Tip**: SearXNG aggregates results from multiple search engines,
+  providing better coverage than any single provider. It also respects your
+  privacy by not tracking searches or storing personal data—ideal for sensitive
+  research queries.
 </Callout>
 
 ---
@@ -751,34 +912,38 @@ Let's walk through a concrete example of how the research agent works:
 **Question**: "What are the latest developments in agentic AI architectures?"
 
 **Iteration 1**:
+
 - **Query**: "latest developments agentic AI architectures"
 - **Sources Found**: 5 articles about agent frameworks, LangGraph, AutoGPT
 - **Synthesis**: "Found information about LangGraph and multi-agent systems, but missing details on Model Context Protocol (MCP) and recent benchmarks"
 - **Sufficiency Check**: NO (gaps identified)
 
 **Iteration 2**:
+
 - **Follow-up Queries**: "Model Context Protocol MCP", "agentic AI benchmarks 2024"
 - **Sources Found**: 8 new articles about MCP, agent evaluation frameworks
 - **Synthesis**: "Now have MCP details and benchmarks, but unclear about production deployment patterns"
 - **Sufficiency Check**: NO (still gaps)
 
 **Iteration 3**:
+
 - **Follow-up Query**: "production deployment agentic systems"
 - **Sources Found**: 6 articles about agent orchestration, monitoring, scaling
 - **Synthesis**: "Complete picture: architectures (LangGraph, MCP), evaluation (benchmarks), deployment (production patterns)"
 - **Sufficiency Check**: YES
 
 **Final Answer** (with citations):
+
 ```
 Recent developments in agentic AI architectures focus on three key areas:
 
-1. **Orchestration Frameworks**: LangGraph has emerged as a leading framework for 
+1. **Orchestration Frameworks**: LangGraph has emerged as a leading framework for
    building stateful, multi-agent systems with cyclic workflows [1][2].
 
-2. **Model Context Protocol (MCP)**: Anthropic's MCP standardizes how agents 
+2. **Model Context Protocol (MCP)**: Anthropic's MCP standardizes how agents
    interact with external tools and data sources, enabling interoperability [3][4].
 
-3. **Production Patterns**: Enterprise deployments now emphasize observability, 
+3. **Production Patterns**: Enterprise deployments now emphasize observability,
    fault tolerance, and cost optimization through intelligent model routing [5][6].
 
 Citations:
@@ -788,13 +953,54 @@ Citations:
 ...
 ```
 
-{/* IMAGE_PLACEHOLDER: Create a visual timeline/flowchart showing this exact example with three iterations. Use a horizontal timeline with branches for each iteration showing: query → search results (with mini document icons) → synthesis (with thought bubble) → sufficiency check (with yes/no decision diamond). Highlight how knowledge accumulates across iterations. Use color coding: blue for queries, green for sources, purple for synthesis, red/green for sufficiency. Place this after the practical example text to reinforce the iterative concept. */}
+<Mermaid
+  chart={`
+gantt
+    title Research Example: Agentic AI
+    dateFormat X
+    axisFormat %s
+    
+    section Iteration 1
+    Query "Devs"      :active, 0, 1
+    Search (5 docs)   :active, 1, 2
+    Synthesize (Gap)  :crit, 2, 3
+    
+    section Iteration 2
+    Query "MCP"       :active, 3, 4
+    Search (8 docs)   :active, 4, 5
+    Synthesize (Gap)  :crit, 5, 6
+    
+    section Iteration 3
+    Query "Prod"      :active, 6, 7
+    Search (6 docs)   :active, 7, 8
+    Synthesize (Done) :active, 8, 9
+`}
+  caption="Example Timeline: Accumulating knowledge over 3 iterations."
+/>
 
 ---
 
 ## Key Takeaways
 
-{/* IMAGE_PLACEHOLDER: Create an infographic with 4 key lessons as visual metaphors: (1) Iterative Search shown as a spiral/loop getting closer to a target, (2) Citation Tracking shown as facts connected to source documents with chains/links, (3) Hybrid Providers shown as a balance scale with SearXNG (free) and Tavily (premium), (4) Synthesis Quality shown as puzzle pieces from multiple sources forming a complete picture. Use icons and minimal text. Place this at the beginning of Key Takeaways section. */}
+<Mermaid
+  chart={`
+mindmap
+  root((Research Agent))
+    Iterative
+        Refine Queries
+        Fill Gaps
+    Citations
+        Verify Facts
+        Build Trust
+    Hybrid Search
+        SearXNG Free
+        Tavily Deep
+    Synthesis
+        Cross-reference
+        Identify Conflicts
+`}
+  caption="Key Takeaways: The pillars of agentic research."
+/>
 
 1. **Iterative Search**: Good research is a loop, not a line. Allow agents to refine their queries.
    - **Why it matters**: Single-shot searches miss nuances. Humans naturally iterate—read, identify gaps, search again. Your agent should too.
@@ -818,7 +1024,26 @@ Citations:
 
 You've now built the core components of a production-ready agentic ecosystem across this 90-day course:
 
-{/* IMAGE_PLACEHOLDER: Create a visual service mesh diagram showing all 5 mini-project services interconnected. Show: Prompt Library (8001) at the top providing prompts to all services, Memory Service (8002) storing conversation history, RAG Service (8003) retrieving documents, LLM Router (8004) routing requests to different models, and Research Agent (8005) searching the web. Draw connection lines showing how services interact. Use different colors for each service and include port numbers. Add a "Your Agent Fleet" box at the center consuming all services. Place this before the table to visualize the complete ecosystem. */}
+<Mermaid
+  chart={`
+graph TD
+    User[User] -->|Interface| Fleet[Agent Fleet]
+    
+    Fleet -->|Get Prompts| Prompts[Prompt Library :8001]
+    Fleet -->|Store History| Memory[Memory Service :8002]
+    Fleet -->|Query Docs| RAG[RAG Service :8003]
+    Fleet -->|Route Model| Router[LLM Router :8004]
+    Fleet -->|Research| Research[Research Agent :8005]
+    
+    style Fleet fill:#fff9c4,stroke:#fbc02d
+    style Prompts fill:#e1f5fe,stroke:#01579b
+    style Memory fill:#e1f5fe,stroke:#01579b
+    style RAG fill:#e1f5fe,stroke:#01579b
+    style Router fill:#e1f5fe,stroke:#01579b
+    style Research fill:#e1f5fe,stroke:#01579b
+`}
+  caption="The Agent Ecosystem: Five microservices working in concert."
+/>
 
 | Service        | Port | Purpose                       |
 | -------------- | ---- | ----------------------------- |

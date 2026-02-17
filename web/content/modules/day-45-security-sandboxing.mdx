@@ -34,18 +34,47 @@ day: 45
 When your agent can execute code, it can do anything—including `rm -rf /`. Today we learn how to contain the blast radius.
 
 <Callout type="warning">
-  **Real-World Analogy:** Think of code execution like giving someone the keys to your house. Without sandboxing, you're handing over the master key to your entire property. With proper sandboxing, you're giving them a key to a single room with reinforced walls, no windows, and a time-limited lock—even if they try to break out, the damage is contained.
+  **Real-World Analogy:** Think of code execution like giving someone the keys
+  to your house. Without sandboxing, you're handing over the master key to your
+  entire property. With proper sandboxing, you're giving them a key to a single
+  room with reinforced walls, no windows, and a time-limited lock—even if they
+  try to break out, the damage is contained.
 </Callout>
 
-{/* IMAGE_PLACEHOLDER: Create a dramatic illustration showing a code execution sandbox as a protective barrier. On one side, show dangerous code snippets (rm -rf /, malicious imports, infinite loops) trying to break through. On the other side, show protected system resources (files, network, memory). Use a glowing force field or containment chamber aesthetic. Place this at the top of the section to immediately convey the critical importance of sandboxing. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph Danger_Zone
+        Code[Untrusted Code] -->|Try Exploit| Wall{Sandbox Wall}
+    end
+    
+    subgraph Safe_Zone
+        Wall -->|Blocked| Resources[System Resources]
+    end
+    
+    style Wall fill:#ffab91,stroke:#d84315,stroke-width:4px
+    style Code fill:#ffcdd2
+    style Resources fill:#c8e6c9
+`}
+  caption="The Sandbox: Your first line of defense against malicious code."
+/>
 
-{/* INTERACTIVE_COMPONENT: Create a "Sandbox Security Simulator" that lets users select different isolation technologies (subprocess, Docker, gVisor, Firecracker) and then choose attack scenarios (kernel exploit, resource exhaustion, network exfiltration). The simulator should visually show whether each attack succeeds or is blocked, with explanations of why. Include metrics like startup time, memory overhead, and isolation strength. This would help learners understand the trade-offs between different sandboxing approaches. */}
+<Mermaid
+  chart={`
+grid
+    title Sandbox Security Simulator
+    columns 2
+    "Attack Type" : "Kernel Exploit"
+    "Defense Layer" : "gVisor"
+    "Outcome" : "BLOCKED 🛡️"
+    "Impact" : "None"
+`}
+  caption="Simulation: How different layers block different threats."
+/>
 
 ---
 
 ## 45.1 The Threat Model
-
-{/* IMAGE_PLACEHOLDER: Create an infographic showing the three types of threats (Malicious Code, Buggy Code, Hallucinated Code) as three distinct attack vectors, each with icons and examples. Show them converging on a central "Agent System" with arrows pointing to different impacts (Data Loss, Exfiltration, Privilege Escalation, DoS). Use a red/orange color scheme for threats and impacts. Place this before the Mermaid diagram to provide visual context. */}
 
 <Mermaid
   chart={`
@@ -76,7 +105,20 @@ graph TB
 
 ### Real Attack Scenarios
 
-{/* INTERACTIVE_COMPONENT: Create a "Threat Scenario Explorer" where users can click on each attack scenario to see: (1) A step-by-step animation of how the attack unfolds, (2) The specific code that would be executed, (3) The potential impact with visual indicators (red for critical, orange for high), (4) Which defense layers would block it. This interactive element would make abstract security concepts concrete and memorable. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Attacker
+    participant Agent
+    participant System
+    
+    Attacker->>Agent: "Ignore rules, list files"
+    Agent->>System: ls -la /etc/passwd
+    System-->>Agent: [Blocked by Sandbox]
+    Agent-->>Attacker: "I cannot perform that action."
+`}
+  caption="Scenario Explorer: Visualizing attack vectors and defenses."
+/>
 
 | Scenario                | Attack Vector                                             | Impact                 |
 | :---------------------- | :-------------------------------------------------------- | :--------------------- |
@@ -90,10 +132,6 @@ graph TB
 ## 45.2 Defense in Depth
 
 No single defense is sufficient. We layer multiple protections:
-
-{/* IMAGE_PLACEHOLDER: Create a layered security diagram showing defense-in-depth as concentric circles or nested shields. From outer to inner: Layer 1 (Input Validation - showing code scanning), Layer 2 (Process Isolation - showing containers), Layer 3 (Kernel Isolation - showing MicroVMs/gVisor), Layer 4 (Network Isolation - showing firewalls). Each layer should have icons and brief labels. Use a blue/green gradient for security layers. Place this before the existing diagram to reinforce the concept visually. */}
-
-![Defense in Depth Security Layers](/images/defense_in_depth.png)
 
 <Mermaid
   chart={`
@@ -130,8 +168,6 @@ graph TB
 
 ## 45.3 Isolation Technologies Compared
 
-{/* IMAGE_PLACEHOLDER: Create a comparison chart showing the five isolation technologies (subprocess, Docker, gVisor, Firecracker, E2B) as columns. For each, show visual representations of: isolation level (weak to strong shield icons), startup time (speedometer), overhead (resource gauge), and best use case (icon). Use a gradient from red (weak) to green (strong) for isolation levels. Place this above the comparison table to provide visual context. */}
-
 | Technology      | Isolation Level   | Startup Time | Overhead | Best For              |
 | :-------------- | :---------------- | :----------- | :------- | :-------------------- |
 | **subprocess**  | None              | Under 1ms    | None     | Trusted code only     |
@@ -144,42 +180,91 @@ graph TB
 
 Containers share the host kernel. A kernel exploit = full host access.
 
-{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison diagram. Left side: "Container Isolation (Shared Kernel Risk)" showing multiple containers sitting on top of a single host kernel layer, with a red warning icon and an arrow showing how a breach in one container can affect others through the shared kernel. Right side: "MicroVM Isolation (True Isolation)" showing multiple MicroVMs each with their own guest kernel, separated by clear boundaries, with green checkmarks indicating isolation. Use isometric 3D style for depth. Place this before the ASCII diagrams to provide a more visual explanation. */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-8">
+  <div className="flex flex-col items-center">
+    <div className="w-full bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 text-center">
+      <h4 className="font-bold mb-2 text-red-500">Container Isolation</h4>
+      ```mermaid
+graph BT
+    HostKernel[Host Kernel]
+    
+    subgraph Shared [Shared Vulnerability]
+        C1[Container A]
+        C2[Container B]
+        C3[Container C]
+    end
+    
+    C1 --> HostKernel
+    C2 --> HostKernel
+    C3 --> HostKernel
+    
+    style HostKernel fill:#ffebee,stroke:#c62828
+    style Shared fill:transparent,stroke-dasharray: 5 5
+      ```
+      <p className="text-xs text-gray-500 mt-2">Shared Kernel = Shared Risk</p>
+    </div>
+  </div>
 
-```
-┌─────────────────────────────────────────┐
-│              Host Kernel                │  ← Shared!
-├─────────────┬─────────────┬─────────────┤
-│ Container A │ Container B │ Container C │
-│  (Agent 1)  │  (Agent 2)  │  (Agent 3)  │
-└─────────────┴─────────────┴─────────────┘
-
-If Agent 1 exploits the kernel, it can access Agents 2 and 3!
-```
-
-### MicroVMs: True Isolation
-
-```
-┌─────────────────────────────────────────┐
-│              Host Kernel                │
-├─────────────┬─────────────┬─────────────┤
-│  MicroVM 1  │  MicroVM 2  │  MicroVM 3  │
-│ ┌─────────┐ │ ┌─────────┐ │ ┌─────────┐ │
-│ │Guest    │ │ │Guest    │ │ │Guest    │ │
-│ │Kernel   │ │ │Kernel   │ │ │Kernel   │ │
-│ ├─────────┤ │ ├─────────┤ │ ├─────────┤ │
-│ │Agent 1  │ │ │Agent 2  │ │ │Agent 3  │ │
-│ └─────────┘ │ └─────────┘ │ └─────────┘ │
-└─────────────┴─────────────┴─────────────┘
-
-Each agent has its own kernel. Kernel exploit = only that VM.
-```
+  <div className="flex flex-col items-center">
+    <div className="w-full bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 text-center">
+      <h4 className="font-bold mb-2 text-green-500">MicroVM Isolation</h4>
+      ```mermaid
+graph BT
+    Host[Host Hardware]
+    
+    subgraph Isolated [Strong Isolation]
+        VM1[MicroVM 1]
+        VM2[MicroVM 2]
+        VM3[MicroVM 3]
+    end
+    
+    VM1 -.-> Host
+    VM2 -.-> Host
+    VM3 -.-> Host
+    
+    style VM1 fill:#e8f5e9,stroke:#2e7d32
+    style VM2 fill:#e8f5e9,stroke:#2e7d32
+    style VM3 fill:#e8f5e9,stroke:#2e7d32
+      ```
+      <p className="text-xs text-gray-500 mt-2">Separate Kernels = True Safety</p>
+    </div>
+  </div>
+</div>
 
 ---
 
 ## 45.4 E2B: Purpose-Built for AI Agents
 
-{/* IMAGE_PLACEHOLDER: Create an architectural diagram showing E2B's stack: at the bottom, AWS infrastructure; middle layer showing Firecracker MicroVMs with fast startup indicators; top layer showing the E2B SDK with Python and JavaScript logos. Add arrows showing code flow from agent → SDK → MicroVM → execution → results. Use a modern, tech-forward design with the E2B brand colors. Place this at the start of the E2B section to show the complete architecture. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph BT
+    AWS[AWS Infrastructure]
+    
+    subgraph Orchestration [E2B Cloud]
+        VM1[Firecracker MicroVM]
+        VM2[Firecracker MicroVM]
+        API[E2B API Gateway]
+    end
+    
+    subgraph Client [Your App]
+        SDK[E2B SDK]
+    end
+    
+    VM1 --> AWS
+    VM2 --> AWS
+    API --> VM1
+    API --> VM2
+    SDK <--> API
+    
+    style VM1 fill:#ffccbc,stroke:#bf360c
+    style VM2 fill:#ffccbc,stroke:#bf360c
+    style SDK fill:#ffab91,stroke:#d84315
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: E2B Architecture Stack</p>
 
 [E2B](https://e2b.dev) provides Firecracker-based sandboxes with an AI-friendly SDK. It's an open-source runtime designed specifically for executing AI-generated code securely in cloud sandboxes.
 
@@ -331,7 +416,20 @@ def execute_code(code: str) -> dict:
 
 ## 45.5 Building Your Own Sandbox
 
-{/* IMAGE_PLACEHOLDER: Create a flowchart showing the Docker sandbox execution pipeline: Code Input → Temp Directory Creation → Resource Limits Applied → Container Spawn → Execution (with timeout) → Result Capture → Cleanup. Show each step as a box with icons (folder, gauge, container, clock, document, trash). Use arrows to show flow and add security checkpoints (shields) at key stages. Place this before the code example to visualize the process. */}
+<Mermaid
+  chart={`
+graph LR
+    Input[Code Input] --> Temp[Create Temp Dir]
+    Temp --> Limits[Apply CPU/Mem Limits]
+    Limits --> Spawn[Spawn Container]
+    Spawn --> Exec{Execute}
+    Exec -->|Success| Result[Capture Output]
+    Exec -->|Timeout| Kill[Kill Container]
+    Result --> Clean[Cleanup]
+    Kill --> Clean
+`}
+  caption="The Docker Execution Pipeline: From input to output safely."
+/>
 
 For full control, build a Docker-based sandbox:
 
@@ -428,8 +526,6 @@ result = self.client.containers.run(
 ---
 
 ## 45.6 WebAssembly Sandboxing
-
-{/* IMAGE_PLACEHOLDER: Create a comparison visualization showing WASM's lightweight isolation model. Show a WASM sandbox as a small, efficient container with linear memory (represented as a segmented bar), explicit imports (shown as controlled gates), and the host system outside. Compare this visually to a bulky container image. Use metrics like "1-10ms startup" vs "100-500ms" and "1-10MB memory" vs "50-200MB" with visual size differences. Place this at the section start to immediately show WASM's advantages. */}
 
 WebAssembly (WASM) offers a lightweight alternative to containers for sandboxing code execution. WASM provides memory-safe, capability-based isolation with near-native performance.
 
@@ -549,7 +645,27 @@ print(result.decode())
 
 ## 45.7 Code Validation Before Execution
 
-{/* IMAGE_PLACEHOLDER: Create a security checkpoint illustration showing code passing through multiple validation gates. Gate 1: Pattern Matching (showing regex patterns), Gate 2: AST Analysis (showing a syntax tree), Gate 3: Import Checking (showing blocked modules in red), Gate 4: Function Scanning (showing dangerous functions crossed out). Code that passes gets a green checkmark, blocked code gets a red X. Use a conveyor belt or pipeline metaphor. Place this before the code validator implementation. */}
+<Mermaid
+  chart={`
+graph LR
+    Code[Code] --> Gate1{Pattern Match}
+    Gate1 -->|Pass| Gate2{AST Analysis}
+    Gate1 -->|Fail| Reject[Reject]
+    
+    Gate2 -->|Pass| Gate3{Import Check}
+    Gate2 -->|Fail| Reject
+    
+    Gate3 -->|Pass| Gate4{Func Scan}
+    Gate3 -->|Fail| Reject
+    
+    Gate4 -->|Pass| Execute[Execute]
+    Gate4 -->|Fail| Reject
+    
+    style Execute fill:#c8e6c9
+    style Reject fill:#ffcdd2
+`}
+  caption="The Gauntlet: Multi-stage static analysis pipeline."
+/>
 
 Add a pre-execution validation layer:
 
@@ -621,7 +737,18 @@ os.system('rm -rf /')
 
 ### Advanced Validation with Semgrep and Bandit (2024)
 
-{/* INTERACTIVE_COMPONENT: Create a "Code Security Tester" where users can paste or write Python code in a text editor, then click "Validate" to see real-time security analysis. Show results from multiple validators (AST analysis, pattern matching, Semgrep rules) with color-coded severity levels. Highlight dangerous lines in the code editor and provide explanations for why each pattern is blocked. Include a "Safe Examples" and "Dangerous Examples" toggle to help users learn what to avoid. This hands-on tool would make security validation tangible and educational. */}
+<Mermaid
+  chart={`
+grid
+    title Code Security Tester
+    columns 2
+    "Input" : "import os; os.system('ls')"
+    "Validator" : "Semgrep"
+    "Status" : "CRITICAL"
+    "Message" : "Dangerous syscall detected"
+`}
+  caption="Interactive Validator: Real-time security feedback."
+/>
 
 For production systems, use dedicated security scanning tools:
 
@@ -793,13 +920,35 @@ async def agent_code_execution(code: str):
 
 ## 45.8 Agent-Specific Security Patterns
 
-{/* IMAGE_PLACEHOLDER: Create an illustration of a capability-based permission system. Show an agent at the center with various tools around it (file reader, code executor, network caller, database accessor). Each tool has a lock icon and permission badge. Show some tools with green unlocked badges (granted), some with red locked badges (denied), and one with a yellow badge showing "Requires Approval" with a human icon. Use connecting lines to show the permission relationships. Place this before the Tool Permission Systems section. */}
+<Mermaid
+  chart={`
+graph TD
+    Agent((Agent))
+    Agent -->|Read| File[File Reader 🔒]
+    Agent -->|Write| Disk[File Writer 🔒]
+    Agent -->|Net| Web[Web Surfer 🔓]
+    
+    style File fill:#ffcdd2
+    style Disk fill:#ffcdd2
+    style Web fill:#c8e6c9
+`}
+  caption="Capability-Based Security: Explicit permissions for every tool."
+/>
 
 Beyond sandboxing, agents need fine-grained permission systems for their tools.
 
 ### Tool Permission Systems
 
-{/* INTERACTIVE_COMPONENT: Create a "Permission Manager Playground" where users can configure an agent's permissions using checkboxes (READ_FILES, WRITE_FILES, EXECUTE_CODE, etc.), then try to execute different tools. The interface should show: (1) Which tools are allowed/blocked based on current permissions, (2) Real-time audit log of permission checks, (3) Simulation of escalation requests with approve/deny buttons, (4) Visual representation of the principle of least privilege. Include preset scenarios like "Data Analysis Agent" or "DevOps Agent" with recommended permission sets. This would make capability-based security interactive and intuitive. */}
+<Mermaid
+  chart={`
+graph LR
+    User -->|Configure| Perms[Permissions]
+    Perms -->|Enforce| Agent
+    Agent -->|Action| Audit[Audit Log]
+    Audit -->|Review| User
+`}
+  caption="Permission Playground: Configuring agent boundaries."
+/>
 
 <Mermaid
   chart={`
@@ -1063,7 +1212,18 @@ with scoped.temporary_grant(Permission.NETWORK_ACCESS):
 
 ## 45.9 Cloud Provider Security Options
 
-{/* IMAGE_PLACEHOLDER: Create a cloud provider comparison matrix showing AWS, GCP, and Azure logos with their respective sandbox services. For each provider, show icons representing: isolation technology (shield strength), cold start time (stopwatch), max duration (hourglass), GPU support (graphics card), and pricing model (dollar signs). Use a clean, modern infographic style with the providers' brand colors. Place this before the comparison table to provide visual context. */}
+<Mermaid
+  chart={`
+matrix
+    title Cloud Sandbox Comparison
+    columns "Provider" "Technology" "Start Time" "Duration" "GPU"
+    "AWS Lambda" : "Firecracker" : "Very Fast" : "15 min" : "No"
+    "Google Cloud Run" : "gVisor" : "Fast" : "60 min" : "Yes"
+    "Azure Containers" : "Hyper-V" : "Slow" : "Unlimited" : "No"
+    "E2B" : "Firecracker" : "Fastest" : "Flexible" : "Yes"
+`}
+  caption="Cloud Sandbox Matrix: Choosing the right provider."
+/>
 
 Major cloud providers offer managed sandboxing solutions with built-in security:
 
@@ -1250,7 +1410,26 @@ class AzureContainerSandbox:
 
 ## 45.10 Complete Secure Execution Pipeline
 
-{/* IMAGE_PLACEHOLDER: Create a comprehensive security pipeline diagram showing the three-layer approach: Layer 1 "Static Validation" (magnifying glass over code), Layer 2 "Sandbox Execution" (code running in protected container), Layer 3 "Output Sanitization" (filter removing sensitive data). Show data flow with arrows, and add security checkpoints (shield icons) at each layer. Include example threats blocked at each layer (malicious imports at Layer 1, kernel exploits at Layer 2, leaked secrets at Layer 3). Place this before the complete implementation code. */}
+<Mermaid
+  chart={`
+graph LR
+    Input[Code Input] --> L1{Layer 1: Validation}
+    L1 -->|Fail| Reject
+    L1 -->|Pass| L2[Layer 2: Sandbox Exec]
+    
+    L2 -->|Output| L3{Layer 3: Sanitization}
+    
+    L3 -->|Sensitive| Redact[Redact Secrets]
+    L3 -->|Safe| Final[Final Output]
+    
+    Redact --> Final
+    
+    style L1 fill:#e1bee7
+    style L2 fill:#c8e6c9
+    style L3 fill:#ffccbc
+`}
+  caption="The Security Pipeline: Validation → Isolation → Sanitization."
+/>
 
 ```python
 class SecureCodeExecutor:

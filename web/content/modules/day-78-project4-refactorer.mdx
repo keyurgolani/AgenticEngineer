@@ -10,8 +10,8 @@ day: 78
 <Callout type="info">
   **Project Tier:** This is a **Tier 4 Project** (4-8 hours). It demonstrates
   the Neuro-Symbolic AI pattern—combining LLM reasoning with deterministic AST
-  manipulation for safe code transformation. Prerequisites: Complete foundational
-  modules (Days 1-30) and POC-01 first.
+  manipulation for safe code transformation. Prerequisites: Complete
+  foundational modules (Days 1-30) and POC-01 first.
 </Callout>
 
 <SkillLevel level="advanced" description="Code transformation" />
@@ -434,23 +434,29 @@ stateDiagram-v2
 
 ## 17.1 The Problem: "Blind" Refactoring
 
-![Refactoring Nano-bots](/images/refactoring_agent.png)
+<Mermaid
+  chart={`
+flowchart TD
+    subgraph "❌ LLM-Only"
+        Code1[Code] --> LLM1[LLM]
+        LLM1 -->|Hallucinates| BadCode[Broken Code]
+        LLM1 -->|Loses Comments| BadCode
+    end
 
-{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison diagram showing:
-LEFT SIDE - "LLM-Only Refactoring" with red X marks:
-- Original code with comments and formatting
-- Arrow pointing to messy output with deleted comments, changed indentation, hallucinated code
-- Label: "Unreliable, loses context"
+    subgraph "✅ Neuro-Symbolic"
+        Code2[Code] --> Parse[Parser]
+        Parse -->|Tree| Agent[LLM Planner]
+        Agent -->|Plan JSON| Trans[Transformer]
+        Parse -->|Original Tree| Trans
+        Trans -->|Apply Plan| GoodCode[Clean Code]
+    end
 
-RIGHT SIDE - "Neuro-Symbolic Refactoring" with green checkmarks:
-- Original code with comments
-- Arrow through "LLM Brain" (planning) + "AST Hands" (execution)
-- Output with preserved formatting, only type hints added
-- Label: "Reliable, preserves everything"
+    style BadCode fill:#f66,stroke:#333
+    style GoodCode fill:#6f6,stroke:#333
 
-Style: Clean, technical diagram with code snippets, use blue/green color scheme
-Placement: Directly after the section heading, before the list
-*/}
+`}
+caption="Comparison: LLMs struggle with syntax preservation. AST tools preserve it perfectly."
+/>
 
 If you ask an LLM to "rewrite this file to add type hints," it will often:
 
@@ -465,53 +471,50 @@ If you ask an LLM to "rewrite this file to add type hints," it will often:
 
 ## 17.2 Architecture: LLM + AST
 
-{/* IMAGE_PLACEHOLDER: Create an interactive visualization showing the Neuro-Symbolic pipeline:
-- Three connected stages with animated flow:
-  1. PARSE stage: Python code → LibCST parser → Tree structure (show actual CST nodes)
-  2. PLAN stage: Tree → LLM analysis → JSON output (show example JSON with function names and types)
-  3. PATCH stage: JSON + Tree → Transformer → Modified code (highlight only type hints changed)
-- Include hover states that show details for each stage
-- Use a medical surgery metaphor: "Brain" (LLM) + "Hands" (AST) = "Surgeon"
-- Color code: Blue for deterministic steps, Purple for LLM step
-- Add small code snippets at each stage showing actual transformations
-Placement: Right after this paragraph, before the Mermaid diagram
-*/}
-
-[LibCST](https://libcst.readthedocs.io/) (from Instagram/Meta) is a Concrete Syntax Tree parser for Python that preserves all formatting details—comments, whitespace, and parentheses. Unlike Python's built-in `ast` module, LibCST allows you to modify code while keeping it human-readable.
-
-1.  **Parse**: Convert code to a Concrete Syntax Tree (LibCST).
-2.  **Plan**: Ask LLM: "Which functions need what return types? Return JSON."
-3.  **Patch**: Deterministically apply the JSON plan to the Tree.
-
-<div className="my-8">
 <Mermaid
   chart={`
-graph TD
-    Code[Legacy Code] --> Parse[LibCST Parser]
-    Parse -->|Function Signatures| LLM
-    LLM -->|JSON Plan| Transformer[AST Transformer]
-    Parse --> Transformer
-    Transformer --> NewCode[Refactored Code]
+sequenceDiagram
+    participant Code as Source Code
+    participant CST as LibCST Parser
+    participant LLM as LLM Agent
+    participant Trans as Transformer
 
-    style Transformer fill:#f9f,stroke:#333
+    Code->>CST: Parse(preserve_formatting=True)
+    CST-->>LLM: Extract Function Signatures
+
+    Note over LLM: "Analyze types based on variable names"
+
+    LLM-->>Trans: Return Refactoring Plan (JSON)
+    Note right of LLM: {"add": {"a": "int", "b": "int"}}
+
+    CST->>Trans: Pass Original Tree
+    Trans->>Trans: Apply Plan to Tree
+    Trans-->>Code: Generate New Code (Format Preserved)
 
 `}
+caption="The Pipeline: The LLM makes decisions (Plan), but code modification is done by the AST Transformer (Patch)."
 />
-
-</div>
 
 ### Why LibCST over ast?
 
-{/* IMAGE_PLACEHOLDER: Create an interactive comparison tool:
-- Split-screen code editor showing same Python function
-- LEFT: "ast module" - show original code, then after round-trip (comments gone, formatting changed)
-- RIGHT: "LibCST" - show original code, then after round-trip (identical, only type hints added)
-- Include a slider or toggle to switch between "before" and "after" states
-- Highlight differences with color coding (red for lost content, green for preserved)
-- Add tooltips explaining why each feature matters
-- Make it look like a real code diff tool (similar to GitHub's diff view)
-Placement: Replace or supplement the table below
-*/}
+<Mermaid
+  chart={`
+quadrantChart
+    title Tool Capabilities
+    x-axis Low Fidelity --> High Fidelity
+    y-axis "Hard to Use" --> "Easy to Use"
+    quadrant-1 "Ideal (LibCST)"
+    quadrant-2 "User Friendly but Lossy (Aider/LLM)"
+    quadrant-3 "Low Utils (Regex)"
+    quadrant-4 "Powerful but Complex (Standard AST)"
+    
+    "LibCST": [0.8, 0.6]
+    "ast module": [0.3, 0.4]
+    "Regex": [0.1, 0.2]
+    "LLM-Only": [0.2, 0.9]
+`}
+  caption="Trade-offs: LibCST offers high fidelity (formatting preservation) with reasonable usability."
+/>
 
 | Feature            | `ast` module | LibCST       |
 | :----------------- | :----------- | :----------- |
@@ -531,18 +534,24 @@ LibCST has continued to evolve with Python's rapid release cycle:
 
 ### Choosing Your Parsing Approach
 
-{/* IMAGE_PLACEHOLDER: Create a decision tree flowchart:
-- Start node: "Need to refactor code?"
-- Branch 1: "Single language?" → Yes → "Python?" → Yes → "LibCST" (highlighted as best choice)
-- Branch 2: "Single language?" → No → "Multiple languages?" → "tree-sitter"
-- Branch 3: "Format preservation critical?" → Yes → "LibCST" or "RedBaron"
-- Branch 4: "Format preservation critical?" → No → "Simple changes?" → Yes → "Regex" (with warning icon)
-- Branch 5: "Exploratory only?" → "LLM-only" (with caution icon)
-- Use icons for each tool (Python logo for LibCST, tree icon for tree-sitter, etc.)
-- Color code by risk level: Green (safe), Yellow (caution), Red (risky)
-- Make it interactive: clicking each node shows pros/cons and example use cases
-Placement: Above or below the table
-*/}
+<Mermaid
+  chart={`
+flowchart TD
+    Start{Need to Refactor?} -->|Yes| Lang{Python?}
+    Lang -->|No| TreeSitter[Use tree-sitter]
+    Lang -->|Yes| Format{Format Critical?}
+    
+    Format -->|No/One-off| LLM[LLM / Aider]
+    Format -->|Yes| LibCST[Use LibCST]
+    
+    LibCST --> Safe[Safe & Scalable]
+    LLM --> Risky[Check Manually!]
+    
+    style LibCST fill:#6f6,stroke:#333
+    style LLM fill:#f96,stroke:#333
+`}
+  caption="Decision Tree: Choose the right parser based on your constraints."
+/>
 
 | Approach        | Best For                                  | Trade-offs                          |
 | :-------------- | :---------------------------------------- | :---------------------------------- |
@@ -668,20 +677,21 @@ We don't send the whole file if it's huge. We iterate over functions.
 
 ### Step 2: The Surgeon (LibCST)
 
-{/* IMAGE_PLACEHOLDER: Create an animated AST transformation visualizer:
-- Show the CST tree structure for "def add(a, b): return a + b"
-- Visualize nodes: Module → FunctionDef → Name, Parameters, Return
-- Animate the transformation process:
-  1. Highlight the FunctionDef node
-  2. Show the plan JSON: {"add": "int"}
-  3. Animate adding the Annotation node to the returns field
-  4. Show the final tree with the new node highlighted in green
-- Include a "step through" control to see each transformation step
-- Display the code output updating in real-time as the tree changes
-- Use tree visualization similar to AST Explorer (https://astexplorer.net/)
-- Add tooltips showing node types and properties
-Placement: Right before the code block, as an interactive learning tool
-*/}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "CST Transformation"
+        Func[FunctionDef: add] --> Params[Parameters: a, b]
+        Func --> Body[Body: return a+b]
+        Func -.->|New Node| Ann[Annotation: -> int]
+    end
+    
+    Transformer[Transformer] -->|Injects| Ann
+    
+    style Ann fill:#6f6,stroke:#333
+`}
+  caption="The Surgery: The Transformer injects a specific Annotation node without touching the body or comments."
+/>
 
 This code is **100% deterministic**. It cannot hallucinate.
 
@@ -855,19 +865,23 @@ if __name__ == "__main__":
 
 ## 17.5 Code Quality Validation
 
-{/* IMAGE_PLACEHOLDER: Create a validation pipeline diagram:
-- Show a horizontal flow with 4 stages:
-  1. "Refactor" (code with type hints added)
-  2. "Type Check" (mypy/pyright running, show terminal output)
-  3. "Test Suite" (pytest running, show pass/fail indicators)
-  4. "Commit" (git commit with checkmark) OR "Rollback" (undo icon)
-- Use traffic light colors: Green for pass, Red for fail, Yellow for warnings
-- Include actual terminal output snippets for each stage
-- Add a "failure path" showing rollback when validation fails
-- Make it look like a CI/CD pipeline visualization
-- Include timing information for each stage (e.g., "Type check: 2.3s")
-Placement: At the start of section 17.5, before the subsections
-*/}
+<Mermaid
+  chart={`
+flowchart LR
+    Refactor[Refactor Code] --> TypeCheck{Type Check}
+    TypeCheck -->|Pass| TestSuite{Test Suite}
+    TypeCheck -->|Fail| Rollback[Rollback]
+    
+    TestSuite -->|Pass| Commit[Git Commit]
+    TestSuite -->|Fail| Rollback
+    
+    style TypeCheck fill:#fff9c4,stroke:#fbc02d
+    style TestSuite fill:#fff9c4,stroke:#fbc02d
+    style Commit fill:#c8e6c9,stroke:#2e7d32
+    style Rollback fill:#ffcdd2,stroke:#c62828
+`}
+  caption="Validation Pipeline: Failing fast at any stage triggers an automatic rollback."
+/>
 
 Refactoring without validation is dangerous. After applying type hints, you must verify the code still works correctly.
 
@@ -1031,34 +1045,55 @@ except Exception as e:
 
 ## 17.6 Multi-Language Support
 
-{/* IMAGE_PLACEHOLDER: Create a multi-language support matrix:
-- Grid layout showing languages (Python, TypeScript, Java, Go, Rust) vs. capabilities
-- For each language, show:
-  - Parser tool (LibCST, ts-morph, JavaParser, etc.)
-  - Format preservation (✓ or ✗)
-  - Type inference support
-  - Example code snippet
-- Include language logos for visual recognition
-- Add a "complexity meter" showing how difficult each language is to refactor
-- Make it interactive: clicking a language shows detailed implementation guide
-- Highlight Python + TypeScript as the "best supported" languages
-Placement: At the start of section 17.6, as an overview
-*/}
+<Mermaid
+  chart={`
+mindmap
+  root((Languages))
+    Python
+        LibCST
+        Full Preservation
+        Mature
+    TypeScript
+        ts-morph
+        Full Preservation
+        Mature
+    Java
+        JavaParser
+        Partial Preservation
+        Enterprise
+    Go
+        go/ast
+        No Comments
+        Fast
+    Rust
+        Syn
+        Complex
+        Growing
+`}
+  caption="Language Support Matrix: Python and TypeScript offer the best tooling for format-preserving refactoring."
+/>
 
 While LibCST excels at Python, production codebases often span multiple languages. Here's how to extend your refactoring agent.
 
 ### Tree-sitter for Language-Agnostic Parsing
 
-{/* IMAGE_PLACEHOLDER: Create a tree-sitter visualization:
-- Show the same function in 3 languages (Python, JavaScript, Rust)
-- Display the tree-sitter AST for each (similar structure despite different syntax)
-- Highlight common patterns: function definitions, parameters, return statements
-- Include a query example showing how to find functions across all languages
-- Use a unified color scheme to show equivalent nodes across languages
-- Add an interactive query builder where users can test tree-sitter queries
-- Link to AST Explorer with pre-loaded examples
-Placement: Right after the tree-sitter heading
-*/}
+<Mermaid
+  chart={`
+graph TD
+    Function[FunctionDefinition]
+    Function --> Name[Name: add]
+    Function --> Params[Parameters]
+    Params --> P1[Param: a]
+    Params --> P2[Param: b]
+    Function --> Body[Block]
+    Body --> Return[ReturnStatement]
+    
+    style Function fill:#e1bee7,stroke:#4a148c
+    style Name fill:#bbdefb,stroke:#0d47a1
+    style Params fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Tree-sitter AST: Universal structure allows querying functions across different languages."
+/>
 
 [Tree-sitter](https://tree-sitter.github.io/) provides fast, incremental parsing for 100+ languages:
 
@@ -1217,39 +1252,51 @@ class MultiLanguageRefactorer:
 
 ## 17.7 Production Considerations
 
-{/* IMAGE_PLACEHOLDER: Create a production readiness checklist visualization:
-- Dashboard-style layout with key metrics:
-  - Files processed: progress bar with count
-  - Type coverage: circular progress indicator (e.g., 73%)
-  - Test pass rate: gauge meter
-  - Performance: time per file chart
-- Include a "risk assessment" section with traffic lights:
-  - Backup strategy: Green (implemented)
-  - Rollback plan: Green (tested)
-  - Validation: Yellow (partial)
-- Add a timeline showing incremental rollout phases
-- Include real-world metrics from a sample refactoring project
-- Make it look like a professional monitoring dashboard
-Placement: At the start of section 17.7
-*/}
+<Mermaid
+  chart={`
+mindmap
+  root((Production))
+    Safety
+        Backups
+        Rollback
+        Dry Run
+    Quality
+        Type Check
+        Unit Tests
+        Linting
+    Observability
+        Progress bars
+        Error Logs
+        Metrics
+    Scale
+        Chunking
+        Parallelism
+        Caching
+`}
+  caption="Production Readiness: Critical features for running refactorings at scale."
+/>
 
 Scaling refactoring from a single file to enterprise codebases requires careful planning.
 
 ### Handling Large Codebases
 
-{/* IMAGE_PLACEHOLDER: Create a codebase chunking strategy diagram:
-- Visualize a large repository as a tree structure
-- Show different chunking strategies:
-  1. By directory (src/, tests/, lib/)
-  2. By file size (small, medium, large)
-  3. By change frequency (hot, warm, cold)
-  4. By priority (critical, high, medium, low)
-- Include a memory usage graph showing how chunking prevents OOM errors
-- Add a "batch processing" animation showing files moving through the pipeline
-- Display estimated time and cost for each strategy
-- Use a Gantt chart to show parallel processing opportunities
-Placement: Right after the "Handling Large Codebases" heading
-*/}
+<Mermaid
+  chart={`
+graph TB
+    Repo[Repository] -->|Split| Dirs[Directories]
+    Dirs -->|Filter| Files[Python Files]
+    
+    Files -->|Strategy| Batching{Batch Strategy}
+    
+    Batching -->|Small| Direct[Process]
+    Batching -->|Large| Chunk[Split by Module]
+    Batching -->|Huge| Skip[Manual Review]
+    
+    style Repo fill:#bbdefb,stroke:#0d47a1
+    style Batching fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Chunking Strategy: Breaking down large codebases to prevent memory issues."
+/>
 
 **Chunking Strategies**:
 
@@ -1295,26 +1342,23 @@ for chunk in chunk_files(Path("./src"), chunk_size=50):
 
 ### Incremental vs Big-Bang Refactoring
 
-{/* IMAGE_PLACEHOLDER: Create a comparison animation:
-- Split screen showing two parallel timelines:
-  LEFT: "Incremental Refactoring"
-  - Show small PRs being merged over time (weeks/months)
-  - Visualize gradual type coverage increase (0% → 25% → 50% → 75% → 100%)
-  - Display team velocity staying stable
-  - Show low risk meter throughout
-  
-  RIGHT: "Big-Bang Refactoring"
-  - Show one massive PR at the end
-  - Visualize sudden jump in type coverage (0% → 100%)
-  - Display team velocity dropping during refactoring
-  - Show high risk spike, then drop
-  
-- Include a "merge conflict" indicator showing frequency
-- Add a "team stress" meter (humorous but informative)
-- Use animated progress bars and timeline markers
-- Include a recommendation engine: "Based on your team size and codebase, we recommend..."
-Placement: Above or below the comparison table
-*/}
+<Mermaid
+  chart={`
+quadrantChart
+    title Refactoring Strategy Risk Profile
+    x-axis Low Risk --> High Risk
+    y-axis Low Velocity --> High Velocity
+    quadrant-1 Big Bang (Fast but Risky)
+    quadrant-2 Efficient Incremental
+    quadrant-3 Slow Incremental
+    quadrant-4 Chaos (Rolling Refactor)
+    "Incremental": [0.2, 0.6]
+    "Big Bang": [0.8, 0.8]
+    "Manual": [0.1, 0.2]
+    "No Tests": [0.9, 0.3]
+`}
+  caption="Risk vs Velocity: Incremental refactoring maintains stability while Big Bang offers speed at high risk."
+/>
 
 | Approach        | Pros                                        | Cons                                  | Best For                        |
 | :-------------- | :------------------------------------------ | :------------------------------------ | :------------------------------ |

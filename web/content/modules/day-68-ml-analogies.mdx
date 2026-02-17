@@ -36,14 +36,48 @@ day: 68
 
 As senior engineers, you already have deep intuition about machine learning systems. This module leverages that knowledge to demystify agentic AI—transforming it from "magic" into a rigorous engineering discipline.
 
-{/* IMAGE_PLACEHOLDER: Create an interactive concept mapper showing:
-   - Left column: ML Concepts (Kernel Trick, Ensemble, Hidden Layers, PCA, RL, Attention, Transfer Learning, Regularization, Gradient Descent)
-   - Right column: Agent Concepts (Feature Engineering, Multi-Agent, Reasoning, Context Compression, Optimization, Focus, Adaptation, Safety, Improvement)
-   - Interactive connecting lines that light up on hover to show the mapping
-   - Each concept should be clickable to jump to that section
-   - Use icons for each concept pair
-   - Include a "Show All Connections" toggle
-   Style: Interactive visualization with smooth animations, suitable for both light and dark themes */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "ML Concepts"
+        A[Kernel Trick]
+        B[Ensemble]
+        C[Hidden Layers]
+        D[PCA]
+        E[RL]
+        F[Attention]
+        G[Transfer Learning]
+        H[Regularization]
+        I[Gradient Descent]
+    end
+    
+    subgraph "Agent Concepts"
+        AA[Implicit Features]
+        BB[Multi-Agent Swarm]
+        CC[Reasoning Chain]
+        DD[Context Compression]
+        EE[Feedback Loops]
+        FF[Focus Mechanism]
+        GG[Domain Adaptation]
+        HH[Safety Layers]
+        II[Optimization]
+    end
+    
+    A <--> AA
+    B <--> BB
+    C <--> CC
+    D <--> DD
+    E <--> EE
+    F <--> FF
+    G <--> GG
+    H <--> HH
+    I <--> II
+    
+    style A fill:#e3f2fd,stroke:#1565c0
+    style AA fill:#e8f5e9,stroke:#2e7d32
+`}
+  caption="Mapping Classical ML Intuition to Agentic Design Patterns."
+/>
 
 <Callout type="tip">
   **The Goal:** By the end of this module, you'll see agents not as mysterious
@@ -62,11 +96,30 @@ As senior engineers, you already have deep intuition about machine learning syst
 
 ## 14.1 The Kernel Trick: Agents as Feature Engineers
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing the kernel trick concept with two panels: 
-   Left panel: 2D scatter plot with non-linearly separable data points (red and blue circles mixed)
-   Right panel: Same data transformed into 3D space where they become linearly separable with a plane
-   Include arrows showing the transformation and label it "Implicit Feature Engineering"
-   Style: Clean, technical diagram with soft colors, suitable for dark/light themes */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Input Space (Raw Code)"
+        P1((Code A))
+        P2((Code B))
+        P3((Code C))
+    end
+    
+    subgraph "Feature Space (Agent Understanding)"
+        P1 --> F1[Security Risk: High]
+        P1 --> F2[Complexity: 8/10]
+        P2 --> F3[Security Risk: Low]
+        P2 --> F4[Complexity: 2/10]
+        
+        Boundary{Decision Plane}
+        F1 --> Boundary
+        F3 --> Boundary
+    end
+    
+    style Boundary fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="The Kernel Trick: Agents implicitly map raw text to high-dimensional semantic features."
+/>
 
 <TransformerArchitecture />
 
@@ -153,12 +206,31 @@ Just as different kernels (linear, polynomial, RBF) are suited for different dat
 
 ## 14.2 Ensemble Methods: Multi-Agent as Random Forest
 
-{/* IMAGE_PLACEHOLDER: Create a visual comparison showing:
-   Top: Random Forest diagram with multiple decision trees feeding into a voting mechanism
-   Bottom: Multi-agent system with specialized agents (Security, Performance, Style, Testing) feeding into an orchestrator
-   Use parallel visual structure to emphasize the analogy
-   Include icons for each agent type and connecting arrows showing information flow
-   Style: Modern, clean infographic style with consistent color coding */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Random Forest"
+        D1[Data] --> T1[Tree 1]
+        D1 --> T2[Tree 2]
+        D1 --> T3[Tree 3]
+        T1 --> V[Voting]
+        T2 --> V
+        T3 --> V
+        V --> R1[Prediction]
+    end
+    
+    subgraph "Agent Swarm"
+        Task[Task] --> A1[Security Agent]
+        Task --> A2[Perf Agent]
+        Task --> A3[Style Agent]
+        A1 --> O[Orchestrator]
+        A2 --> O
+        A3 --> O
+        O --> R2[Unified Report]
+    end
+`}
+  caption="Visual Parallel: Multi-agent systems as ensemble predictors."
+/>
 
 <MLAnalogy
   type="ensemble"
@@ -335,14 +407,20 @@ graph TD
 
 ## 14.3 Hidden Layers: Emergent Agent Behaviors
 
-{/* IMAGE_PLACEHOLDER: Create a neural network visualization showing:
-   - Input layer (raw data: code, logs, queries)
-   - Multiple hidden layers with abstract patterns/activations (representing intermediate reasoning)
-   - Output layer (final agent response)
-   - Highlight that hidden layers contain non-interpretable but valuable transformations
-   - Use gradient colors to show information flow and transformation
-   - Add labels: "Raw Input" → "Hidden Reasoning" → "Final Output"
-   Style: Technical but accessible, with flowing connections between layers */}
+<Mermaid
+  chart={`
+graph LR
+    Input[User Request] --> L1[Layer 1: Parsing]
+    L1 --> L2[Layer 2: Reasoning]
+    L2 --> L3[Layer 3: Planning]
+    L3 --> L4[Layer 4: Tool Selection]
+    L4 --> Output[Final Response]
+    
+    style L2 fill:#e1bee7,stroke:#8e24aa
+    style L3 fill:#e1bee7,stroke:#8e24aa
+`}
+  caption="Reasoning steps act as hidden layers, transforming input into actionable output."
+/>
 
 <MLAnalogy
   type="neural"
@@ -465,13 +543,22 @@ def query_expander(state: ResearchState) -> dict:
 
 ## 14.4 Dimensionality Reduction: Context Compression
 
-{/* IMAGE_PLACEHOLDER: Create a visualization showing dimensionality reduction:
-   - Left side: High-dimensional data cloud (1000s of log lines, large codebase) represented as a dense 3D point cloud
-   - Center: PCA transformation arrow with "Extract Principal Components" label
-   - Right side: Compressed 2D representation showing the key information preserved
-   - Include labels showing "10,000 lines → 50 key insights" with percentage "95% variance preserved"
-   - Use color gradients to show information density
-   Style: Technical visualization with clear before/after comparison */}
+<Mermaid
+  chart={`
+graph LR
+    Raw[10k Log Lines] -->|PCA / Compression| Features[50 Key Signals]
+    Features -->|Analysis| Insight[Root Cause]
+    
+    subgraph "Dimensionality Reduction"
+        Raw 
+        Features
+    end
+    
+    style Raw fill:#ffcdd2
+    style Features fill:#c8e6c9
+`}
+  caption="Context Compression: Reducing 10k lines to 50 key signals."
+/>
 
 <MLAnalogy
   type="pca"
@@ -587,14 +674,23 @@ class HierarchicalContextManager:
 
 ## 14.5 Reinforcement Learning: Agent Optimization
 
-{/* IMAGE_PLACEHOLDER: Create an RL cycle diagram showing:
-   - Agent in center
-   - Circular flow: Agent → Action → Environment → Reward → Agent
-   - Split view showing "Exploration" path (trying new approaches, question marks) vs "Exploitation" path (using known solutions, checkmarks)
-   - Include epsilon-greedy formula: ε = 0.1 (10% explore, 90% exploit)
-   - Show reward signals: +1 for success, -1 for failure, 0 for neutral
-   - Use arrows and icons to make the feedback loop clear
-   Style: Clean cycle diagram with distinct colors for exploration vs exploitation */}
+<Mermaid
+  chart={`
+stateDiagram-v2
+    Agent --> Action: Select Action
+    Action --> Environment: Execute
+    Environment --> Reward: Result
+    Reward --> Agent: +1 Success / -1 Failure
+    
+    state Agent {
+        [*] --> Explore
+        [*] --> Exploit
+        Explore --> UpdatePolicy
+        Exploit --> UpdatePolicy
+    }
+`}
+  caption="The RL Loop: Agents learn from environmental feedback."
+/>
 
 <MLAnalogy
   type="rl"
@@ -764,14 +860,25 @@ class AgentRewardSystem:
 
 ## 14.6 Attention Mechanisms: Agent Focus
 
-{/* IMAGE_PLACEHOLDER: Create an attention heatmap visualization:
-   - Show a long document/context window as a horizontal bar
-   - Overlay attention weights as a heatmap (bright at beginning and end, dim in middle)
-   - Label the "Lost in the Middle" problem with a valley in the attention curve
-   - Include a second panel showing "Attention-Aware Positioning" with strategic placement of important info
-   - Add multi-head attention concept: 4 different colored attention patterns (semantic, temporal, structural, causal)
-   - Use warm colors (red/orange) for high attention, cool colors (blue) for low attention
-   Style: Heatmap visualization with clear annotations and labels */}
+<Mermaid
+  chart={`
+graph TD
+    Context[Long Context Window]
+    
+    Head1[Semantic Head]
+    Head2[Temporal Head]
+    
+    Context -->|Attend| Head1
+    Context -->|Attend| Head2
+    
+    Head1 -->|Focus| Relevant[Key Info]
+    Head2 -->|Focus| Recent[Recent Events]
+    
+    Relevant --> Combined
+    Recent --> Combined
+`}
+  caption="Multi-Head Attention: Focusing on what matters."
+/>
 
 <MLAnalogy
   type="attention"
@@ -937,18 +1044,28 @@ graph TD
 
 ## 14.7 Transfer Learning: Agent Adaptation
 
-{/* IMAGE_PLACEHOLDER: Create a transfer learning flow diagram:
-   - Left: Pre-trained model (large brain icon) labeled "General Knowledge: ImageNet/Web-scale training"
-   - Center: Transfer arrow with layers showing what transfers (low-level features) vs what adapts (high-level features)
-   - Right: Specialized model (focused brain icon) labeled "Domain Expert: Medical/Legal/Your Codebase"
-   - Below: Show the adaptation spectrum as a horizontal scale:
-     * Prompt Engineering (lightest, fastest)
-     * Few-Shot Examples
-     * RAG Augmentation
-     * Fine-Tuning
-     * Continued Pretraining (heaviest, slowest)
-   - Use color intensity to show adaptation depth
-   Style: Clean flow diagram with clear progression from general to specific */}
+<Mermaid
+  chart={`
+graph LR
+    Pre[Pre-Trained Knowledge] -->|Transfer| Adapted[Adapted Agent]
+    
+    subgraph "Transfer Strategies"
+        P[Prompting]
+        F[Few-Shot]
+        R[RAG]
+        FT[Fine-Tuning]
+    end
+    
+    P --> Adapted
+    F --> Adapted
+    R --> Adapted
+    FT --> Adapted
+    
+    style Pre fill:#ffe0b2
+    style Adapted fill:#b3e5fc
+`}
+  caption="Transfer Learning Spectrum: From Prompting to Fine-Tuning."
+/>
 
 <MLAnalogy
   type="transfer"
@@ -1090,16 +1207,27 @@ class DomainAdaptedAgent:
 
 ## 14.8 Regularization: Preventing Agent Failures
 
-{/* IMAGE_PLACEHOLDER: Create a regularization comparison diagram:
-   - Top panel: "Overfitting" - Agent confidently hallucinating incorrect information (red warning signs)
-   - Bottom panel: "Regularized" - Agent with multiple safety layers:
-     * Layer 1: RAG Grounding (database icon)
-     * Layer 2: Confidence Calibration (uncertainty bars)
-     * Layer 3: Multi-Agent Verification (multiple agent icons checking)
-     * Layer 4: Structured Output Constraints (schema/template icon)
-   - Show information flow through each regularization layer
-   - Include before/after confidence scores: "99% confident (wrong)" vs "75% confident (correct)"
-   Style: Layered architecture diagram with clear visual distinction between unsafe and safe outputs */}
+<Mermaid
+  chart={`
+graph TD
+    Unsafe[Overfit/Unsafe Agent] -->|Regularization| Safe[Robust Agent]
+    
+    subgraph "Regularizers"
+        R1[RAG Grounding]
+        R2[Confidence Calib]
+        R3[Multi-Agent Verify]
+    end
+    
+    Unsafe --> R1
+    Unsafe --> R2
+    Unsafe --> R3
+    
+    R1 --> Safe
+    R2 --> Safe
+    R3 --> Safe
+`}
+  caption="Regularization: Preventing hallucinations and overfitting."
+/>
 
 <MLAnalogy
   type="regularization"
@@ -1311,17 +1439,21 @@ class MultiAgentVerification:
 
 ## 14.9 Gradient Descent: Iterative Agent Improvement
 
-{/* IMAGE_PLACEHOLDER: Create a gradient descent optimization visualization:
-   - 3D loss surface (bowl-shaped) with agent configuration as the parameter space
-   - Show optimization path: starting point → iterative steps → optimal point
-   - Include gradient arrows pointing downhill toward better performance
-   - Add labels for key concepts:
-     * Learning rate (step size arrows)
-     * Momentum (curved trajectory showing acceleration)
-     * Local minimum vs global minimum
-   - Side panel showing iteration metrics: Loss decreasing over iterations
-   - Include analogy labels: "Prompt tweaks" = "Parameter updates", "Performance metrics" = "Loss function"
-   Style: 3D surface plot with clear optimization trajectory and annotations */}
+<Mermaid
+  chart={`
+graph TD
+    Start[Initial Config] --> Eval[Evaluate]
+    Eval --> Loss{Loss < Threshold?}
+    Loss -->|Yes| Deploy[Deploy]
+    Loss -->|No| Grad[Compute 'Gradient']
+    Grad --> Update[Update Prompts/Params]
+    Update --> Eval
+    
+    style Loss fill:#fff9c4
+    style Deploy fill:#c8e6c9
+`}
+  caption="Gradient Descent: Iteratively optimizing the agent."
+/>
 
 <MLAnalogy
   type="optimization"
@@ -1507,22 +1639,26 @@ class AgentOptimizer:
 
 ## 14.10 Putting It All Together
 
-{/* IMAGE_PLACEHOLDER: Create a comprehensive system architecture diagram showing all ML analogies integrated:
-   - Center: "Production Incident Analysis Agent"
-   - Surrounding modules with icons and labels:
-     * Kernel Trick: Feature extraction layer
-     * Ensemble/MoE: Specialist agents with router
-     * Hidden Layers: Reasoning chain
-     * PCA: Context compression
-     * RL: Feedback loop
-     * Attention: Focus mechanism
-     * Transfer Learning: Domain adaptation
-     * Regularization: Safety layers
-     * Gradient Descent: Improvement cycle
-   - Show data flow through the system with arrows
-   - Use consistent color coding for each ML concept
-   - Include input (incident data) and output (root cause analysis)
-   Style: Comprehensive architecture diagram, clean and organized, showing how all concepts work together */}
+<Mermaid
+  chart={`
+graph TD
+    Input[Incident Data] --> PCA[PCA: Context Compression]
+    PCA --> Attn[Attention: Focus]
+    Attn --> Kernel[Kernel: Feature Extraction]
+    Kernel --> MOE[MoE: Specialist Agents]
+    
+    MOE --> Deep[Hidden Layers: Reasoning]
+    Deep --> Reg[Regularization: Safety Check]
+    Reg --> RL[RL: Feedback Loop]
+    
+    RL --> Output[Root Cause Analysis]
+    
+    style MOE fill:#bbdefb
+    style Deep fill:#e1bee7
+    style Reg fill:#c8e6c9
+`}
+  caption="The Unified Architecture: All ML concepts working in concert."
+/>
 
 <RealWorldExample
   title="ML-Informed Agent Architecture"

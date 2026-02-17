@@ -1,0 +1,3765 @@
+---
+title: "Mini Project: Agentic Documentation Generator"
+description: "Build an intelligent agent that analyzes codebases and automatically generates comprehensive documentation including API references, architecture diagrams, and usage examples."
+week: 14
+day: 97
+---
+
+<ReadingTime minutes={55} />
+
+<SkillLevel
+  level="intermediate"
+  description="Code analysis and documentation generation"
+/>
+
+<Prerequisites
+  items={[
+    "Understanding of Abstract Syntax Trees (AST) and code parsing",
+    "Familiarity with Python type hints and docstrings",
+    "Experience with LLM-based text generation",
+    "Basic knowledge of Mermaid diagram syntax",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Parse Python codebases using AST and libcst for structural analysis",
+    "Extract function signatures, class hierarchies, and module dependencies",
+    "Generate comprehensive API documentation with LLM assistance",
+    "Create architecture diagrams automatically using Mermaid syntax",
+    "Produce usage examples from function signatures and docstrings",
+    "Implement docstring quality checking and improvement suggestions",
+    "Build a documentation versioning system for tracking changes",
+  ]}
+/>
+
+<Callout type="info">
+  **Project Context:** This intermediate project combines static code analysis
+  with LLM-powered documentation generation to create a production-grade
+  documentation tool. Duration: 10-14 hours. Ideal for developers building
+  internal tools or maintaining large codebases.
+</Callout>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Abstract Syntax Tree (AST)",
+      definition:
+        "A tree representation of source code structure that captures functions, classes, and their relationships without execution",
+    },
+    {
+      term: "Docstring",
+      definition:
+        "A string literal that appears as the first statement in a module, function, class, or method, used for documentation",
+    },
+    {
+      term: "API Reference",
+      definition:
+        "Comprehensive documentation of all public interfaces including function signatures, parameters, return types, and examples",
+    },
+    {
+      term: "Architecture Diagram",
+      definition:
+        "Visual representation of system components and their relationships, typically rendered as flowcharts or class diagrams",
+    },
+    {
+      term: "Documentation Versioning",
+      definition:
+        "Tracking documentation changes over time, enabling comparison between versions and change history",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build an intelligent agent that analyzes Python codebases and automatically generates comprehensive documentation including API references, architecture diagrams in Mermaid format, and usage examples.
+
+**Why This Matters**: Documentation is often the first casualty of fast-paced development. Outdated or missing docs slow down onboarding, increase bugs, and frustrate developers. An automated documentation generator ensures docs stay current with code, reduces manual effort, and maintains consistency across large codebases.
+
+<Mermaid
+  chart={`
+graph LR
+    Codebase[Source Code] --> Parser[AST Parser]
+    Parser --> Analyzer[Code Analyzer]
+    Analyzer --> DocGen[Doc Generator]
+    DocGen --> LLM[LLM Enhancer]
+    LLM --> Output[Documentation]
+    
+    Analyzer --> DiagramGen[Diagram Generator]
+    DiagramGen --> Output
+    
+    Analyzer --> ExampleGen[Example Generator]
+    ExampleGen --> Output
+    
+    style LLM fill:#f9f,stroke:#333
+    style Analyzer fill:#e1f5fe,stroke:#01579b
+    style Output fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Documentation Pipeline: From source code to comprehensive documentation."
+/>
+
+**Real-World Analogy**: Think of this agent as an expert technical writer who can read code fluently. They examine your codebase, understand the architecture, identify public APIs, and produce clear documentation—all without you explaining anything. The LLM adds the human touch, generating readable explanations and practical examples.
+
+**Skills Showcased**:
+
+- Multi-file codebase analysis with AST parsing
+- Function and class extraction with type information
+- LLM-assisted documentation generation
+- Mermaid diagram creation from code structure
+- Usage example synthesis
+- Documentation quality metrics
+
+## Module Summary
+
+In this project, we build a sophisticated documentation generation system:
+
+1. **AST Parsing Pipeline**: We parse Python source files using `ast` and `libcst` to extract structural information including functions, classes, imports, and their relationships.
+
+2. **Code Analysis**: We analyze extracted elements to understand module dependencies, class hierarchies, and function call graphs.
+
+3. **LLM-Powered Documentation**: We use GPT-4o to generate human-readable descriptions, explanations, and usage examples from code signatures and existing docstrings.
+
+4. **Diagram Generation**: We automatically create Mermaid diagrams showing module dependencies, class hierarchies, and architecture overviews.
+
+5. **Quality Checking**: We evaluate existing docstrings for completeness and suggest improvements.
+
+6. **Versioning**: We track documentation changes over time, enabling diff views between versions.
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Scan
+    Scan --> Parse: Files Found
+    Parse --> Analyze: AST Built
+    Analyze --> Generate: Structure Extracted
+    
+    Generate --> Enhance{LLM?}
+    Enhance -->|Yes| LLMProcess: Add Descriptions
+    Enhance -->|No| Format
+    LLMProcess --> Format
+    
+    Format --> Output
+    Output --> Version: Save Snapshot
+    Version --> [*]
+`}
+  caption="Documentation State Machine: From scanning to versioned output."
+/>
+
+---
+
+## Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Documentation Generator Service"
+        API[Documentation API] --> Orchestrator[Doc Orchestrator]
+        
+        subgraph "Parsing Layer"
+            Scanner[File Scanner]
+            ASTParser[AST Parser]
+            TypeExtractor[Type Extractor]
+        end
+        
+        subgraph "Analysis Layer"
+            ModuleAnalyzer[Module Analyzer]
+            ClassAnalyzer[Class Analyzer]
+            FuncAnalyzer[Function Analyzer]
+            DepMapper[Dependency Mapper]
+        end
+        
+        subgraph "Generation Layer"
+            APIDocGen[API Doc Generator]
+            DiagramGen[Diagram Generator]
+            ExampleGen[Example Generator]
+            QualityChecker[Quality Checker]
+        end
+        
+        subgraph "Output Layer"
+            MDRenderer[Markdown Renderer]
+            Versioner[Version Manager]
+        end
+        
+        Orchestrator --> Scanner
+        Scanner --> ASTParser
+        ASTParser --> TypeExtractor
+        
+        TypeExtractor --> ModuleAnalyzer
+        TypeExtractor --> ClassAnalyzer
+        TypeExtractor --> FuncAnalyzer
+        ModuleAnalyzer --> DepMapper
+        
+        ClassAnalyzer --> APIDocGen
+        FuncAnalyzer --> APIDocGen
+        DepMapper --> DiagramGen
+        
+        APIDocGen --> MDRenderer
+        DiagramGen --> MDRenderer
+        ExampleGen --> MDRenderer
+        QualityChecker --> MDRenderer
+        
+        MDRenderer --> Versioner
+    end
+    
+    style APIDocGen fill:#f9f,stroke:#333
+    style DiagramGen fill:#e1f5fe,stroke:#01579b
+    style Versioner fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="System Architecture: Multi-layer documentation generation pipeline."
+/>
+
+---
+
+## Detailed Requirements Specification
+
+### Functional Requirements (FR)
+
+| ID    | Requirement              | Description                                                                            | Priority |
+| ----- | ------------------------ | -------------------------------------------------------------------------------------- | -------- |
+| FR-01 | File Scanning            | The system shall recursively scan directories for Python files                         | P0       |
+| FR-02 | AST Parsing              | The system shall parse Python files into AST representations                           | P0       |
+| FR-03 | Function Extraction      | The system shall extract function signatures, parameters, return types, and docstrings | P0       |
+| FR-04 | Class Extraction         | The system shall extract class definitions, methods, attributes, and inheritance       | P0       |
+| FR-05 | API Doc Generation       | The system shall generate API reference documentation in Markdown format               | P0       |
+| FR-06 | Diagram Generation       | The system shall create Mermaid diagrams for module dependencies and class hierarchies | P1       |
+| FR-07 | Example Generation       | The system shall generate usage examples from function signatures                      | P1       |
+| FR-08 | Docstring Quality Check  | The system shall evaluate docstring completeness and suggest improvements              | P1       |
+| FR-09 | LLM Enhancement          | The system shall use LLM to generate human-readable descriptions                       | P1       |
+| FR-10 | Documentation Versioning | The system shall track documentation versions and enable comparisons                   | P2       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement        | Target                                                     | Measurement           |
+| ------ | ------------------ | ---------------------------------------------------------- | --------------------- |
+| NFR-01 | Parse Success Rate | 100% of valid Python files shall parse successfully        | Parse success rate    |
+| NFR-02 | Processing Speed   | Process 1000 LOC in < 5 seconds (excluding LLM calls)      | Lines per second      |
+| NFR-03 | Output Quality     | Generated docs shall be valid Markdown                     | Markdown lint pass    |
+| NFR-04 | Diagram Validity   | All generated Mermaid diagrams shall render without errors | Mermaid parse success |
+| NFR-05 | Coverage           | Extract 100% of public functions and classes               | Extraction coverage   |
+
+### API Contract
+
+#### POST /generate - Generate Documentation
+
+**Request Body:**
+
+```json
+{
+  "source_path": "string (required) - path to file or directory",
+  "output_format": "string ('markdown' | 'mdx') - default: 'markdown'",
+  "include_private": "boolean - include private members (default: false)",
+  "generate_diagrams": "boolean - create Mermaid diagrams (default: true)",
+  "generate_examples": "boolean - create usage examples (default: true)",
+  "use_llm": "boolean - enhance with LLM descriptions (default: true)",
+  "options": {
+    "max_depth": "integer - max directory depth (default: 10)",
+    "exclude_patterns": "array of glob patterns to exclude",
+    "docstring_style": "string ('google' | 'numpy' | 'sphinx') - default: 'google'"
+  }
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "documentation": {
+    "modules": ["array of module documentation objects"],
+    "classes": ["array of class documentation objects"],
+    "functions": ["array of function documentation objects"]
+  },
+  "diagrams": {
+    "module_dependency": "string - Mermaid diagram code",
+    "class_hierarchy": "string - Mermaid diagram code",
+    "architecture": "string - Mermaid diagram code"
+  },
+  "quality_report": {
+    "total_items": "integer",
+    "documented_items": "integer",
+    "coverage_percent": "float",
+    "suggestions": ["array of improvement suggestions"]
+  },
+  "metadata": {
+    "files_processed": "integer",
+    "lines_of_code": "integer",
+    "generation_time_ms": "integer",
+    "version_id": "string"
+  }
+}
+```
+
+**Error Response (400/500):**
+
+```json
+{
+  "detail": "string",
+  "parse_errors": ["array of file parse errors"] | null,
+  "files_failed": ["array of failed file paths"] | null
+}
+```
+
+### Data Models
+
+```
+Documentation Request:
+┌─────────────────────────────────────────────────────────────┐
+│                   GenerationRequest                          │
+├─────────────────────────────────────────────────────────────┤
+│ source_path: STRING                                         │
+│ output_format: OutputFormat                                 │
+│ include_private: BOOLEAN                                    │
+│ generate_diagrams: BOOLEAN                                  │
+│ generate_examples: BOOLEAN                                  │
+│ use_llm: BOOLEAN                                            │
+│ options: GenerationOptions                                  │
+└─────────────────────────────────────────────────────────────┘
+
+Extracted Function:
+┌─────────────────────────────────────────────────────────────┐
+│                   FunctionInfo                               │
+├─────────────────────────────────────────────────────────────┤
+│ name: STRING                                                │
+│ module: STRING                                              │
+│ signature: STRING                                           │
+│ parameters: List[ParameterInfo]                             │
+│ return_type: STRING | null                                  │
+│ docstring: STRING | null                                    │
+│ decorators: List[STRING]                                    │
+│ is_async: BOOLEAN                                           │
+│ line_number: INTEGER                                        │
+└─────────────────────────────────────────────────────────────┘
+
+Extracted Class:
+┌─────────────────────────────────────────────────────────────┐
+│                   ClassInfo                                  │
+├─────────────────────────────────────────────────────────────┤
+│ name: STRING                                                │
+│ module: STRING                                              │
+│ bases: List[STRING]                                         │
+│ methods: List[FunctionInfo]                                 │
+│ attributes: List[AttributeInfo]                             │
+│ docstring: STRING | null                                    │
+│ decorators: List[STRING]                                    │
+│ line_number: INTEGER                                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Error Handling Matrix
+
+| Error Code       | HTTP Status | Cause                           | Response Body                                            | Recovery Action        |
+| ---------------- | ----------- | ------------------------------- | -------------------------------------------------------- | ---------------------- |
+| PATH_NOT_FOUND   | 400         | Source path does not exist      | `{"detail": "Path not found: X"}`                        | Verify path exists     |
+| PARSE_ERROR      | 400         | Python file has syntax errors   | `{"detail": "Parse error", "parse_errors": [...]}`       | Fix source syntax      |
+| PERMISSION_ERROR | 400         | Cannot read source files        | `{"detail": "Permission denied: X"}`                     | Check file permissions |
+| LLM_ERROR        | 500         | LLM API call failed             | `{"detail": "LLM enhancement failed"}`                   | Retry or disable LLM   |
+| GENERATION_ERROR | 500         | Documentation generation failed | `{"detail": "Generation failed", "files_failed": [...]}` | Check specific files   |
+
+---
+
+## Core Implementation
+
+### Step 1: File Scanner and AST Parser
+
+We start by scanning the codebase and parsing Python files into AST representations.
+
+<Mermaid
+  chart={`
+graph TD
+    Path[Source Path] --> Scanner[File Scanner]
+    Scanner --> Filter{Python File?}
+    Filter -->|Yes| Parser[AST Parser]
+    Filter -->|No| Skip[Skip]
+    
+    Parser --> Extract[Extract Elements]
+    Extract --> Functions[Functions]
+    Extract --> Classes[Classes]
+    Extract --> Imports[Imports]
+    
+    style Parser fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="File Processing: From path to extracted code elements."
+/>
+
+```python
+# parsers/code_parser.py
+import ast
+import libcst as cst
+from pathlib import Path
+from dataclasses import dataclass, field
+from typing import List, Dict, Optional, Any, Set
+import fnmatch
+
+@dataclass
+class ParameterInfo:
+    """Information about a function parameter."""
+    name: str
+    type_hint: Optional[str] = None
+    default: Optional[str] = None
+    is_args: bool = False
+    is_kwargs: bool = False
+
+@dataclass
+class FunctionInfo:
+    """Extracted function information."""
+    name: str
+    module: str
+    filepath: str
+    signature: str
+    parameters: List[ParameterInfo]
+    return_type: Optional[str]
+    docstring: Optional[str]
+    decorators: List[str]
+    is_async: bool
+    is_private: bool
+    line_number: int
+    source_code: str
+
+@dataclass
+class AttributeInfo:
+    """Class attribute information."""
+    name: str
+    type_hint: Optional[str]
+    default: Optional[str]
+    is_class_var: bool
+
+@dataclass
+class ClassInfo:
+    """Extracted class information."""
+    name: str
+    module: str
+    filepath: str
+    bases: List[str]
+    methods: List[FunctionInfo]
+    attributes: List[AttributeInfo]
+    docstring: Optional[str]
+    decorators: List[str]
+    is_private: bool
+    line_number: int
+    source_code: str
+
+@dataclass
+class ModuleInfo:
+    """Extracted module information."""
+    name: str
+    filepath: str
+    docstring: Optional[str]
+    imports: List[str]
+    from_imports: Dict[str, List[str]]
+    functions: List[FunctionInfo]
+    classes: List[ClassInfo]
+    global_variables: List[AttributeInfo]
+
+@dataclass
+class CodebaseInfo:
+    """Complete codebase analysis result."""
+    modules: List[ModuleInfo] = field(default_factory=list)
+    all_functions: List[FunctionInfo] = field(default_factory=list)
+    all_classes: List[ClassInfo] = field(default_factory=list)
+    dependency_graph: Dict[str, Set[str]] = field(default_factory=dict)
+    class_hierarchy: Dict[str, List[str]] = field(default_factory=dict)
+
+class FileScanner:
+    """Scan directories for Python files."""
+
+    def __init__(
+        self,
+        exclude_patterns: List[str] = None,
+        max_depth: int = 10
+    ):
+        self.exclude_patterns = exclude_patterns or [
+            "__pycache__",
+            "*.pyc",
+            ".git",
+            ".venv",
+            "venv",
+            "node_modules",
+            ".tox",
+            "*.egg-info",
+        ]
+        self.max_depth = max_depth
+
+    def scan(self, source_path: str) -> List[Path]:
+        """Scan for Python files in the given path."""
+        path = Path(source_path)
+
+        if not path.exists():
+            raise FileNotFoundError(f"Path not found: {source_path}")
+
+        if path.is_file():
+            if path.suffix == ".py":
+                return [path]
+            return []
+
+        return self._scan_directory(path, depth=0)
+
+    def _scan_directory(self, directory: Path, depth: int) -> List[Path]:
+        """Recursively scan directory for Python files."""
+        if depth > self.max_depth:
+            return []
+
+        python_files = []
+
+        for item in directory.iterdir():
+            if self._should_exclude(item):
+                continue
+
+            if item.is_file() and item.suffix == ".py":
+                python_files.append(item)
+            elif item.is_dir():
+                python_files.extend(self._scan_directory(item, depth + 1))
+
+        return sorted(python_files)
+
+    def _should_exclude(self, path: Path) -> bool:
+        """Check if path matches any exclude pattern."""
+        name = path.name
+        for pattern in self.exclude_patterns:
+            if fnmatch.fnmatch(name, pattern):
+                return True
+        return False
+
+
+class PythonASTParser:
+    """Parse Python files and extract code elements."""
+
+    def __init__(self, include_private: bool = False):
+        self.include_private = include_private
+
+    def parse_file(self, filepath: Path) -> Optional[ModuleInfo]:
+        """Parse a single Python file."""
+        try:
+            source_code = filepath.read_text(encoding="utf-8")
+            tree = ast.parse(source_code)
+        except SyntaxError as e:
+            raise ValueError(f"Syntax error in {filepath}: {e}")
+        except Exception as e:
+            raise ValueError(f"Failed to parse {filepath}: {e}")
+
+        module_name = self._get_module_name(filepath)
+
+        return ModuleInfo(
+            name=module_name,
+            filepath=str(filepath),
+            docstring=ast.get_docstring(tree),
+            imports=self._extract_imports(tree),
+            from_imports=self._extract_from_imports(tree),
+            functions=self._extract_functions(tree, module_name, filepath, source_code),
+            classes=self._extract_classes(tree, module_name, filepath, source_code),
+            global_variables=self._extract_globals(tree),
+        )
+
+    def _get_module_name(self, filepath: Path) -> str:
+        """Convert filepath to module name."""
+        parts = filepath.with_suffix("").parts
+        # Remove common prefixes like 'src'
+        if parts and parts[0] in ("src", "lib", "app"):
+            parts = parts[1:]
+        return ".".join(parts)
+
+    def _extract_imports(self, tree: ast.Module) -> List[str]:
+        """Extract import statements."""
+        imports = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imports.append(alias.name)
+        return imports
+
+    def _extract_from_imports(self, tree: ast.Module) -> Dict[str, List[str]]:
+        """Extract from...import statements."""
+        from_imports = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                names = [alias.name for alias in node.names]
+                if module in from_imports:
+                    from_imports[module].extend(names)
+                else:
+                    from_imports[module] = names
+        return from_imports
+
+    def _extract_functions(
+        self,
+        tree: ast.Module,
+        module_name: str,
+        filepath: Path,
+        source_code: str
+    ) -> List[FunctionInfo]:
+        """Extract top-level function definitions."""
+        functions = []
+
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                is_private = node.name.startswith("_")
+                if is_private and not self.include_private:
+                    continue
+
+                func_info = self._parse_function(
+                    node, module_name, filepath, source_code
+                )
+                functions.append(func_info)
+
+        return functions
+
+    def _parse_function(
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+        module_name: str,
+        filepath: Path,
+        source_code: str
+    ) -> FunctionInfo:
+        """Parse a function definition node."""
+        parameters = self._extract_parameters(node.args)
+        return_type = self._get_annotation_str(node.returns)
+        decorators = [self._get_decorator_name(d) for d in node.decorator_list]
+
+        # Build signature string
+        param_strs = []
+        for p in parameters:
+            s = p.name
+            if p.type_hint:
+                s += f": {p.type_hint}"
+            if p.default:
+                s += f" = {p.default}"
+            param_strs.append(s)
+
+        signature = f"def {node.name}({', '.join(param_strs)})"
+        if return_type:
+            signature += f" -> {return_type}"
+
+        # Extract source code for this function
+        func_source = ast.get_source_segment(source_code, node) or ""
+
+        return FunctionInfo(
+            name=node.name,
+            module=module_name,
+            filepath=str(filepath),
+            signature=signature,
+            parameters=parameters,
+            return_type=return_type,
+            docstring=ast.get_docstring(node),
+            decorators=decorators,
+            is_async=isinstance(node, ast.AsyncFunctionDef),
+            is_private=node.name.startswith("_"),
+            line_number=node.lineno,
+            source_code=func_source,
+        )
+
+    def _extract_parameters(self, args: ast.arguments) -> List[ParameterInfo]:
+        """Extract function parameters."""
+        parameters = []
+
+        # Regular parameters
+        defaults_offset = len(args.args) - len(args.defaults)
+        for i, arg in enumerate(args.args):
+            default_idx = i - defaults_offset
+            default = None
+            if default_idx >= 0:
+                default = ast.unparse(args.defaults[default_idx])
+
+            parameters.append(ParameterInfo(
+                name=arg.arg,
+                type_hint=self._get_annotation_str(arg.annotation),
+                default=default,
+            ))
+
+        # *args
+        if args.vararg:
+            parameters.append(ParameterInfo(
+                name=f"*{args.vararg.arg}",
+                type_hint=self._get_annotation_str(args.vararg.annotation),
+                is_args=True,
+            ))
+
+        # **kwargs
+        if args.kwarg:
+            parameters.append(ParameterInfo(
+                name=f"**{args.kwarg.arg}",
+                type_hint=self._get_annotation_str(args.kwarg.annotation),
+                is_kwargs=True,
+            ))
+
+        return parameters
+
+    def _get_annotation_str(self, annotation: Optional[ast.expr]) -> Optional[str]:
+        """Convert annotation AST node to string."""
+        if annotation is None:
+            return None
+        return ast.unparse(annotation)
+
+    def _get_decorator_name(self, decorator: ast.expr) -> str:
+        """Extract decorator name from AST node."""
+        if isinstance(decorator, ast.Name):
+            return decorator.id
+        elif isinstance(decorator, ast.Call):
+            if isinstance(decorator.func, ast.Name):
+                return decorator.func.id
+            elif isinstance(decorator.func, ast.Attribute):
+                return ast.unparse(decorator.func)
+        elif isinstance(decorator, ast.Attribute):
+            return ast.unparse(decorator)
+        return ast.unparse(decorator)
+
+    def _extract_classes(
+        self,
+        tree: ast.Module,
+        module_name: str,
+        filepath: Path,
+        source_code: str
+    ) -> List[ClassInfo]:
+        """Extract class definitions."""
+        classes = []
+
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef):
+                is_private = node.name.startswith("_")
+                if is_private and not self.include_private:
+                    continue
+
+                class_info = self._parse_class(
+                    node, module_name, filepath, source_code
+                )
+                classes.append(class_info)
+
+        return classes
+
+    def _parse_class(
+        self,
+        node: ast.ClassDef,
+        module_name: str,
+        filepath: Path,
+        source_code: str
+    ) -> ClassInfo:
+        """Parse a class definition node."""
+        bases = [ast.unparse(base) for base in node.bases]
+        decorators = [self._get_decorator_name(d) for d in node.decorator_list]
+
+        # Extract methods
+        methods = []
+        for item in node.body:
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                is_private = item.name.startswith("_") and item.name != "__init__"
+                if is_private and not self.include_private:
+                    continue
+                methods.append(self._parse_function(
+                    item, module_name, filepath, source_code
+                ))
+
+        # Extract class attributes
+        attributes = self._extract_class_attributes(node)
+
+        class_source = ast.get_source_segment(source_code, node) or ""
+
+        return ClassInfo(
+            name=node.name,
+            module=module_name,
+            filepath=str(filepath),
+            bases=bases,
+            methods=methods,
+            attributes=attributes,
+            docstring=ast.get_docstring(node),
+            decorators=decorators,
+            is_private=node.name.startswith("_"),
+            line_number=node.lineno,
+            source_code=class_source,
+        )
+
+    def _extract_class_attributes(self, node: ast.ClassDef) -> List[AttributeInfo]:
+        """Extract class-level attributes."""
+        attributes = []
+
+        for item in node.body:
+            if isinstance(item, ast.AnnAssign):
+                # Type-annotated attribute
+                if isinstance(item.target, ast.Name):
+                    attributes.append(AttributeInfo(
+                        name=item.target.id,
+                        type_hint=self._get_annotation_str(item.annotation),
+                        default=ast.unparse(item.value) if item.value else None,
+                        is_class_var=False,
+                    ))
+            elif isinstance(item, ast.Assign):
+                # Simple assignment
+                for target in item.targets:
+                    if isinstance(target, ast.Name):
+                        attributes.append(AttributeInfo(
+                            name=target.id,
+                            type_hint=None,
+                            default=ast.unparse(item.value),
+                            is_class_var=True,
+                        ))
+
+        return attributes
+
+    def _extract_globals(self, tree: ast.Module) -> List[AttributeInfo]:
+        """Extract module-level variables."""
+        globals_list = []
+
+        for node in tree.body:
+            if isinstance(node, ast.AnnAssign):
+                if isinstance(node.target, ast.Name):
+                    globals_list.append(AttributeInfo(
+                        name=node.target.id,
+                        type_hint=self._get_annotation_str(node.annotation),
+                        default=ast.unparse(node.value) if node.value else None,
+                        is_class_var=False,
+                    ))
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        # Skip dunder variables
+                        if not target.id.startswith("__"):
+                            globals_list.append(AttributeInfo(
+                                name=target.id,
+                                type_hint=None,
+                                default=ast.unparse(node.value),
+                                is_class_var=False,
+                            ))
+
+        return globals_list
+```
+
+**Key Implementation Details**:
+
+- **Dual Parser Strategy**: We use Python's built-in `ast` module for reliable parsing and `libcst` when we need to preserve formatting
+- **Comprehensive Extraction**: We capture functions, classes, parameters, return types, decorators, and docstrings
+- **Privacy Filtering**: Option to include or exclude private members (those starting with `_`)
+- **Source Preservation**: We keep the original source code for each element, enabling accurate documentation
+
+### Step 2: Code Analysis and Dependency Mapping
+
+After parsing, we analyze the codebase to understand relationships between modules, classes, and functions.
+
+<Mermaid
+  chart={`
+graph LR
+    Modules[Parsed Modules] --> DepAnalyzer[Dependency Analyzer]
+    DepAnalyzer --> ImportGraph[Import Graph]
+    
+    Classes[Parsed Classes] --> HierarchyAnalyzer[Hierarchy Analyzer]
+    HierarchyAnalyzer --> InheritanceTree[Inheritance Tree]
+    
+    ImportGraph --> Combined[Combined Analysis]
+    InheritanceTree --> Combined
+    
+    style Combined fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Code Analysis: Building relationship graphs from parsed elements."
+/>
+
+```python
+# analysis/code_analyzer.py
+from typing import Dict, List, Set, Optional
+from dataclasses import dataclass, field
+from parsers.code_parser import (
+    ModuleInfo, ClassInfo, FunctionInfo, CodebaseInfo
+)
+
+@dataclass
+class DependencyInfo:
+    """Information about module dependencies."""
+    module: str
+    imports: Set[str] = field(default_factory=set)
+    imported_by: Set[str] = field(default_factory=set)
+    external_deps: Set[str] = field(default_factory=set)
+    internal_deps: Set[str] = field(default_factory=set)
+
+@dataclass
+class ClassHierarchyNode:
+    """Node in class hierarchy tree."""
+    name: str
+    module: str
+    bases: List[str]
+    subclasses: List[str] = field(default_factory=list)
+    depth: int = 0
+
+class CodeAnalyzer:
+    """Analyze codebase structure and relationships."""
+
+    def __init__(self):
+        self.modules: Dict[str, ModuleInfo] = {}
+        self.dependency_graph: Dict[str, DependencyInfo] = {}
+        self.class_hierarchy: Dict[str, ClassHierarchyNode] = {}
+        self.internal_modules: Set[str] = set()
+
+    def analyze(self, modules: List[ModuleInfo]) -> CodebaseInfo:
+        """Perform complete codebase analysis."""
+        # Index modules
+        for module in modules:
+            self.modules[module.name] = module
+            self.internal_modules.add(module.name)
+
+        # Build dependency graph
+        self._build_dependency_graph()
+
+        # Build class hierarchy
+        self._build_class_hierarchy()
+
+        # Collect all functions and classes
+        all_functions = []
+        all_classes = []
+        for module in modules:
+            all_functions.extend(module.functions)
+            all_classes.extend(module.classes)
+
+        return CodebaseInfo(
+            modules=modules,
+            all_functions=all_functions,
+            all_classes=all_classes,
+            dependency_graph={
+                name: info.imports for name, info in self.dependency_graph.items()
+            },
+            class_hierarchy={
+                name: node.subclasses for name, node in self.class_hierarchy.items()
+            },
+        )
+
+    def _build_dependency_graph(self):
+        """Build module dependency graph from imports."""
+        for module_name, module in self.modules.items():
+            dep_info = DependencyInfo(module=module_name)
+
+            # Process direct imports
+            for imp in module.imports:
+                dep_info.imports.add(imp)
+                if imp in self.internal_modules:
+                    dep_info.internal_deps.add(imp)
+                else:
+                    dep_info.external_deps.add(imp)
+
+            # Process from imports
+            for from_module in module.from_imports.keys():
+                if from_module:
+                    dep_info.imports.add(from_module)
+                    # Check if it's an internal module or submodule
+                    base_module = from_module.split(".")[0]
+                    if base_module in self.internal_modules or from_module in self.internal_modules:
+                        dep_info.internal_deps.add(from_module)
+                    else:
+                        dep_info.external_deps.add(from_module)
+
+            self.dependency_graph[module_name] = dep_info
+
+        # Build reverse dependencies (imported_by)
+        for module_name, dep_info in self.dependency_graph.items():
+            for imported in dep_info.internal_deps:
+                if imported in self.dependency_graph:
+                    self.dependency_graph[imported].imported_by.add(module_name)
+
+    def _build_class_hierarchy(self):
+        """Build class inheritance hierarchy."""
+        # First pass: create nodes for all classes
+        for module in self.modules.values():
+            for cls in module.classes:
+                full_name = f"{module.name}.{cls.name}"
+                self.class_hierarchy[full_name] = ClassHierarchyNode(
+                    name=cls.name,
+                    module=module.name,
+                    bases=cls.bases,
+                )
+
+        # Second pass: link subclasses
+        for full_name, node in self.class_hierarchy.items():
+            for base in node.bases:
+                # Try to find the base class in our hierarchy
+                base_full_name = self._resolve_class_name(base, node.module)
+                if base_full_name in self.class_hierarchy:
+                    self.class_hierarchy[base_full_name].subclasses.append(full_name)
+
+        # Calculate depths
+        self._calculate_hierarchy_depths()
+
+    def _resolve_class_name(self, class_name: str, current_module: str) -> str:
+        """Resolve a class name to its full module path."""
+        # Check if it's already a full path
+        if class_name in self.class_hierarchy:
+            return class_name
+
+        # Check in current module
+        full_name = f"{current_module}.{class_name}"
+        if full_name in self.class_hierarchy:
+            return full_name
+
+        # Check imports in current module
+        module = self.modules.get(current_module)
+        if module:
+            for from_module, names in module.from_imports.items():
+                if class_name in names:
+                    return f"{from_module}.{class_name}"
+
+        return class_name
+
+    def _calculate_hierarchy_depths(self):
+        """Calculate depth of each class in hierarchy."""
+        def get_depth(full_name: str, visited: Set[str]) -> int:
+            if full_name in visited:
+                return 0  # Circular reference
+            visited.add(full_name)
+
+            node = self.class_hierarchy.get(full_name)
+            if not node or not node.bases:
+                return 0
+
+            max_parent_depth = 0
+            for base in node.bases:
+                base_full = self._resolve_class_name(base, node.module)
+                if base_full in self.class_hierarchy:
+                    parent_depth = get_depth(base_full, visited)
+                    max_parent_depth = max(max_parent_depth, parent_depth + 1)
+
+            return max_parent_depth
+
+        for full_name in self.class_hierarchy:
+            self.class_hierarchy[full_name].depth = get_depth(full_name, set())
+
+    def get_module_metrics(self, module_name: str) -> Dict:
+        """Get metrics for a specific module."""
+        module = self.modules.get(module_name)
+        if not module:
+            return {}
+
+        dep_info = self.dependency_graph.get(module_name, DependencyInfo(module=module_name))
+
+        return {
+            "name": module_name,
+            "functions_count": len(module.functions),
+            "classes_count": len(module.classes),
+            "imports_count": len(dep_info.imports),
+            "internal_deps": len(dep_info.internal_deps),
+            "external_deps": len(dep_info.external_deps),
+            "imported_by_count": len(dep_info.imported_by),
+            "has_docstring": module.docstring is not None,
+        }
+
+    def get_codebase_metrics(self) -> Dict:
+        """Get overall codebase metrics."""
+        total_functions = sum(len(m.functions) for m in self.modules.values())
+        total_classes = sum(len(m.classes) for m in self.modules.values())
+        total_methods = sum(
+            len(c.methods)
+            for m in self.modules.values()
+            for c in m.classes
+        )
+
+        documented_functions = sum(
+            1 for m in self.modules.values()
+            for f in m.functions if f.docstring
+        )
+        documented_classes = sum(
+            1 for m in self.modules.values()
+            for c in m.classes if c.docstring
+        )
+
+        return {
+            "total_modules": len(self.modules),
+            "total_functions": total_functions,
+            "total_classes": total_classes,
+            "total_methods": total_methods,
+            "documented_functions": documented_functions,
+            "documented_classes": documented_classes,
+            "documentation_coverage": (
+                (documented_functions + documented_classes) /
+                max(total_functions + total_classes, 1) * 100
+            ),
+        }
+```
+
+**Analysis Capabilities**:
+
+- **Dependency Graph**: Maps which modules import which, distinguishing internal vs external dependencies
+- **Class Hierarchy**: Builds inheritance trees with depth calculation for visualization
+- **Metrics Collection**: Calculates documentation coverage and codebase statistics
+- **Reverse Dependencies**: Tracks which modules are imported by others (useful for impact analysis)
+
+### Step 3: LLM-Powered Documentation Generation
+
+The LLM transforms raw code information into human-readable documentation with descriptions, explanations, and examples.
+
+<Mermaid
+  chart={`
+graph TD
+    CodeInfo[Code Information] --> PromptBuilder[Prompt Builder]
+    Docstring[Existing Docstring] --> PromptBuilder
+    Signature[Function Signature] --> PromptBuilder
+    
+    PromptBuilder --> LLM[GPT-4o]
+    LLM --> Description[Description]
+    LLM --> Examples[Usage Examples]
+    LLM --> Notes[Important Notes]
+    
+    style LLM fill:#f9f,stroke:#333
+`}
+  caption="LLM Documentation: Generating rich documentation from code context."
+/>
+
+````python
+# generation/llm_doc_generator.py
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+import asyncio
+
+from parsers.code_parser import FunctionInfo, ClassInfo, ModuleInfo
+
+@dataclass
+class GeneratedDoc:
+    """LLM-generated documentation."""
+    description: str
+    detailed_explanation: Optional[str]
+    usage_example: Optional[str]
+    notes: List[str]
+    see_also: List[str]
+
+class LLMDocGenerator:
+    """Generate documentation using LLM."""
+
+    SYSTEM_PROMPT = """You are an expert technical writer specializing in Python documentation.
+Your task is to generate clear, accurate, and helpful documentation from code.
+
+Guidelines:
+1. Be concise but comprehensive - explain what the code does and why
+2. Use active voice and present tense
+3. Include practical usage examples when requested
+4. Highlight important caveats, edge cases, or gotchas
+5. Reference related functions/classes when relevant
+6. Follow Google-style docstring conventions
+
+Output format: Respond with valid JSON matching the requested structure."""
+
+    def __init__(self, model: str = "gpt-4o", temperature: float = 0.3):
+        self.llm = ChatOpenAI(model=model, temperature=temperature)
+
+    async def generate_function_doc(
+        self,
+        func: FunctionInfo,
+        context: Optional[str] = None,
+        generate_example: bool = True
+    ) -> GeneratedDoc:
+        """Generate documentation for a function."""
+        prompt = self._build_function_prompt(func, context, generate_example)
+
+        messages = [
+            SystemMessage(content=self.SYSTEM_PROMPT),
+            HumanMessage(content=prompt),
+        ]
+
+        response = await self.llm.ainvoke(messages)
+        return self._parse_response(response.content)
+
+    async def generate_class_doc(
+        self,
+        cls: ClassInfo,
+        context: Optional[str] = None,
+        generate_example: bool = True
+    ) -> GeneratedDoc:
+        """Generate documentation for a class."""
+        prompt = self._build_class_prompt(cls, context, generate_example)
+
+        messages = [
+            SystemMessage(content=self.SYSTEM_PROMPT),
+            HumanMessage(content=prompt),
+        ]
+
+        response = await self.llm.ainvoke(messages)
+        return self._parse_response(response.content)
+
+    async def generate_module_doc(
+        self,
+        module: ModuleInfo,
+        context: Optional[str] = None
+    ) -> GeneratedDoc:
+        """Generate documentation for a module."""
+        prompt = self._build_module_prompt(module, context)
+
+        messages = [
+            SystemMessage(content=self.SYSTEM_PROMPT),
+            HumanMessage(content=prompt),
+        ]
+
+        response = await self.llm.ainvoke(messages)
+        return self._parse_response(response.content)
+
+    async def batch_generate(
+        self,
+        items: List[FunctionInfo | ClassInfo],
+        batch_size: int = 5
+    ) -> Dict[str, GeneratedDoc]:
+        """Generate documentation for multiple items in batches."""
+        results = {}
+
+        for i in range(0, len(items), batch_size):
+            batch = items[i:i + batch_size]
+            tasks = []
+
+            for item in batch:
+                if isinstance(item, FunctionInfo):
+                    tasks.append(self.generate_function_doc(item))
+                elif isinstance(item, ClassInfo):
+                    tasks.append(self.generate_class_doc(item))
+
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for item, result in zip(batch, batch_results):
+                key = f"{item.module}.{item.name}"
+                if isinstance(result, Exception):
+                    results[key] = GeneratedDoc(
+                        description=f"Documentation generation failed: {result}",
+                        detailed_explanation=None,
+                        usage_example=None,
+                        notes=[],
+                        see_also=[],
+                    )
+                else:
+                    results[key] = result
+
+        return results
+
+    def _build_function_prompt(
+        self,
+        func: FunctionInfo,
+        context: Optional[str],
+        generate_example: bool
+    ) -> str:
+        """Build prompt for function documentation."""
+        params_desc = []
+        for p in func.parameters:
+            desc = f"- {p.name}"
+            if p.type_hint:
+                desc += f" ({p.type_hint})"
+            if p.default:
+                desc += f" [default: {p.default}]"
+            params_desc.append(desc)
+
+        prompt = f"""Generate documentation for this Python function:
+
+**Function Name**: {func.name}
+**Module**: {func.module}
+**Signature**: {func.signature}
+**Is Async**: {func.is_async}
+**Decorators**: {', '.join(func.decorators) if func.decorators else 'None'}
+
+**Parameters**:
+{chr(10).join(params_desc) if params_desc else 'None'}
+
+**Return Type**: {func.return_type or 'Not specified'}
+
+**Existing Docstring**:
+{func.docstring or 'None'}
+
+**Source Code**:
+```python
+{func.source_code[:1500]}
+````
+
+"""
+
+        if context:
+            prompt += f"\n**Additional Context**: {context}\n"
+
+        prompt += """
+
+Generate a JSON response with this structure:
+{
+"description": "One-line description of what the function does",
+"detailed_explanation": "Detailed explanation of behavior, algorithm, or implementation details (2-3 sentences)",
+"usage_example": "Python code example showing typical usage",
+"notes": ["Important note 1", "Important note 2"],
+"see_also": ["related_function", "RelatedClass"]
+}
+"""
+
+        if not generate_example:
+            prompt += "\nSet usage_example to null."
+
+        return prompt
+
+    def _build_class_prompt(
+        self,
+        cls: ClassInfo,
+        context: Optional[str],
+        generate_example: bool
+    ) -> str:
+        """Build prompt for class documentation."""
+        methods_list = [m.name for m in cls.methods[:10]]  # Limit for prompt size
+        attrs_list = [f"{a.name}: {a.type_hint or 'Any'}" for a in cls.attributes[:10]]
+
+        prompt = f"""Generate documentation for this Python class:
+
+**Class Name**: {cls.name}
+**Module**: {cls.module}
+**Base Classes**: {', '.join(cls.bases) if cls.bases else 'None'}
+**Decorators**: {', '.join(cls.decorators) if cls.decorators else 'None'}
+
+**Attributes**:
+{chr(10).join(f'- {a}' for a in attrs_list) if attrs_list else 'None'}
+
+**Methods**: {', '.join(methods_list)}
+
+**Existing Docstring**:
+{cls.docstring or 'None'}
+
+**Source Code** (truncated):
+
+```python
+{cls.source_code[:2000]}
+```
+
+"""
+
+        if context:
+            prompt += f"\n**Additional Context**: {context}\n"
+
+        prompt += """
+
+Generate a JSON response with this structure:
+{
+"description": "One-line description of what the class represents",
+"detailed_explanation": "Detailed explanation of the class purpose, typical usage patterns, and key features",
+"usage_example": "Python code example showing how to instantiate and use the class",
+"notes": ["Important note about usage", "Thread-safety note if relevant"],
+"see_also": ["RelatedClass", "helper_function"]
+}
+"""
+
+        if not generate_example:
+            prompt += "\nSet usage_example to null."
+
+        return prompt
+
+    def _build_module_prompt(
+        self,
+        module: ModuleInfo,
+        context: Optional[str]
+    ) -> str:
+        """Build prompt for module documentation."""
+        functions = [f.name for f in module.functions[:15]]
+        classes = [c.name for c in module.classes[:10]]
+
+        prompt = f"""Generate documentation for this Python module:
+
+**Module Name**: {module.name}
+**File Path**: {module.filepath}
+
+**Existing Docstring**:
+{module.docstring or 'None'}
+
+**Public Functions**: {', '.join(functions) if functions else 'None'}
+**Public Classes**: {', '.join(classes) if classes else 'None'}
+
+**Imports**: {', '.join(module.imports[:20]) if module.imports else 'None'}
+"""
+
+        if context:
+            prompt += f"\n**Additional Context**: {context}\n"
+
+        prompt += """
+
+Generate a JSON response with this structure:
+{
+"description": "One-line description of the module's purpose",
+"detailed_explanation": "Overview of what this module provides and when to use it",
+"usage_example": null,
+"notes": ["Important usage notes"],
+"see_also": ["related_module"]
+}
+"""
+
+        return prompt
+
+    def _parse_response(self, response: str) -> GeneratedDoc:
+        """Parse LLM response into GeneratedDoc."""
+        import json
+
+        # Try to extract JSON from response
+        try:
+            # Handle markdown code blocks
+            if "```json" in response:
+                start = response.find("```json") + 7
+                end = response.find("```", start)
+                response = response[start:end].strip()
+            elif "```" in response:
+                start = response.find("```") + 3
+                end = response.find("```", start)
+                response = response[start:end].strip()
+
+            data = json.loads(response)
+
+            return GeneratedDoc(
+                description=data.get("description", ""),
+                detailed_explanation=data.get("detailed_explanation"),
+                usage_example=data.get("usage_example"),
+                notes=data.get("notes", []),
+                see_also=data.get("see_also", []),
+            )
+        except json.JSONDecodeError:
+            # Fallback: use response as description
+            return GeneratedDoc(
+                description=response[:500],
+                detailed_explanation=None,
+                usage_example=None,
+                notes=[],
+                see_also=[],
+            )
+
+```
+
+**LLM Integration Features**:
+
+- **Structured Output**: JSON response format ensures consistent parsing
+- **Rich Context**: Provides signature, parameters, source code, and existing docstrings
+- **Batch Processing**: Processes multiple items concurrently with rate limiting
+- **Graceful Fallback**: Handles LLM failures without crashing the pipeline
+```
+
+### Step 4: Mermaid Diagram Generation
+
+We automatically generate architecture diagrams from the analyzed code structure.
+
+<Mermaid
+  chart={`
+graph TD
+    Analysis[Code Analysis] --> DiagramGen[Diagram Generator]
+    
+    DiagramGen --> ModuleDep[Module Dependencies]
+    DiagramGen --> ClassHier[Class Hierarchy]
+    DiagramGen --> Architecture[Architecture Overview]
+    
+    ModuleDep --> Mermaid1[Mermaid Code]
+    ClassHier --> Mermaid2[Mermaid Code]
+    Architecture --> Mermaid3[Mermaid Code]
+    
+    style DiagramGen fill:#e1f5fe,stroke:#01579b
+`}
+  caption="Diagram Generation: Creating visual representations from code analysis."
+/>
+
+```python
+# generation/diagram_generator.py
+from typing import Dict, List, Set, Optional
+from dataclasses import dataclass
+from analysis.code_analyzer import CodeAnalyzer, DependencyInfo, ClassHierarchyNode
+from parsers.code_parser import CodebaseInfo, ModuleInfo
+
+@dataclass
+class DiagramOutput:
+    """Generated diagram output."""
+    diagram_type: str
+    mermaid_code: str
+    title: str
+    description: str
+
+class MermaidDiagramGenerator:
+    """Generate Mermaid diagrams from code analysis."""
+
+    def __init__(self, max_nodes: int = 30):
+        self.max_nodes = max_nodes
+
+    def generate_all_diagrams(
+        self,
+        codebase: CodebaseInfo,
+        analyzer: CodeAnalyzer
+    ) -> Dict[str, DiagramOutput]:
+        """Generate all diagram types."""
+        return {
+            "module_dependency": self.generate_module_dependency_diagram(
+                codebase, analyzer
+            ),
+            "class_hierarchy": self.generate_class_hierarchy_diagram(
+                codebase, analyzer
+            ),
+            "architecture": self.generate_architecture_diagram(
+                codebase, analyzer
+            ),
+        }
+
+    def generate_module_dependency_diagram(
+        self,
+        codebase: CodebaseInfo,
+        analyzer: CodeAnalyzer
+    ) -> DiagramOutput:
+        """Generate module dependency flowchart."""
+        lines = ["graph TD"]
+
+        # Get internal dependencies only
+        internal_deps = {}
+        for module_name, dep_info in analyzer.dependency_graph.items():
+            internal = dep_info.internal_deps
+            if internal:
+                internal_deps[module_name] = internal
+
+        # Limit nodes if too many
+        modules_to_show = list(internal_deps.keys())[:self.max_nodes]
+
+        # Add nodes with styling
+        for module in modules_to_show:
+            safe_id = self._safe_id(module)
+            short_name = module.split(".")[-1]
+            lines.append(f"    {safe_id}[{short_name}]")
+
+        # Add edges
+        edges_added = set()
+        for module in modules_to_show:
+            safe_from = self._safe_id(module)
+            for dep in internal_deps.get(module, []):
+                if dep in modules_to_show:
+                    safe_to = self._safe_id(dep)
+                    edge = f"{safe_from}-->{safe_to}"
+                    if edge not in edges_added:
+                        lines.append(f"    {safe_from} --> {safe_to}")
+                        edges_added.add(edge)
+
+        # Add styling for entry points (modules with no incoming deps)
+        entry_points = self._find_entry_points(analyzer)
+        for ep in entry_points:
+            if ep in modules_to_show:
+                safe_id = self._safe_id(ep)
+                lines.append(f"    style {safe_id} fill:#c8e6c9,stroke:#2e7d32")
+
+        mermaid_code = "\n".join(lines)
+
+        return DiagramOutput(
+            diagram_type="module_dependency",
+            mermaid_code=mermaid_code,
+            title="Module Dependencies",
+            description="Shows how modules import from each other. Green nodes are entry points.",
+        )
+
+    def generate_class_hierarchy_diagram(
+        self,
+        codebase: CodebaseInfo,
+        analyzer: CodeAnalyzer
+    ) -> DiagramOutput:
+        """Generate class inheritance diagram."""
+        lines = ["classDiagram"]
+
+        # Get classes with inheritance relationships
+        classes_with_hierarchy = {
+            name: node for name, node in analyzer.class_hierarchy.items()
+            if node.bases or node.subclasses
+        }
+
+        # Limit if too many
+        classes_to_show = list(classes_with_hierarchy.keys())[:self.max_nodes]
+
+        # Find corresponding ClassInfo for each class
+        class_info_map = {}
+        for module in codebase.modules:
+            for cls in module.classes:
+                full_name = f"{module.name}.{cls.name}"
+                class_info_map[full_name] = cls
+
+        # Add class definitions
+        for full_name in classes_to_show:
+            node = classes_with_hierarchy[full_name]
+            safe_id = self._safe_id(full_name)
+            cls_info = class_info_map.get(full_name)
+
+            lines.append(f"    class {safe_id} {{")
+
+            # Add key attributes
+            if cls_info:
+                for attr in cls_info.attributes[:5]:
+                    type_str = attr.type_hint or "Any"
+                    lines.append(f"        +{type_str} {attr.name}")
+
+                # Add key methods
+                for method in cls_info.methods[:5]:
+                    if not method.name.startswith("_") or method.name == "__init__":
+                        ret = method.return_type or "None"
+                        lines.append(f"        +{method.name}() {ret}")
+
+            lines.append("    }")
+
+        # Add inheritance relationships
+        for full_name in classes_to_show:
+            node = classes_with_hierarchy[full_name]
+            safe_child = self._safe_id(full_name)
+
+            for base in node.bases:
+                base_full = analyzer._resolve_class_name(base, node.module)
+                if base_full in classes_to_show:
+                    safe_parent = self._safe_id(base_full)
+                    lines.append(f"    {safe_parent} <|-- {safe_child}")
+
+        mermaid_code = "\n".join(lines)
+
+        return DiagramOutput(
+            diagram_type="class_hierarchy",
+            mermaid_code=mermaid_code,
+            title="Class Hierarchy",
+            description="Shows class inheritance relationships and key members.",
+        )
+
+    def generate_architecture_diagram(
+        self,
+        codebase: CodebaseInfo,
+        analyzer: CodeAnalyzer
+    ) -> DiagramOutput:
+        """Generate high-level architecture diagram."""
+        lines = ["graph TB"]
+
+        # Group modules by top-level package
+        packages: Dict[str, List[str]] = {}
+        for module in codebase.modules:
+            parts = module.name.split(".")
+            package = parts[0] if len(parts) > 1 else "root"
+            if package not in packages:
+                packages[package] = []
+            packages[package].append(module.name)
+
+        # Create subgraphs for packages
+        for package, modules in packages.items():
+            safe_pkg = self._safe_id(package)
+            lines.append(f"    subgraph {safe_pkg}[\"{package}\"]")
+
+            for module in modules[:10]:  # Limit modules per package
+                safe_mod = self._safe_id(module)
+                short_name = module.split(".")[-1]
+
+                # Count functions and classes
+                mod_info = analyzer.modules.get(module)
+                if mod_info:
+                    func_count = len(mod_info.functions)
+                    class_count = len(mod_info.classes)
+                    label = f"{short_name}<br/>({func_count}f, {class_count}c)"
+                else:
+                    label = short_name
+
+                lines.append(f"        {safe_mod}[\"{label}\"]")
+
+            lines.append("    end")
+
+        # Add cross-package dependencies
+        for module_name, dep_info in analyzer.dependency_graph.items():
+            from_pkg = module_name.split(".")[0]
+            safe_from = self._safe_id(module_name)
+
+            for dep in dep_info.internal_deps:
+                to_pkg = dep.split(".")[0]
+                if from_pkg != to_pkg:  # Only cross-package deps
+                    safe_to = self._safe_id(dep)
+                    lines.append(f"    {safe_from} -.-> {safe_to}")
+
+        mermaid_code = "\n".join(lines)
+
+        return DiagramOutput(
+            diagram_type="architecture",
+            mermaid_code=mermaid_code,
+            title="Architecture Overview",
+            description="High-level view of packages and their relationships. Numbers show (functions, classes).",
+        )
+
+    def generate_function_call_diagram(
+        self,
+        module: ModuleInfo,
+        analyzer: CodeAnalyzer
+    ) -> DiagramOutput:
+        """Generate function call graph for a module."""
+        lines = ["graph LR"]
+
+        # This would require more sophisticated analysis
+        # For now, show functions and their relationships based on naming
+        for func in module.functions[:15]:
+            safe_id = self._safe_id(func.name)
+            lines.append(f"    {safe_id}[{func.name}]")
+
+            # Style async functions differently
+            if func.is_async:
+                lines.append(f"    style {safe_id} fill:#e1f5fe,stroke:#01579b")
+
+        mermaid_code = "\n".join(lines)
+
+        return DiagramOutput(
+            diagram_type="function_calls",
+            mermaid_code=mermaid_code,
+            title=f"Functions in {module.name}",
+            description="Functions in this module. Blue nodes are async.",
+        )
+
+    def _safe_id(self, name: str) -> str:
+        """Convert name to safe Mermaid identifier."""
+        return name.replace(".", "_").replace("-", "_").replace(" ", "_")
+
+    def _find_entry_points(self, analyzer: CodeAnalyzer) -> List[str]:
+        """Find modules that are not imported by others."""
+        entry_points = []
+        for module_name, dep_info in analyzer.dependency_graph.items():
+            if not dep_info.imported_by:
+                entry_points.append(module_name)
+        return entry_points
+```
+
+**Diagram Types**:
+
+- **Module Dependencies**: Flowchart showing import relationships between modules
+- **Class Hierarchy**: UML-style class diagram with inheritance and key members
+- **Architecture Overview**: High-level package structure with cross-package dependencies
+- **Function Calls**: Per-module function visualization (extensible to call graphs)
+
+### Step 5: Usage Example Generation
+
+We generate practical usage examples from function signatures and context.
+
+```python
+# generation/example_generator.py
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from parsers.code_parser import FunctionInfo, ClassInfo, ParameterInfo
+
+@dataclass
+class UsageExample:
+    """Generated usage example."""
+    code: str
+    description: str
+    imports_needed: List[str]
+
+class ExampleGenerator:
+    """Generate usage examples from code signatures."""
+
+    # Type to example value mappings
+    TYPE_EXAMPLES = {
+        "str": '"example"',
+        "int": "42",
+        "float": "3.14",
+        "bool": "True",
+        "list": "[]",
+        "dict": "{}",
+        "List[str]": '["item1", "item2"]',
+        "List[int]": "[1, 2, 3]",
+        "Dict[str, Any]": '{"key": "value"}',
+        "Dict[str, str]": '{"name": "value"}',
+        "Optional[str]": '"optional_value"',
+        "Optional[int]": "None",
+        "Path": 'Path("./example")',
+        "bytes": 'b"data"',
+        "Any": '"any_value"',
+    }
+
+    def generate_function_example(
+        self,
+        func: FunctionInfo,
+        include_imports: bool = True
+    ) -> UsageExample:
+        """Generate usage example for a function."""
+        imports = []
+        args = []
+
+        # Generate argument values
+        for param in func.parameters:
+            if param.is_args or param.is_kwargs:
+                continue
+            if param.name in ("self", "cls"):
+                continue
+
+            value = self._get_example_value(param)
+            args.append(f"{param.name}={value}")
+
+        # Build function call
+        if func.is_async:
+            call = f"result = await {func.name}({', '.join(args)})"
+            wrapper = f"async def main():\n    {call}\n\nimport asyncio\nasyncio.run(main())"
+        else:
+            call = f"result = {func.name}({', '.join(args)})"
+            wrapper = call
+
+        # Add import statement
+        if include_imports:
+            module_parts = func.module.split(".")
+            if len(module_parts) > 1:
+                imports.append(f"from {func.module} import {func.name}")
+            else:
+                imports.append(f"from {func.module} import {func.name}")
+
+        # Build complete example
+        code_parts = []
+        if imports:
+            code_parts.extend(imports)
+            code_parts.append("")
+        code_parts.append(wrapper)
+
+        # Add result handling if return type is known
+        if func.return_type and func.return_type != "None":
+            code_parts.append(f"print(result)  # {func.return_type}")
+
+        return UsageExample(
+            code="\n".join(code_parts),
+            description=f"Example usage of {func.name}",
+            imports_needed=imports,
+        )
+
+    def generate_class_example(
+        self,
+        cls: ClassInfo,
+        include_imports: bool = True
+    ) -> UsageExample:
+        """Generate usage example for a class."""
+        imports = []
+        code_parts = []
+
+        # Add import
+        if include_imports:
+            imports.append(f"from {cls.module} import {cls.name}")
+            code_parts.append(imports[0])
+            code_parts.append("")
+
+        # Find __init__ method
+        init_method = None
+        for method in cls.methods:
+            if method.name == "__init__":
+                init_method = method
+                break
+
+        # Generate constructor call
+        if init_method:
+            args = []
+            for param in init_method.parameters:
+                if param.name == "self":
+                    continue
+                value = self._get_example_value(param)
+                args.append(f"{param.name}={value}")
+
+            code_parts.append(f"# Create instance")
+            code_parts.append(f"instance = {cls.name}({', '.join(args)})")
+        else:
+            code_parts.append(f"# Create instance")
+            code_parts.append(f"instance = {cls.name}()")
+
+        # Add example method calls
+        public_methods = [
+            m for m in cls.methods
+            if not m.name.startswith("_")
+        ][:3]
+
+        if public_methods:
+            code_parts.append("")
+            code_parts.append("# Use methods")
+
+            for method in public_methods:
+                args = []
+                for param in method.parameters:
+                    if param.name == "self":
+                        continue
+                    value = self._get_example_value(param)
+                    args.append(value)
+
+                if method.is_async:
+                    code_parts.append(f"# await instance.{method.name}({', '.join(args)})")
+                else:
+                    code_parts.append(f"instance.{method.name}({', '.join(args)})")
+
+        return UsageExample(
+            code="\n".join(code_parts),
+            description=f"Example usage of {cls.name}",
+            imports_needed=imports,
+        )
+
+    def _get_example_value(self, param: ParameterInfo) -> str:
+        """Get example value for a parameter."""
+        # Use default if available
+        if param.default and param.default != "None":
+            return param.default
+
+        # Use type hint to generate value
+        if param.type_hint:
+            # Check direct mapping
+            if param.type_hint in self.TYPE_EXAMPLES:
+                return self.TYPE_EXAMPLES[param.type_hint]
+
+            # Check for generic types
+            for type_pattern, value in self.TYPE_EXAMPLES.items():
+                if type_pattern in param.type_hint:
+                    return value
+
+        # Infer from parameter name
+        name_lower = param.name.lower()
+        if "name" in name_lower or "title" in name_lower:
+            return '"example_name"'
+        if "id" in name_lower:
+            return "1"
+        if "count" in name_lower or "num" in name_lower:
+            return "10"
+        if "path" in name_lower or "file" in name_lower:
+            return '"./path/to/file"'
+        if "url" in name_lower:
+            return '"https://example.com"'
+        if "enabled" in name_lower or "is_" in name_lower:
+            return "True"
+        if "config" in name_lower or "options" in name_lower:
+            return "{}"
+        if "items" in name_lower or "list" in name_lower:
+            return "[]"
+        if "callback" in name_lower or "func" in name_lower:
+            return "lambda x: x"
+
+        # Default fallback
+        return "..."
+```
+
+**Example Generation Features**:
+
+- **Type-Aware Values**: Generates appropriate example values based on type hints
+- **Name-Based Inference**: Uses parameter names to guess sensible values
+- **Async Support**: Properly wraps async function calls with asyncio
+- **Method Chaining**: Shows typical usage patterns for classes
+
+### Step 6: Docstring Quality Checker
+
+We evaluate existing documentation quality and suggest improvements.
+
+```python
+# quality/docstring_checker.py
+from typing import Dict, List, Optional
+from dataclasses import dataclass, field
+from enum import Enum
+from parsers.code_parser import FunctionInfo, ClassInfo, ModuleInfo
+
+class QualityLevel(Enum):
+    """Documentation quality levels."""
+    EXCELLENT = "excellent"
+    GOOD = "good"
+    FAIR = "fair"
+    POOR = "poor"
+    MISSING = "missing"
+
+@dataclass
+class QualityIssue:
+    """A documentation quality issue."""
+    item_name: str
+    item_type: str  # 'function', 'class', 'module'
+    issue_type: str
+    message: str
+    suggestion: str
+    severity: str  # 'error', 'warning', 'info'
+
+@dataclass
+class QualityReport:
+    """Complete quality assessment report."""
+    total_items: int
+    documented_items: int
+    coverage_percent: float
+    quality_scores: Dict[str, QualityLevel]
+    issues: List[QualityIssue]
+    suggestions: List[str]
+    overall_grade: QualityLevel
+
+class DocstringQualityChecker:
+    """Check and score documentation quality."""
+
+    # Required sections for different docstring styles
+    GOOGLE_STYLE_SECTIONS = ["Args", "Returns", "Raises", "Example"]
+    NUMPY_STYLE_SECTIONS = ["Parameters", "Returns", "Raises", "Examples"]
+
+    def __init__(self, style: str = "google"):
+        self.style = style
+        self.required_sections = (
+            self.GOOGLE_STYLE_SECTIONS if style == "google"
+            else self.NUMPY_STYLE_SECTIONS
+        )
+
+    def check_codebase(
+        self,
+        modules: List[ModuleInfo]
+    ) -> QualityReport:
+        """Check documentation quality for entire codebase."""
+        all_issues = []
+        quality_scores = {}
+        total_items = 0
+        documented_items = 0
+
+        for module in modules:
+            # Check module docstring
+            total_items += 1
+            module_issues, module_score = self._check_module(module)
+            all_issues.extend(module_issues)
+            quality_scores[module.name] = module_score
+            if module.docstring:
+                documented_items += 1
+
+            # Check functions
+            for func in module.functions:
+                total_items += 1
+                func_issues, func_score = self._check_function(func)
+                all_issues.extend(func_issues)
+                quality_scores[f"{module.name}.{func.name}"] = func_score
+                if func.docstring:
+                    documented_items += 1
+
+            # Check classes
+            for cls in module.classes:
+                total_items += 1
+                cls_issues, cls_score = self._check_class(cls)
+                all_issues.extend(cls_issues)
+                quality_scores[f"{module.name}.{cls.name}"] = cls_score
+                if cls.docstring:
+                    documented_items += 1
+
+                # Check methods
+                for method in cls.methods:
+                    if method.name.startswith("_") and method.name != "__init__":
+                        continue
+                    total_items += 1
+                    method_issues, method_score = self._check_function(method)
+                    all_issues.extend(method_issues)
+                    quality_scores[f"{module.name}.{cls.name}.{method.name}"] = method_score
+                    if method.docstring:
+                        documented_items += 1
+
+        coverage = (documented_items / max(total_items, 1)) * 100
+        overall_grade = self._calculate_overall_grade(coverage, all_issues)
+        suggestions = self._generate_suggestions(all_issues, coverage)
+
+        return QualityReport(
+            total_items=total_items,
+            documented_items=documented_items,
+            coverage_percent=round(coverage, 1),
+            quality_scores=quality_scores,
+            issues=all_issues,
+            suggestions=suggestions,
+            overall_grade=overall_grade,
+        )
+
+    def _check_module(self, module: ModuleInfo) -> tuple[List[QualityIssue], QualityLevel]:
+        """Check module documentation quality."""
+        issues = []
+
+        if not module.docstring:
+            issues.append(QualityIssue(
+                item_name=module.name,
+                item_type="module",
+                issue_type="missing_docstring",
+                message="Module has no docstring",
+                suggestion="Add a module-level docstring describing the module's purpose",
+                severity="warning",
+            ))
+            return issues, QualityLevel.MISSING
+
+        # Check docstring length
+        if len(module.docstring) < 20:
+            issues.append(QualityIssue(
+                item_name=module.name,
+                item_type="module",
+                issue_type="short_docstring",
+                message="Module docstring is too short",
+                suggestion="Expand the docstring to describe what the module provides",
+                severity="info",
+            ))
+
+        score = self._score_docstring(module.docstring, is_module=True)
+        return issues, score
+
+    def _check_function(self, func: FunctionInfo) -> tuple[List[QualityIssue], QualityLevel]:
+        """Check function documentation quality."""
+        issues = []
+        full_name = f"{func.module}.{func.name}"
+
+        if not func.docstring:
+            issues.append(QualityIssue(
+                item_name=full_name,
+                item_type="function",
+                issue_type="missing_docstring",
+                message=f"Function '{func.name}' has no docstring",
+                suggestion="Add a docstring describing what the function does",
+                severity="warning",
+            ))
+            return issues, QualityLevel.MISSING
+
+        # Check for parameter documentation
+        if func.parameters:
+            params_without_self = [p for p in func.parameters if p.name not in ("self", "cls")]
+            if params_without_self:
+                args_section = "Args:" if self.style == "google" else "Parameters"
+                if args_section.lower() not in func.docstring.lower():
+                    issues.append(QualityIssue(
+                        item_name=full_name,
+                        item_type="function",
+                        issue_type="missing_params",
+                        message="Function has parameters but docstring doesn't document them",
+                        suggestion=f"Add an '{args_section}' section documenting each parameter",
+                        severity="warning",
+                    ))
+
+        # Check for return documentation
+        if func.return_type and func.return_type != "None":
+            returns_section = "Returns:" if self.style == "google" else "Returns"
+            if returns_section.lower() not in func.docstring.lower():
+                issues.append(QualityIssue(
+                    item_name=full_name,
+                    item_type="function",
+                    issue_type="missing_returns",
+                    message="Function has return type but docstring doesn't document it",
+                    suggestion=f"Add a '{returns_section}' section describing the return value",
+                    severity="info",
+                ))
+
+        # Check docstring length
+        if len(func.docstring) < 10:
+            issues.append(QualityIssue(
+                item_name=full_name,
+                item_type="function",
+                issue_type="short_docstring",
+                message="Docstring is too short to be useful",
+                suggestion="Expand the docstring with more detail about behavior",
+                severity="info",
+            ))
+
+        score = self._score_docstring(func.docstring, has_params=bool(func.parameters))
+        return issues, score
+
+    def _check_class(self, cls: ClassInfo) -> tuple[List[QualityIssue], QualityLevel]:
+        """Check class documentation quality."""
+        issues = []
+        full_name = f"{cls.module}.{cls.name}"
+
+        if not cls.docstring:
+            issues.append(QualityIssue(
+                item_name=full_name,
+                item_type="class",
+                issue_type="missing_docstring",
+                message=f"Class '{cls.name}' has no docstring",
+                suggestion="Add a docstring describing what the class represents",
+                severity="warning",
+            ))
+            return issues, QualityLevel.MISSING
+
+        # Check for attributes documentation
+        if cls.attributes:
+            attrs_section = "Attributes:" if self.style == "google" else "Attributes"
+            if attrs_section.lower() not in cls.docstring.lower():
+                issues.append(QualityIssue(
+                    item_name=full_name,
+                    item_type="class",
+                    issue_type="missing_attributes",
+                    message="Class has attributes but docstring doesn't document them",
+                    suggestion=f"Add an '{attrs_section}' section documenting class attributes",
+                    severity="info",
+                ))
+
+        score = self._score_docstring(cls.docstring, is_class=True)
+        return issues, score
+
+    def _score_docstring(
+        self,
+        docstring: str,
+        is_module: bool = False,
+        is_class: bool = False,
+        has_params: bool = False
+    ) -> QualityLevel:
+        """Score a docstring's quality."""
+        score = 0
+        max_score = 100
+
+        # Length score (0-30)
+        length = len(docstring)
+        if length >= 100:
+            score += 30
+        elif length >= 50:
+            score += 20
+        elif length >= 20:
+            score += 10
+
+        # Has description (0-30)
+        if docstring.strip():
+            score += 30
+
+        # Has sections (0-40)
+        sections_found = 0
+        for section in self.required_sections:
+            if section.lower() in docstring.lower():
+                sections_found += 1
+
+        if is_module:
+            # Modules don't need all sections
+            score += min(sections_found * 20, 40)
+        elif is_class:
+            # Classes should have Attributes
+            if "attributes" in docstring.lower():
+                score += 40
+            else:
+                score += sections_found * 10
+        else:
+            # Functions should have Args and Returns
+            if has_params and "args" in docstring.lower():
+                score += 20
+            if "returns" in docstring.lower():
+                score += 20
+
+        # Convert to quality level
+        if score >= 80:
+            return QualityLevel.EXCELLENT
+        elif score >= 60:
+            return QualityLevel.GOOD
+        elif score >= 40:
+            return QualityLevel.FAIR
+        else:
+            return QualityLevel.POOR
+
+    def _calculate_overall_grade(
+        self,
+        coverage: float,
+        issues: List[QualityIssue]
+    ) -> QualityLevel:
+        """Calculate overall documentation grade."""
+        error_count = sum(1 for i in issues if i.severity == "error")
+        warning_count = sum(1 for i in issues if i.severity == "warning")
+
+        if coverage >= 90 and error_count == 0 and warning_count < 5:
+            return QualityLevel.EXCELLENT
+        elif coverage >= 70 and error_count == 0:
+            return QualityLevel.GOOD
+        elif coverage >= 50:
+            return QualityLevel.FAIR
+        elif coverage >= 20:
+            return QualityLevel.POOR
+        else:
+            return QualityLevel.MISSING
+
+    def _generate_suggestions(
+        self,
+        issues: List[QualityIssue],
+        coverage: float
+    ) -> List[str]:
+        """Generate actionable improvement suggestions."""
+        suggestions = []
+
+        # Coverage suggestions
+        if coverage < 50:
+            suggestions.append(
+                f"Documentation coverage is {coverage:.0f}%. "
+                "Prioritize adding docstrings to public functions and classes."
+            )
+        elif coverage < 80:
+            suggestions.append(
+                f"Documentation coverage is {coverage:.0f}%. "
+                "Consider documenting remaining public APIs."
+            )
+
+        # Issue-based suggestions
+        missing_count = sum(1 for i in issues if i.issue_type == "missing_docstring")
+        if missing_count > 10:
+            suggestions.append(
+                f"{missing_count} items are missing docstrings. "
+                "Use the LLM generator to create initial documentation."
+            )
+
+        params_count = sum(1 for i in issues if i.issue_type == "missing_params")
+        if params_count > 5:
+            suggestions.append(
+                f"{params_count} functions don't document their parameters. "
+                "Add Args/Parameters sections to improve usability."
+            )
+
+        return suggestions
+```
+
+**Quality Checking Features**:
+
+- **Coverage Metrics**: Tracks what percentage of code is documented
+- **Style Validation**: Checks for required sections (Args, Returns, etc.)
+- **Severity Levels**: Distinguishes errors, warnings, and informational issues
+- **Actionable Suggestions**: Provides specific recommendations for improvement
+
+### Step 7: Markdown Output Renderer
+
+We render all generated documentation into well-formatted Markdown files.
+
+````python
+# output/markdown_renderer.py
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+from parsers.code_parser import (
+    FunctionInfo, ClassInfo, ModuleInfo, CodebaseInfo
+)
+from generation.llm_doc_generator import GeneratedDoc
+from generation.diagram_generator import DiagramOutput
+from quality.docstring_checker import QualityReport
+
+@dataclass
+class RenderedDoc:
+    """Rendered documentation output."""
+    filename: str
+    content: str
+    doc_type: str  # 'api', 'module', 'index', 'diagram'
+
+class MarkdownRenderer:
+    """Render documentation to Markdown format."""
+
+    def __init__(self, output_format: str = "markdown"):
+        self.output_format = output_format
+        self.is_mdx = output_format == "mdx"
+
+    def render_complete_docs(
+        self,
+        codebase: CodebaseInfo,
+        generated_docs: Dict[str, GeneratedDoc],
+        diagrams: Dict[str, DiagramOutput],
+        quality_report: QualityReport,
+    ) -> List[RenderedDoc]:
+        """Render complete documentation set."""
+        docs = []
+
+        # Render index/overview
+        docs.append(self._render_index(codebase, quality_report))
+
+        # Render module documentation
+        for module in codebase.modules:
+            docs.append(self._render_module(module, generated_docs))
+
+        # Render API reference
+        docs.append(self._render_api_reference(codebase, generated_docs))
+
+        # Render diagrams page
+        docs.append(self._render_diagrams(diagrams))
+
+        return docs
+
+    def _render_index(
+        self,
+        codebase: CodebaseInfo,
+        quality_report: QualityReport
+    ) -> RenderedDoc:
+        """Render documentation index page."""
+        lines = []
+
+        # Header
+        lines.append("# Documentation")
+        lines.append("")
+        lines.append(f"*Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}*")
+        lines.append("")
+
+        # Overview stats
+        lines.append("## Overview")
+        lines.append("")
+        lines.append(f"- **Modules**: {len(codebase.modules)}")
+        lines.append(f"- **Classes**: {len(codebase.all_classes)}")
+        lines.append(f"- **Functions**: {len(codebase.all_functions)}")
+        lines.append(f"- **Documentation Coverage**: {quality_report.coverage_percent}%")
+        lines.append("")
+
+        # Table of contents
+        lines.append("## Modules")
+        lines.append("")
+        for module in codebase.modules:
+            module_link = module.name.replace(".", "-")
+            lines.append(f"- [{module.name}](./modules/{module_link}.md)")
+        lines.append("")
+
+        # Quick links
+        lines.append("## Quick Links")
+        lines.append("")
+        lines.append("- [API Reference](./api-reference.md)")
+        lines.append("- [Architecture Diagrams](./diagrams.md)")
+        lines.append("")
+
+        return RenderedDoc(
+            filename="index.md",
+            content="\n".join(lines),
+            doc_type="index",
+        )
+
+    def _render_module(
+        self,
+        module: ModuleInfo,
+        generated_docs: Dict[str, GeneratedDoc]
+    ) -> RenderedDoc:
+        """Render documentation for a single module."""
+        lines = []
+
+        # Module header
+        lines.append(f"# {module.name}")
+        lines.append("")
+
+        # Module description
+        gen_doc = generated_docs.get(module.name)
+        if gen_doc:
+            lines.append(gen_doc.description)
+            if gen_doc.detailed_explanation:
+                lines.append("")
+                lines.append(gen_doc.detailed_explanation)
+        elif module.docstring:
+            lines.append(module.docstring)
+        lines.append("")
+
+        # Classes section
+        if module.classes:
+            lines.append("## Classes")
+            lines.append("")
+
+            for cls in module.classes:
+                lines.extend(self._render_class(cls, generated_docs))
+                lines.append("")
+
+        # Functions section
+        if module.functions:
+            lines.append("## Functions")
+            lines.append("")
+
+            for func in module.functions:
+                lines.extend(self._render_function(func, generated_docs))
+                lines.append("")
+
+        module_filename = module.name.replace(".", "-")
+        return RenderedDoc(
+            filename=f"modules/{module_filename}.md",
+            content="\n".join(lines),
+            doc_type="module",
+        )
+
+    def _render_class(
+        self,
+        cls: ClassInfo,
+        generated_docs: Dict[str, GeneratedDoc]
+    ) -> List[str]:
+        """Render class documentation."""
+        lines = []
+        full_name = f"{cls.module}.{cls.name}"
+
+        lines.append(f"### {cls.name}")
+        lines.append("")
+
+        # Inheritance
+        if cls.bases:
+            lines.append(f"*Inherits from: {', '.join(cls.bases)}*")
+            lines.append("")
+
+        # Description
+        gen_doc = generated_docs.get(full_name)
+        if gen_doc:
+            lines.append(gen_doc.description)
+            if gen_doc.detailed_explanation:
+                lines.append("")
+                lines.append(gen_doc.detailed_explanation)
+        elif cls.docstring:
+            lines.append(cls.docstring)
+        lines.append("")
+
+        # Attributes
+        if cls.attributes:
+            lines.append("#### Attributes")
+            lines.append("")
+            lines.append("| Name | Type | Description |")
+            lines.append("|------|------|-------------|")
+            for attr in cls.attributes:
+                type_str = attr.type_hint or "Any"
+                lines.append(f"| `{attr.name}` | `{type_str}` | |")
+            lines.append("")
+
+        # Methods
+        public_methods = [m for m in cls.methods if not m.name.startswith("_") or m.name == "__init__"]
+        if public_methods:
+            lines.append("#### Methods")
+            lines.append("")
+
+            for method in public_methods:
+                lines.extend(self._render_method(method, generated_docs))
+                lines.append("")
+
+        # Usage example
+        if gen_doc and gen_doc.usage_example:
+            lines.append("#### Example")
+            lines.append("")
+            lines.append("```python")
+            lines.append(gen_doc.usage_example)
+            lines.append("```")
+            lines.append("")
+
+        return lines
+
+    def _render_function(
+        self,
+        func: FunctionInfo,
+        generated_docs: Dict[str, GeneratedDoc]
+    ) -> List[str]:
+        """Render function documentation."""
+        lines = []
+        full_name = f"{func.module}.{func.name}"
+
+        # Function signature
+        async_prefix = "async " if func.is_async else ""
+        lines.append(f"### `{async_prefix}{func.signature}`")
+        lines.append("")
+
+        # Decorators
+        if func.decorators:
+            lines.append(f"*Decorators: {', '.join(f'@{d}' for d in func.decorators)}*")
+            lines.append("")
+
+        # Description
+        gen_doc = generated_docs.get(full_name)
+        if gen_doc:
+            lines.append(gen_doc.description)
+            if gen_doc.detailed_explanation:
+                lines.append("")
+                lines.append(gen_doc.detailed_explanation)
+        elif func.docstring:
+            lines.append(func.docstring)
+        lines.append("")
+
+        # Parameters table
+        params = [p for p in func.parameters if p.name not in ("self", "cls")]
+        if params:
+            lines.append("**Parameters:**")
+            lines.append("")
+            lines.append("| Name | Type | Default | Description |")
+            lines.append("|------|------|---------|-------------|")
+            for param in params:
+                type_str = param.type_hint or "Any"
+                default_str = param.default or "-"
+                lines.append(f"| `{param.name}` | `{type_str}` | `{default_str}` | |")
+            lines.append("")
+
+        # Return type
+        if func.return_type:
+            lines.append(f"**Returns:** `{func.return_type}`")
+            lines.append("")
+
+        # Usage example
+        if gen_doc and gen_doc.usage_example:
+            lines.append("**Example:**")
+            lines.append("")
+            lines.append("```python")
+            lines.append(gen_doc.usage_example)
+            lines.append("```")
+            lines.append("")
+
+        # Notes
+        if gen_doc and gen_doc.notes:
+            lines.append("**Notes:**")
+            lines.append("")
+            for note in gen_doc.notes:
+                lines.append(f"- {note}")
+            lines.append("")
+
+        return lines
+
+    def _render_method(
+        self,
+        method: FunctionInfo,
+        generated_docs: Dict[str, GeneratedDoc]
+    ) -> List[str]:
+        """Render method documentation (compact format)."""
+        lines = []
+
+        # Method signature
+        async_prefix = "async " if method.is_async else ""
+        params = [p for p in method.parameters if p.name != "self"]
+        param_str = ", ".join(
+            f"{p.name}: {p.type_hint}" if p.type_hint else p.name
+            for p in params
+        )
+        ret_str = f" -> {method.return_type}" if method.return_type else ""
+
+        lines.append(f"##### `{async_prefix}{method.name}({param_str}){ret_str}`")
+        lines.append("")
+
+        # Brief description
+        if method.docstring:
+            first_line = method.docstring.split("\n")[0]
+            lines.append(first_line)
+            lines.append("")
+
+        return lines
+
+    def _render_api_reference(
+        self,
+        codebase: CodebaseInfo,
+        generated_docs: Dict[str, GeneratedDoc]
+    ) -> RenderedDoc:
+        """Render complete API reference."""
+        lines = []
+
+        lines.append("# API Reference")
+        lines.append("")
+        lines.append("Complete API documentation for all public interfaces.")
+        lines.append("")
+
+        # Group by module
+        for module in codebase.modules:
+            lines.append(f"## {module.name}")
+            lines.append("")
+
+            # Classes
+            for cls in module.classes:
+                lines.append(f"### class {cls.name}")
+                if cls.bases:
+                    lines.append(f"*Bases: {', '.join(cls.bases)}*")
+                lines.append("")
+
+                if cls.docstring:
+                    lines.append(cls.docstring.split("\n")[0])
+                    lines.append("")
+
+            # Functions
+            for func in module.functions:
+                async_prefix = "async " if func.is_async else ""
+                lines.append(f"### {async_prefix}def {func.name}")
+                lines.append("")
+                lines.append(f"```python")
+                lines.append(func.signature)
+                lines.append("```")
+                lines.append("")
+
+                if func.docstring:
+                    lines.append(func.docstring.split("\n")[0])
+                    lines.append("")
+
+        return RenderedDoc(
+            filename="api-reference.md",
+            content="\n".join(lines),
+            doc_type="api",
+        )
+
+    def _render_diagrams(
+        self,
+        diagrams: Dict[str, DiagramOutput]
+    ) -> RenderedDoc:
+        """Render diagrams page."""
+        lines = []
+
+        lines.append("# Architecture Diagrams")
+        lines.append("")
+        lines.append("Visual representations of the codebase structure.")
+        lines.append("")
+
+        for diagram_type, diagram in diagrams.items():
+            lines.append(f"## {diagram.title}")
+            lines.append("")
+            lines.append(diagram.description)
+            lines.append("")
+
+            if self.is_mdx:
+                # MDX format with Mermaid component
+                lines.append("<Mermaid")
+                lines.append(f'  chart={{`')
+                lines.append(diagram.mermaid_code)
+                lines.append("`}}")
+                lines.append("/>")
+            else:
+                # Standard Markdown with mermaid code block
+                lines.append("```mermaid")
+                lines.append(diagram.mermaid_code)
+                lines.append("```")
+
+            lines.append("")
+
+        return RenderedDoc(
+            filename="diagrams.md",
+            content="\n".join(lines),
+            doc_type="diagram",
+        )
+````
+
+**Rendering Features**:
+
+- **Multiple Output Formats**: Supports both Markdown and MDX
+- **Structured Layout**: Index, per-module docs, API reference, and diagrams
+- **Tables for Parameters**: Clean parameter documentation with types and defaults
+- **Code Examples**: Properly formatted code blocks with syntax highlighting
+
+### Step 8: Documentation Versioning
+
+We track documentation versions to enable change tracking and comparisons.
+
+```python
+# versioning/version_manager.py
+import hashlib
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
+from dataclasses import dataclass, asdict
+
+@dataclass
+class DocVersion:
+    """A documentation version snapshot."""
+    version_id: str
+    timestamp: str
+    commit_hash: Optional[str]
+    files_hash: str
+    modules_count: int
+    functions_count: int
+    classes_count: int
+    coverage_percent: float
+    changes_summary: Optional[str]
+
+@dataclass
+class VersionDiff:
+    """Differences between two versions."""
+    from_version: str
+    to_version: str
+    added_items: List[str]
+    removed_items: List[str]
+    modified_items: List[str]
+    coverage_change: float
+
+class VersionManager:
+    """Manage documentation versions."""
+
+    def __init__(self, storage_path: str = ".doc-versions"):
+        self.storage_path = Path(storage_path)
+        self.storage_path.mkdir(exist_ok=True)
+        self.versions_file = self.storage_path / "versions.json"
+        self.versions: List[DocVersion] = self._load_versions()
+
+    def _load_versions(self) -> List[DocVersion]:
+        """Load existing versions from storage."""
+        if not self.versions_file.exists():
+            return []
+
+        with open(self.versions_file, "r") as f:
+            data = json.load(f)
+            return [DocVersion(**v) for v in data]
+
+    def _save_versions(self):
+        """Save versions to storage."""
+        with open(self.versions_file, "w") as f:
+            json.dump([asdict(v) for v in self.versions], f, indent=2)
+
+    def create_version(
+        self,
+        modules_count: int,
+        functions_count: int,
+        classes_count: int,
+        coverage_percent: float,
+        content_hash: str,
+        commit_hash: Optional[str] = None,
+        changes_summary: Optional[str] = None,
+    ) -> DocVersion:
+        """Create a new documentation version."""
+        version_id = self._generate_version_id()
+        timestamp = datetime.now().isoformat()
+
+        version = DocVersion(
+            version_id=version_id,
+            timestamp=timestamp,
+            commit_hash=commit_hash,
+            files_hash=content_hash,
+            modules_count=modules_count,
+            functions_count=functions_count,
+            classes_count=classes_count,
+            coverage_percent=coverage_percent,
+            changes_summary=changes_summary,
+        )
+
+        self.versions.append(version)
+        self._save_versions()
+
+        return version
+
+    def get_version(self, version_id: str) -> Optional[DocVersion]:
+        """Get a specific version by ID."""
+        for version in self.versions:
+            if version.version_id == version_id:
+                return version
+        return None
+
+    def get_latest_version(self) -> Optional[DocVersion]:
+        """Get the most recent version."""
+        if not self.versions:
+            return None
+        return self.versions[-1]
+
+    def list_versions(self, limit: int = 10) -> List[DocVersion]:
+        """List recent versions."""
+        return self.versions[-limit:]
+
+    def compare_versions(
+        self,
+        from_version_id: str,
+        to_version_id: str,
+        from_items: List[str],
+        to_items: List[str],
+    ) -> VersionDiff:
+        """Compare two versions."""
+        from_version = self.get_version(from_version_id)
+        to_version = self.get_version(to_version_id)
+
+        if not from_version or not to_version:
+            raise ValueError("Version not found")
+
+        from_set = set(from_items)
+        to_set = set(to_items)
+
+        added = list(to_set - from_set)
+        removed = list(from_set - to_set)
+        # Items in both but potentially modified
+        common = from_set & to_set
+
+        coverage_change = to_version.coverage_percent - from_version.coverage_percent
+
+        return VersionDiff(
+            from_version=from_version_id,
+            to_version=to_version_id,
+            added_items=sorted(added),
+            removed_items=sorted(removed),
+            modified_items=[],  # Would need content comparison
+            coverage_change=round(coverage_change, 1),
+        )
+
+    def _generate_version_id(self) -> str:
+        """Generate a unique version ID."""
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        count = len(self.versions) + 1
+        return f"v{count}-{timestamp}"
+
+    @staticmethod
+    def compute_content_hash(content: str) -> str:
+        """Compute hash of documentation content."""
+        return hashlib.sha256(content.encode()).hexdigest()[:12]
+```
+
+---
+
+## Documentation Orchestrator
+
+The orchestrator ties all components together into a complete pipeline.
+
+```python
+# services/doc_generator.py
+from typing import Dict, List, Optional
+from pathlib import Path
+import asyncio
+
+from parsers.code_parser import (
+    FileScanner, PythonASTParser, ModuleInfo, CodebaseInfo
+)
+from analysis.code_analyzer import CodeAnalyzer
+from generation.llm_doc_generator import LLMDocGenerator, GeneratedDoc
+from generation.diagram_generator import MermaidDiagramGenerator
+from generation.example_generator import ExampleGenerator
+from quality.docstring_checker import DocstringQualityChecker, QualityReport
+from output.markdown_renderer import MarkdownRenderer, RenderedDoc
+from versioning.version_manager import VersionManager
+
+class DocumentationGenerator:
+    """Orchestrates the complete documentation generation pipeline."""
+
+    def __init__(
+        self,
+        use_llm: bool = True,
+        output_format: str = "markdown",
+        include_private: bool = False,
+    ):
+        self.use_llm = use_llm
+        self.output_format = output_format
+        self.include_private = include_private
+
+        # Initialize components
+        self.scanner = FileScanner()
+        self.parser = PythonASTParser(include_private=include_private)
+        self.analyzer = CodeAnalyzer()
+        self.llm_generator = LLMDocGenerator() if use_llm else None
+        self.diagram_generator = MermaidDiagramGenerator()
+        self.example_generator = ExampleGenerator()
+        self.quality_checker = DocstringQualityChecker()
+        self.renderer = MarkdownRenderer(output_format=output_format)
+        self.version_manager = VersionManager()
+
+    async def generate(
+        self,
+        source_path: str,
+        generate_diagrams: bool = True,
+        generate_examples: bool = True,
+    ) -> Dict:
+        """Execute the complete documentation generation pipeline."""
+
+        # Step 1: Scan for Python files
+        files = self.scanner.scan(source_path)
+        if not files:
+            raise ValueError(f"No Python files found in {source_path}")
+
+        # Step 2: Parse all files
+        modules: List[ModuleInfo] = []
+        parse_errors = []
+
+        for filepath in files:
+            try:
+                module = self.parser.parse_file(filepath)
+                if module:
+                    modules.append(module)
+            except ValueError as e:
+                parse_errors.append(str(e))
+
+        if not modules:
+            raise ValueError(f"Failed to parse any files: {parse_errors}")
+
+        # Step 3: Analyze codebase
+        codebase = self.analyzer.analyze(modules)
+
+        # Step 4: Generate LLM-enhanced documentation
+        generated_docs: Dict[str, GeneratedDoc] = {}
+        if self.use_llm and self.llm_generator:
+            # Collect items to document
+            items_to_doc = []
+            for module in modules:
+                items_to_doc.extend(module.functions)
+                items_to_doc.extend(module.classes)
+
+            # Batch generate documentation
+            generated_docs = await self.llm_generator.batch_generate(
+                items_to_doc, batch_size=5
+            )
+
+        # Step 5: Generate diagrams
+        diagrams = {}
+        if generate_diagrams:
+            diagrams = self.diagram_generator.generate_all_diagrams(
+                codebase, self.analyzer
+            )
+
+        # Step 6: Check documentation quality
+        quality_report = self.quality_checker.check_codebase(modules)
+
+        # Step 7: Render documentation
+        rendered_docs = self.renderer.render_complete_docs(
+            codebase=codebase,
+            generated_docs=generated_docs,
+            diagrams=diagrams,
+            quality_report=quality_report,
+        )
+
+        # Step 8: Create version snapshot
+        all_content = "\n".join(doc.content for doc in rendered_docs)
+        content_hash = VersionManager.compute_content_hash(all_content)
+
+        version = self.version_manager.create_version(
+            modules_count=len(modules),
+            functions_count=len(codebase.all_functions),
+            classes_count=len(codebase.all_classes),
+            coverage_percent=quality_report.coverage_percent,
+            content_hash=content_hash,
+        )
+
+        return {
+            "documentation": {
+                "modules": [self._module_to_dict(m) for m in modules],
+                "classes": [self._class_to_dict(c) for c in codebase.all_classes],
+                "functions": [self._func_to_dict(f) for f in codebase.all_functions],
+            },
+            "diagrams": {
+                name: {"mermaid_code": d.mermaid_code, "title": d.title}
+                for name, d in diagrams.items()
+            },
+            "quality_report": {
+                "total_items": quality_report.total_items,
+                "documented_items": quality_report.documented_items,
+                "coverage_percent": quality_report.coverage_percent,
+                "suggestions": quality_report.suggestions,
+            },
+            "rendered_docs": [
+                {"filename": d.filename, "content": d.content}
+                for d in rendered_docs
+            ],
+            "metadata": {
+                "files_processed": len(files),
+                "parse_errors": parse_errors,
+                "version_id": version.version_id,
+            },
+        }
+
+    def _module_to_dict(self, module: ModuleInfo) -> Dict:
+        """Convert ModuleInfo to dictionary."""
+        return {
+            "name": module.name,
+            "filepath": module.filepath,
+            "docstring": module.docstring,
+            "functions_count": len(module.functions),
+            "classes_count": len(module.classes),
+        }
+
+    def _class_to_dict(self, cls) -> Dict:
+        """Convert ClassInfo to dictionary."""
+        return {
+            "name": cls.name,
+            "module": cls.module,
+            "bases": cls.bases,
+            "methods_count": len(cls.methods),
+            "docstring": cls.docstring[:200] if cls.docstring else None,
+        }
+
+    def _func_to_dict(self, func) -> Dict:
+        """Convert FunctionInfo to dictionary."""
+        return {
+            "name": func.name,
+            "module": func.module,
+            "signature": func.signature,
+            "is_async": func.is_async,
+            "docstring": func.docstring[:200] if func.docstring else None,
+        }
+
+    async def generate_single_file(
+        self,
+        filepath: str,
+    ) -> Dict:
+        """Generate documentation for a single file."""
+        path = Path(filepath)
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {filepath}")
+
+        module = self.parser.parse_file(path)
+        if not module:
+            raise ValueError(f"Failed to parse {filepath}")
+
+        # Generate docs for this module only
+        generated_docs = {}
+        if self.use_llm and self.llm_generator:
+            items = module.functions + module.classes
+            generated_docs = await self.llm_generator.batch_generate(items)
+
+        return {
+            "module": self._module_to_dict(module),
+            "functions": [self._func_to_dict(f) for f in module.functions],
+            "classes": [self._class_to_dict(c) for c in module.classes],
+            "generated_docs": {
+                k: {"description": v.description, "example": v.usage_example}
+                for k, v in generated_docs.items()
+            },
+        }
+```
+
+### API Endpoints
+
+```python
+# routers/docs.py
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+from pydantic import BaseModel, Field
+from typing import List, Dict, Optional
+import asyncio
+
+from services.doc_generator import DocumentationGenerator
+
+router = APIRouter(prefix="/docs", tags=["documentation"])
+
+class GenerationOptions(BaseModel):
+    max_depth: int = Field(default=10, ge=1, le=50)
+    exclude_patterns: List[str] = Field(default_factory=list)
+    docstring_style: str = Field(default="google", pattern="^(google|numpy|sphinx)$")
+
+class GenerationRequest(BaseModel):
+    source_path: str
+    output_format: str = Field(default="markdown", pattern="^(markdown|mdx)$")
+    include_private: bool = False
+    generate_diagrams: bool = True
+    generate_examples: bool = True
+    use_llm: bool = True
+    options: Optional[GenerationOptions] = None
+
+class QualityReportResponse(BaseModel):
+    total_items: int
+    documented_items: int
+    coverage_percent: float
+    suggestions: List[str]
+
+class MetadataResponse(BaseModel):
+    files_processed: int
+    version_id: str
+
+class GenerationResponse(BaseModel):
+    documentation: Dict
+    diagrams: Dict
+    quality_report: QualityReportResponse
+    metadata: MetadataResponse
+
+@router.post("/generate", response_model=GenerationResponse)
+async def generate_documentation(request: GenerationRequest):
+    """Generate documentation for a codebase."""
+    try:
+        generator = DocumentationGenerator(
+            use_llm=request.use_llm,
+            output_format=request.output_format,
+            include_private=request.include_private,
+        )
+
+        result = await generator.generate(
+            source_path=request.source_path,
+            generate_diagrams=request.generate_diagrams,
+            generate_examples=request.generate_examples,
+        )
+
+        return GenerationResponse(
+            documentation=result["documentation"],
+            diagrams=result["diagrams"],
+            quality_report=QualityReportResponse(**result["quality_report"]),
+            metadata=MetadataResponse(
+                files_processed=result["metadata"]["files_processed"],
+                version_id=result["metadata"]["version_id"],
+            ),
+        )
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+
+@router.post("/generate/file")
+async def generate_file_documentation(filepath: str, use_llm: bool = True):
+    """Generate documentation for a single file."""
+    try:
+        generator = DocumentationGenerator(use_llm=use_llm)
+        result = await generator.generate_single_file(filepath)
+        return result
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/versions")
+async def list_versions(limit: int = 10):
+    """List documentation versions."""
+    from versioning.version_manager import VersionManager
+
+    manager = VersionManager()
+    versions = manager.list_versions(limit=limit)
+
+    return {
+        "versions": [
+            {
+                "version_id": v.version_id,
+                "timestamp": v.timestamp,
+                "coverage_percent": v.coverage_percent,
+                "modules_count": v.modules_count,
+            }
+            for v in versions
+        ]
+    }
+
+@router.get("/versions/{version_id}")
+async def get_version(version_id: str):
+    """Get details of a specific version."""
+    from versioning.version_manager import VersionManager
+
+    manager = VersionManager()
+    version = manager.get_version(version_id)
+
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    return version
+
+@router.get("/quality")
+async def check_quality(source_path: str):
+    """Check documentation quality without generating."""
+    from parsers.code_parser import FileScanner, PythonASTParser
+    from quality.docstring_checker import DocstringQualityChecker
+
+    scanner = FileScanner()
+    parser = PythonASTParser()
+    checker = DocstringQualityChecker()
+
+    try:
+        files = scanner.scan(source_path)
+        modules = []
+        for f in files:
+            try:
+                module = parser.parse_file(f)
+                if module:
+                    modules.append(module)
+            except ValueError:
+                continue
+
+        report = checker.check_codebase(modules)
+
+        return {
+            "total_items": report.total_items,
+            "documented_items": report.documented_items,
+            "coverage_percent": report.coverage_percent,
+            "overall_grade": report.overall_grade.value,
+            "issues_count": len(report.issues),
+            "suggestions": report.suggestions,
+        }
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+```
+
+---
+
+## Practical Example
+
+Let's walk through generating documentation for a sample codebase:
+
+**Sample Source Code:**
+
+```python
+# sample/calculator.py
+"""A simple calculator module with basic arithmetic operations."""
+
+from typing import Union, List
+
+Number = Union[int, float]
+
+class Calculator:
+    """A calculator that performs basic arithmetic operations.
+
+    Attributes:
+        history: List of past calculations.
+        precision: Number of decimal places for results.
+    """
+
+    def __init__(self, precision: int = 2):
+        """Initialize the calculator.
+
+        Args:
+            precision: Number of decimal places for rounding results.
+        """
+        self.history: List[str] = []
+        self.precision = precision
+
+    def add(self, a: Number, b: Number) -> Number:
+        """Add two numbers.
+
+        Args:
+            a: First number.
+            b: Second number.
+
+        Returns:
+            The sum of a and b.
+        """
+        result = round(a + b, self.precision)
+        self._record(f"{a} + {b} = {result}")
+        return result
+
+    def divide(self, a: Number, b: Number) -> Number:
+        """Divide a by b.
+
+        Args:
+            a: Dividend.
+            b: Divisor.
+
+        Returns:
+            The quotient of a divided by b.
+
+        Raises:
+            ValueError: If b is zero.
+        """
+        if b == 0:
+            raise ValueError("Cannot divide by zero")
+        result = round(a / b, self.precision)
+        self._record(f"{a} / {b} = {result}")
+        return result
+
+    def _record(self, operation: str) -> None:
+        """Record an operation in history."""
+        self.history.append(operation)
+
+    def get_history(self) -> List[str]:
+        """Get the calculation history.
+
+        Returns:
+            List of past calculations as strings.
+        """
+        return self.history.copy()
+
+
+def quick_add(a: Number, b: Number) -> Number:
+    """Quickly add two numbers without tracking history.
+
+    Args:
+        a: First number.
+        b: Second number.
+
+    Returns:
+        The sum of a and b.
+
+    Example:
+        >>> quick_add(2, 3)
+        5
+    """
+    return a + b
+```
+
+**Generated Documentation Output:**
+
+````markdown
+# sample.calculator
+
+A simple calculator module with basic arithmetic operations.
+
+## Classes
+
+### Calculator
+
+_Inherits from: None_
+
+A calculator that performs basic arithmetic operations.
+
+#### Attributes
+
+| Name        | Type        | Description                           |
+| ----------- | ----------- | ------------------------------------- |
+| `history`   | `List[str]` | List of past calculations.            |
+| `precision` | `int`       | Number of decimal places for results. |
+
+#### Methods
+
+##### `__init__(precision: int = 2)`
+
+Initialize the calculator.
+
+##### `add(a: Number, b: Number) -> Number`
+
+Add two numbers.
+
+##### `divide(a: Number, b: Number) -> Number`
+
+Divide a by b.
+
+##### `get_history() -> List[str]`
+
+Get the calculation history.
+
+#### Example
+
+```python
+from sample.calculator import Calculator
+
+# Create instance
+calc = Calculator(precision=2)
+
+# Use methods
+result = calc.add(10, 5)
+print(result)  # 15
+
+history = calc.get_history()
+print(history)  # ['10 + 5 = 15']
+```
+````
+
+## Functions
+
+### `def quick_add(a: Number, b: Number) -> Number`
+
+Quickly add two numbers without tracking history.
+
+**Parameters:**
+
+| Name | Type     | Default | Description    |
+| ---- | -------- | ------- | -------------- |
+| `a`  | `Number` | -       | First number.  |
+| `b`  | `Number` | -       | Second number. |
+
+**Returns:** `Number`
+
+**Example:**
+
+```python
+from sample.calculator import quick_add
+
+result = quick_add(2, 3)
+print(result)  # 5
+```
+
+````
+
+**Generated Module Dependency Diagram:**
+
+```mermaid
+graph TD
+    sample_calculator[calculator]
+    style sample_calculator fill:#c8e6c9,stroke:#2e7d32
+````
+
+**Quality Report:**
+
+```json
+{
+  "total_items": 6,
+  "documented_items": 6,
+  "coverage_percent": 100.0,
+  "overall_grade": "excellent",
+  "suggestions": []
+}
+```
+
+---
+
+## Challenges and Extensions
+
+### Challenge 1: Multi-Language Support
+
+Extend the generator to support TypeScript codebases:
+
+```python
+# parsers/typescript_parser.py (conceptual)
+class TypeScriptParser:
+    """Parse TypeScript files using ts-morph concepts."""
+
+    def parse_file(self, filepath: Path) -> ModuleInfo:
+        """Parse a TypeScript file.
+
+        Would use ts-morph or tree-sitter-typescript for actual parsing.
+        """
+        # Extract interfaces, types, classes, functions
+        # Map TypeScript types to documentation format
+        pass
+
+    def _extract_interface(self, node) -> Dict:
+        """Extract TypeScript interface definition."""
+        return {
+            "name": node.name,
+            "properties": [
+                {"name": p.name, "type": p.type, "optional": p.optional}
+                for p in node.properties
+            ],
+            "extends": node.extends,
+        }
+```
+
+### Challenge 2: Interactive Documentation Server
+
+Build a live documentation server with hot reload:
+
+```python
+# server/live_docs.py
+from fastapi import FastAPI, WebSocket
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import asyncio
+
+class DocReloadHandler(FileSystemEventHandler):
+    """Watch for file changes and trigger doc regeneration."""
+
+    def __init__(self, generator, websocket_manager):
+        self.generator = generator
+        self.ws_manager = websocket_manager
+
+    def on_modified(self, event):
+        if event.src_path.endswith(".py"):
+            asyncio.create_task(self._regenerate(event.src_path))
+
+    async def _regenerate(self, filepath: str):
+        """Regenerate docs and notify clients."""
+        result = await self.generator.generate_single_file(filepath)
+        await self.ws_manager.broadcast({
+            "type": "doc_updated",
+            "file": filepath,
+            "content": result,
+        })
+
+class WebSocketManager:
+    """Manage WebSocket connections for live updates."""
+
+    def __init__(self):
+        self.connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.connections.append(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.connections:
+            await connection.send_json(message)
+```
+
+### Challenge 3: Documentation Search
+
+Add full-text search across generated documentation:
+
+```python
+# search/doc_search.py
+from typing import List, Dict
+from dataclasses import dataclass
+import re
+
+@dataclass
+class SearchResult:
+    """A search result."""
+    item_name: str
+    item_type: str
+    module: str
+    snippet: str
+    score: float
+
+class DocumentationSearch:
+    """Search through documentation."""
+
+    def __init__(self):
+        self.index: Dict[str, Dict] = {}
+
+    def build_index(self, codebase_info, generated_docs: Dict):
+        """Build search index from documentation."""
+        for func in codebase_info.all_functions:
+            key = f"{func.module}.{func.name}"
+            self.index[key] = {
+                "name": func.name,
+                "type": "function",
+                "module": func.module,
+                "signature": func.signature,
+                "docstring": func.docstring or "",
+                "generated": generated_docs.get(key, {}).get("description", ""),
+            }
+
+        for cls in codebase_info.all_classes:
+            key = f"{cls.module}.{cls.name}"
+            self.index[key] = {
+                "name": cls.name,
+                "type": "class",
+                "module": cls.module,
+                "docstring": cls.docstring or "",
+                "generated": generated_docs.get(key, {}).get("description", ""),
+            }
+
+    def search(self, query: str, limit: int = 10) -> List[SearchResult]:
+        """Search documentation for query."""
+        results = []
+        query_lower = query.lower()
+        query_words = query_lower.split()
+
+        for key, item in self.index.items():
+            score = 0.0
+            searchable = f"{item['name']} {item['docstring']} {item['generated']}".lower()
+
+            # Exact name match
+            if query_lower == item["name"].lower():
+                score += 10.0
+
+            # Name contains query
+            if query_lower in item["name"].lower():
+                score += 5.0
+
+            # Word matches in content
+            for word in query_words:
+                if word in searchable:
+                    score += 1.0
+
+            if score > 0:
+                # Extract snippet
+                snippet = self._extract_snippet(searchable, query_words)
+                results.append(SearchResult(
+                    item_name=item["name"],
+                    item_type=item["type"],
+                    module=item["module"],
+                    snippet=snippet,
+                    score=score,
+                ))
+
+        # Sort by score descending
+        results.sort(key=lambda r: r.score, reverse=True)
+        return results[:limit]
+
+    def _extract_snippet(self, text: str, query_words: List[str]) -> str:
+        """Extract relevant snippet containing query words."""
+        for word in query_words:
+            idx = text.find(word)
+            if idx >= 0:
+                start = max(0, idx - 50)
+                end = min(len(text), idx + 100)
+                return "..." + text[start:end] + "..."
+        return text[:150] + "..."
+```
+
+### Challenge 4: CI/CD Integration
+
+Create a GitHub Action for automated documentation:
+
+```yaml
+# .github/workflows/docs.yml
+name: Generate Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**/*.py"
+      - "docs/**"
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Generate documentation
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python -m doc_generator generate src/ --output docs/api
+
+      - name: Check documentation quality
+        run: |
+          python -m doc_generator quality src/ --min-coverage 80
+
+      - name: Commit documentation
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: auto-generate API documentation"
+          file_pattern: "docs/**"
+```
+
+---
+
+## Testing Requirements
+
+### Unit Test Coverage
+
+| Component                 | Test Cases                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| `FileScanner`             | Directory scanning, exclude patterns, max depth, single file handling                    |
+| `PythonASTParser`         | Function extraction, class extraction, type hints, decorators, docstrings, syntax errors |
+| `CodeAnalyzer`            | Dependency graph building, class hierarchy, metrics calculation                          |
+| `LLMDocGenerator`         | Prompt construction, response parsing, batch processing, error handling                  |
+| `MermaidDiagramGenerator` | Module dependency diagrams, class hierarchy diagrams, architecture diagrams              |
+| `ExampleGenerator`        | Function examples, class examples, type-based value generation                           |
+| `DocstringQualityChecker` | Coverage calculation, issue detection, quality scoring                                   |
+| `MarkdownRenderer`        | Index rendering, module rendering, API reference, diagram pages                          |
+| `VersionManager`          | Version creation, version retrieval, version comparison                                  |
+
+### Integration Test Scenarios
+
+| Scenario           | Steps                                 | Expected Outcome                             |
+| ------------------ | ------------------------------------- | -------------------------------------------- |
+| Full Pipeline      | Generate docs for sample codebase     | Complete documentation with all sections     |
+| No LLM Mode        | Generate without LLM enhancement      | Documentation using only docstrings          |
+| Empty Codebase     | Generate for directory with no Python | Appropriate error message                    |
+| Syntax Errors      | Generate with invalid Python files    | Partial results with error reporting         |
+| Large Codebase     | Generate for 100+ file project        | Complete within timeout, all files processed |
+| Version Comparison | Generate twice, compare versions      | Accurate diff of changes                     |
+
+---
+
+## Project Structure
+
+```
+doc-generator/
+├── parsers/
+│   ├── __init__.py
+│   ├── code_parser.py        # AST parsing and extraction
+│   └── typescript_parser.py  # TypeScript support (extension)
+├── analysis/
+│   ├── __init__.py
+│   └── code_analyzer.py      # Dependency and hierarchy analysis
+├── generation/
+│   ├── __init__.py
+│   ├── llm_doc_generator.py  # LLM-powered documentation
+│   ├── diagram_generator.py  # Mermaid diagram creation
+│   └── example_generator.py  # Usage example generation
+├── quality/
+│   ├── __init__.py
+│   └── docstring_checker.py  # Documentation quality checking
+├── output/
+│   ├── __init__.py
+│   └── markdown_renderer.py  # Markdown/MDX rendering
+├── versioning/
+│   ├── __init__.py
+│   └── version_manager.py    # Documentation versioning
+├── search/
+│   ├── __init__.py
+│   └── doc_search.py         # Full-text search (extension)
+├── services/
+│   ├── __init__.py
+│   └── doc_generator.py      # Main orchestrator
+├── routers/
+│   ├── __init__.py
+│   └── docs.py               # FastAPI endpoints
+├── main.py                   # FastAPI application
+├── requirements.txt
+└── tests/
+    ├── test_parser.py
+    ├── test_analyzer.py
+    ├── test_generator.py
+    ├── test_quality.py
+    └── test_integration.py
+```
+
+---
+
+## Dependencies
+
+```txt
+# requirements.txt
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+langchain>=0.1.0
+langchain-openai>=0.0.5
+libcst>=1.0.0
+httpx>=0.24.0
+watchdog>=3.0.0
+```
+
+---
+
+## Key Takeaways
+
+<Mermaid
+  chart={`
+mindmap
+  root((Doc Generator))
+    AST Parsing
+      Function extraction
+      Class extraction
+      Type hints
+    Code Analysis
+      Dependencies
+      Class hierarchy
+      Metrics
+    LLM Enhancement
+      Descriptions
+      Examples
+      Explanations
+    Diagram Generation
+      Module deps
+      Class hierarchy
+      Architecture
+    Quality Checking
+      Coverage
+      Completeness
+      Suggestions
+    Versioning
+      Snapshots
+      Comparisons
+      History
+`}
+  caption="Key Components: The pillars of documentation generation."
+/>
+
+1. **AST-Based Extraction**: Parsing code into AST provides accurate, complete extraction of all code elements. This is more reliable than regex-based approaches.
+   - **Why it matters**: AST captures the true structure of code, including nested classes, decorators, and type hints.
+   - **Trade-off**: Requires language-specific parsers, but the accuracy is worth it.
+
+2. **LLM for Human Touch**: While AST gives us structure, LLMs add the human-readable explanations and practical examples that make documentation useful.
+   - **Batch Processing**: Process multiple items concurrently to reduce latency.
+   - **Fallback Strategy**: Always have a non-LLM path for when API calls fail.
+
+3. **Diagrams from Code**: Automatically generated diagrams stay in sync with code, unlike manually maintained diagrams that quickly become outdated.
+   - **Mermaid Format**: Text-based diagrams that can be version-controlled alongside code.
+   - **Multiple Views**: Module dependencies, class hierarchies, and architecture overviews serve different needs.
+
+4. **Quality Metrics Drive Improvement**: Measuring documentation coverage and quality creates accountability and identifies gaps.
+   - **Actionable Suggestions**: Don't just report problems—suggest specific fixes.
+   - **Continuous Monitoring**: Integrate quality checks into CI/CD pipelines.
+
+5. **Versioning Enables Tracking**: Documentation versions help track changes over time and ensure docs stay current with code.
+   - **Content Hashing**: Detect when documentation actually changed.
+   - **Diff Views**: Show what was added, removed, or modified between versions.
+
+---
+
+<ModuleSummary
+  points={[
+    "AST parsing provides accurate extraction of functions, classes, and their metadata from Python codebases",
+    "Code analysis builds dependency graphs and class hierarchies for understanding codebase structure",
+    "LLM-powered generation creates human-readable descriptions and practical usage examples",
+    "Mermaid diagrams automatically visualize module dependencies and class relationships",
+    "Quality checking measures documentation coverage and suggests specific improvements",
+    "Documentation versioning tracks changes over time and enables version comparisons",
+  ]}
+/>
+
+**Next Steps**: Consider extending this generator with TypeScript support, building a live documentation server with hot reload, adding full-text search, or integrating with CI/CD pipelines for automated documentation updates.

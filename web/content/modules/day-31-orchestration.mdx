@@ -5,7 +5,25 @@ week: 5
 day: 31
 ---
 
-{/* IMAGE_PLACEHOLDER: Hero illustration showing a state machine diagram with nodes and edges, representing the transition from linear chains to graph-based orchestration. Should include visual elements like: interconnected nodes with arrows, a control flow diagram, and icons representing different agent tasks (research, analysis, writing). Place at the top of the module after the frontmatter. Style: Modern, technical, with a color scheme matching the course theme (blues and purples). */}
+<Mermaid
+  chart={`
+graph TD
+    classDef main fill:#e1f5fe,stroke:#01579b
+    classDef node fill:#fff,stroke:#333
+
+    Start((Start)) --> NodeA[Research]
+    NodeA --> Router{Decision}
+    Router -->|More Info| NodeB[Deep Dive]
+    Router -->|Enough Info| NodeC[Synthesize]
+    NodeB --> NodeA
+    NodeC --> End((End))
+
+    class Start,End,Router main
+    class NodeA,NodeB,NodeC node
+
+`}
+caption="From linear chains to stateful graphs: Orchestrating complex agent behaviors."
+/>
 
 <ReadingTime minutes={55} />
 
@@ -83,8 +101,6 @@ Our hand-built agent loops work, but they lack the robustness needed for product
   production-grade multi-agent systems.
 </Callout>
 
-{/* IMAGE_PLACEHOLDER: Comparison infographic showing "Traditional Linear Chain" vs "LangGraph State Machine". Left side: simple linear flow A→B→C→D. Right side: complex graph with conditional branches, loops, and parallel execution paths. Include annotations highlighting key differences: "No cycles" vs "Native loops", "In-memory state" vs "Persistent checkpoints", "Manual HITL" vs "Built-in interrupts". Place immediately after the callout. Style: Side-by-side comparison with clear visual distinction. */}
-
 ---
 
 ## 31.1 Why LangGraph?
@@ -131,7 +147,23 @@ graph LR
 
 Choosing the right orchestration framework is critical for production systems. Here's how LangGraph compares to other popular options:
 
-{/* IMAGE_PLACEHOLDER: Framework comparison matrix visualization showing LangGraph, CrewAI, AutoGen, and OpenAI Swarm. Use a radar chart or comparison grid showing dimensions like: Control Granularity, Persistence, HITL Support, Learning Curve, Production Readiness, and Ecosystem Integration. Each framework should have a distinct color. Place above the comparison table. Style: Clean, data-driven visualization with clear legends. */}
+<Mermaid
+  chart={`
+quadrantChart
+    title Orchestration Framework Comparison
+    x-axis Low Control --> High Control
+    y-axis "Easy to Use" --> "Production Ready"
+    quadrant-1 "Enterprise Core"
+    quadrant-2 "Rapid Prototype"
+    quadrant-3 "Simple Scripts"
+    quadrant-4 "Complex Manual"
+    "LangGraph": [0.85, 0.85]
+    "CrewAI": [0.35, 0.70]
+    "AutoGen": [0.45, 0.55]
+    "Swarm": [0.40, 0.45]
+`}
+  caption="Framework Landscape: Choosing the right tool for the job."
+/>
 
 | Framework        | Architecture                                 | Best For                                                            | Trade-offs                                                            |
 | :--------------- | :------------------------------------------- | :------------------------------------------------------------------ | :-------------------------------------------------------------------- |
@@ -167,13 +199,164 @@ Beyond frameworks, you must choose the right _coordination architecture_ for you
   but lacks stateful conversation flow.
 </Callout>
 
+### The Complete 11-Pattern Taxonomy
+
+Research and production experience have identified 11 distinct multi-agent orchestration patterns. Understanding when to use each is critical for building effective systems.
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph Sequential ["Sequential Patterns"]
+        P1[1. Pipeline]
+        P2[2. Supervisor]
+    end
+    
+    subgraph Parallel ["Parallel Patterns"]
+        P3[3. Fan-out/Fan-in]
+        P4[4. Router]
+    end
+    
+    subgraph Hierarchical ["Hierarchical Patterns"]
+        P5[5. Hierarchical]
+        P6[6. Collaborative]
+    end
+    
+    subgraph Emergent ["Emergent Patterns"]
+        P7[7. Blackboard]
+        P8[8. Swarm]
+        P9[9. Council]
+    end
+    
+    subgraph Reflective ["Reflective Patterns"]
+        P10[10. Evaluator/Critic]
+        P11[11. Debate]
+    end
+    
+    style Sequential fill:#e3f2fd,stroke:#2196f3
+    style Parallel fill:#c8e6c9,stroke:#4caf50
+    style Hierarchical fill:#fff9c4,stroke:#fbc02d
+    style Emergent fill:#f3e5f5,stroke:#9c27b0
+    style Reflective fill:#ffcdd2,stroke:#c62828
+`}
+  caption="The 11 Multi-Agent Orchestration Patterns"
+/>
+
+| #   | Pattern              | Description                                    | Best For                               | Complexity |
+| :-- | :------------------- | :--------------------------------------------- | :------------------------------------- | :--------- |
+| 1   | **Pipeline**         | Sequential chain: A → B → C                    | ETL, document processing               | ⭐         |
+| 2   | **Supervisor**       | Central coordinator dispatches to specialists  | Customer support, task routing         | ⭐⭐       |
+| 3   | **Fan-out/Fan-in**   | Parallel execution with result aggregation     | Research, data gathering               | ⭐⭐       |
+| 4   | **Router**           | Single decision point routes to one specialist | Q&A, intent classification             | ⭐         |
+| 5   | **Hierarchical**     | Tree of supervisors with delegation            | Large organizations, complex workflows | ⭐⭐⭐     |
+| 6   | **Collaborative**    | Peers work together on shared state            | Pair programming, co-authoring         | ⭐⭐⭐     |
+| 7   | **Blackboard**       | Shared workspace agents read/write freely      | Problem solving, planning              | ⭐⭐⭐⭐   |
+| 8   | **Swarm**            | Autonomous agents with emergent behavior       | Exploration, creative tasks            | ⭐⭐⭐⭐   |
+| 9   | **Council**          | Multiple agents vote on decisions              | High-stakes decisions, consensus       | ⭐⭐⭐     |
+| 10  | **Evaluator/Critic** | Generator + evaluator feedback loop            | Content creation, code generation      | ⭐⭐       |
+| 11  | **Debate**           | Agents argue opposing positions                | Analysis, decision support             | ⭐⭐⭐     |
+
+#### Pattern Details
+
+**1. Pipeline** — Tasks flow sequentially through specialized stages. Simple but inflexible.
+
+```
+Input → Extract → Transform → Load → Output
+```
+
+**2. Supervisor** — A central agent decides which specialist handles each subtask.
+
+```
+User → Supervisor → [Billing Agent | Support Agent | Sales Agent]
+```
+
+**3. Fan-out/Fan-in** — Dispatch work to multiple agents in parallel, then aggregate results.
+
+```
+Query → [Agent1, Agent2, Agent3] → Synthesizer → Response
+```
+
+**4. Router** — Single classification step routes to exactly one handler (no aggregation).
+
+```
+Query → Classifier → Agent_N → Response
+```
+
+**5. Hierarchical** — Tree structure with managers delegating to sub-managers.
+
+```
+CEO Agent → [VP Engineering → [Team Lead → Developers], VP Sales → [Reps]]
+```
+
+**6. Collaborative** — Peer agents work on shared state without central control.
+
+```
+Agent A ↔ Shared State ↔ Agent B (both read/write)
+```
+
+**7. Blackboard** — Agents post findings to a shared "blackboard"; others react to changes.
+
+```
+[Agent1, Agent2, Agent3] ↔ Blackboard (opportunistic contribution)
+```
+
+**8. Swarm** — Autonomous agents with local rules produce emergent global behavior.
+
+```
+[Agent1, Agent2, ...AgentN] → Emergent Solution (no central control)
+```
+
+**9. Council** — Multiple agents vote or reach consensus on decisions.
+
+```
+Query → [Judge1, Judge2, Judge3] → Majority Vote → Decision
+```
+
+**10. Evaluator/Critic** — Generator produces output; critic provides feedback for iteration.
+
+```
+Generator → Draft → Critic → Feedback → Generator (loop until approved)
+```
+
+**11. Debate** — Agents argue opposing positions; synthesizer extracts best arguments.
+
+```
+[Pro Agent ↔ Con Agent] → Moderator → Balanced Conclusion
+```
+
+<Callout type="tip" title="Pattern Selection Guide">
+  Start with the simplest pattern that meets your needs. **Pipeline** for linear
+  workflows, **Supervisor** for task routing, **Fan-out/Fan-in** for parallel
+  research. Only reach for complex patterns like **Swarm** or **Blackboard**
+  when simpler approaches fail.
+</Callout>
+
 ---
 
 ## 31.2 Two APIs: Graph and Functional
 
 LangGraph now offers two complementary approaches to building workflows:
 
-{/* IMAGE_PLACEHOLDER: Split-screen code comparison showing the same workflow implemented in both Graph API and Functional API. Left side: Graph API with StateGraph, add_node, add_edge calls. Right side: Functional API with @entrypoint and @task decorators. Use syntax highlighting and arrows to show equivalent concepts. Place immediately after the section heading. Style: Code-focused, with clear visual separation and annotations. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Graph API (Explicit)"
+        A[StateGraph] --> B[add_node]
+        B --> C[add_edge]
+        C --> D[compile]
+    end
+
+    subgraph "Functional API (Decorator)"
+        E[@entrypoint] --> F[@task]
+        F --> G[@task]
+        G --> E
+    end
+
+    style A fill:#e3f2fd
+    style E fill:#f3e5f5
+
+`}
+caption="Two APIs, One Runtime: Choose your abstraction level."
+/>
 
 ### The Graph API (Classic)
 
@@ -239,7 +422,23 @@ def workflow(topic: str) -> str:
 
 ## 31.3 Core Concepts
 
-{/* IMAGE_PLACEHOLDER: Interactive diagram showing the three core concepts of LangGraph: State (represented as a flowing data structure), Nodes (as processing units with function icons), and Edges (as directional arrows with conditional/unconditional variants). Use animation indicators to show data flow through the system. Place at the section start. Style: Educational, with clear labels and color-coding for each concept. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    State[State] -->|Input| Node[Node Function]
+    Node -->|Return Updates| State
+    State -->|Check Condition| Edge{Edge/Router}
+    Edge -->|Route| Node
+    
+    style State fill:#e1f5fe,stroke:#0277bd
+    style Node fill:#e8f5e9,stroke:#2e7d32
+    style Edge fill:#fff9c4,stroke:#fbc02d
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: The Core LangGraph Cycle</p>
 
 ### State
 
@@ -465,7 +664,32 @@ app = workflow.compile(checkpointer=checkpointer)
 
 PostgreSQL is the recommended choice for production deployments:
 
-{/* IMAGE_PLACEHOLDER: Architecture diagram showing PostgreSQL checkpointing flow. Illustrate: (1) Agent execution with state changes, (2) Checkpoint writes to PostgreSQL with ACID guarantees, (3) State recovery on restart, (4) Time-travel debugging accessing historical checkpoints. Include database icon, transaction logs, and recovery arrows. Place above the code block. Style: Technical architecture diagram with clear data flow. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+sequenceDiagram
+    participant Agent
+    participant Graph
+    participant Postgres
+    
+    Agent->>Graph: Invoke(Input)
+    Graph->>Graph: Execute Node
+    Graph->>Graph: Update State
+    Graph->>Postgres: Write Checkpoint (thread_id)
+    Postgres-->>Graph: Ack
+    Graph-->>Agent: Return Result
+    
+    opt Restart/Resume
+        Agent->>Graph: Invoke(thread_id)
+        Graph->>Postgres: Read Latest Checkpoint
+        Postgres-->>Graph: Return State
+        Graph->>Graph: Resume Execution
+    end
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Durable State Persistence Flow</p>
 
 ```python
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -552,7 +776,30 @@ result = app.invoke({"messages": [HumanMessage(content="Try again")]}, replay_co
 
 LangGraph provides sophisticated patterns for human oversight using the `interrupt()` function and `Command` primitive:
 
-{/* IMAGE_PLACEHOLDER: Workflow diagram showing human-in-the-loop pattern. Visualize: (1) Agent proposes action, (2) Execution pauses with interrupt(), (3) Human reviews in UI, (4) Human approves/rejects, (5) Agent resumes with Command(resume=decision), (6) Workflow continues or terminates. Use icons for human, agent, and decision points. Place at section start. Style: Process flow with clear pause/resume indicators. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+sequenceDiagram
+    participant S as System
+    participant U as User
+    
+    S->>S: Analyze Data
+    S->>S: Propose Action (interrupt)
+    S-->>U: Pause & Show Proposal
+    
+    U->>U: Review
+    alt Approve
+        U->>S: Command(resume="approve")
+        S->>S: Execute Action
+    else Reject
+        U->>S: Command(resume="reject")
+        S->>S: Terminate / Retry flow
+    end
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Human-in-the-Loop Approval Pattern</p>
 
 ### Basic Approval Pattern
 
@@ -676,7 +923,28 @@ result = app.invoke(
 
 Execute multiple nodes in parallel using the Send API:
 
-{/* IMAGE_PLACEHOLDER: Fan-out/fan-in pattern visualization. Show: (1) Single input node, (2) Fan-out to multiple parallel researcher nodes (3-5 nodes running simultaneously), (3) Synchronization barrier collecting results, (4) Single synthesizer node combining outputs. Use parallel arrows and a merge point. Include timing indicators showing parallel execution. Place at section start. Style: Clear parallel processing diagram with synchronization emphasis. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    Input[Input Topic List] --> Map{Fan-Out Map}
+    Map --Send()--> R1[Researcher 1]
+    Map --Send()--> R2[Researcher 2]
+    Map --Send()--> R3[Researcher 3]
+    
+    R1 --> Reduce[Reducer]
+    R2 --> Reduce
+    R3 --> Reduce
+    
+    Reduce --> Result[Synthesized Result]
+    
+    style Map fill:#f9f,stroke:#333
+    style Reduce fill:#bbf,stroke:#333
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Fan-Out/Fan-In Parallel Execution</p>
 
 ```python
 from langgraph.constants import Send
@@ -753,7 +1021,18 @@ graph TD
 
 Production agents need robust error handling. LangGraph provides built-in retry policies:
 
-{/* IMAGE_PLACEHOLDER: Retry policy visualization showing exponential backoff. Display: (1) Initial API call fails, (2) Wait 1s → retry, (3) Wait 2s → retry, (4) Wait 4s → retry, (5) Wait 8s → retry, (6) Success or max attempts reached. Use timeline with increasing wait intervals and jitter randomization. Include success/failure indicators. Place at section start. Style: Timeline diagram with clear exponential growth visualization. */}
+<Mermaid
+  chart={`
+timeline
+    title Retry Policy with Exponential Backoff
+    Call Fails (0s) : Initial Attempt
+    Retry 1 (1s) : Wait 1s
+    Retry 2 (3s) : Wait 2s
+    Retry 3 (7s) : Wait 4s
+    Success : API Responds
+`}
+  caption="Resilience: Implementing exponential backoff strategies."
+/>
 
 ### Node Retry Policies
 
@@ -864,7 +1143,31 @@ def llm_with_fallback(state: AgentState) -> dict:
 
 LangGraph supports multiple streaming modes for responsive UIs:
 
-{/* IMAGE_PLACEHOLDER: Streaming modes comparison showing four panels: (1) "values" mode - full state snapshots, (2) "updates" mode - delta changes only, (3) "messages" mode - token-by-token LLM output, (4) "custom" mode - progress bars and status updates. Each panel shows example UI output. Place at section start. Style: Multi-panel comparison with UI mockups. */}
+<Mermaid
+  chart={`
+graph TB
+    subgraph Main_Workflow
+        Start((Start)) --> Plan[Planner]
+        Plan --> Research[Research Subgraph]
+        Research --> Write[Writer]
+        Write --> End((End))
+    end
+
+    subgraph Research_Subgraph [Research Subgraph Detail]
+        R_Start((Start)) --> Search[Web Search]
+        Search --> Analyze[Analyze]
+        Analyze --> R_End((End))
+    end
+
+    Research -.-> R_Start
+    R_End -.-> Research
+
+    style Research fill:#e1f5fe
+    style Research_Subgraph fill:#fff,stroke:#0277bd,stroke-dasharray: 5 5
+
+`}
+caption="Subgraphs: Encapsulating complexity for cleaner architectures."
+/>
 
 ### Stream Modes
 
@@ -964,7 +1267,31 @@ for chunk in app.stream(input_data, config, stream_mode="custom"):
 
 Compose complex workflows from reusable subgraphs:
 
-{/* IMAGE_PLACEHOLDER: Nested graph architecture showing main workflow containing multiple subgraphs. Visualize: (1) Main graph with high-level nodes, (2) One node expanded to show internal subgraph structure, (3) State transformation at boundaries, (4) Isolated state management within subgraph. Use nested boxes and clear boundary indicators. Place at section start. Style: Hierarchical architecture diagram with encapsulation emphasis. */}
+<Mermaid
+  chart={`
+graph TB
+    subgraph Main_Workflow
+        Start((Start)) --> Plan[Planner]
+        Plan --> Research[Research Subgraph]
+        Research --> Write[Writer]
+        Write --> End((End))
+    end
+
+    subgraph Research_Subgraph [Research Subgraph Detail]
+        R_Start((Start)) --> Search[Web Search]
+        Search --> Analyze[Analyze]
+        Analyze --> R_End((End))
+    end
+
+    Research -.-> R_Start
+    R_End -.-> Research
+
+    style Research fill:#e1f5fe
+    style Research_Subgraph fill:#fff,stroke:#0277bd,stroke-dasharray: 5 5
+
+`}
+caption="Subgraphs: Encapsulating complexity for cleaner architectures."
+/>
 
 ### Creating Reusable Subgraphs
 
@@ -1089,7 +1416,1573 @@ The agent uses `grep` to find "budget" or "objections" across transcripts, then 
 
 ---
 
-## 31.12 LangGraph Platform and Deployment
+## 31.12 Advanced 2025 Orchestration Patterns
+
+Beyond the foundational patterns, 2025 has seen the emergence of sophisticated orchestration strategies that enable more intelligent, adaptive, and resilient multi-agent systems. These patterns draw inspiration from distributed systems, swarm intelligence, and organizational theory.
+
+### Swarm Intelligence Patterns
+
+Swarm intelligence enables emergent problem-solving through decentralized collaboration—no central coordinator, just simple local rules that produce complex global behavior.
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Swarm Architecture"
+        E[Environment/Shared State]
+        A1[Agent 1] -.->|read/write| E
+        A2[Agent 2] -.->|read/write| E
+        A3[Agent 3] -.->|read/write| E
+        A4[Agent N] -.->|read/write| E
+        
+        A1 -.->|pheromone| A2
+        A2 -.->|pheromone| A3
+        A3 -.->|pheromone| A4
+    end
+    
+    style E fill:#fff9c4,stroke:#fbc02d
+    style A1 fill:#e3f2fd,stroke:#2196f3
+    style A2 fill:#e3f2fd,stroke:#2196f3
+    style A3 fill:#e3f2fd,stroke:#2196f3
+    style A4 fill:#e3f2fd,stroke:#2196f3
+`}
+  caption="Swarm Intelligence: Decentralized agents coordinate through environmental signals."
+/>
+
+#### Key Principles
+
+| Principle             | Description                                 | Agent Application                          |
+| :-------------------- | :------------------------------------------ | :----------------------------------------- |
+| **Decentralization**  | No single point of control                  | Each agent makes local decisions           |
+| **Stigmergy**         | Indirect coordination via environment       | Agents leave "traces" others can follow    |
+| **Emergence**         | Complex behavior from simple rules          | Global solutions from local interactions   |
+| **Self-Organization** | Structure arises without external direction | Teams form dynamically based on task needs |
+
+#### Implementation: Ant Colony Optimization for Research
+
+```python
+from typing import TypedDict, Annotated, List, Dict
+from langgraph.graph import StateGraph, START, END
+import operator
+import random
+
+class SwarmState(TypedDict):
+    """Shared environment state for swarm agents."""
+    query: str
+    # Pheromone trails: path -> strength (higher = more promising)
+    pheromones: Annotated[Dict[str, float], operator.ior]
+    # Discovered findings from all agents
+    findings: Annotated[List[dict], operator.add]
+    # Exploration paths taken
+    explored_paths: Annotated[List[str], operator.add]
+    iteration: int
+
+def calculate_path_probability(pheromones: Dict[str, float], paths: List[str]) -> Dict[str, float]:
+    """Calculate selection probability based on pheromone strength."""
+    total = sum(pheromones.get(p, 1.0) for p in paths)
+    return {p: pheromones.get(p, 1.0) / total for p in paths}
+
+def swarm_agent(state: SwarmState, agent_id: int) -> dict:
+    """Individual swarm agent following pheromone trails."""
+    available_paths = ["academic_papers", "news_articles", "expert_blogs",
+                       "patents", "social_media", "government_reports"]
+
+    # Probabilistic path selection based on pheromones (exploitation)
+    # with random exploration (exploration-exploitation balance)
+    if random.random() < 0.2:  # 20% exploration
+        chosen_path = random.choice(available_paths)
+    else:  # 80% exploitation - follow pheromones
+        probs = calculate_path_probability(state["pheromones"], available_paths)
+        chosen_path = max(probs, key=probs.get)
+
+    # Simulate research on chosen path
+    quality_score = research_path(state["query"], chosen_path)
+    finding = {
+        "agent": agent_id,
+        "path": chosen_path,
+        "content": f"Finding from {chosen_path}",
+        "quality": quality_score
+    }
+
+    # Deposit pheromone proportional to quality (stigmergy)
+    pheromone_deposit = {chosen_path: quality_score * 0.5}
+
+    return {
+        "findings": [finding],
+        "explored_paths": [f"agent_{agent_id}:{chosen_path}"],
+        "pheromones": pheromone_deposit
+    }
+
+def evaporate_pheromones(state: SwarmState) -> dict:
+    """Pheromone evaporation prevents convergence to suboptimal solutions."""
+    evaporation_rate = 0.1
+    updated = {k: v * (1 - evaporation_rate) for k, v in state["pheromones"].items()}
+    return {"pheromones": updated, "iteration": state["iteration"] + 1}
+
+def should_continue_swarm(state: SwarmState) -> str:
+    """Continue until convergence or max iterations."""
+    if state["iteration"] >= 5:
+        return "synthesize"
+    # Check for convergence (one path dominates)
+    if state["pheromones"]:
+        max_pheromone = max(state["pheromones"].values())
+        if max_pheromone > 10.0:  # Strong convergence
+            return "synthesize"
+    return "continue"
+
+# Build swarm workflow with parallel agent execution
+from langgraph.constants import Send
+
+def fan_out_swarm(state: SwarmState) -> List[Send]:
+    """Dispatch multiple swarm agents in parallel."""
+    num_agents = 5
+    return [Send("swarm_agent", {"agent_id": i, **state}) for i in range(num_agents)]
+
+workflow = StateGraph(SwarmState)
+workflow.add_node("swarm_agent", lambda s: swarm_agent(s, s.get("agent_id", 0)))
+workflow.add_node("evaporate", evaporate_pheromones)
+workflow.add_node("synthesize", synthesize_findings)
+
+workflow.add_conditional_edges(START, fan_out_swarm)
+workflow.add_edge("swarm_agent", "evaporate")
+workflow.add_conditional_edges("evaporate", should_continue_swarm, {
+    "continue": "swarm_agent",
+    "synthesize": "synthesize"
+})
+workflow.add_edge("synthesize", END)
+```
+
+<Callout type="insight" title="When to Use Swarm Patterns">
+  Swarm intelligence excels when: (1) The solution space is large and unknown,
+  (2) No single "correct" path exists, (3) You want diverse exploration, (4)
+  Fault tolerance is critical (losing one agent doesn't break the system). Avoid
+  for tasks requiring strict sequential logic or deterministic outputs.
+</Callout>
+
+---
+
+### Council Pattern: Multi-Expert Consensus
+
+The Council pattern assembles multiple specialized agents to deliberate and reach consensus on complex decisions. Unlike simple voting, it incorporates weighted expertise and structured conflict resolution.
+
+<Mermaid
+  chart={`
+graph TD
+    Query[Complex Query] --> Council{Council Assembly}
+    Council --> E1[Domain Expert]
+    Council --> E2[Safety Expert]
+    Council --> E3[Cost Expert]
+    Council --> E4[UX Expert]
+    
+    E1 --> V[Voting & Deliberation]
+    E2 --> V
+    E3 --> V
+    E4 --> V
+    
+    V --> CR{Consensus Reached?}
+    CR -->|Yes| Decision[Final Decision]
+    CR -->|No| Debate[Structured Debate]
+    Debate --> V
+    
+    style Council fill:#f3e5f5,stroke:#9c27b0
+    style V fill:#e8f5e9,stroke:#4caf50
+    style CR fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Council Pattern: Weighted multi-expert deliberation with conflict resolution."
+/>
+
+#### Council Implementation
+
+```python
+from typing import TypedDict, Annotated, List, Dict, Literal
+from dataclasses import dataclass
+import operator
+
+@dataclass
+class ExpertVote:
+    expert_id: str
+    decision: str
+    confidence: float  # 0.0 to 1.0
+    reasoning: str
+    weight: float  # Expert's weight in this domain
+
+class CouncilState(TypedDict):
+    query: str
+    context: dict
+    votes: Annotated[List[ExpertVote], operator.add]
+    debate_rounds: int
+    consensus: str | None
+    dissenting_opinions: List[str]
+
+# Expert definitions with domain weights
+EXPERTS = {
+    "security": {"weight": 1.5, "domains": ["auth", "data", "compliance"]},
+    "performance": {"weight": 1.2, "domains": ["latency", "throughput", "cost"]},
+    "usability": {"weight": 1.0, "domains": ["ux", "accessibility", "docs"]},
+    "architecture": {"weight": 1.3, "domains": ["scalability", "maintainability"]}
+}
+
+def create_expert_node(expert_id: str):
+    """Factory for creating expert voting nodes."""
+    def expert_vote(state: CouncilState) -> dict:
+        llm = ChatOpenAI(model="gpt-4o")
+        expert_config = EXPERTS[expert_id]
+
+        # Expert analyzes from their perspective
+        response = llm.invoke([
+            {"role": "system", "content": f"""You are a {expert_id} expert.
+            Analyze this decision from your domain perspective.
+            Domains of expertise: {expert_config['domains']}
+
+            Respond with JSON:
+            {{"decision": "approve|reject|needs_discussion",
+              "confidence": 0.0-1.0,
+              "reasoning": "your analysis"}}"""
+            },
+            {"role": "user", "content": f"Query: {state['query']}\nContext: {state['context']}"}
+        ])
+
+        result = json.loads(response.content)
+        vote = ExpertVote(
+            expert_id=expert_id,
+            decision=result["decision"],
+            confidence=result["confidence"],
+            reasoning=result["reasoning"],
+            weight=expert_config["weight"]
+        )
+        return {"votes": [vote]}
+
+    return expert_vote
+
+def calculate_consensus(state: CouncilState) -> dict:
+    """Calculate weighted consensus from expert votes."""
+    votes = state["votes"]
+
+    # Group votes by decision
+    decision_scores: Dict[str, float] = {}
+    for vote in votes:
+        weighted_score = vote.confidence * vote.weight
+        decision_scores[vote.decision] = decision_scores.get(vote.decision, 0) + weighted_score
+
+    total_weight = sum(decision_scores.values())
+
+    # Check for supermajority (>66% weighted agreement)
+    for decision, score in decision_scores.items():
+        if score / total_weight > 0.66:
+            dissenting = [v.reasoning for v in votes if v.decision != decision]
+            return {
+                "consensus": decision,
+                "dissenting_opinions": dissenting
+            }
+
+    # No consensus - need more deliberation
+    return {"consensus": None, "debate_rounds": state["debate_rounds"] + 1}
+
+def structured_debate(state: CouncilState) -> dict:
+    """Facilitate structured debate when consensus isn't reached."""
+    llm = ChatOpenAI(model="gpt-4o")
+
+    # Summarize disagreements
+    votes_summary = "\n".join([
+        f"- {v.expert_id}: {v.decision} (confidence: {v.confidence}) - {v.reasoning}"
+        for v in state["votes"]
+    ])
+
+    # Generate debate prompts to resolve disagreement
+    response = llm.invoke([
+        {"role": "system", "content": """Analyze the expert disagreements and identify:
+        1. Key points of contention
+        2. Missing information that could resolve disagreement
+        3. Potential compromise positions
+
+        Output specific questions each expert should reconsider."""},
+        {"role": "user", "content": f"Votes:\n{votes_summary}"}
+    ])
+
+    # Clear votes for next round with new context
+    return {
+        "votes": [],  # Reset for re-voting
+        "context": {**state["context"], "debate_guidance": response.content}
+    }
+
+def route_after_consensus(state: CouncilState) -> str:
+    """Route based on consensus status."""
+    if state["consensus"]:
+        return "finalize"
+    if state["debate_rounds"] >= 3:
+        return "escalate"  # Human intervention needed
+    return "debate"
+
+# Build council workflow
+workflow = StateGraph(CouncilState)
+
+# Add expert nodes
+for expert_id in EXPERTS:
+    workflow.add_node(f"expert_{expert_id}", create_expert_node(expert_id))
+
+workflow.add_node("consensus", calculate_consensus)
+workflow.add_node("debate", structured_debate)
+workflow.add_node("finalize", finalize_decision)
+workflow.add_node("escalate", escalate_to_human)
+
+# Fan out to all experts
+workflow.add_edge(START, "expert_security")
+workflow.add_edge(START, "expert_performance")
+workflow.add_edge(START, "expert_usability")
+workflow.add_edge(START, "expert_architecture")
+
+# All experts converge to consensus
+for expert_id in EXPERTS:
+    workflow.add_edge(f"expert_{expert_id}", "consensus")
+
+workflow.add_conditional_edges("consensus", route_after_consensus, {
+    "finalize": "finalize",
+    "debate": "debate",
+    "escalate": "escalate"
+})
+
+# After debate, re-vote
+for expert_id in EXPERTS:
+    workflow.add_edge("debate", f"expert_{expert_id}")
+
+workflow.add_edge("finalize", END)
+workflow.add_edge("escalate", END)
+```
+
+---
+
+### Adaptive Loops: Plan-Do-Check-Act (PDCA)
+
+The PDCA cycle enables self-improving workflows that learn from execution and dynamically adjust their approach.
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "PDCA Cycle"
+        P[Plan] --> D[Do]
+        D --> C[Check]
+        C --> A[Act/Adjust]
+        A --> P
+    end
+    
+    subgraph "Agent Implementation"
+        P1[Generate Strategy] --> D1[Execute Tasks]
+        D1 --> C1[Evaluate Results]
+        C1 --> A1[Refine Approach]
+        A1 -->|Iterate| P1
+        A1 -->|Converged| Done[Complete]
+    end
+    
+    style P fill:#e3f2fd,stroke:#2196f3
+    style D fill:#e8f5e9,stroke:#4caf50
+    style C fill:#fff9c4,stroke:#fbc02d
+    style A fill:#ffcdd2,stroke:#c62828
+`}
+  caption="PDCA: Continuous improvement through structured feedback loops."
+/>
+
+```python
+from typing import TypedDict, Annotated, List
+import operator
+
+class PDCAState(TypedDict):
+    goal: str
+    current_plan: dict
+    execution_results: List[dict]
+    evaluation: dict
+    improvements: Annotated[List[str], operator.add]
+    iteration: int
+    converged: bool
+
+def plan_node(state: PDCAState) -> dict:
+    """Generate or refine the execution plan."""
+    llm = ChatOpenAI(model="gpt-4o")
+
+    context = {
+        "goal": state["goal"],
+        "previous_plan": state.get("current_plan"),
+        "previous_evaluation": state.get("evaluation"),
+        "accumulated_improvements": state.get("improvements", [])
+    }
+
+    response = llm.invoke([
+        {"role": "system", "content": """Create an execution plan.
+        If previous attempts exist, incorporate lessons learned.
+        Output JSON with: {"steps": [...], "success_criteria": [...], "risk_mitigations": [...]}"""},
+        {"role": "user", "content": json.dumps(context)}
+    ])
+
+    return {"current_plan": json.loads(response.content)}
+
+def do_node(state: PDCAState) -> dict:
+    """Execute the current plan."""
+    results = []
+    for step in state["current_plan"]["steps"]:
+        try:
+            result = execute_step(step)
+            results.append({"step": step, "status": "success", "output": result})
+        except Exception as e:
+            results.append({"step": step, "status": "failed", "error": str(e)})
+
+    return {"execution_results": results}
+
+def check_node(state: PDCAState) -> dict:
+    """Evaluate execution against success criteria."""
+    llm = ChatOpenAI(model="gpt-4o")
+
+    response = llm.invoke([
+        {"role": "system", "content": """Evaluate the execution results against success criteria.
+        Output JSON:
+        {
+            "criteria_met": {"criterion": true/false, ...},
+            "overall_success_rate": 0.0-1.0,
+            "failure_analysis": "root cause of failures",
+            "improvement_opportunities": ["specific improvements"]
+        }"""},
+        {"role": "user", "content": json.dumps({
+            "criteria": state["current_plan"]["success_criteria"],
+            "results": state["execution_results"]
+        })}
+    ])
+
+    return {"evaluation": json.loads(response.content)}
+
+def act_node(state: PDCAState) -> dict:
+    """Decide whether to iterate or complete."""
+    evaluation = state["evaluation"]
+
+    # Check for convergence
+    if evaluation["overall_success_rate"] >= 0.95:
+        return {"converged": True}
+
+    # Check for max iterations
+    if state["iteration"] >= 5:
+        return {"converged": True}  # Accept best effort
+
+    # Record improvements for next iteration
+    return {
+        "improvements": evaluation.get("improvement_opportunities", []),
+        "iteration": state["iteration"] + 1,
+        "converged": False
+    }
+
+def should_continue_pdca(state: PDCAState) -> str:
+    return "complete" if state["converged"] else "plan"
+
+workflow = StateGraph(PDCAState)
+workflow.add_node("plan", plan_node)
+workflow.add_node("do", do_node)
+workflow.add_node("check", check_node)
+workflow.add_node("act", act_node)
+workflow.add_node("complete", lambda s: s)
+
+workflow.add_edge(START, "plan")
+workflow.add_edge("plan", "do")
+workflow.add_edge("do", "check")
+workflow.add_edge("check", "act")
+workflow.add_conditional_edges("act", should_continue_pdca, {
+    "plan": "plan",
+    "complete": "complete"
+})
+workflow.add_edge("complete", END)
+```
+
+<Callout type="tip" title="PDCA Best Practices">
+  1. **Define measurable success criteria** upfront—vague goals prevent
+  convergence 2. **Limit iterations** to prevent infinite loops (3-5 is typical)
+  3. **Persist learnings** across iterations using state 4. **Include escape
+  hatches** for when improvement plateaus
+</Callout>
+
+---
+
+### Hybrid Architectures: Dynamic Topology
+
+Real-world systems often need to switch between orchestration patterns based on context. Hybrid architectures combine hierarchical control with peer-to-peer collaboration.
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Hybrid Architecture"
+        Router{Context Router}
+        
+        subgraph "Hierarchical Mode"
+            Sup[Supervisor]
+            W1[Worker 1]
+            W2[Worker 2]
+            Sup --> W1
+            Sup --> W2
+        end
+        
+        subgraph "P2P Mode"
+            P1[Peer 1]
+            P2[Peer 2]
+            P3[Peer 3]
+            P1 <--> P2
+            P2 <--> P3
+            P1 <--> P3
+        end
+        
+        Router -->|"Complex/Uncertain"| P1
+        Router -->|"Well-defined"| Sup
+    end
+    
+    style Router fill:#f3e5f5,stroke:#9c27b0
+`}
+  caption="Hybrid Architecture: Dynamic switching between hierarchical and peer-to-peer modes."
+/>
+
+```python
+from typing import TypedDict, Literal
+from enum import Enum
+
+class OrchestrationMode(Enum):
+    HIERARCHICAL = "hierarchical"
+    PEER_TO_PEER = "peer_to_peer"
+    SWARM = "swarm"
+
+class HybridState(TypedDict):
+    task: dict
+    mode: OrchestrationMode
+    complexity_score: float
+    uncertainty_score: float
+    results: dict
+
+def analyze_task_complexity(state: HybridState) -> dict:
+    """Analyze task to determine optimal orchestration mode."""
+    llm = ChatOpenAI(model="gpt-4o")
+
+    response = llm.invoke([
+        {"role": "system", "content": """Analyze this task and score:
+        - complexity (0-1): How many interdependent steps?
+        - uncertainty (0-1): How well-defined is the solution path?
+        - collaboration_need (0-1): Do subtasks need to share information?
+
+        Output JSON: {"complexity": 0.X, "uncertainty": 0.X, "collaboration": 0.X}"""},
+        {"role": "user", "content": json.dumps(state["task"])}
+    ])
+
+    scores = json.loads(response.content)
+
+    # Determine mode based on scores
+    if scores["uncertainty"] > 0.7:
+        mode = OrchestrationMode.SWARM  # Explore unknown space
+    elif scores["collaboration"] > 0.6:
+        mode = OrchestrationMode.PEER_TO_PEER  # Need tight coordination
+    else:
+        mode = OrchestrationMode.HIERARCHICAL  # Clear delegation
+
+    return {
+        "complexity_score": scores["complexity"],
+        "uncertainty_score": scores["uncertainty"],
+        "mode": mode
+    }
+
+def route_to_mode(state: HybridState) -> str:
+    """Route to appropriate orchestration subgraph."""
+    return state["mode"].value
+
+# Subgraph factories
+def create_hierarchical_subgraph():
+    """Traditional supervisor-worker pattern."""
+    sg = StateGraph(HybridState)
+    sg.add_node("supervisor", supervisor_node)
+    sg.add_node("worker_pool", worker_pool_node)
+    sg.add_node("aggregate", aggregate_results)
+    sg.add_edge(START, "supervisor")
+    sg.add_edge("supervisor", "worker_pool")
+    sg.add_edge("worker_pool", "aggregate")
+    sg.add_edge("aggregate", END)
+    return sg.compile()
+
+def create_p2p_subgraph():
+    """Peer-to-peer collaborative pattern."""
+    sg = StateGraph(HybridState)
+    sg.add_node("initialize_peers", init_peers)
+    sg.add_node("collaborate", peer_collaboration_round)
+    sg.add_node("check_convergence", check_p2p_convergence)
+    sg.add_edge(START, "initialize_peers")
+    sg.add_edge("initialize_peers", "collaborate")
+    sg.add_edge("collaborate", "check_convergence")
+    sg.add_conditional_edges("check_convergence",
+        lambda s: "done" if s.get("converged") else "collaborate",
+        {"collaborate": "collaborate", "done": END})
+    return sg.compile()
+
+def create_swarm_subgraph():
+    """Swarm intelligence pattern."""
+    # Use the swarm implementation from earlier
+    return create_swarm_workflow()
+
+# Main hybrid workflow
+workflow = StateGraph(HybridState)
+workflow.add_node("analyze", analyze_task_complexity)
+workflow.add_node("hierarchical", create_hierarchical_subgraph())
+workflow.add_node("peer_to_peer", create_p2p_subgraph())
+workflow.add_node("swarm", create_swarm_subgraph())
+
+workflow.add_edge(START, "analyze")
+workflow.add_conditional_edges("analyze", route_to_mode, {
+    "hierarchical": "hierarchical",
+    "peer_to_peer": "peer_to_peer",
+    "swarm": "swarm"
+})
+workflow.add_edge("hierarchical", END)
+workflow.add_edge("peer_to_peer", END)
+workflow.add_edge("swarm", END)
+```
+
+---
+
+### Agent Communication Protocols
+
+Effective multi-agent systems require well-designed communication patterns. Here are the primary approaches:
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Message Passing"
+        A1[Agent A] -->|direct message| A2[Agent B]
+        A2 -->|response| A1
+    end
+    
+    subgraph "Shared Memory"
+        B1[Agent A] -->|write| SM[(Shared State)]
+        B2[Agent B] -->|read| SM
+        SM -->|notify| B1
+        SM -->|notify| B2
+    end
+    
+    subgraph "Pub/Sub"
+        C1[Agent A] -->|publish| Topic[Topic/Channel]
+        Topic -->|subscribe| C2[Agent B]
+        Topic -->|subscribe| C3[Agent C]
+    end
+    
+    style SM fill:#fff9c4,stroke:#fbc02d
+    style Topic fill:#e8f5e9,stroke:#4caf50
+`}
+  caption="Communication Patterns: Message passing, shared memory, and pub/sub."
+/>
+
+#### Pattern Comparison
+
+| Pattern            | Coupling   | Scalability | Use Case                                  |
+| :----------------- | :--------- | :---------- | :---------------------------------------- |
+| **Direct Message** | Tight      | Low         | Request-response, 1:1 communication       |
+| **Shared Memory**  | Medium     | Medium      | Collaborative editing, blackboard systems |
+| **Message Queue**  | Loose      | High        | Async processing, load balancing          |
+| **Pub/Sub**        | Very Loose | Very High   | Event-driven, broadcast updates           |
+
+#### Implementation: Event-Driven Agent Coordination
+
+```python
+from typing import TypedDict, Annotated, List, Dict
+from dataclasses import dataclass
+from enum import Enum
+import operator
+
+class EventType(Enum):
+    TASK_CREATED = "task_created"
+    TASK_COMPLETED = "task_completed"
+    FINDING_DISCOVERED = "finding_discovered"
+    HELP_REQUESTED = "help_requested"
+    CONSENSUS_NEEDED = "consensus_needed"
+
+@dataclass
+class AgentEvent:
+    event_type: EventType
+    source_agent: str
+    payload: dict
+    timestamp: float
+
+class EventDrivenState(TypedDict):
+    events: Annotated[List[AgentEvent], operator.add]
+    subscriptions: Dict[str, List[EventType]]  # agent_id -> event types
+    agent_states: Dict[str, dict]
+    pending_responses: Dict[str, List[dict]]
+
+class EventBus:
+    """Central event bus for agent communication."""
+
+    def __init__(self):
+        self.subscribers: Dict[EventType, List[callable]] = {}
+
+    def subscribe(self, event_type: EventType, handler: callable):
+        if event_type not in self.subscribers:
+            self.subscribers[event_type] = []
+        self.subscribers[event_type].append(handler)
+
+    def publish(self, event: AgentEvent) -> List[dict]:
+        """Publish event and collect responses from subscribers."""
+        responses = []
+        handlers = self.subscribers.get(event.event_type, [])
+        for handler in handlers:
+            response = handler(event)
+            if response:
+                responses.append(response)
+        return responses
+
+def create_event_driven_agent(agent_id: str, subscriptions: List[EventType]):
+    """Factory for creating event-driven agents."""
+
+    def agent_node(state: EventDrivenState) -> dict:
+        # Process events this agent is subscribed to
+        my_subscriptions = state["subscriptions"].get(agent_id, [])
+        relevant_events = [
+            e for e in state["events"]
+            if e.event_type in my_subscriptions
+            and e.source_agent != agent_id  # Don't process own events
+        ]
+
+        new_events = []
+        for event in relevant_events:
+            # React to event based on type
+            if event.event_type == EventType.HELP_REQUESTED:
+                if can_help(agent_id, event.payload):
+                    new_events.append(AgentEvent(
+                        event_type=EventType.TASK_COMPLETED,
+                        source_agent=agent_id,
+                        payload={"help_response": provide_help(event.payload)},
+                        timestamp=time.time()
+                    ))
+
+            elif event.event_type == EventType.FINDING_DISCOVERED:
+                # React to findings from other agents
+                if is_relevant(agent_id, event.payload):
+                    incorporate_finding(state["agent_states"][agent_id], event.payload)
+
+            elif event.event_type == EventType.CONSENSUS_NEEDED:
+                # Participate in consensus
+                vote = generate_vote(agent_id, event.payload)
+                new_events.append(AgentEvent(
+                    event_type=EventType.TASK_COMPLETED,
+                    source_agent=agent_id,
+                    payload={"vote": vote},
+                    timestamp=time.time()
+                ))
+
+        return {"events": new_events}
+
+    return agent_node
+
+# Build event-driven workflow
+workflow = StateGraph(EventDrivenState)
+
+# Create agents with different subscriptions
+agents = {
+    "researcher": [EventType.TASK_CREATED, EventType.HELP_REQUESTED],
+    "analyst": [EventType.FINDING_DISCOVERED, EventType.CONSENSUS_NEEDED],
+    "coordinator": [EventType.TASK_COMPLETED, EventType.HELP_REQUESTED]
+}
+
+for agent_id, subs in agents.items():
+    workflow.add_node(agent_id, create_event_driven_agent(agent_id, subs))
+
+workflow.add_node("event_router", route_events)
+workflow.add_node("check_completion", check_all_tasks_complete)
+
+# Event-driven routing
+workflow.add_edge(START, "event_router")
+workflow.add_conditional_edges("event_router",
+    lambda s: select_active_agents(s),
+    {agent_id: agent_id for agent_id in agents}
+)
+for agent_id in agents:
+    workflow.add_edge(agent_id, "check_completion")
+workflow.add_conditional_edges("check_completion",
+    lambda s: "done" if s.get("all_complete") else "event_router",
+    {"event_router": "event_router", "done": END}
+)
+```
+
+<Callout type="warning" title="Communication Anti-Patterns">
+  **Avoid these common mistakes:** 1. **Chatty agents** - Too many small
+  messages create overhead 2. **Tight coupling** - Direct references between
+  agents prevent scaling 3. **Missing acknowledgments** - Fire-and-forget loses
+  messages 4. **Unbounded queues** - Always set limits to prevent memory issues
+</Callout>
+
+---
+
+### Peer-to-Peer Coordination
+
+Unlike hierarchical patterns where a supervisor controls workers, peer-to-peer (P2P) coordination enables agents to communicate directly without a central coordinator. This pattern excels when agents need tight collaboration and rapid information exchange.
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Peer-to-Peer Network"
+        P1[Agent A] <-->|negotiate| P2[Agent B]
+        P2 <-->|share findings| P3[Agent C]
+        P3 <-->|request help| P1
+        P1 <-->|validate| P3
+    end
+    
+    subgraph "Shared Context"
+        SC[(Gossip Protocol)]
+        P1 -.->|broadcast| SC
+        P2 -.->|broadcast| SC
+        P3 -.->|broadcast| SC
+    end
+    
+    style P1 fill:#e3f2fd,stroke:#2196f3
+    style P2 fill:#e3f2fd,stroke:#2196f3
+    style P3 fill:#e3f2fd,stroke:#2196f3
+    style SC fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Peer-to-Peer: Agents coordinate directly through negotiation and gossip protocols."
+/>
+
+#### When to Use P2P
+
+| Scenario                        | Why P2P Works                                        |
+| :------------------------------ | :--------------------------------------------------- |
+| **Collaborative writing**       | Agents need to see each other's changes in real-time |
+| **Distributed problem solving** | No single agent has complete knowledge               |
+| **Fault tolerance**             | No single point of failure                           |
+| **Dynamic task allocation**     | Agents negotiate who handles what                    |
+
+#### Implementation: P2P Research Collaboration
+
+```python
+from typing import TypedDict, Annotated, List, Dict, Set
+from dataclasses import dataclass, field
+from langgraph.graph import StateGraph, START, END
+import operator
+import random
+
+@dataclass
+class PeerMessage:
+    """Message passed between peers."""
+    sender: str
+    recipient: str  # "*" for broadcast
+    msg_type: str  # "finding", "request", "ack", "negotiate"
+    content: dict
+    timestamp: float
+
+class P2PState(TypedDict):
+    """State for peer-to-peer coordination."""
+    task: str
+    # Each peer's local knowledge
+    peer_knowledge: Dict[str, dict]
+    # Message queue for inter-peer communication
+    messages: Annotated[List[PeerMessage], operator.add]
+    # Processed message IDs to avoid duplicates
+    processed_ids: Set[str]
+    # Convergence tracking
+    round: int
+    converged: bool
+
+def create_peer_agent(peer_id: str, expertise: List[str]):
+    """Factory for creating peer agents with specific expertise."""
+
+    def peer_node(state: P2PState) -> dict:
+        my_knowledge = state["peer_knowledge"].get(peer_id, {})
+        new_messages = []
+
+        # Process incoming messages addressed to me or broadcast
+        incoming = [
+            m for m in state["messages"]
+            if (m.recipient == peer_id or m.recipient == "*")
+            and m.sender != peer_id
+            and f"{m.sender}:{m.timestamp}" not in state.get("processed_ids", set())
+        ]
+
+        for msg in incoming:
+            if msg.msg_type == "finding":
+                # Incorporate peer's finding into my knowledge
+                if is_relevant_to_expertise(msg.content, expertise):
+                    my_knowledge = merge_knowledge(my_knowledge, msg.content)
+                    # Acknowledge receipt
+                    new_messages.append(PeerMessage(
+                        sender=peer_id,
+                        recipient=msg.sender,
+                        msg_type="ack",
+                        content={"received": msg.content.get("id")},
+                        timestamp=time.time()
+                    ))
+
+            elif msg.msg_type == "request":
+                # Peer is asking for help - check if I can assist
+                if can_help_with(msg.content["topic"], expertise):
+                    response = generate_response(msg.content, my_knowledge)
+                    new_messages.append(PeerMessage(
+                        sender=peer_id,
+                        recipient=msg.sender,
+                        msg_type="finding",
+                        content=response,
+                        timestamp=time.time()
+                    ))
+
+            elif msg.msg_type == "negotiate":
+                # Task allocation negotiation
+                if should_accept_task(msg.content, expertise, my_knowledge):
+                    new_messages.append(PeerMessage(
+                        sender=peer_id,
+                        recipient=msg.sender,
+                        msg_type="ack",
+                        content={"accepted": msg.content.get("task_id")},
+                        timestamp=time.time()
+                    ))
+
+        # Do my own work based on expertise
+        if not state.get("converged"):
+            new_finding = research_topic(state["task"], expertise, my_knowledge)
+            if new_finding:
+                my_knowledge = merge_knowledge(my_knowledge, new_finding)
+                # Broadcast finding to all peers
+                new_messages.append(PeerMessage(
+                    sender=peer_id,
+                    recipient="*",  # Broadcast
+                    msg_type="finding",
+                    content=new_finding,
+                    timestamp=time.time()
+                ))
+
+        # Update processed message IDs
+        new_processed = {f"{m.sender}:{m.timestamp}" for m in incoming}
+
+        return {
+            "peer_knowledge": {peer_id: my_knowledge},
+            "messages": new_messages,
+            "processed_ids": state.get("processed_ids", set()) | new_processed
+        }
+
+    return peer_node
+
+def check_p2p_convergence(state: P2PState) -> dict:
+    """Check if peers have reached consensus."""
+    # Convergence when all peers have similar knowledge
+    knowledge_sets = list(state["peer_knowledge"].values())
+
+    if len(knowledge_sets) < 2:
+        return {"round": state["round"] + 1, "converged": False}
+
+    # Calculate knowledge overlap
+    overlap = calculate_knowledge_overlap(knowledge_sets)
+
+    if overlap > 0.9 or state["round"] >= 10:
+        return {"converged": True}
+
+    return {"round": state["round"] + 1, "converged": False}
+
+def synthesize_p2p_results(state: P2PState) -> dict:
+    """Combine all peer knowledge into final result."""
+    all_knowledge = state["peer_knowledge"]
+
+    # Merge all peer findings with conflict resolution
+    final_result = {}
+    for peer_id, knowledge in all_knowledge.items():
+        for key, value in knowledge.items():
+            if key not in final_result:
+                final_result[key] = {"value": value, "sources": [peer_id]}
+            else:
+                # Conflict resolution: majority vote or merge
+                final_result[key]["sources"].append(peer_id)
+
+    return {"final_result": final_result}
+
+# Build P2P workflow
+workflow = StateGraph(P2PState)
+
+# Define peers with different expertise
+peers = {
+    "alice": ["machine_learning", "statistics"],
+    "bob": ["software_engineering", "systems"],
+    "carol": ["domain_expertise", "validation"]
+}
+
+for peer_id, expertise in peers.items():
+    workflow.add_node(peer_id, create_peer_agent(peer_id, expertise))
+
+workflow.add_node("check_convergence", check_p2p_convergence)
+workflow.add_node("synthesize", synthesize_p2p_results)
+
+# All peers run in parallel each round
+workflow.add_edge(START, "alice")
+workflow.add_edge(START, "bob")
+workflow.add_edge(START, "carol")
+
+# Converge to check
+workflow.add_edge("alice", "check_convergence")
+workflow.add_edge("bob", "check_convergence")
+workflow.add_edge("carol", "check_convergence")
+
+# Loop or finish
+workflow.add_conditional_edges(
+    "check_convergence",
+    lambda s: "synthesize" if s["converged"] else "continue",
+    {
+        "continue": "alice",  # Next round
+        "synthesize": "synthesize"
+    }
+)
+workflow.add_edge("synthesize", END)
+
+app = workflow.compile()
+```
+
+<Callout type="tip" title="P2P vs Hierarchical">
+  Use P2P when agents have **complementary expertise** and need to **negotiate**
+  task allocation. Use hierarchical when you need **deterministic control** and
+  **clear accountability**. P2P is more resilient but harder to debug.
+</Callout>
+
+---
+
+### Message Passing Patterns
+
+Message passing is the foundation of agent communication. Different patterns suit different coordination needs.
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Request-Response"
+        RR1[Agent A] -->|request| RR2[Agent B]
+        RR2 -->|response| RR1
+    end
+    
+    subgraph "Fire-and-Forget"
+        FF1[Agent A] -->|message| FF2[Agent B]
+    end
+    
+    subgraph "Scatter-Gather"
+        SG1[Coordinator] -->|scatter| SG2[Agent 1]
+        SG1 -->|scatter| SG3[Agent 2]
+        SG1 -->|scatter| SG4[Agent 3]
+        SG2 -->|gather| SG1
+        SG3 -->|gather| SG1
+        SG4 -->|gather| SG1
+    end
+    
+    subgraph "Pipeline"
+        PL1[Stage 1] -->|forward| PL2[Stage 2]
+        PL2 -->|forward| PL3[Stage 3]
+    end
+    
+    style RR1 fill:#e3f2fd,stroke:#2196f3
+    style SG1 fill:#f3e5f5,stroke:#9c27b0
+    style PL1 fill:#e8f5e9,stroke:#4caf50
+`}
+  caption="Message Passing Patterns: Request-Response, Fire-and-Forget, Scatter-Gather, and Pipeline."
+/>
+
+#### Pattern Comparison
+
+| Pattern              | Coupling   | Latency     | Reliability | Use Case                 |
+| :------------------- | :--------- | :---------- | :---------- | :----------------------- |
+| **Request-Response** | Tight      | Synchronous | High        | API calls, queries       |
+| **Fire-and-Forget**  | Loose      | Async       | Low         | Logging, notifications   |
+| **Scatter-Gather**   | Medium     | Parallel    | Medium      | Research, voting         |
+| **Pipeline**         | Sequential | Cumulative  | High        | ETL, document processing |
+
+#### Implementation: Type-Safe Message Protocol
+
+```python
+from typing import TypedDict, Annotated, List, Union, Literal
+from dataclasses import dataclass
+from enum import Enum
+import operator
+import uuid
+
+class MessagePriority(Enum):
+    LOW = 1
+    NORMAL = 2
+    HIGH = 3
+    CRITICAL = 4
+
+@dataclass
+class BaseMessage:
+    """Base class for all agent messages."""
+    id: str
+    sender: str
+    timestamp: float
+    priority: MessagePriority = MessagePriority.NORMAL
+    correlation_id: str | None = None  # For request-response tracking
+
+@dataclass
+class RequestMessage(BaseMessage):
+    """Request expecting a response."""
+    action: str
+    payload: dict
+    timeout_ms: int = 5000
+
+@dataclass
+class ResponseMessage(BaseMessage):
+    """Response to a request."""
+    success: bool
+    result: dict | None
+    error: str | None = None
+
+@dataclass
+class EventMessage(BaseMessage):
+    """Fire-and-forget event notification."""
+    event_type: str
+    data: dict
+
+@dataclass
+class BroadcastMessage(BaseMessage):
+    """Message to all agents."""
+    topic: str
+    content: dict
+
+AgentMessage = Union[RequestMessage, ResponseMessage, EventMessage, BroadcastMessage]
+
+class MessagePassingState(TypedDict):
+    """State with typed message queue."""
+    inbox: Annotated[List[AgentMessage], operator.add]
+    outbox: Annotated[List[AgentMessage], operator.add]
+    pending_requests: Dict[str, RequestMessage]  # correlation_id -> request
+    agent_states: Dict[str, dict]
+
+class MessageRouter:
+    """Routes messages between agents with delivery guarantees."""
+
+    def __init__(self):
+        self.dead_letter_queue: List[AgentMessage] = []
+        self.retry_counts: Dict[str, int] = {}
+        self.max_retries = 3
+
+    def route(self, message: AgentMessage, recipients: List[str]) -> List[tuple[str, AgentMessage]]:
+        """Route message to recipients with retry logic."""
+        deliveries = []
+        for recipient in recipients:
+            deliveries.append((recipient, message))
+        return deliveries
+
+    def handle_failure(self, message: AgentMessage, error: str) -> AgentMessage | None:
+        """Handle delivery failure with retry or dead-letter."""
+        msg_id = message.id
+        self.retry_counts[msg_id] = self.retry_counts.get(msg_id, 0) + 1
+
+        if self.retry_counts[msg_id] < self.max_retries:
+            return message  # Retry
+        else:
+            self.dead_letter_queue.append(message)
+            return None  # Give up
+
+def create_message_handler(agent_id: str):
+    """Factory for creating message-handling agents."""
+
+    def handle_messages(state: MessagePassingState) -> dict:
+        my_inbox = [m for m in state["inbox"] if getattr(m, 'recipient', None) == agent_id or isinstance(m, BroadcastMessage)]
+        outgoing = []
+        my_state = state["agent_states"].get(agent_id, {})
+        pending = state.get("pending_requests", {})
+
+        for message in my_inbox:
+            if isinstance(message, RequestMessage):
+                # Handle request and send response
+                try:
+                    result = process_request(message.action, message.payload, my_state)
+                    response = ResponseMessage(
+                        id=str(uuid.uuid4()),
+                        sender=agent_id,
+                        timestamp=time.time(),
+                        correlation_id=message.id,
+                        success=True,
+                        result=result,
+                        error=None
+                    )
+                except Exception as e:
+                    response = ResponseMessage(
+                        id=str(uuid.uuid4()),
+                        sender=agent_id,
+                        timestamp=time.time(),
+                        correlation_id=message.id,
+                        success=False,
+                        result=None,
+                        error=str(e)
+                    )
+                outgoing.append(response)
+
+            elif isinstance(message, ResponseMessage):
+                # Match response to pending request
+                if message.correlation_id in pending:
+                    original_request = pending[message.correlation_id]
+                    handle_response(original_request, message, my_state)
+                    del pending[message.correlation_id]
+
+            elif isinstance(message, EventMessage):
+                # Fire-and-forget: just process, no response
+                handle_event(message.event_type, message.data, my_state)
+
+            elif isinstance(message, BroadcastMessage):
+                # Process broadcast if relevant
+                if is_subscribed_to(agent_id, message.topic):
+                    handle_broadcast(message.topic, message.content, my_state)
+
+        return {
+            "outbox": outgoing,
+            "agent_states": {agent_id: my_state},
+            "pending_requests": pending
+        }
+
+    return handle_messages
+
+# Scatter-Gather implementation
+def scatter_gather_coordinator(state: MessagePassingState) -> dict:
+    """Coordinator that scatters requests and gathers responses."""
+    task = state.get("task")
+    workers = ["worker_1", "worker_2", "worker_3"]
+
+    # Scatter phase: send requests to all workers
+    scatter_messages = []
+    correlation_ids = []
+
+    for worker in workers:
+        msg_id = str(uuid.uuid4())
+        correlation_ids.append(msg_id)
+        scatter_messages.append(RequestMessage(
+            id=msg_id,
+            sender="coordinator",
+            timestamp=time.time(),
+            priority=MessagePriority.HIGH,
+            action="process",
+            payload={"task": task, "worker": worker},
+            timeout_ms=10000
+        ))
+
+    return {
+        "outbox": scatter_messages,
+        "pending_requests": {m.id: m for m in scatter_messages}
+    }
+
+def gather_responses(state: MessagePassingState) -> dict:
+    """Gather and aggregate responses from workers."""
+    responses = [m for m in state["inbox"] if isinstance(m, ResponseMessage)]
+
+    # Aggregate results
+    successful = [r for r in responses if r.success]
+    failed = [r for r in responses if not r.success]
+
+    if len(successful) >= 2:  # Quorum
+        aggregated = aggregate_results([r.result for r in successful])
+        return {"final_result": aggregated, "status": "success"}
+    else:
+        return {"status": "failed", "errors": [r.error for r in failed]}
+```
+
+---
+
+### Shared Memory vs Message Queues
+
+Two fundamental approaches to agent state sharing, each with distinct trade-offs.
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Shared Memory Model"
+        SM[(Shared State Store)]
+        SMA[Agent A] -->|read/write| SM
+        SMB[Agent B] -->|read/write| SM
+        SMC[Agent C] -->|read/write| SM
+        SM -->|notify| SMA
+        SM -->|notify| SMB
+        SM -->|notify| SMC
+    end
+    
+    subgraph "Message Queue Model"
+        MQA[Agent A] -->|enqueue| Q1[Queue A→B]
+        Q1 -->|dequeue| MQB[Agent B]
+        MQB -->|enqueue| Q2[Queue B→C]
+        Q2 -->|dequeue| MQC[Agent C]
+    end
+    
+    style SM fill:#fff9c4,stroke:#fbc02d
+    style Q1 fill:#e8f5e9,stroke:#4caf50
+    style Q2 fill:#e8f5e9,stroke:#4caf50
+`}
+  caption="Shared Memory vs Message Queues: Different coordination paradigms."
+/>
+
+#### Comparison Matrix
+
+| Aspect            | Shared Memory          | Message Queues            |
+| :---------------- | :--------------------- | :------------------------ |
+| **Coupling**      | Tight (shared schema)  | Loose (message contracts) |
+| **Consistency**   | Strong (with locks)    | Eventual                  |
+| **Scalability**   | Limited by contention  | Highly scalable           |
+| **Debugging**     | Easier (inspect state) | Harder (trace messages)   |
+| **Failure modes** | Corruption risk        | Message loss risk         |
+| **Best for**      | Collaborative editing  | Async pipelines           |
+
+#### Implementation: Shared Memory with LangGraph
+
+```python
+from typing import TypedDict, Annotated, Dict, Any
+from threading import Lock
+import operator
+
+class SharedMemoryState(TypedDict):
+    """State using shared memory pattern."""
+    # Shared workspace all agents can read/write
+    workspace: Annotated[Dict[str, Any], operator.ior]
+    # Version vector for conflict detection
+    versions: Dict[str, int]
+    # Lock status (for optimistic locking)
+    locks: Dict[str, str]  # key -> agent_id holding lock
+
+class SharedMemoryManager:
+    """Manages shared state with conflict resolution."""
+
+    def __init__(self):
+        self._lock = Lock()
+        self._versions: Dict[str, int] = {}
+
+    def read(self, key: str, state: SharedMemoryState) -> tuple[Any, int]:
+        """Read value with version for optimistic locking."""
+        value = state["workspace"].get(key)
+        version = state["versions"].get(key, 0)
+        return value, version
+
+    def write(self, key: str, value: Any, expected_version: int,
+              state: SharedMemoryState) -> tuple[bool, dict]:
+        """Write with optimistic locking - fails if version mismatch."""
+        current_version = state["versions"].get(key, 0)
+
+        if current_version != expected_version:
+            # Conflict detected
+            return False, {}
+
+        # Success - update value and increment version
+        return True, {
+            "workspace": {key: value},
+            "versions": {key: current_version + 1}
+        }
+
+    def acquire_lock(self, key: str, agent_id: str,
+                     state: SharedMemoryState) -> tuple[bool, dict]:
+        """Acquire exclusive lock on a key."""
+        current_holder = state["locks"].get(key)
+
+        if current_holder is not None and current_holder != agent_id:
+            return False, {}  # Already locked by another agent
+
+        return True, {"locks": {key: agent_id}}
+
+    def release_lock(self, key: str, agent_id: str,
+                     state: SharedMemoryState) -> dict:
+        """Release lock if held by this agent."""
+        if state["locks"].get(key) == agent_id:
+            new_locks = {k: v for k, v in state["locks"].items() if k != key}
+            return {"locks": new_locks}
+        return {}
+
+def create_shared_memory_agent(agent_id: str, manager: SharedMemoryManager):
+    """Agent that uses shared memory for coordination."""
+
+    def agent_node(state: SharedMemoryState) -> dict:
+        updates = {}
+
+        # Read current shared state
+        findings, version = manager.read("findings", state)
+
+        # Do work
+        my_finding = research_and_analyze(state, agent_id)
+
+        # Try to update shared state (optimistic locking)
+        if findings is None:
+            findings = []
+
+        new_findings = findings + [my_finding]
+        success, write_updates = manager.write(
+            "findings", new_findings, version, state
+        )
+
+        if success:
+            updates.update(write_updates)
+        else:
+            # Conflict - retry logic or merge
+            current_findings, _ = manager.read("findings", state)
+            merged = merge_findings(current_findings, [my_finding])
+            _, write_updates = manager.write(
+                "findings", merged, version + 1, state
+            )
+            updates.update(write_updates)
+
+        return updates
+
+    return agent_node
+
+# Build shared memory workflow
+manager = SharedMemoryManager()
+workflow = StateGraph(SharedMemoryState)
+
+for agent_id in ["researcher", "analyst", "writer"]:
+    workflow.add_node(agent_id, create_shared_memory_agent(agent_id, manager))
+
+workflow.add_edge(START, "researcher")
+workflow.add_edge(START, "analyst")
+workflow.add_edge("researcher", "writer")
+workflow.add_edge("analyst", "writer")
+workflow.add_edge("writer", END)
+```
+
+#### Implementation: Message Queue Pattern
+
+```python
+from typing import TypedDict, Annotated, List, Dict
+from dataclasses import dataclass
+from collections import deque
+import operator
+
+@dataclass
+class QueueMessage:
+    """Message in a queue."""
+    id: str
+    payload: dict
+    timestamp: float
+    retries: int = 0
+
+class MessageQueueState(TypedDict):
+    """State using message queue pattern."""
+    # Named queues between agents
+    queues: Dict[str, List[QueueMessage]]
+    # Dead letter queue for failed messages
+    dlq: Annotated[List[QueueMessage], operator.add]
+    # Processing results
+    results: Annotated[Dict[str, Any], operator.ior]
+
+class MessageQueue:
+    """Simple message queue implementation."""
+
+    def __init__(self, name: str, max_size: int = 1000):
+        self.name = name
+        self.max_size = max_size
+
+    def enqueue(self, message: QueueMessage, state: MessageQueueState) -> dict:
+        """Add message to queue."""
+        queue = state["queues"].get(self.name, [])
+
+        if len(queue) >= self.max_size:
+            # Queue full - send to DLQ
+            return {"dlq": [message]}
+
+        return {"queues": {self.name: queue + [message]}}
+
+    def dequeue(self, state: MessageQueueState) -> tuple[QueueMessage | None, dict]:
+        """Remove and return message from queue."""
+        queue = state["queues"].get(self.name, [])
+
+        if not queue:
+            return None, {}
+
+        message = queue[0]
+        remaining = queue[1:]
+        return message, {"queues": {self.name: remaining}}
+
+    def peek(self, state: MessageQueueState) -> QueueMessage | None:
+        """View next message without removing."""
+        queue = state["queues"].get(self.name, [])
+        return queue[0] if queue else None
+
+def create_queue_producer(agent_id: str, output_queue: MessageQueue):
+    """Agent that produces messages to a queue."""
+
+    def producer_node(state: MessageQueueState) -> dict:
+        # Do work
+        result = process_task(state, agent_id)
+
+        # Enqueue result for next stage
+        message = QueueMessage(
+            id=str(uuid.uuid4()),
+            payload={"result": result, "producer": agent_id},
+            timestamp=time.time()
+        )
+
+        return output_queue.enqueue(message, state)
+
+    return producer_node
+
+def create_queue_consumer(agent_id: str, input_queue: MessageQueue,
+                          output_queue: MessageQueue | None = None):
+    """Agent that consumes from one queue and optionally produces to another."""
+
+    def consumer_node(state: MessageQueueState) -> dict:
+        updates = {}
+
+        # Dequeue message
+        message, dequeue_updates = input_queue.dequeue(state)
+        updates.update(dequeue_updates)
+
+        if message is None:
+            return updates  # Nothing to process
+
+        try:
+            # Process message
+            result = process_message(message.payload, agent_id)
+
+            if output_queue:
+                # Forward to next queue
+                next_message = QueueMessage(
+                    id=str(uuid.uuid4()),
+                    payload={"result": result, "producer": agent_id},
+                    timestamp=time.time()
+                )
+                updates.update(output_queue.enqueue(next_message, state))
+            else:
+                # Final stage - store result
+                updates["results"] = {agent_id: result}
+
+        except Exception as e:
+            # Retry or DLQ
+            if message.retries < 3:
+                message.retries += 1
+                updates.update(input_queue.enqueue(message, state))
+            else:
+                updates["dlq"] = [message]
+
+        return updates
+
+    return consumer_node
+
+# Build message queue pipeline
+q1 = MessageQueue("stage1_to_stage2")
+q2 = MessageQueue("stage2_to_stage3")
+
+workflow = StateGraph(MessageQueueState)
+workflow.add_node("producer", create_queue_producer("producer", q1))
+workflow.add_node("processor", create_queue_consumer("processor", q1, q2))
+workflow.add_node("finalizer", create_queue_consumer("finalizer", q2))
+
+workflow.add_edge(START, "producer")
+workflow.add_edge("producer", "processor")
+workflow.add_edge("processor", "finalizer")
+workflow.add_edge("finalizer", END)
+```
+
+<Callout type="insight" title="Choosing Between Patterns">
+  **Use Shared Memory when:**
+  - Agents need to see each other's work in real-time
+  - Strong consistency is required
+  - The number of agents is small (< 10)
+  
+  **Use Message Queues when:**
+  - Agents work asynchronously at different speeds
+  - You need to scale horizontally
+  - Fault isolation is important
+  - Processing order matters
+</Callout>
+
+---
+
+### Cross-References: Related Modules
+
+These orchestration patterns connect to other modules in the curriculum:
+
+<Callout type="info" title="Continue Your Multi-Agent Journey">
+  **Day 37: CrewAI Lab** — Apply these patterns using CrewAI's role-based agent
+  framework. See how Supervisor, Hierarchical, and Collaborative patterns map to
+  CrewAI's crew and task abstractions. **Day 38: Agent-to-Agent (A2A) Protocol**
+  — Learn how agents communicate across system boundaries using standardized
+  protocols. The message passing patterns covered here form the foundation for
+  A2A's inter-agent communication.
+</Callout>
+
+---
+
+## 31.13 LangGraph Platform and Deployment
 
 LangGraph Platform (now **LangSmith Deployment**) provides production infrastructure for deploying agents:
 

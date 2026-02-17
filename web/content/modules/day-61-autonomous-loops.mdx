@@ -37,7 +37,32 @@ day: 61
 
 Traditional agent development involves micromanaging every step. You watch the agent, correct it, and guide it through each decision. This doesn't scale.
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing the contrast between "Micromanaged Agent" (developer hovering over every step with a magnifying glass, agent looking constrained) vs "Autonomous Agent" (agent confidently working through a cycle with checkpoints, developer relaxed with coffee). Use a split-screen design with arrows showing iteration cycles on the autonomous side. Style: Modern, clean, with subtle animation potential for the cycle arrows. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    subgraph Micro [Micromanaged Agent]
+        U1[User] -->|Instruction| A1[Agent]
+        A1 -->|Result| U1
+        U1 -->|Correction| A1
+        A1 -->|Result| U1
+    end
+    
+    subgraph Auto [Autonomous Agent]
+        U2[User] -->|Goal| A2[Agent]
+        A2 -->|Action| Env[Use Tool]
+        Env -->|Result| A2
+        A2 -->|Self-Correct| A2
+        A2 -->|Done| U2
+    end
+    
+    style Micro fill:#fff3e0,stroke:#ff9800
+    style Auto fill:#e8f5e9,stroke:#4caf50
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Micromanagement vs. Autonomy</p>
 
 <ConceptIntro
   title="Eventual Consistency for Agents"
@@ -46,9 +71,26 @@ Traditional agent development involves micromanaging every step. You watch the a
   whyItMatters="This pattern enables truly autonomous operations—agents that can work overnight, handle edge cases, and self-correct without human intervention. It's the difference between a tool and a teammate."
 />
 
-{/* IMAGE_PLACEHOLDER: Create a circular flow diagram showing the autonomous loop cycle: "Define Goal" → "Agent Perceives State" → "Agent Takes Action" → "Evaluate Progress" → "Goal Met?" (if no, loop back to Perceive; if yes, "Success"). Include visual indicators for checkpointing at each step and a "failure = learning signal" annotation. Use a color gradient to show progress toward the goal. Style: Technical diagram with modern iconography, suitable for dark/light themes. */}
-
-![Autonomous Loop Cycle](/images/autonomous_loop.png)
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    Start([Define Goal]) --> Perceive[👀 Perceive State]
+    Perceive --> Plan[🧠 Plan]
+    Plan --> Act[🤖 Take Action]
+    Act --> Evaluate{Goal Met?}
+    Evaluate -->|No| Perceive
+    Evaluate -->|Yes| Success([🎉 Success])
+    
+    style Start fill:#e3f2fd,stroke:#2196f3
+    style Perceive fill:#f3e5f5,stroke:#9c27b0
+    style Act fill:#e8f5e9,stroke:#4caf50
+    style Evaluate fill:#fff9c4,stroke:#fbc02d
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: The Autonomous Loop Cycle</p>
 
 ---
 
@@ -113,7 +155,29 @@ echo "Max iterations reached"
 exit 1
 ```
 
-{/* IMAGE_PLACEHOLDER: Create an interactive visualization showing a test coverage loop in action. Display a codebase tree on the left with files color-coded by coverage (red=0%, yellow=50%, green=80%+). In the center, show the agent analyzing and writing tests with animated code snippets. On the right, show a progress meter climbing toward 80% with iteration count and cost tracker. Include play/pause controls for the animation. Style: Dashboard-like interface with real-time metrics, suitable for interactive component. */}
+<Mermaid
+  chart={`
+graph TD
+    Start([Start]) --> Read[Read Codebase]
+    Read --> Anal[Analyze Coverage]
+    Anal --> Dec{Goal Met?}
+    Dec -->|Yes| Done([End])
+    Dec -->|No| Identify[Identify Gap]
+    Identify --> Write[Write Test]
+    Write --> Run[Run Test]
+    Run --> Fail{Pass?}
+    Fail -->|No| Fix[Fix Test]
+    Fix --> Run
+    Fail -->|Yes| Commit[Commit]
+    Commit --> Read
+    
+    style Start fill:#e3f2fd,stroke:#2196f3
+    style Write fill:#f3e5f5,stroke:#9c27b0
+    style Run fill:#fff9c4,stroke:#fbc02d
+    style Done fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Test Coverage Loop: An autonomous cycle that writes tests until criteria are met."
+/>
 
 ---
 
@@ -210,7 +274,24 @@ def create_autonomous_assistant(goal: str):
     return poll_until_complete(thread.id, run.id)
 ```
 
-{/* IMAGE_PLACEHOLDER: Create a comparison matrix visualization showing the autonomous coding agents. Use a grid layout with framework logos/icons on the left, and columns for "Strengths", "Best For", "Cost Model", and "Autonomy Level" (shown as a 1-5 star rating). Include hover states that reveal more details about each framework. Add a "Use Case Matcher" interactive element where users can select their needs and see recommended frameworks highlighted. Style: Modern comparison table with interactive elements, icons for each framework. */}
+<Mermaid
+  chart={`
+quadrantChart
+    title Autonomy vs Cost
+    x-axis Low Cost --> High Cost
+    y-axis Low Autonomy --> High Autonomy
+    quadrant-1 Specialized & Expensive
+    quadrant-2 Capable & Expensive
+    quadrant-3 Basic & Cheap
+    quadrant-4 Efficient Autonomy
+    "OpenAI Code Interpreter": [0.8, 0.7]
+    "Claude Computer Use": [0.9, 0.9]
+    "Devin": [0.95, 0.95]
+    "Cursor Agent": [0.6, 0.6]
+    "Aider": [0.3, 0.4]
+`}
+  caption="Agent Landscape: Balancing autonomy capabilities with operational costs."
+/>
 
 ### Autonomous Coding Agents Comparison
 
@@ -234,7 +315,25 @@ def create_autonomous_assistant(goal: str):
 
 The key insight: **the file system is the agent's external memory**.
 
-{/* IMAGE_PLACEHOLDER: Create a diagram showing the "File System as Memory" concept. On the left, show a traditional agent with a limited conversation history buffer (depicted as a small scrolling window). On the right, show an autonomous agent reading from a file system (depicted as a large, persistent storage with folders and files). Use arrows to show how the agent writes changes to files, then reads them back in the next iteration. Include annotations showing "Conversation History: ~10 messages" vs "File System: Unlimited, Persistent". Style: Side-by-side comparison with clear visual metaphors for memory limitations vs persistence. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Ephemeral Memory"
+        Agent1[Standard Agent] -->|Context Window| History[Short History]
+        History -->|Overflow| Forget[Lost Context ❌]
+    end
+    
+    subgraph "Persistent Memory"
+        Agent2[Autonomous Agent] <-->|Read/Write| FS[(File System)]
+        FS -->|Files| State[Project State]
+        State -->|Unlimited| Agent2
+    end
+    
+    style FS fill:#c8e6c9,stroke:#2e7d32
+    style History fill:#ffccbc,stroke:#bf360c
+`}
+  caption="File System as Memory: Bypassing context limits by reading state from disk."
+/>
 
 <Callout type="tip">
   **Why This Works:** By reading project files at the start of each loop
@@ -309,7 +408,26 @@ class AutonomousLoop:
   whyItMatters="This mindset shift is crucial. Stop controlling every step and start defining what 'done' looks like. Let failures teach you what your specification is missing."
 />
 
-{/* IMAGE_PLACEHOLDER: Create an interactive "Prompt Refinement Simulator" showing the iterative improvement of a prompt specification. Display 4 versions of a prompt side-by-side with visual indicators of what was added (highlighted in different colors). Below each version, show the failure that occurred and the learning extracted. Include an interactive element where users can click through the versions to see the evolution. Add a "Try Your Own" section where users can input a vague prompt and see suggestions for refinement. Style: Educational, step-by-step progression with clear visual hierarchy and color-coding for different types of constraints (framework, coverage, philosophy). */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    V1[Prompt V1: Vague] -->|Fail: Validation Error| Learn1[Add Format Constraints]
+    Learn1 --> V2[Prompt V2: Better]
+    V2 -->|Fail: Edge Case| Learn2[Add Examples]
+    Learn2 --> V3[Prompt V3: Robust]
+    V3 -->|Success| Done([System Stable])
+    
+    style V1 fill:#ffcdd2,stroke:#c62828
+    style V2 fill:#fff9c4,stroke:#fbc02d
+    style V3 fill:#c8e6c9,stroke:#2e7d32
+    style Learn1 fill:#e1f5fe,stroke:#0277bd
+    style Learn2 fill:#e1f5fe,stroke:#0277bd
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: The Refinement Cycle</p>
 
 ### The Refinement Cycle
 
@@ -489,7 +607,31 @@ class CachedAutonomousLoop:
         return response
 ```
 
-{/* IMAGE_PLACEHOLDER: Create an interactive "Cost Optimization Dashboard" showing real-time cost tracking for an autonomous loop. Display three panels: 1) Model Router showing which model is selected for each iteration type with cost per call, 2) Running cost meter with budget remaining and alerts at 50%/80% thresholds, 3) Cost comparison chart showing "Without Optimization" vs "With Optimization" (prompt caching + model routing). Include interactive sliders to adjust iteration count and see projected costs. Style: Financial dashboard with clear metrics, progress bars, and cost savings highlighted in green. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    Task[Incoming Task] --> Router{Complexity?}
+    Router -->|Low| Fast[Haiku Model\n($0.001/1k)]
+    Router -->|Medium| Balanced[Sonnet Model\n($0.003/1k)]
+    Router -->|High| Powerful[Opus/GPT-4\n($0.015/1k)]
+    
+    Fast --> Cache{Context Cached?}
+    Balanced --> Cache
+    Powerful --> Cache
+    
+    Cache -->|Yes| Cost[Cost: -90%]
+    Cache -->|No| Full[Cost: 100%]
+    
+    style Router fill:#e3f2fd,stroke:#2196f3
+    style Fast fill:#c8e6c9,stroke:#2e7d32
+    style Powerful fill:#ffccbc,stroke:#bf360c
+    style Cost fill:#dcedc8,stroke:#558b2f
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Model Routing & Caching Strategy</p>
 
 ### Model Routing for Cost Optimization
 
@@ -649,7 +791,30 @@ class HumanInTheLoopAgent:
         return approval_id
 ```
 
-{/* IMAGE_PLACEHOLDER: Create a flowchart visualization showing "Human-in-the-Loop Decision Tree". Start with "Agent Assesses Action Risk" at the top, then branch into four paths based on risk level (Low/Medium/High/Critical). Each path shows different approval requirements: Low=Auto-approve (green), Medium=Log & Continue (yellow), High=Request Approval with timeout (orange), Critical=Block until explicit approval (red). Include icons for each action type and estimated time delays. Add an interactive element where users can click on different action types to see which path they would take. Style: Decision tree with color-coded risk levels, clear branching logic, and time indicators. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    Action[Proposed Action] --> Assess{Risk Level?}
+    Assess -->|Low| Auto[✅ Auto-Approve]
+    Assess -->|Medium| Log[📝 Log & Continue]
+    Assess -->|High| Timeout[⏳ Request Approval\n(w/ Timeout)]
+    Assess -->|Critical| Block[🛑 Block Until\nExplicit Approval]
+    
+    Timeout -->|Approved| Execute[Execute]
+    Timeout -->|Rejected| Cancel[Cancel]
+    Timeout -->|Timeout| Cancel
+    
+    style Assess fill:#e3f2fd,stroke:#2196f3
+    style Auto fill:#c8e6c9,stroke:#2e7d32
+    style Log fill:#fff9c4,stroke:#fbc02d
+    style Timeout fill:#ffccbc,stroke:#f57c00
+    style Block fill:#ffcdd2,stroke:#c62828
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: HITL Decision Tree</p>
 
 ### Confidence-Based Escalation
 
@@ -757,8 +922,6 @@ async def autonomous_with_review(goal: str):
   involving production data.
 </Callout>
 
-{/* IMAGE_PLACEHOLDER: Create an interactive "Autonomy Safety Checker" tool. Display a grid of common use cases with visual indicators (green checkmark for safe, red X for dangerous, yellow warning for "depends"). When users hover over or click each use case, show a detailed explanation of why it's safe/dangerous, including risk factors, mitigation strategies, and alternative approaches. Include a "Check Your Use Case" input where users can describe their scenario and get a safety assessment. Style: Interactive safety dashboard with clear visual indicators, tooltips, and educational content. Use traffic light colors (green/yellow/red) for quick assessment. */}
-
 ### Danger Zone Checklist
 
 | Use Case               | Safe?  | Reason                                   |
@@ -856,7 +1019,34 @@ app = workflow.compile(checkpointer=checkpointer)
 
 Production autonomous loops must survive failures. Network issues, API rate limits, and process crashes are inevitable—your loops need to resume gracefully.
 
-{/* IMAGE_PLACEHOLDER: Create a diagram showing "Checkpointing and Recovery Architecture". Display three layers: 1) Top layer shows the autonomous loop with iteration markers, 2) Middle layer shows checkpoint storage (PostgreSQL/Redis/SQLite) with save points after each iteration, 3) Bottom layer shows recovery scenarios (network failure, rate limit, crash) with arrows showing how the loop resumes from the last checkpoint. Include a timeline showing "Without Checkpointing" (restart from beginning) vs "With Checkpointing" (resume from iteration 5). Style: Technical architecture diagram with clear data flow, storage icons, and recovery paths highlighted. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Execution Layer"
+        Loop[Agent Loop] -->|Step 1| Step2[Agent Loop]
+        Step2 -->|Step 2| Step3[Agent Loop]
+        Step3 -->|Crash!| Fail[💥 Failure]
+    end
+    
+    subgraph "Persistence Layer"
+        DB[(Checkpoint DB)]
+    end
+    
+    Loop -.->|Save| DB
+    Step2 -.->|Save| DB
+    Step3 -.->|Save| DB
+    
+    subgraph "Recovery Layer"
+        Fail -->|Resume| Restore[Load State]
+        Restore -->|Continue| Step3
+    end
+    
+    style DB fill:#e1bee7,stroke:#8e24aa
+    style Fail fill:#ffcdd2,stroke:#c62828
+    style Restore fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Checkpointing Architecture: Saving state after every step enables resilience."
+/>
 
 ### LangGraph Persistence Layer
 
@@ -1010,7 +1200,7 @@ export const autonomousLoop = inngest.createFunction(
         `check-coverage-${iteration}`,
         async () => {
           return await checkCoverage();
-        }
+        },
       );
 
       if (currentCoverage >= goalCoverage) {
@@ -1033,7 +1223,7 @@ export const autonomousLoop = inngest.createFunction(
     }
 
     return { status: "max_iterations", coverage: currentCoverage };
-  }
+  },
 );
 ```
 
@@ -1088,7 +1278,22 @@ class RecoveryManager:
 
 You can't improve what you can't measure. Production autonomous loops require comprehensive monitoring.
 
-{/* IMAGE_PLACEHOLDER: Create an interactive "Loop Health Monitor" dashboard showing real-time metrics for an autonomous loop. Display four key panels: 1) Iteration Progress (circular progress indicator with current/max iterations), 2) Goal Distance Meter (line chart showing convergence toward goal over time), 3) Action History (timeline of recent actions with success/failure indicators), 4) Alert Panel (showing warnings for stuck loops, repeated actions, or budget concerns). Include color-coded status indicators (green=healthy, yellow=warning, red=critical). Style: Modern monitoring dashboard with real-time data visualization, suitable for production environments. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Loop Health Dashboard"
+        Progress((Progress\n45%))
+        Goal[Goal Distance\n📉 Improving]
+        History[Action History\n✅ ✅ ❌ ✅]
+        Alerts[Alerts\n⚠️ High Cost]
+    end
+    
+    style Progress fill:#bbdefb,stroke:#1976d2
+    style Goal fill:#c8e6c9,stroke:#2e7d32
+    style Alerts fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Health Monitor: Key metrics for tracking autonomous agent performance."
+/>
 
 ### Detecting Stuck Loops
 
@@ -1218,7 +1423,34 @@ class MetricsReporter:
 start_http_server(8000)
 ```
 
-{/* IMAGE_PLACEHOLDER: Create an interactive "Circuit Breaker State Machine" visualization. Show three states as large circles: CLOSED (green, normal operation), OPEN (red, blocked), and HALF_OPEN (yellow, testing recovery). Display transitions between states with arrows labeled with conditions (e.g., "5 failures" from CLOSED to OPEN, "60s timeout" from OPEN to HALF_OPEN, "3 successes" from HALF_OPEN to CLOSED). Include a live demo where users can click "Simulate Failure" or "Simulate Success" to see the state machine transition. Add counters showing failure count and time since last failure. Style: State machine diagram with interactive controls, clear visual states, and animated transitions. */}
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Closed
+    
+    Closed --> Open: Failure Threshold Reached
+    Open --> HalfOpen: Timeout Expired
+    
+    HalfOpen --> Closed: Success
+    HalfOpen --> Open: Failure
+    
+    state Closed {
+        [*] --> NormalOp
+        note right of NormalOp: Requests Allowed
+    }
+    
+    state Open {
+        [*] --> Blocked
+        note right of Blocked: Fail Fast
+    }
+    
+    state HalfOpen {
+        [*] --> TestRequest
+        note right of TestRequest: Limited Traffic
+    }
+`}
+  caption="Circuit Breaker: A state machine for preventing cascading failures."
+/>
 
 ### Kill Switches and Circuit Breakers
 
@@ -1405,10 +1637,11 @@ async def safe_autonomous_loop():
 ## Hands-On Practice
 
 <Callout type="tip">
-  **Builds Toward Capstone:** Autonomous loops are critical for Month 3 capstone projects.
-  The Deep Research Agent (Days 76-80) uses loops to iteratively gather and refine information.
-  The K8s Operator Agent (Days 81-85) uses loops for continuous monitoring and self-healing.
-  The AgentOS Ecosystem (Days 86-90) coordinates multiple autonomous agents working in parallel.
+  **Builds Toward Capstone:** Autonomous loops are critical for Month 3 capstone
+  projects. The Deep Research Agent (Days 76-80) uses loops to iteratively
+  gather and refine information. The K8s Operator Agent (Days 81-85) uses loops
+  for continuous monitoring and self-healing. The AgentOS Ecosystem (Days 86-90)
+  coordinates multiple autonomous agents working in parallel.
 </Callout>
 
 ### Recommended Exercises

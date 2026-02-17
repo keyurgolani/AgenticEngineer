@@ -33,7 +33,11 @@ day: 14
 
 A **router agent** is like a traffic controller for your AI workflows. It examines the input and routes execution to different specialized nodes based on the content. This is one of the most common patterns in production agent systems.
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing a traffic controller directing cars (representing user queries) to different lanes/destinations (representing specialized handlers). The traffic controller should be at a central intersection with multiple paths leading to different specialized areas labeled "Search", "Chat", "Calculate", etc. Use a clean, modern style with icons and arrows to show the flow. This visual metaphor helps learners understand the router's role in directing requests. */}
+<ConceptVisual
+  image="/images/day_14_01_router_traffic_controller_1769029083663.png"
+  caption="The Router Agent: A central traffic controller directing specialized requests to the right experts."
+  alt="Illustration of a traffic controller routing queries"
+/>
 
 <Mermaid
   chart={`
@@ -64,7 +68,11 @@ graph TD
 
 The router pattern has three key components:
 
-{/* IMAGE_PLACEHOLDER: Create a diagram showing the three components of the router pattern as interconnected gears or puzzle pieces. Show: 1) Router Node (analyzing/examining icon), 2) Routing Function (decision/branching icon), 3) Handler Nodes (specialized tools/workers icon). Use arrows to show the flow from input → router node → routing function → handler nodes → output. Include small example labels for each component. */}
+<ConceptVisual
+  image="/images/day_14_02_router_components_gears_1769029100822.png"
+  caption="Anatomy of a Router: Analyze (Router Node) → Decide (Function) → Act (Handler Nodes)."
+  alt="Diagram showing router components as connected gears"
+/>
 
 | Component            | Purpose                                  | Example                           |
 | :------------------- | :--------------------------------------- | :-------------------------------- |
@@ -79,7 +87,11 @@ The router pattern has three key components:
   takeaway="Routers enable specialization. Instead of one agent trying to do everything, you route to experts."
 />
 
-{/* IMAGE_PLACEHOLDER: Create a customer support scenario illustration showing a customer query "My payment failed" entering a router system. The router analyzes the query and shows thought bubbles with keywords detected ("payment", "failed"). Three specialist agents are shown as characters/avatars: 1) Billing Agent (calculator icon, handles payments), 2) Tech Agent (wrench icon, handles technical issues), 3) General Agent (info icon, handles FAQs). An arrow shows the query being routed to the Billing Agent. Include a success indicator showing the specialized agent providing a relevant solution. This concrete example helps learners visualize real-world router applications. */}
+<ConceptVisual
+  image="/images/day_14_03_customer_support_scenario_routing_1769029120876.png"
+  caption="Real-World Routing: Directing customer queries to the agent with the right tools for the job."
+  alt="Customer support scenario showing routing logic"
+/>
 
 ---
 
@@ -404,7 +416,11 @@ Respond with only the category name."""
 
 For production systems with many routes, **embedding-based routing** offers the best balance of accuracy and speed:
 
-{/* IMAGE_PLACEHOLDER: Create a visual comparison showing three routing approaches side by side: 1) Keyword Matching (simple, fast but limited - show keywords with exact matches), 2) LLM Classification (accurate but slow/expensive - show brain/AI icon with dollar signs), 3) Semantic Routing (best of both - show vector embeddings as dots in space with similarity lines). Use a performance/cost matrix or comparison chart to highlight that semantic routing is the sweet spot. */}
+<ConceptVisual
+  image="/images/day_14_04_routing_approaches_comparison_1769029160691.png"
+  caption="Routing Strategies Compared: Semantic routing offers the best balance of accuracy, speed, and cost."
+  alt="Comparison of keyword, LLM, and semantic routing approaches"
+/>
 
 ```python
 from openai import OpenAI
@@ -473,18 +489,34 @@ def semantic_router_node(state: AgentState) -> dict:
   Embedding API is ~100x cheaper than chat completions
 </Callout>
 
-{/* INTERACTIVE_COMPONENT_OPPORTUNITY: Create a "Routing Method Comparison Calculator" that lets users input:
-1. Number of requests per day
-2. Average query complexity distribution (simple/medium/complex %)
-3. Select routing method (keyword/LLM/semantic/cost-aware)
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Routing Calculator"
+        Stats[Input: Requests & Complexity]
+        Method{Routing Method}
+        
+        Stats --> Method
+        
+        Method -->|Keyword| Res1[Low Cost / High Speed<br/>Low Accuracy]
+        Method -->|LLM| Res2[High Cost / Low Speed<br/>High Accuracy]
+        Method -->|Semantic| Res3[Med Cost / Med Speed<br/>Med Accuracy]
+        Method -->|Cost-Aware| Res4[Optimized Balance]
+        
+        Res1 --> Output[Compare: Cost vs Accuracy]
+        Res2 --> Output
+        Res3 --> Output
+        Res4 --> Output
+    end
+    
+    style Stats fill:#e1f5fe,stroke:#01579b
+    style Method fill:#fff9c4,stroke:#fbc02d
+    style Res4 fill:#c8e6c9,stroke:#2e7d32
+`}
+  chartAlt="Calculator Flow: Comparing cost and accuracy across routing methods."
+/>
 
-The calculator would show:
-- Total daily cost
-- Average latency per request
-- Accuracy estimate
-- Cost savings vs baseline (LLM-only approach)
-
-This would help learners understand the practical trade-offs between different routing strategies and see real-world cost implications. Could be built as a React component with sliders and real-time calculations. */}
+This would help learners understand the practical trade-offs between different routing strategies and see real-world cost implications. Could be built as a React component with sliders and real-time calculations. \*/}
 
 ---
 
@@ -492,7 +524,11 @@ This would help learners understand the practical trade-offs between different r
 
 One of the most powerful applications of routing is **cost optimization**. Route simple queries to cheaper models and complex ones to more capable (expensive) models:
 
-{/* IMAGE_PLACEHOLDER: Create an infographic showing a decision tree for cost-aware routing. At the top, show an incoming query being analyzed for complexity. Three branches lead to different model tiers: "Fast Lane" (gpt-4o-mini, $0.00015/1k tokens, simple queries like greetings), "Balanced Lane" (gpt-4o, $0.0025/1k tokens, medium complexity like summaries), and "Power Lane" (Claude Sonnet, $0.003/1k tokens, complex tasks like analysis). Include icons showing cost savings (piggy bank) and a stat showing "40-63% cost reduction". Use color coding: green for cheap, yellow for medium, red for expensive. */}
+<ConceptVisual
+  image="/images/day_14_05_cost_aware_routing_tree_1769029183069.png"
+  caption="Cost-Aware Routing: Save 40-60% by routing simple queries to cheaper models."
+  alt="Infographic decision tree for cost-optimized routing"
+/>
 
 ```python
 from openai import OpenAI
@@ -565,7 +601,11 @@ class CostAwareRouter:
 
 Production systems need fallback logic when primary models fail:
 
-{/* IMAGE_PLACEHOLDER: Create a flowchart showing a resilient multi-model routing system. Show: Primary Model (OpenAI GPT-4o) at the top with a checkmark for success path and an X for failure path. On failure, arrow points to Fallback Model (GPT-4o-mini or Anthropic Claude). Include retry logic (attempt counter 1/3, 2/3, 3/3) and final fallback to cached response or error message. Use traffic light colors: green for success, yellow for fallback, red for final failure. Add icons for different providers (OpenAI, Anthropic, local Ollama) to show provider diversity strategy. */}
+<ConceptVisual
+  image="/images/day_14_06_resilient_routing_flowchart_1769029203649.png"
+  caption="Resilient Routing: Automatic fallbacks ensure reliability when primary models fail."
+  alt="Flowchart showing resilient multi-model routing logic"
+/>
 
 ```python
 from typing import TypedDict

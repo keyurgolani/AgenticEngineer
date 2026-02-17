@@ -1,0 +1,2727 @@
+---
+title: "Mini Project: Voice-First Task Manager"
+description: "Build a voice-controlled task management system with real-time updates, undo/redo functionality, and natural language task parsing."
+week: 12
+day: 82
+---
+
+<ReadingTime minutes={50} />
+
+<SkillLevel
+  level="intermediate"
+  description="Voice agents and real-time systems"
+/>
+
+<Prerequisites
+  items={[
+    "Completed Day 65 (Voice AI Agents)",
+    "Understanding of WebSocket and real-time protocols",
+    "Familiarity with speech recognition concepts",
+    "Basic knowledge of task management patterns",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Build a complete voice-controlled task management system",
+    "Implement real-time voice streaming with LiveKit/WebRTC",
+    "Integrate speech recognition using Deepgram or Whisper",
+    "Design a task backend with undo/redo action history",
+    "Create WebSocket-based real-time updates",
+    "Parse natural language commands into structured task operations",
+    "Provide voice feedback using text-to-speech synthesis",
+  ]}
+/>
+
+<Callout type="info">
+  **Project Overview:** This self-paced project builds a voice-first task
+  manager inspired by Taskmaster-style productivity tools. You'll create a
+  system where users can manage tasks entirely through voice commands—adding,
+  completing, prioritizing, and organizing tasks without touching a keyboard.
+</Callout>
+
+<Mermaid
+  chart={`
+graph TD
+    User([🎤 User Voice]) --> VAD[Voice Activity Detection]
+    VAD --> STT[Speech-to-Text<br/>Deepgram/Whisper]
+    STT --> NLU[Natural Language<br/>Understanding]
+    NLU --> TaskEngine[Task Engine]
+    
+    TaskEngine --> Actions[Action History<br/>Undo/Redo Stack]
+    TaskEngine --> DB[(Task Database)]
+    TaskEngine --> WS[WebSocket Hub]
+    
+    WS --> Clients[Connected Clients]
+    TaskEngine --> TTS[Text-to-Speech<br/>Feedback]
+    TTS --> Speaker([🔊 Voice Response])
+    
+    style User fill:#e3f2fd,stroke:#2196f3
+    style TaskEngine fill:#f3e5f5,stroke:#9c27b0
+    style Speaker fill:#c8e6c9,stroke:#4caf50
+`}
+  caption="Voice-First Task Manager: From spoken command to task action with voice feedback."
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Voice Activity Detection (VAD)",
+      definition:
+        "Algorithm that detects when a user starts and stops speaking, enabling turn-based conversation",
+    },
+    {
+      term: "Natural Language Understanding (NLU)",
+      definition:
+        "Processing that extracts intent and entities from transcribed speech to determine task operations",
+    },
+    {
+      term: "Action History",
+      definition:
+        "Stack-based pattern for tracking operations, enabling undo/redo functionality",
+    },
+    {
+      term: "Barge-In",
+      definition:
+        "Ability for users to interrupt the agent mid-response, requiring immediate audio cancellation",
+    },
+    {
+      term: "WebRTC",
+      definition:
+        "Real-time communication protocol for low-latency audio/video streaming in browsers",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build a voice-controlled task management system where users can create, complete, prioritize, and organize tasks using natural speech. The system provides real-time updates across connected clients and supports undo/redo for all operations.
+
+**Why This Matters**: Voice interfaces are becoming the dominant mode of human-computer interaction. Building a voice-first task manager teaches you the complete pipeline from audio capture to action execution—skills directly applicable to voice assistants, accessibility tools, and hands-free productivity applications.
+
+<Mermaid
+  chart={`
+graph LR
+    Traditional[Traditional Task App] -->|Click| Button[Button Press]
+    Button -->|Type| Form[Form Input]
+    Form -->|Submit| Action[Task Created]
+    
+    VoiceFirst[Voice-First App] -->|Speak| Command["Add buy groceries"]
+    Command -->|Instant| Action2[Task Created + Confirmed]
+    
+    style Traditional fill:#ffcdd2,stroke:#c62828
+    style VoiceFirst fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Voice-first reduces friction: One spoken command replaces multiple clicks and keystrokes."
+/>
+
+**Difficulty**: Intermediate  
+**Duration**: 8-12 hours
+
+**Skills Showcased**:
+
+- Voice agent architecture (STT → NLU → Action → TTS)
+- Real-time WebSocket communication
+- Command pattern with undo/redo
+- Natural language intent parsing
+- Low-latency audio streaming
+
+---
+
+## Architecture Design
+
+The Voice-First Task Manager follows a layered architecture separating voice processing, command interpretation, task management, and real-time synchronization.
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Voice Layer"
+        Mic[🎤 Microphone] --> LiveKit[LiveKit/WebRTC]
+        LiveKit --> VAD[Silero VAD]
+        VAD --> STT[Deepgram STT]
+    end
+    
+    subgraph "Intelligence Layer"
+        STT --> NLU[Intent Parser]
+        NLU --> |Intent + Entities| Dispatcher[Command Dispatcher]
+    end
+    
+    subgraph "Task Layer"
+        Dispatcher --> TaskService[Task Service]
+        TaskService --> ActionStack[Action History]
+        TaskService --> DB[(SQLite/Postgres)]
+    end
+
+    subgraph "Feedback Layer"
+        TaskService --> WSHub[WebSocket Hub]
+        TaskService --> TTS[ElevenLabs/OpenAI TTS]
+        WSHub --> Clients[Connected Clients]
+        TTS --> Speaker[🔊 Speaker]
+    end
+
+    style NLU fill:#fff9c4,stroke:#fbc02d
+    style TaskService fill:#e1bee7,stroke:#4a148c
+    style WSHub fill:#b2ebf2,stroke:#006064
+
+`}
+caption="System Architecture: Four layers from voice input to synchronized output."
+/>
+
+### Component Breakdown
+
+| Component          | Responsibility                                | Technology                 |
+| :----------------- | :-------------------------------------------- | :------------------------- |
+| **Voice Capture**  | Stream audio from user's microphone           | LiveKit SDK, WebRTC        |
+| **VAD**            | Detect speech start/end for turn-taking       | Silero VAD                 |
+| **STT**            | Convert speech to text with low latency       | Deepgram Nova-2 or Whisper |
+| **Intent Parser**  | Extract task operations from natural language | GPT-4o-mini or local NLU   |
+| **Task Service**   | Execute CRUD operations on tasks              | FastAPI + SQLAlchemy       |
+| **Action History** | Track operations for undo/redo                | Command Pattern stack      |
+| **WebSocket Hub**  | Broadcast updates to all clients              | FastAPI WebSockets         |
+| **TTS**            | Provide voice confirmation feedback           | OpenAI TTS or ElevenLabs   |
+
+### Data Flow
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Voice as Voice Layer
+    participant NLU as Intent Parser
+    participant Task as Task Service
+    participant WS as WebSocket Hub
+    participant TTS as TTS Engine
+    
+    User->>Voice: "Add task buy milk for tomorrow"
+    Voice->>NLU: "add task buy milk for tomorrow"
+    NLU->>Task: {intent: "add", title: "buy milk", due: "tomorrow"}
+    Task->>Task: Execute + Push to ActionStack
+    Task->>WS: Broadcast: task_created
+    WS-->>User: Real-time UI update
+    Task->>TTS: "Added task: buy milk, due tomorrow"
+    TTS-->>User: Voice confirmation
+`}
+  caption="End-to-end flow: From spoken command to confirmed action in under 500ms."
+/>
+
+---
+
+## Detailed Requirements
+
+### Functional Requirements
+
+| ID    | Requirement           | Description                                                                              | Priority |
+| :---- | :-------------------- | :--------------------------------------------------------------------------------------- | :------- |
+| FR-01 | Voice Task Creation   | Users can create tasks by speaking naturally (e.g., "Add buy groceries")                 | P0       |
+| FR-02 | Voice Task Completion | Users can complete tasks by voice (e.g., "Complete buy groceries" or "Done with task 3") | P0       |
+| FR-03 | Voice Task Deletion   | Users can delete tasks by voice (e.g., "Delete task 5" or "Remove buy groceries")        | P0       |
+| FR-04 | Undo/Redo Operations  | Users can say "Undo" or "Redo" to reverse/replay the last action                         | P0       |
+| FR-05 | Priority Setting      | Users can set priority (e.g., "Make buy groceries high priority")                        | P1       |
+| FR-06 | Due Date Parsing      | Natural language dates parsed (e.g., "tomorrow", "next Monday", "in 3 days")             | P1       |
+| FR-07 | Task Listing          | Users can ask "What are my tasks?" or "List high priority tasks"                         | P1       |
+| FR-08 | Voice Feedback        | System confirms actions with spoken responses                                            | P0       |
+| FR-09 | Real-Time Sync        | All connected clients see updates immediately via WebSocket                              | P0       |
+| FR-10 | Interruption Handling | Users can interrupt voice feedback to issue new commands                                 | P2       |
+
+### Non-Functional Requirements
+
+| ID     | Requirement             | Target                                           | Measurement         |
+| :----- | :---------------------- | :----------------------------------------------- | :------------------ |
+| NFR-01 | Voice-to-Action Latency | < 500ms from end of speech to action execution   | End-to-end timing   |
+| NFR-02 | STT Accuracy            | > 95% word accuracy for task-related commands    | WER measurement     |
+| NFR-03 | Intent Recognition      | > 90% correct intent classification              | Test suite accuracy |
+| NFR-04 | WebSocket Latency       | < 100ms broadcast to all connected clients       | Network timing      |
+| NFR-05 | Undo Stack Depth        | Support at least 50 undoable actions per session | Stack size          |
+| NFR-06 | Concurrent Users        | Support 10+ simultaneous voice sessions          | Load testing        |
+
+### Supported Voice Commands
+
+```
+Task Creation:
+  "Add [task description]"
+  "Create task [description]"
+  "New task: [description]"
+  "Remind me to [description]"
+  "Add [description] for [date]"
+  "Add [description] with high priority"
+
+Task Completion:
+  "Complete [task description]"
+  "Done with [task description]"
+  "Mark [description] as done"
+  "Finish task [number]"
+
+Task Deletion:
+  "Delete [task description]"
+  "Remove task [number]"
+  "Cancel [description]"
+
+Task Modification:
+  "Set [task] to high/medium/low priority"
+  "Change [task] due date to [date]"
+  "Rename [task] to [new description]"
+
+Queries:
+  "What are my tasks?"
+  "List all tasks"
+  "Show high priority tasks"
+  "What's due today/tomorrow?"
+
+Undo/Redo:
+  "Undo"
+  "Redo"
+  "Undo last action"
+```
+
+---
+
+## Implementation Guide
+
+### Step 1: Project Setup (30 minutes)
+
+```bash
+mkdir voice-taskmaster
+cd voice-taskmaster
+python -m venv venv
+source venv/bin/activate
+
+pip install fastapi uvicorn sqlalchemy pydantic python-dotenv \
+    websockets deepgram-sdk openai livekit livekit-agents \
+    python-dateutil
+```
+
+#### Project Structure
+
+```
+voice-taskmaster/
+├── .env
+├── main.py
+├── models/
+│   ├── __init__.py
+│   ├── database.py
+│   └── schemas.py
+├── services/
+│   ├── __init__.py
+│   ├── task_service.py
+│   ├── action_history.py
+│   ├── intent_parser.py
+│   └── voice_agent.py
+├── routers/
+│   ├── __init__.py
+│   ├── tasks.py
+│   └── websocket.py
+└── tests/
+    ├── test_tasks.py
+    └── test_intent_parser.py
+```
+
+#### Environment Configuration
+
+```bash
+# .env
+DATABASE_URL=sqlite:///./tasks.db
+DEEPGRAM_API_KEY=your-deepgram-key
+OPENAI_API_KEY=your-openai-key
+LIVEKIT_URL=wss://your-livekit-server
+LIVEKIT_API_KEY=your-livekit-api-key
+LIVEKIT_API_SECRET=your-livekit-api-secret
+```
+
+---
+
+### Step 2: Set Up LiveKit/WebRTC for Voice Streaming (45 minutes)
+
+LiveKit provides the real-time infrastructure for streaming audio between the user's browser and your voice agent.
+
+<Mermaid
+  chart={`
+graph LR
+    Browser[Browser] -->|WebRTC| LiveKit[LiveKit Server]
+    LiveKit -->|Audio Stream| Agent[Voice Agent]
+    Agent -->|Audio Response| LiveKit
+    LiveKit -->|WebRTC| Browser
+    
+    style LiveKit fill:#e3f2fd,stroke:#1976d2
+    style Agent fill:#f3e5f5,stroke:#7b1fa2
+`}
+  caption="LiveKit handles the complex WebRTC negotiation for low-latency audio."
+/>
+
+```python
+# services/voice_agent.py
+from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli
+from livekit.agents.voice_assistant import VoiceAssistant
+from livekit.plugins import deepgram, openai, silero
+from services.intent_parser import IntentParser
+from services.task_service import TaskService
+
+class TaskmasterVoiceAgent:
+    """Voice agent that processes task commands."""
+
+    def __init__(self, task_service: TaskService):
+        self.task_service = task_service
+        self.intent_parser = IntentParser()
+
+    async def process_transcript(self, transcript: str, user_id: str) -> str:
+        """Process transcribed speech and return response."""
+        # Parse intent from transcript
+        intent = await self.intent_parser.parse(transcript)
+
+        if intent is None:
+            return "I didn't understand that. Try saying 'Add task' followed by a description."
+
+        # Execute the appropriate action
+        result = await self._execute_intent(intent, user_id)
+        return result
+
+    async def _execute_intent(self, intent: dict, user_id: str) -> str:
+        """Execute parsed intent and return confirmation message."""
+        action = intent.get("action")
+
+        match action:
+            case "add":
+                task = await self.task_service.create_task(
+                    user_id=user_id,
+                    title=intent["title"],
+                    due_date=intent.get("due_date"),
+                    priority=intent.get("priority", "medium")
+                )
+                return f"Added task: {task.title}"
+
+            case "complete":
+                task = await self.task_service.complete_task(
+                    user_id=user_id,
+                    task_identifier=intent["task_identifier"]
+                )
+                return f"Completed: {task.title}"
+
+            case "delete":
+                task = await self.task_service.delete_task(
+                    user_id=user_id,
+                    task_identifier=intent["task_identifier"]
+                )
+                return f"Deleted: {task.title}"
+
+            case "undo":
+                result = await self.task_service.undo(user_id)
+                return result or "Nothing to undo"
+
+            case "redo":
+                result = await self.task_service.redo(user_id)
+                return result or "Nothing to redo"
+
+            case "list":
+                tasks = await self.task_service.list_tasks(
+                    user_id=user_id,
+                    filter_priority=intent.get("priority"),
+                    filter_due=intent.get("due_filter")
+                )
+                if not tasks:
+                    return "You have no tasks"
+                task_list = ", ".join([t.title for t in tasks[:5]])
+                return f"Your tasks: {task_list}"
+
+            case _:
+                return "I'm not sure how to help with that"
+
+
+async def entrypoint(ctx: JobContext):
+    """LiveKit agent entrypoint."""
+    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+
+    participant = await ctx.wait_for_participant()
+    user_id = participant.identity
+
+    # Initialize services
+    task_service = TaskService()
+    agent = TaskmasterVoiceAgent(task_service)
+
+    # Create voice assistant with custom processing
+    assistant = VoiceAssistant(
+        vad=silero.VAD.load(),
+        stt=deepgram.STT(model="nova-2"),
+        llm=None,  # We handle LLM ourselves
+        tts=openai.TTS(voice="nova"),
+        will_synthesize_assistant_reply=False,
+    )
+
+    @assistant.on("user_speech_committed")
+    async def on_speech(transcript: str):
+        response = await agent.process_transcript(transcript, user_id)
+        await assistant.say(response)
+
+    assistant.start(ctx.room, participant)
+    await assistant.say("Voice Taskmaster ready. What would you like to do?")
+
+
+if __name__ == "__main__":
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+```
+
+---
+
+### Step 3: Integrate Speech Recognition (45 minutes)
+
+For applications not using LiveKit, you can integrate Deepgram directly for streaming STT.
+
+```python
+# services/stt_service.py
+from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
+import asyncio
+from typing import Callable, Optional
+
+class StreamingSTT:
+    """Real-time speech-to-text using Deepgram."""
+
+    def __init__(self, api_key: str):
+        self.client = DeepgramClient(api_key)
+        self.connection = None
+        self.on_transcript: Optional[Callable[[str, bool], None]] = None
+
+    async def start(self, on_transcript: Callable[[str, bool], None]):
+        """Start streaming transcription."""
+        self.on_transcript = on_transcript
+        self.connection = self.client.listen.live.v("1")
+
+        def handle_transcript(self, result, **kwargs):
+            transcript = result.channel.alternatives[0].transcript
+            is_final = result.is_final
+            if transcript and self.on_transcript:
+                asyncio.create_task(
+                    self._notify_transcript(transcript, is_final)
+                )
+
+        self.connection.on(LiveTranscriptionEvents.Transcript, handle_transcript)
+
+        options = LiveOptions(
+            model="nova-2",
+            language="en-US",
+            smart_format=True,
+            interim_results=True,  # Get partial results for responsiveness
+            utterance_end_ms=1000,  # Detect end of utterance
+            vad_events=True,  # Voice activity detection
+        )
+
+        await self.connection.start(options)
+
+    async def _notify_transcript(self, transcript: str, is_final: bool):
+        """Notify callback of new transcript."""
+        if self.on_transcript:
+            await self.on_transcript(transcript, is_final)
+
+    async def send_audio(self, audio_chunk: bytes):
+        """Send audio chunk for transcription."""
+        if self.connection:
+            await self.connection.send(audio_chunk)
+
+    async def stop(self):
+        """Stop transcription."""
+        if self.connection:
+            await self.connection.finish()
+```
+
+<Callout type="tip">
+  **Latency Optimization:** Enable `interim_results` to get partial transcripts
+  while the user is still speaking. This allows you to start processing before
+  the utterance is complete, reducing perceived latency.
+</Callout>
+
+#### Alternative: Local Whisper for Privacy
+
+```python
+# services/local_stt.py
+from faster_whisper import WhisperModel
+import numpy as np
+from typing import Generator
+
+class LocalWhisperSTT:
+    """Local speech-to-text using faster-whisper."""
+
+    def __init__(self, model_size: str = "base"):
+        self.model = WhisperModel(
+            model_size,
+            device="cuda",  # or "cpu"
+            compute_type="float16"
+        )
+
+    def transcribe(self, audio_array: np.ndarray) -> str:
+        """Transcribe audio array to text."""
+        segments, info = self.model.transcribe(
+            audio_array,
+            beam_size=5,
+            language="en",
+            vad_filter=True,  # Filter out non-speech
+        )
+        return " ".join([segment.text for segment in segments])
+
+    def transcribe_stream(
+        self,
+        audio_chunks: Generator[np.ndarray, None, None]
+    ) -> Generator[str, None, None]:
+        """Stream transcription for real-time use."""
+        buffer = np.array([], dtype=np.float32)
+
+        for chunk in audio_chunks:
+            buffer = np.concatenate([buffer, chunk])
+
+            # Process when we have enough audio (e.g., 1 second)
+            if len(buffer) >= 16000:  # 1 second at 16kHz
+                text = self.transcribe(buffer)
+                if text.strip():
+                    yield text
+                buffer = np.array([], dtype=np.float32)
+```
+
+---
+
+### Step 4: Build Task Management Backend (60 minutes)
+
+The task service handles CRUD operations and maintains the action history for undo/redo.
+
+```python
+# models/database.py
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Enum
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from datetime import datetime
+import enum
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./tasks.db")
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class Priority(enum.Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+class Task(Base):
+    """Task model."""
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(100), index=True, nullable=False)
+    title = Column(String(500), nullable=False)
+    description = Column(String(2000))
+    priority = Column(Enum(Priority), default=Priority.MEDIUM)
+    due_date = Column(DateTime, nullable=True)
+    completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+```python
+# models/schemas.py
+from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime
+from enum import Enum
+
+class PriorityEnum(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+class TaskCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    priority: PriorityEnum = PriorityEnum.MEDIUM
+    due_date: Optional[datetime] = None
+
+class TaskResponse(BaseModel):
+    id: int
+    user_id: str
+    title: str
+    description: Optional[str]
+    priority: PriorityEnum
+    due_date: Optional[datetime]
+    completed: bool
+    completed_at: Optional[datetime]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[PriorityEnum] = None
+    due_date: Optional[datetime] = None
+    completed: Optional[bool] = None
+```
+
+---
+
+### Step 5: Implement Undo/Redo Functionality (45 minutes)
+
+The Command Pattern enables reversible operations—essential for voice interfaces where mistakes are common.
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Action Stack"
+        A1[Add Task A] --> A2[Complete B]
+        A2 --> A3[Delete C]
+        A3 --> Current[Current State]
+    end
+    
+    Undo[Undo] -.->|Reverse A3| A2
+    Redo[Redo] -.->|Replay A3| Current
+    
+    style Current fill:#c8e6c9,stroke:#2e7d32
+    style Undo fill:#ffcdd2,stroke:#c62828
+    style Redo fill:#bbdefb,stroke:#1565c0
+`}
+  caption="Action History: Each operation is reversible, enabling undo/redo."
+/>
+
+```python
+# services/action_history.py
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import List, Optional, Any, Dict
+from datetime import datetime
+
+class Action(ABC):
+    """Base class for undoable actions."""
+
+    @abstractmethod
+    async def execute(self) -> Any:
+        """Execute the action."""
+        pass
+
+    @abstractmethod
+    async def undo(self) -> Any:
+        """Reverse the action."""
+        pass
+
+    @abstractmethod
+    def describe(self) -> str:
+        """Human-readable description of the action."""
+        pass
+
+@dataclass
+class CreateTaskAction(Action):
+    """Action for creating a task."""
+    task_service: Any
+    user_id: str
+    title: str
+    priority: str = "medium"
+    due_date: Optional[datetime] = None
+    created_task_id: Optional[int] = None
+
+    async def execute(self) -> Any:
+        task = await self.task_service._create_task_internal(
+            user_id=self.user_id,
+            title=self.title,
+            priority=self.priority,
+            due_date=self.due_date
+        )
+        self.created_task_id = task.id
+        return task
+
+    async def undo(self) -> Any:
+        if self.created_task_id:
+            await self.task_service._delete_task_internal(self.created_task_id)
+        return f"Undid: Add {self.title}"
+
+    def describe(self) -> str:
+        return f"Add task: {self.title}"
+
+@dataclass
+class CompleteTaskAction(Action):
+    """Action for completing a task."""
+    task_service: Any
+    task_id: int
+    task_title: str = ""
+    previous_state: bool = False
+
+    async def execute(self) -> Any:
+        task = await self.task_service._get_task_by_id(self.task_id)
+        self.previous_state = task.completed
+        self.task_title = task.title
+        await self.task_service._update_task_internal(
+            self.task_id,
+            completed=True
+        )
+        return task
+
+    async def undo(self) -> Any:
+        await self.task_service._update_task_internal(
+            self.task_id,
+            completed=self.previous_state
+        )
+        return f"Undid: Complete {self.task_title}"
+
+    def describe(self) -> str:
+        return f"Complete task: {self.task_title}"
+
+@dataclass
+class DeleteTaskAction(Action):
+    """Action for deleting a task (soft delete for undo support)."""
+    task_service: Any
+    task_id: int
+    deleted_task_data: Optional[Dict] = None
+
+    async def execute(self) -> Any:
+        task = await self.task_service._get_task_by_id(self.task_id)
+        self.deleted_task_data = {
+            "title": task.title,
+            "priority": task.priority,
+            "due_date": task.due_date,
+            "completed": task.completed,
+            "user_id": task.user_id,
+        }
+        await self.task_service._delete_task_internal(self.task_id)
+        return task
+
+    async def undo(self) -> Any:
+        if self.deleted_task_data:
+            task = await self.task_service._create_task_internal(**self.deleted_task_data)
+            return f"Restored: {self.deleted_task_data['title']}"
+        return "Could not restore task"
+
+    def describe(self) -> str:
+        title = self.deleted_task_data.get("title", "Unknown") if self.deleted_task_data else "Unknown"
+        return f"Delete task: {title}"
+
+
+class ActionHistory:
+    """Manages undo/redo stack for a user session."""
+
+    def __init__(self, max_size: int = 50):
+        self.max_size = max_size
+        self._undo_stack: List[Action] = []
+        self._redo_stack: List[Action] = []
+
+    async def execute(self, action: Action) -> Any:
+        """Execute an action and add to history."""
+        result = await action.execute()
+
+        self._undo_stack.append(action)
+        self._redo_stack.clear()  # Clear redo on new action
+
+        # Trim if exceeds max size
+        if len(self._undo_stack) > self.max_size:
+            self._undo_stack.pop(0)
+
+        return result
+
+    async def undo(self) -> Optional[str]:
+        """Undo the last action."""
+        if not self._undo_stack:
+            return None
+
+        action = self._undo_stack.pop()
+        result = await action.undo()
+        self._redo_stack.append(action)
+
+        return result
+
+    async def redo(self) -> Optional[str]:
+        """Redo the last undone action."""
+        if not self._redo_stack:
+            return None
+
+        action = self._redo_stack.pop()
+        await action.execute()
+        self._undo_stack.append(action)
+
+        return f"Redid: {action.describe()}"
+
+    def can_undo(self) -> bool:
+        return len(self._undo_stack) > 0
+
+    def can_redo(self) -> bool:
+        return len(self._redo_stack) > 0
+```
+
+---
+
+### Step 6: Implement Real-Time Updates via WebSockets (45 minutes)
+
+WebSockets enable instant synchronization across all connected clients when tasks change.
+
+```python
+# routers/websocket.py
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import Dict, Set
+import json
+import asyncio
+
+class ConnectionManager:
+    """Manages WebSocket connections for real-time updates."""
+
+    def __init__(self):
+        # user_id -> set of WebSocket connections
+        self._connections: Dict[str, Set[WebSocket]] = {}
+        self._lock = asyncio.Lock()
+
+    async def connect(self, websocket: WebSocket, user_id: str):
+        """Accept and register a new connection."""
+        await websocket.accept()
+        async with self._lock:
+            if user_id not in self._connections:
+                self._connections[user_id] = set()
+            self._connections[user_id].add(websocket)
+
+    async def disconnect(self, websocket: WebSocket, user_id: str):
+        """Remove a connection."""
+        async with self._lock:
+            if user_id in self._connections:
+                self._connections[user_id].discard(websocket)
+                if not self._connections[user_id]:
+                    del self._connections[user_id]
+
+    async def broadcast_to_user(self, user_id: str, message: dict):
+        """Send message to all connections for a user."""
+        async with self._lock:
+            connections = self._connections.get(user_id, set()).copy()
+
+        dead_connections = []
+        for connection in connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                dead_connections.append(connection)
+
+        # Clean up dead connections
+        for conn in dead_connections:
+            await self.disconnect(conn, user_id)
+
+    async def broadcast_task_event(
+        self,
+        user_id: str,
+        event_type: str,
+        task_data: dict
+    ):
+        """Broadcast a task-related event."""
+        await self.broadcast_to_user(user_id, {
+            "type": event_type,
+            "task": task_data,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+
+
+# Global connection manager
+manager = ConnectionManager()
+
+
+# WebSocket endpoint
+from fastapi import APIRouter
+router = APIRouter()
+
+@router.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    await manager.connect(websocket, user_id)
+    try:
+        while True:
+            # Keep connection alive, handle incoming messages
+            data = await websocket.receive_text()
+            message = json.loads(data)
+
+            # Handle ping/pong for connection health
+            if message.get("type") == "ping":
+                await websocket.send_json({"type": "pong"})
+
+    except WebSocketDisconnect:
+        await manager.disconnect(websocket, user_id)
+```
+
+#### Client-Side WebSocket Integration
+
+```typescript
+// client/websocket.ts
+class TaskWebSocket {
+  private ws: WebSocket | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+
+  constructor(
+    private userId: string,
+    private onTaskEvent: (event: TaskEvent) => void,
+  ) {}
+
+  connect() {
+    const wsUrl = `ws://localhost:8000/ws/${this.userId}`;
+    this.ws = new WebSocket(wsUrl);
+
+    this.ws.onopen = () => {
+      console.log("Connected to task updates");
+      this.reconnectAttempts = 0;
+      this.startHeartbeat();
+    };
+
+    this.ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type !== "pong") {
+        this.onTaskEvent(data);
+      }
+    };
+
+    this.ws.onclose = () => {
+      this.attemptReconnect();
+    };
+  }
+
+  private startHeartbeat() {
+    setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 30000);
+  }
+
+  private attemptReconnect() {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      setTimeout(() => this.connect(), 1000 * this.reconnectAttempts);
+    }
+  }
+}
+
+// Usage
+const taskWs = new TaskWebSocket("user-123", (event) => {
+  switch (event.type) {
+    case "task_created":
+      addTaskToUI(event.task);
+      break;
+    case "task_completed":
+      markTaskComplete(event.task.id);
+      break;
+    case "task_deleted":
+      removeTaskFromUI(event.task.id);
+      break;
+  }
+});
+taskWs.connect();
+```
+
+---
+
+### Step 7: Voice Feedback with TTS (30 minutes)
+
+Provide spoken confirmation for every action to complete the voice-first experience.
+
+```python
+# services/tts_service.py
+from openai import OpenAI
+from typing import AsyncIterator
+import io
+
+class TTSService:
+    """Text-to-speech for voice feedback."""
+
+    def __init__(self, api_key: str):
+        self.client = OpenAI(api_key=api_key)
+        self.voice = "nova"  # Natural, friendly voice
+        self.model = "tts-1"  # Fast model for low latency
+
+    def synthesize(self, text: str) -> bytes:
+        """Convert text to speech audio."""
+        response = self.client.audio.speech.create(
+            model=self.model,
+            voice=self.voice,
+            input=text,
+            response_format="mp3"
+        )
+        return response.content
+
+    async def stream(self, text: str) -> AsyncIterator[bytes]:
+        """Stream TTS for lower time-to-first-byte."""
+        with self.client.audio.speech.with_streaming_response.create(
+            model=self.model,
+            voice=self.voice,
+            input=text
+        ) as response:
+            for chunk in response.iter_bytes(chunk_size=1024):
+                yield chunk
+
+    def generate_task_confirmation(self, action: str, task_title: str) -> str:
+        """Generate natural confirmation messages."""
+        confirmations = {
+            "add": [
+                f"Added {task_title} to your list.",
+                f"Got it. {task_title} added.",
+                f"Task added: {task_title}.",
+            ],
+            "complete": [
+                f"Nice! {task_title} is done.",
+                f"Completed {task_title}.",
+                f"Marked {task_title} as complete.",
+            ],
+            "delete": [
+                f"Removed {task_title}.",
+                f"Deleted {task_title} from your list.",
+                f"{task_title} has been deleted.",
+            ],
+            "undo": [
+                "Undone.",
+                "Action reversed.",
+                "I've undone that.",
+            ],
+            "redo": [
+                "Redone.",
+                "Action restored.",
+                "I've redone that.",
+            ],
+        }
+
+        import random
+        messages = confirmations.get(action, [f"Done with {task_title}."])
+        return random.choice(messages)
+```
+
+<Callout type="tip">
+  **Voice UX Best Practices:** - Keep confirmations short (under 3 seconds of
+  audio) - Vary responses to avoid robotic repetition - Include the task name so
+  users know what was affected - Use a consistent, friendly voice persona
+</Callout>
+
+---
+
+### Step 8: Natural Language Task Parsing (60 minutes)
+
+The intent parser converts natural speech into structured task operations.
+
+```python
+# services/intent_parser.py
+from openai import OpenAI
+from typing import Optional, Dict, Any
+from datetime import datetime, timedelta
+from dateutil import parser as date_parser
+import json
+import re
+
+class IntentParser:
+    """Parse natural language into task intents."""
+
+    def __init__(self, api_key: str = None):
+        self.client = OpenAI(api_key=api_key) if api_key else OpenAI()
+        self.system_prompt = """You are a task intent parser. Extract the intent and entities from user speech.
+
+Return JSON with this structure:
+{
+  "action": "add" | "complete" | "delete" | "list" | "update" | "undo" | "redo",
+  "title": "task title if applicable",
+  "task_identifier": "task number or title for existing tasks",
+  "priority": "low" | "medium" | "high" | null,
+  "due_date": "ISO date string or relative like 'tomorrow'" | null,
+  "due_filter": "today" | "tomorrow" | "this_week" | null
+}
+
+Examples:
+- "Add buy groceries" -> {"action": "add", "title": "buy groceries"}
+- "Complete the milk task" -> {"action": "complete", "task_identifier": "milk"}
+- "Delete task 3" -> {"action": "delete", "task_identifier": "3"}
+- "Add call mom tomorrow high priority" -> {"action": "add", "title": "call mom", "due_date": "tomorrow", "priority": "high"}
+- "What's due today" -> {"action": "list", "due_filter": "today"}
+- "Undo" -> {"action": "undo"}
+
+Only return valid JSON, no explanation."""
+
+    async def parse(self, transcript: str) -> Optional[Dict[str, Any]]:
+        """Parse transcript into structured intent."""
+        # Quick pattern matching for common commands
+        quick_result = self._quick_parse(transcript)
+        if quick_result:
+            return self._resolve_dates(quick_result)
+
+        # Fall back to LLM for complex commands
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": transcript}
+                ],
+                temperature=0,
+                max_tokens=200,
+                response_format={"type": "json_object"}
+            )
+
+            result = json.loads(response.choices[0].message.content)
+            return self._resolve_dates(result)
+
+        except Exception as e:
+            print(f"Intent parsing error: {e}")
+            return None
+
+    def _quick_parse(self, transcript: str) -> Optional[Dict[str, Any]]:
+        """Fast regex-based parsing for common patterns."""
+        text = transcript.lower().strip()
+
+        # Undo/Redo
+        if text in ["undo", "undo that", "undo last action"]:
+            return {"action": "undo"}
+        if text in ["redo", "redo that", "redo last action"]:
+            return {"action": "redo"}
+
+        # Add task patterns
+        add_patterns = [
+            r"^add\s+(?:task\s+)?(.+)$",
+            r"^create\s+(?:task\s+)?(.+)$",
+            r"^new\s+task\s+(.+)$",
+            r"^remind\s+me\s+to\s+(.+)$",
+        ]
+        for pattern in add_patterns:
+            match = re.match(pattern, text)
+            if match:
+                return self._parse_add_details(match.group(1))
+
+        # Complete task patterns
+        complete_patterns = [
+            r"^(?:complete|done|finish|mark)\s+(?:task\s+)?(.+?)(?:\s+as\s+done)?$",
+            r"^done\s+with\s+(.+)$",
+        ]
+        for pattern in complete_patterns:
+            match = re.match(pattern, text)
+            if match:
+                return {"action": "complete", "task_identifier": match.group(1)}
+
+        # Delete task patterns
+        delete_patterns = [
+            r"^(?:delete|remove|cancel)\s+(?:task\s+)?(.+)$",
+        ]
+        for pattern in delete_patterns:
+            match = re.match(pattern, text)
+            if match:
+                return {"action": "delete", "task_identifier": match.group(1)}
+
+        # List patterns
+        if any(phrase in text for phrase in ["what are my tasks", "list tasks", "show tasks", "my tasks"]):
+            return {"action": "list"}
+        if "due today" in text:
+            return {"action": "list", "due_filter": "today"}
+        if "due tomorrow" in text:
+            return {"action": "list", "due_filter": "tomorrow"}
+        if "high priority" in text:
+            return {"action": "list", "priority": "high"}
+
+        return None
+
+    def _parse_add_details(self, text: str) -> Dict[str, Any]:
+        """Extract priority and due date from add command."""
+        result = {"action": "add", "title": text}
+
+        # Extract priority
+        if "high priority" in text:
+            result["priority"] = "high"
+            result["title"] = text.replace("high priority", "").strip()
+        elif "low priority" in text:
+            result["priority"] = "low"
+            result["title"] = text.replace("low priority", "").strip()
+
+        # Extract common date phrases
+        date_phrases = {
+            "tomorrow": 1,
+            "today": 0,
+            "next week": 7,
+            "in a week": 7,
+            "in 3 days": 3,
+            "in three days": 3,
+        }
+
+        for phrase, days in date_phrases.items():
+            if phrase in result["title"]:
+                result["due_date"] = phrase
+                result["title"] = result["title"].replace(phrase, "").strip()
+                break
+
+        # Clean up extra words
+        result["title"] = re.sub(r"\s+for\s*$", "", result["title"])
+        result["title"] = re.sub(r"\s+with\s*$", "", result["title"])
+
+        return result
+
+    def _resolve_dates(self, intent: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert relative dates to absolute dates."""
+        if not intent.get("due_date"):
+            return intent
+
+        due = intent["due_date"].lower()
+        today = datetime.now().replace(hour=23, minute=59, second=59)
+
+        relative_dates = {
+            "today": today,
+            "tomorrow": today + timedelta(days=1),
+            "next week": today + timedelta(days=7),
+            "in a week": today + timedelta(days=7),
+            "in 3 days": today + timedelta(days=3),
+            "in three days": today + timedelta(days=3),
+        }
+
+        if due in relative_dates:
+            intent["due_date"] = relative_dates[due].isoformat()
+        else:
+            # Try parsing with dateutil
+            try:
+                parsed = date_parser.parse(due, fuzzy=True)
+                intent["due_date"] = parsed.isoformat()
+            except:
+                intent["due_date"] = None
+
+        return intent
+```
+
+---
+
+### Complete Task Service
+
+Bringing it all together—the task service orchestrates operations, history, and real-time updates.
+
+```python
+# services/task_service.py
+from sqlalchemy.orm import Session
+from models.database import Task, Priority, get_db
+from models.schemas import TaskCreate, TaskResponse, TaskUpdate
+from services.action_history import (
+    ActionHistory, CreateTaskAction, CompleteTaskAction, DeleteTaskAction
+)
+from routers.websocket import manager
+from typing import Optional, List, Dict
+from datetime import datetime
+
+class TaskService:
+    """Core task management service with undo/redo support."""
+
+    def __init__(self):
+        # Per-user action histories
+        self._histories: Dict[str, ActionHistory] = {}
+
+    def _get_history(self, user_id: str) -> ActionHistory:
+        """Get or create action history for user."""
+        if user_id not in self._histories:
+            self._histories[user_id] = ActionHistory(max_size=50)
+        return self._histories[user_id]
+
+    async def create_task(
+        self,
+        user_id: str,
+        title: str,
+        due_date: Optional[datetime] = None,
+        priority: str = "medium"
+    ) -> TaskResponse:
+        """Create a task with undo support."""
+        history = self._get_history(user_id)
+
+        action = CreateTaskAction(
+            task_service=self,
+            user_id=user_id,
+            title=title,
+            due_date=due_date,
+            priority=priority
+        )
+
+        task = await history.execute(action)
+
+        # Broadcast to connected clients
+        await manager.broadcast_task_event(
+            user_id,
+            "task_created",
+            TaskResponse.from_orm(task).dict()
+        )
+
+        return TaskResponse.from_orm(task)
+
+    async def complete_task(
+        self,
+        user_id: str,
+        task_identifier: str
+    ) -> TaskResponse:
+        """Complete a task by ID or title match."""
+        task = await self._find_task(user_id, task_identifier)
+        if not task:
+            raise ValueError(f"Task not found: {task_identifier}")
+
+        history = self._get_history(user_id)
+        action = CompleteTaskAction(
+            task_service=self,
+            task_id=task.id
+        )
+
+        await history.execute(action)
+
+        # Refresh and broadcast
+        task = await self._get_task_by_id(task.id)
+        await manager.broadcast_task_event(
+            user_id,
+            "task_completed",
+            TaskResponse.from_orm(task).dict()
+        )
+
+        return TaskResponse.from_orm(task)
+
+    async def delete_task(
+        self,
+        user_id: str,
+        task_identifier: str
+    ) -> TaskResponse:
+        """Delete a task with undo support."""
+        task = await self._find_task(user_id, task_identifier)
+        if not task:
+            raise ValueError(f"Task not found: {task_identifier}")
+
+        task_response = TaskResponse.from_orm(task)
+
+        history = self._get_history(user_id)
+        action = DeleteTaskAction(
+            task_service=self,
+            task_id=task.id
+        )
+
+        await history.execute(action)
+
+        await manager.broadcast_task_event(
+            user_id,
+            "task_deleted",
+            task_response.dict()
+        )
+
+        return task_response
+
+    async def list_tasks(
+        self,
+        user_id: str,
+        filter_priority: Optional[str] = None,
+        filter_due: Optional[str] = None,
+        include_completed: bool = False
+    ) -> List[TaskResponse]:
+        """List tasks with optional filters."""
+        db = next(get_db())
+        try:
+            query = db.query(Task).filter(Task.user_id == user_id)
+
+            if not include_completed:
+                query = query.filter(Task.completed == False)
+
+            if filter_priority:
+                query = query.filter(Task.priority == Priority(filter_priority))
+
+            if filter_due == "today":
+                today = datetime.now().date()
+                query = query.filter(
+                    Task.due_date >= today,
+                    Task.due_date < today + timedelta(days=1)
+                )
+            elif filter_due == "tomorrow":
+                tomorrow = datetime.now().date() + timedelta(days=1)
+                query = query.filter(
+                    Task.due_date >= tomorrow,
+                    Task.due_date < tomorrow + timedelta(days=1)
+                )
+
+            tasks = query.order_by(Task.created_at.desc()).all()
+            return [TaskResponse.from_orm(t) for t in tasks]
+        finally:
+            db.close()
+
+    async def undo(self, user_id: str) -> Optional[str]:
+        """Undo last action for user."""
+        history = self._get_history(user_id)
+        result = await history.undo()
+
+        if result:
+            # Broadcast full task list refresh
+            await manager.broadcast_to_user(user_id, {
+                "type": "tasks_refresh",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+
+        return result
+
+    async def redo(self, user_id: str) -> Optional[str]:
+        """Redo last undone action for user."""
+        history = self._get_history(user_id)
+        result = await history.redo()
+
+        if result:
+            await manager.broadcast_to_user(user_id, {
+                "type": "tasks_refresh",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+
+        return result
+
+    # Internal methods (used by actions)
+    async def _create_task_internal(self, **kwargs) -> Task:
+        db = next(get_db())
+        try:
+            task = Task(**kwargs)
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+            return task
+        finally:
+            db.close()
+
+    async def _delete_task_internal(self, task_id: int):
+        db = next(get_db())
+        try:
+            db.query(Task).filter(Task.id == task_id).delete()
+            db.commit()
+        finally:
+            db.close()
+
+    async def _update_task_internal(self, task_id: int, **kwargs):
+        db = next(get_db())
+        try:
+            db.query(Task).filter(Task.id == task_id).update(kwargs)
+            db.commit()
+        finally:
+            db.close()
+
+    async def _get_task_by_id(self, task_id: int) -> Optional[Task]:
+        db = next(get_db())
+        try:
+            return db.query(Task).filter(Task.id == task_id).first()
+        finally:
+            db.close()
+
+    async def _find_task(self, user_id: str, identifier: str) -> Optional[Task]:
+        """Find task by ID number or title match."""
+        db = next(get_db())
+        try:
+            # Try as numeric ID first
+            if identifier.isdigit():
+                return db.query(Task).filter(
+                    Task.user_id == user_id,
+                    Task.id == int(identifier)
+                ).first()
+
+            # Try title match (case-insensitive, partial)
+            return db.query(Task).filter(
+                Task.user_id == user_id,
+                Task.title.ilike(f"%{identifier}%")
+            ).first()
+        finally:
+            db.close()
+```
+
+---
+
+### Main Application Entry Point
+
+```python
+# main.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routers import tasks, websocket
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("Voice Taskmaster starting...")
+    yield
+    # Shutdown
+    print("Voice Taskmaster shutting down...")
+
+app = FastAPI(
+    title="Voice Taskmaster",
+    description="Voice-controlled task management with real-time updates",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(websocket.router, tags=["websocket"])
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "voice-taskmaster"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+---
+
+## Challenges and Extensions
+
+Once you have the core system working, try these extensions to deepen your skills:
+
+### Challenge 1: Multi-User Support
+
+Add support for shared task lists where multiple users can collaborate.
+
+```python
+# Extend the Task model with sharing
+class TaskShare(Base):
+    __tablename__ = "task_shares"
+
+    id = Column(Integer, primary_key=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"))
+    shared_with_user_id = Column(String(100), index=True)
+    permission = Column(String(20))  # "view" or "edit"
+
+# Update WebSocket broadcasts to include shared users
+async def broadcast_task_event(self, task: Task, event_type: str):
+    # Broadcast to owner
+    await self.broadcast_to_user(task.user_id, {...})
+
+    # Broadcast to shared users
+    for share in task.shares:
+        await self.broadcast_to_user(share.shared_with_user_id, {...})
+```
+
+**Voice Commands to Add:**
+
+- "Share buy groceries with John"
+- "Show shared tasks"
+- "Remove John from buy groceries"
+
+### Challenge 2: Smart Task Prioritization
+
+Use AI to automatically suggest priorities based on task content and due dates.
+
+```python
+# services/smart_priority.py
+from openai import OpenAI
+
+class SmartPrioritizer:
+    """AI-powered task priority suggestions."""
+
+    def __init__(self):
+        self.client = OpenAI()
+
+    async def suggest_priority(
+        self,
+        title: str,
+        due_date: Optional[datetime],
+        existing_tasks: List[Task]
+    ) -> str:
+        """Suggest priority based on context."""
+
+        context = f"""Current tasks:
+{chr(10).join([f"- {t.title} ({t.priority.value}, due: {t.due_date})" for t in existing_tasks[:10]])}
+
+New task: {title}
+Due: {due_date or 'No due date'}
+
+Based on urgency, importance, and existing workload, suggest priority (low/medium/high).
+Return only the priority word."""
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": context}],
+            max_tokens=10
+        )
+
+        priority = response.choices[0].message.content.strip().lower()
+        return priority if priority in ["low", "medium", "high"] else "medium"
+```
+
+### Challenge 3: Calendar Integration
+
+Sync tasks with Google Calendar or Apple Calendar.
+
+```python
+# services/calendar_sync.py
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
+class CalendarSync:
+    """Sync tasks with Google Calendar."""
+
+    def __init__(self, credentials: Credentials):
+        self.service = build('calendar', 'v3', credentials=credentials)
+
+    async def create_event_for_task(self, task: Task) -> str:
+        """Create calendar event for task with due date."""
+        if not task.due_date:
+            return None
+
+        event = {
+            'summary': f"📋 {task.title}",
+            'description': f"Task from Voice Taskmaster",
+            'start': {
+                'dateTime': task.due_date.isoformat(),
+                'timeZone': 'UTC',
+            },
+            'end': {
+                'dateTime': (task.due_date + timedelta(hours=1)).isoformat(),
+                'timeZone': 'UTC',
+            },
+            'reminders': {
+                'useDefault': False,
+                'overrides': [
+                    {'method': 'popup', 'minutes': 60},
+                ],
+            },
+        }
+
+        result = self.service.events().insert(
+            calendarId='primary',
+            body=event
+        ).execute()
+
+        return result.get('id')
+```
+
+**Voice Commands to Add:**
+
+- "Add to calendar"
+- "Sync with my calendar"
+- "Show calendar conflicts"
+
+### Challenge 4: Mobile Companion App
+
+Build a React Native or Flutter app that connects to your voice taskmaster.
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Mobile App"
+        UI[Task List UI]
+        Voice[Voice Button]
+        Push[Push Notifications]
+    end
+    
+    subgraph "Backend"
+        API[REST API]
+        WS[WebSocket]
+        Agent[Voice Agent]
+    end
+    
+    Voice -->|Audio Stream| Agent
+    Agent -->|Response| Voice
+    UI -->|CRUD| API
+    WS -->|Real-time| UI
+    API -->|Task Due| Push
+    
+    style Voice fill:#e3f2fd,stroke:#1976d2
+    style Agent fill:#f3e5f5,stroke:#7b1fa2
+`}
+  caption="Mobile companion architecture with voice and real-time sync."
+/>
+
+**Key Features:**
+
+- Push notifications for due tasks
+- Offline support with sync on reconnect
+- Voice input via device microphone
+- Widget for quick task addition
+
+### Challenge 5: Natural Language Queries
+
+Enable complex queries like "What did I complete last week?" or "Show tasks I've been procrastinating on."
+
+```python
+# services/query_engine.py
+class NaturalQueryEngine:
+    """Handle complex natural language queries about tasks."""
+
+    async def execute_query(self, query: str, user_id: str) -> str:
+        """Execute a natural language query."""
+
+        # Parse query intent
+        query_intent = await self._parse_query(query)
+
+        match query_intent["type"]:
+            case "completed_range":
+                tasks = await self._get_completed_in_range(
+                    user_id,
+                    query_intent["start"],
+                    query_intent["end"]
+                )
+                return self._format_task_list(tasks, "completed")
+
+            case "overdue":
+                tasks = await self._get_overdue(user_id)
+                return self._format_task_list(tasks, "overdue")
+
+            case "procrastinated":
+                tasks = await self._get_old_incomplete(user_id, days=7)
+                return self._format_task_list(tasks, "waiting")
+
+            case "statistics":
+                stats = await self._get_stats(user_id)
+                return self._format_stats(stats)
+
+    async def _get_old_incomplete(self, user_id: str, days: int) -> List[Task]:
+        """Find tasks created more than N days ago that aren't complete."""
+        cutoff = datetime.now() - timedelta(days=days)
+        db = next(get_db())
+        return db.query(Task).filter(
+            Task.user_id == user_id,
+            Task.completed == False,
+            Task.created_at < cutoff
+        ).all()
+```
+
+---
+
+## Success Criteria
+
+### Acceptance Tests
+
+Your Voice Taskmaster should pass these scenarios:
+
+| Test    | Scenario                                  | Expected Result                               |
+| :------ | :---------------------------------------- | :-------------------------------------------- |
+| **T1**  | Say "Add buy milk"                        | Task created, voice confirms "Added buy milk" |
+| **T2**  | Say "Add call mom tomorrow high priority" | Task created with due date and priority set   |
+| **T3**  | Say "Complete buy milk"                   | Task marked complete, voice confirms          |
+| **T4**  | Say "Undo"                                | Previous action reversed, voice confirms      |
+| **T5**  | Say "Redo"                                | Undone action restored                        |
+| **T6**  | Say "What are my tasks?"                  | Voice lists current tasks                     |
+| **T7**  | Open second browser tab                   | Both tabs show same task list                 |
+| **T8**  | Add task in tab 1                         | Tab 2 updates in real-time (< 100ms)          |
+| **T9**  | Say "Delete task 1"                       | Task removed, voice confirms                  |
+| **T10** | Interrupt voice feedback                  | Audio stops, new command processed            |
+
+### Demo Scenarios
+
+**Scenario 1: Morning Planning**
+
+```
+User: "What's due today?"
+Agent: "You have 3 tasks due today: finish report, call dentist, and buy groceries."
+User: "Add review presentation for tomorrow high priority"
+Agent: "Added review presentation, due tomorrow, high priority."
+User: "Complete call dentist"
+Agent: "Nice! Call dentist is done."
+```
+
+**Scenario 2: Quick Capture**
+
+```
+User: "Add pick up dry cleaning"
+Agent: "Added pick up dry cleaning."
+User: "Add schedule car service for next week"
+Agent: "Added schedule car service, due next week."
+User: "Undo"
+Agent: "Undone."
+User: "Actually, redo that"
+Agent: "Redone. Schedule car service is back."
+```
+
+**Scenario 3: Multi-Device Sync**
+
+```
+[Phone] User: "Add buy birthday gift"
+[Desktop] → Task appears instantly
+[Desktop] User clicks complete
+[Phone] → Task shows as complete
+```
+
+### Performance Benchmarks
+
+| Metric                  | Target    | How to Measure                        |
+| :---------------------- | :-------- | :------------------------------------ |
+| Voice-to-action latency | < 500ms   | Time from speech end to task created  |
+| STT accuracy            | > 95% WER | Test with 100 task commands           |
+| Intent recognition      | > 90%     | Test suite of 50 varied commands      |
+| WebSocket broadcast     | < 100ms   | Measure time to all connected clients |
+| Undo/redo reliability   | 100%      | All operations reversible             |
+| Concurrent sessions     | 10+       | Load test with multiple voice streams |
+
+---
+
+## Technical Stack Summary
+
+| Layer               | Technology                | Purpose                       |
+| :------------------ | :------------------------ | :---------------------------- |
+| **Voice Streaming** | LiveKit / WebRTC          | Real-time audio transport     |
+| **VAD**             | Silero VAD                | Detect speech boundaries      |
+| **STT**             | Deepgram Nova-2 / Whisper | Speech-to-text conversion     |
+| **NLU**             | GPT-4o-mini + Regex       | Intent and entity extraction  |
+| **Backend**         | FastAPI + SQLAlchemy      | REST API and data persistence |
+| **Real-time**       | WebSockets                | Live updates to clients       |
+| **TTS**             | OpenAI TTS / ElevenLabs   | Voice feedback synthesis      |
+| **Database**        | SQLite / PostgreSQL       | Task storage                  |
+
+---
+
+## What You've Learned
+
+By completing this project, you've gained hands-on experience with:
+
+1. **Voice Agent Architecture** — The complete STT → NLU → Action → TTS pipeline
+2. **Real-Time Systems** — WebSocket-based live updates across clients
+3. **Command Pattern** — Implementing undo/redo with action history
+4. **Natural Language Processing** — Parsing intents from conversational speech
+5. **Low-Latency Design** — Optimizing for sub-500ms response times
+6. **Production Patterns** — Error handling, connection management, graceful degradation
+
+<Callout type="success">
+  **Next Steps:** Consider integrating this Voice Taskmaster with the other
+  mini-projects in the series—use the Prompt Library for voice response
+  templates, the Memory Service for user preferences, or the LLM Router for
+  model selection based on query complexity.
+</Callout>
+
+---
+
+## Complete Tasks Router
+
+The tasks router provides REST API endpoints for task management alongside voice commands.
+
+```python
+# routers/tasks.py
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from typing import List, Optional
+from models.database import get_db, Task, Priority
+from models.schemas import TaskCreate, TaskResponse, TaskUpdate
+from services.task_service import TaskService
+from datetime import datetime
+
+router = APIRouter()
+task_service = TaskService()
+
+@router.post("/", response_model=TaskResponse, status_code=201)
+async def create_task(
+    task: TaskCreate,
+    user_id: str = Query(..., description="User identifier"),
+    db: Session = Depends(get_db)
+):
+    """Create a new task."""
+    return await task_service.create_task(
+        user_id=user_id,
+        title=task.title,
+        due_date=task.due_date,
+        priority=task.priority.value if task.priority else "medium"
+    )
+
+@router.get("/", response_model=List[TaskResponse])
+async def list_tasks(
+    user_id: str = Query(..., description="User identifier"),
+    priority: Optional[str] = Query(None, description="Filter by priority"),
+    due: Optional[str] = Query(None, description="Filter by due date: today, tomorrow, this_week"),
+    include_completed: bool = Query(False, description="Include completed tasks"),
+    db: Session = Depends(get_db)
+):
+    """List all tasks for a user with optional filters."""
+    return await task_service.list_tasks(
+        user_id=user_id,
+        filter_priority=priority,
+        filter_due=due,
+        include_completed=include_completed
+    )
+
+@router.get("/{task_id}", response_model=TaskResponse)
+async def get_task(
+    task_id: int,
+    user_id: str = Query(..., description="User identifier"),
+    db: Session = Depends(get_db)
+):
+    """Get a specific task by ID."""
+    task = await task_service._get_task_by_id(task_id)
+    if not task or task.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return TaskResponse.from_orm(task)
+
+@router.patch("/{task_id}", response_model=TaskResponse)
+async def update_task(
+    task_id: int,
+    update: TaskUpdate,
+    user_id: str = Query(..., description="User identifier"),
+    db: Session = Depends(get_db)
+):
+    """Update a task."""
+    task = await task_service._get_task_by_id(task_id)
+    if not task or task.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    update_data = update.dict(exclude_unset=True)
+    if update_data:
+        await task_service._update_task_internal(task_id, **update_data)
+
+    return TaskResponse.from_orm(await task_service._get_task_by_id(task_id))
+
+@router.post("/{task_id}/complete", response_model=TaskResponse)
+async def complete_task(
+    task_id: int,
+    user_id: str = Query(..., description="User identifier"),
+    db: Session = Depends(get_db)
+):
+    """Mark a task as complete."""
+    return await task_service.complete_task(user_id=user_id, task_identifier=str(task_id))
+
+@router.delete("/{task_id}", response_model=TaskResponse)
+async def delete_task(
+    task_id: int,
+    user_id: str = Query(..., description="User identifier"),
+    db: Session = Depends(get_db)
+):
+    """Delete a task."""
+    return await task_service.delete_task(user_id=user_id, task_identifier=str(task_id))
+
+@router.post("/undo")
+async def undo_action(
+    user_id: str = Query(..., description="User identifier")
+):
+    """Undo the last action."""
+    result = await task_service.undo(user_id)
+    if not result:
+        raise HTTPException(status_code=400, detail="Nothing to undo")
+    return {"message": result}
+
+@router.post("/redo")
+async def redo_action(
+    user_id: str = Query(..., description="User identifier")
+):
+    """Redo the last undone action."""
+    result = await task_service.redo(user_id)
+    if not result:
+        raise HTTPException(status_code=400, detail="Nothing to redo")
+    return {"message": result}
+```
+
+---
+
+## React Frontend Implementation
+
+Build a complete React frontend that connects to the voice taskmaster backend.
+
+### Project Setup
+
+```bash
+# Create React app with TypeScript
+npx create-react-app voice-taskmaster-ui --template typescript
+cd voice-taskmaster-ui
+
+# Install dependencies
+npm install @livekit/components-react livekit-client
+npm install @tanstack/react-query axios
+npm install tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+```
+
+### Main App Component
+
+```tsx
+// src/App.tsx
+import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { TaskList } from "./components/TaskList";
+import { VoiceControl } from "./components/VoiceControl";
+import { useTaskWebSocket } from "./hooks/useTaskWebSocket";
+
+const queryClient = new QueryClient();
+
+function AppContent() {
+  const userId = "user-" + Math.random().toString(36).substr(2, 9);
+
+  // Connect to WebSocket for real-time updates
+  useTaskWebSocket(userId, () => {
+    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  });
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <header className="bg-indigo-600 text-white py-6">
+        <div className="max-w-4xl mx-auto px-4">
+          <h1 className="text-3xl font-bold">🎤 Voice Taskmaster</h1>
+          <p className="text-indigo-200 mt-1">Manage tasks with your voice</p>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-4 py-8">
+        <VoiceControl userId={userId} />
+        <TaskList userId={userId} />
+      </main>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppContent />
+    </QueryClientProvider>
+  );
+}
+```
+
+### Task List Component
+
+```tsx
+// src/components/TaskList.tsx
+import React from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { taskApi, Task } from "../api/tasks";
+
+interface TaskListProps {
+  userId: string;
+}
+
+export function TaskList({ userId }: TaskListProps) {
+  const queryClient = useQueryClient();
+
+  const {
+    data: tasks,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["tasks", userId],
+    queryFn: () => taskApi.listTasks(userId),
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: (taskId: number) => taskApi.completeTask(userId, taskId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (taskId: number) => taskApi.deleteTask(userId, taskId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+
+  const undoMutation = useMutation({
+    mutationFn: () => taskApi.undo(userId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+
+  if (isLoading)
+    return <div className="text-center py-8">Loading tasks...</div>;
+  if (error)
+    return <div className="text-red-500 py-8">Error loading tasks</div>;
+
+  const priorityColors = {
+    high: "border-l-red-500 bg-red-50",
+    medium: "border-l-yellow-500 bg-yellow-50",
+    low: "border-l-green-500 bg-green-50",
+  };
+
+  return (
+    <div className="mt-8">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold text-gray-800">Your Tasks</h2>
+        <button
+          onClick={() => undoMutation.mutate()}
+          className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+        >
+          ↩ Undo
+        </button>
+      </div>
+
+      {tasks?.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-lg shadow">
+          <p className="text-gray-500">
+            No tasks yet. Try saying "Add buy groceries"
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {tasks?.map((task: Task) => (
+            <li
+              key={task.id}
+              className={`p-4 bg-white rounded-lg shadow border-l-4 ${
+                priorityColors[task.priority as keyof typeof priorityColors]
+              } ${task.completed ? "opacity-60" : ""}`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    onChange={() =>
+                      !task.completed && completeMutation.mutate(task.id)
+                    }
+                    className="w-5 h-5 rounded"
+                  />
+                  <div>
+                    <span
+                      className={
+                        task.completed ? "line-through text-gray-400" : ""
+                      }
+                    >
+                      {task.title}
+                    </span>
+                    {task.due_date && (
+                      <span className="ml-2 text-sm text-gray-500">
+                        Due: {new Date(task.due_date).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-2 py-1 text-xs rounded ${
+                      task.priority === "high"
+                        ? "bg-red-100 text-red-700"
+                        : task.priority === "medium"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : "bg-green-100 text-green-700"
+                    }`}
+                  >
+                    {task.priority}
+                  </span>
+                  <button
+                    onClick={() => deleteMutation.mutate(task.id)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    🗑
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+```
+
+### Voice Control Component
+
+```tsx
+// src/components/VoiceControl.tsx
+import React, { useState, useCallback } from "react";
+import {
+  LiveKitRoom,
+  useVoiceAssistant,
+  BarVisualizer,
+  RoomAudioRenderer,
+  VoiceAssistantControlBar,
+} from "@livekit/components-react";
+import "@livekit/components-styles";
+
+interface VoiceControlProps {
+  userId: string;
+}
+
+export function VoiceControl({ userId }: VoiceControlProps) {
+  const [token, setToken] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [lastTranscript, setLastTranscript] = useState("");
+
+  const connectToVoice = useCallback(async () => {
+    setIsConnecting(true);
+    try {
+      // Get token from your backend
+      const response = await fetch(`/api/voice/token?user_id=${userId}`);
+      const data = await response.json();
+      setToken(data.token);
+    } catch (error) {
+      console.error("Failed to get voice token:", error);
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [userId]);
+
+  if (!token) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6 text-center">
+        <div className="mb-4">
+          <span className="text-6xl">🎤</span>
+        </div>
+        <h3 className="text-lg font-medium mb-2">Voice Control</h3>
+        <p className="text-gray-500 mb-4">
+          Click to start voice control. Say commands like "Add buy groceries" or
+          "Complete task 1"
+        </p>
+        <button
+          onClick={connectToVoice}
+          disabled={isConnecting}
+          className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {isConnecting ? "Connecting..." : "Start Voice Control"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <LiveKitRoom
+      token={token}
+      serverUrl={process.env.REACT_APP_LIVEKIT_URL}
+      connect={true}
+      audio={true}
+      video={false}
+    >
+      <VoiceAssistantUI onTranscript={setLastTranscript} />
+      <RoomAudioRenderer />
+
+      {lastTranscript && (
+        <div className="mt-4 p-3 bg-gray-100 rounded text-sm">
+          <span className="text-gray-500">You said:</span> {lastTranscript}
+        </div>
+      )}
+    </LiveKitRoom>
+  );
+}
+
+function VoiceAssistantUI({
+  onTranscript,
+}: {
+  onTranscript: (t: string) => void;
+}) {
+  const { state, audioTrack } = useVoiceAssistant();
+
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-3 h-3 rounded-full ${
+              state === "listening"
+                ? "bg-green-500 animate-pulse"
+                : state === "thinking"
+                  ? "bg-yellow-500 animate-pulse"
+                  : state === "speaking"
+                    ? "bg-blue-500 animate-pulse"
+                    : "bg-gray-300"
+            }`}
+          />
+          <span className="text-sm text-gray-600 capitalize">{state}</span>
+        </div>
+        <VoiceAssistantControlBar />
+      </div>
+
+      <div className="h-16">
+        <BarVisualizer
+          state={state}
+          trackRef={audioTrack}
+          barCount={30}
+          options={{ minHeight: 4 }}
+        />
+      </div>
+
+      <div className="mt-4 text-center text-sm text-gray-500">
+        {state === "listening" && "Listening... speak your command"}
+        {state === "thinking" && "Processing your request..."}
+        {state === "speaking" && "Speaking response..."}
+        {state === "idle" && "Click the microphone to speak"}
+      </div>
+    </div>
+  );
+}
+```
+
+### WebSocket Hook
+
+```tsx
+// src/hooks/useTaskWebSocket.ts
+import { useEffect, useRef, useCallback } from "react";
+
+export function useTaskWebSocket(userId: string, onUpdate: () => void) {
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 5;
+
+  const connect = useCallback(() => {
+    const wsUrl = `${process.env.REACT_APP_WS_URL || "ws://localhost:8000"}/ws/${userId}`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+      reconnectAttempts.current = 0;
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type !== "pong") {
+        console.log("Task event:", data.type);
+        onUpdate();
+      }
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket disconnected");
+      if (reconnectAttempts.current < maxReconnectAttempts) {
+        reconnectAttempts.current++;
+        setTimeout(connect, 1000 * reconnectAttempts.current);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    wsRef.current = ws;
+
+    // Heartbeat
+    const heartbeat = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 30000);
+
+    return () => {
+      clearInterval(heartbeat);
+      ws.close();
+    };
+  }, [userId, onUpdate]);
+
+  useEffect(() => {
+    const cleanup = connect();
+    return cleanup;
+  }, [connect]);
+}
+```
+
+### API Client
+
+```tsx
+// src/api/tasks.ts
+import axios from "axios";
+
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8000";
+
+export interface Task {
+  id: number;
+  user_id: string;
+  title: string;
+  description?: string;
+  priority: "low" | "medium" | "high";
+  due_date?: string;
+  completed: boolean;
+  completed_at?: string;
+  created_at: string;
+}
+
+export const taskApi = {
+  async listTasks(
+    userId: string,
+    filters?: { priority?: string; due?: string },
+  ): Promise<Task[]> {
+    const params = new URLSearchParams({ user_id: userId, ...filters });
+    const response = await axios.get(`${API_BASE}/api/tasks?${params}`);
+    return response.data;
+  },
+
+  async createTask(userId: string, task: Partial<Task>): Promise<Task> {
+    const response = await axios.post(
+      `${API_BASE}/api/tasks?user_id=${userId}`,
+      task,
+    );
+    return response.data;
+  },
+
+  async completeTask(userId: string, taskId: number): Promise<Task> {
+    const response = await axios.post(
+      `${API_BASE}/api/tasks/${taskId}/complete?user_id=${userId}`,
+    );
+    return response.data;
+  },
+
+  async deleteTask(userId: string, taskId: number): Promise<Task> {
+    const response = await axios.delete(
+      `${API_BASE}/api/tasks/${taskId}?user_id=${userId}`,
+    );
+    return response.data;
+  },
+
+  async undo(userId: string): Promise<{ message: string }> {
+    const response = await axios.post(
+      `${API_BASE}/api/tasks/undo?user_id=${userId}`,
+    );
+    return response.data;
+  },
+
+  async redo(userId: string): Promise<{ message: string }> {
+    const response = await axios.post(
+      `${API_BASE}/api/tasks/redo?user_id=${userId}`,
+    );
+    return response.data;
+  },
+};
+```
+
+---
+
+## Testing Guide
+
+### Unit Tests
+
+```python
+# tests/test_intent_parser.py
+import pytest
+from services.intent_parser import IntentParser
+
+@pytest.fixture
+def parser():
+    return IntentParser()
+
+class TestQuickParse:
+    """Test regex-based quick parsing."""
+
+    def test_add_simple(self, parser):
+        result = parser._quick_parse("add buy groceries")
+        assert result["action"] == "add"
+        assert result["title"] == "buy groceries"
+
+    def test_add_with_priority(self, parser):
+        result = parser._quick_parse("add call mom high priority")
+        assert result["action"] == "add"
+        assert result["title"] == "call mom"
+        assert result["priority"] == "high"
+
+    def test_add_with_date(self, parser):
+        result = parser._quick_parse("add meeting tomorrow")
+        assert result["action"] == "add"
+        assert result["due_date"] == "tomorrow"
+
+    def test_complete_task(self, parser):
+        result = parser._quick_parse("complete buy groceries")
+        assert result["action"] == "complete"
+        assert result["task_identifier"] == "buy groceries"
+
+    def test_done_with(self, parser):
+        result = parser._quick_parse("done with the report")
+        assert result["action"] == "complete"
+        assert result["task_identifier"] == "the report"
+
+    def test_delete_task(self, parser):
+        result = parser._quick_parse("delete task 3")
+        assert result["action"] == "delete"
+        assert result["task_identifier"] == "task 3"
+
+    def test_undo(self, parser):
+        result = parser._quick_parse("undo")
+        assert result["action"] == "undo"
+
+    def test_redo(self, parser):
+        result = parser._quick_parse("redo")
+        assert result["action"] == "redo"
+
+    def test_list_tasks(self, parser):
+        result = parser._quick_parse("what are my tasks")
+        assert result["action"] == "list"
+
+    def test_list_due_today(self, parser):
+        result = parser._quick_parse("what's due today")
+        assert result["action"] == "list"
+        assert result["due_filter"] == "today"
+
+
+# tests/test_action_history.py
+import pytest
+from services.action_history import ActionHistory, CreateTaskAction
+
+@pytest.fixture
+def history():
+    return ActionHistory(max_size=10)
+
+class TestActionHistory:
+    """Test undo/redo functionality."""
+
+    @pytest.mark.asyncio
+    async def test_undo_empty(self, history):
+        result = await history.undo()
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_redo_empty(self, history):
+        result = await history.redo()
+        assert result is None
+
+    def test_can_undo_empty(self, history):
+        assert history.can_undo() is False
+
+    def test_can_redo_empty(self, history):
+        assert history.can_redo() is False
+
+
+# tests/test_tasks_api.py
+import pytest
+from fastapi.testclient import TestClient
+from main import app
+
+client = TestClient(app)
+
+class TestTasksAPI:
+    """Test REST API endpoints."""
+
+    def test_health_check(self):
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json()["status"] == "healthy"
+
+    def test_create_task(self):
+        response = client.post(
+            "/api/tasks?user_id=test-user",
+            json={"title": "Test task", "priority": "medium"}
+        )
+        assert response.status_code == 201
+        assert response.json()["title"] == "Test task"
+
+    def test_list_tasks(self):
+        response = client.get("/api/tasks?user_id=test-user")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    def test_complete_task(self):
+        # Create a task first
+        create_response = client.post(
+            "/api/tasks?user_id=test-user",
+            json={"title": "Task to complete"}
+        )
+        task_id = create_response.json()["id"]
+
+        # Complete it
+        response = client.post(f"/api/tasks/{task_id}/complete?user_id=test-user")
+        assert response.status_code == 200
+        assert response.json()["completed"] is True
+
+    def test_undo_action(self):
+        # Create a task
+        client.post(
+            "/api/tasks?user_id=test-user",
+            json={"title": "Task to undo"}
+        )
+
+        # Undo
+        response = client.post("/api/tasks/undo?user_id=test-user")
+        assert response.status_code == 200
+```
+
+### Running Tests
+
+```bash
+# Install test dependencies
+pip install pytest pytest-asyncio httpx
+
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pip install pytest-cov
+pytest tests/ --cov=services --cov=routers --cov-report=html
+
+# Run specific test file
+pytest tests/test_intent_parser.py -v
+```
+
+### Integration Testing
+
+```bash
+# Start the backend
+uvicorn main:app --reload
+
+# In another terminal, run integration tests
+pytest tests/test_integration.py -v
+
+# Or use httpie for manual testing
+pip install httpie
+
+# Create a task
+http POST localhost:8000/api/tasks user_id==test-user title="Buy milk" priority="high"
+
+# List tasks
+http GET localhost:8000/api/tasks user_id==test-user
+
+# Complete a task
+http POST localhost:8000/api/tasks/1/complete user_id==test-user
+
+# Undo
+http POST localhost:8000/api/tasks/undo user_id==test-user
+```
+
+---
+
+## Deployment Guide
+
+### Docker Setup
+
+```dockerfile
+# Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Expose port
+EXPOSE 8000
+
+# Run with uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./tasks.db
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+    volumes:
+      - ./data:/app/data
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8000
+      - REACT_APP_LIVEKIT_URL=${LIVEKIT_URL}
+    depends_on:
+      - backend
+```
+
+### Quick Start
+
+```bash
+# Clone and setup
+git clone <your-repo>
+cd voice-taskmaster
+
+# Create environment file
+cp .env.example .env
+# Edit .env with your API keys
+
+# Start with Docker
+docker-compose up -d
+
+# Or run locally
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload
+
+# Start frontend (in another terminal)
+cd frontend
+npm install
+npm start
+```
+
+<Callout type="success">
+  **Next Steps:** Consider integrating this Voice Taskmaster with the other
+  mini-projects in the series—use the Prompt Library for voice response
+  templates, the Memory Service for user preferences, or the LLM Router for
+  model selection based on query complexity.
+</Callout>

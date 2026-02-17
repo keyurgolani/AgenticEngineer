@@ -636,6 +636,503 @@ You might wonder why we chose LangGraph over alternatives like CrewAI, AutoGen, 
 
 ---
 
+## Part 6: Engineering Principles for AI Development
+
+As you build agents throughout this course, you'll benefit from adopting proven engineering principles. These four principles, popularized by Andrej Karpathy and widely adopted in the AI engineering community, will help you write better code and build more reliable systems.
+
+### The Four Principles
+
+<Callout type="tip">
+  **Why These Matter:** These principles aren't just about writing clean
+  code—they're about building AI systems that work reliably in production.
+  LLM-assisted development makes it easy to generate lots of code quickly, but
+  without discipline, you'll end up with bloated, buggy systems.
+</Callout>
+
+#### 1. Think Before Coding
+
+Don't assume. Don't hide confusion. Surface tradeoffs.
+
+Before implementing anything:
+
+- **State your assumptions explicitly.** If uncertain, ask.
+- **If multiple interpretations exist, present them**—don't pick silently.
+- **If a simpler approach exists, say so.** Push back when warranted.
+- **If something is unclear, stop.** Name what's confusing. Ask.
+
+```python
+# ❌ Bad: Diving in without understanding
+def process_data(data):
+    return [x * 2 for x in data]  # What if data isn't a list?
+
+# ✅ Good: Explicit assumptions
+def process_data(data: list[int]) -> list[int]:
+    """
+    Double each value in the input list.
+
+    Assumes: data contains only integers
+    Returns: New list with doubled values
+    """
+    return [x * 2 for x in data]
+```
+
+#### 2. Simplicity First
+
+Minimum code that solves the problem. Nothing speculative.
+
+- **No features beyond what was asked.**
+- **No abstractions for single-use code.**
+- **No "flexibility" or "configurability" that wasn't requested.**
+- **No error handling for impossible scenarios.**
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: _"Would a senior engineer say this is overcomplicated?"_ If yes, simplify.
+
+```python
+# ❌ Overcomplicated: Premature abstraction
+class DataProcessorFactory:
+    def __init__(self, config):
+        self.config = config
+
+    def create_processor(self, processor_type):
+        if processor_type == "double":
+            return lambda x: x * 2
+        # ... 50 more lines of "flexibility"
+
+# ✅ Simple: Just solve the problem
+def double_values(data: list[int]) -> list[int]:
+    return [x * 2 for x in data]
+```
+
+#### 3. Surgical Changes
+
+Touch only what you must. Clean up only your own mess.
+
+When editing existing code:
+
+- **Don't "improve" adjacent code, comments, or formatting.**
+- **Don't refactor things that aren't broken.**
+- **Match existing style**, even if you'd do it differently.
+- If you notice unrelated dead code, mention it—don't delete it.
+
+When your changes create orphans:
+
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+**The test:** Every changed line should trace directly to the user's request.
+
+#### 4. Goal-Driven Execution
+
+Define success criteria. Loop until verified.
+
+Transform tasks into verifiable goals:
+
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+
+Strong success criteria let you work independently. Weak criteria ("make it work") require constant clarification.
+
+<Callout type="info">
+  **These principles are working if:** fewer unnecessary changes in diffs, fewer
+  rewrites due to overcomplication, and clarifying questions come before
+  implementation rather than after mistakes.
+</Callout>
+
+### Applying These to Agent Development
+
+These principles are especially important when building agents because:
+
+| Principle               | Agent Development Application                               |
+| :---------------------- | :---------------------------------------------------------- |
+| **Think Before Coding** | Understand the agent's purpose before writing prompts       |
+| **Simplicity First**    | Start with simple ReAct loops before complex orchestration  |
+| **Surgical Changes**    | Modify one tool or prompt at a time, test after each change |
+| **Goal-Driven**         | Define clear success metrics for agent behavior             |
+
+---
+
+## Part 7: Vibe Coding — AI-Assisted Development
+
+In early 2025, Andrej Karpathy introduced a concept that perfectly captures the emerging paradigm of AI-assisted development: **Vibe Coding**. This philosophy represents a fundamental shift in how we approach software development—from writing every line manually to collaborating with AI in an iterative, conversational flow.
+
+<ConceptVisual
+  src="/images/vibe_coding_flow.png"
+  alt="Vibe Coding Flow"
+  caption="Vibe Coding: An iterative dance between human intent and AI implementation, where you guide the direction while AI handles the details."
+/>
+
+### What is Vibe Coding?
+
+<ConceptIntro
+  title="Vibe Coding"
+  analogy="Imagine having a conversation with a skilled junior developer who can write code incredibly fast but needs your guidance on what to build. You describe what you want, they write it, you review and redirect, they refine. The 'vibe' is this back-and-forth rhythm—you're not dictating every keystroke, you're steering the direction while the AI handles implementation details."
+  technicalDef="Vibe Coding is a development methodology where programmers collaborate with AI coding assistants through natural language, iterating rapidly on implementations. The developer focuses on intent, architecture, and verification while the AI handles syntax, boilerplate, and initial implementations."
+  whyItMatters="As AI coding assistants become more capable, the skill of effectively collaborating with them becomes as important as traditional coding skills. Vibe coding isn't about replacing programming knowledge—it's about amplifying it."
+/>
+
+<Callout type="info">
+  **Karpathy's Original Tweet (Feb 2025):** "There's a new kind of coding I call
+  'vibe coding', where you fully give in to the vibes, embrace exponentials, and
+  forget that the code even exists... It's not quite coding—I just see stuff,
+  say stuff, run stuff, and copy paste stuff, and it mostly works."
+</Callout>
+
+### The Vibe Coding Mindset
+
+Vibe coding requires a mental shift from traditional development:
+
+| Traditional Coding                  | Vibe Coding                                 |
+| :---------------------------------- | :------------------------------------------ |
+| Start with implementation details   | Start with intent and outcomes              |
+| Write code line by line             | Describe what you want in natural language  |
+| Debug by reading every line         | Debug by describing the problem to AI       |
+| Optimize through manual refactoring | Iterate through conversation                |
+| Knowledge lives in your head        | Knowledge is distributed between you and AI |
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Traditional Development"
+        T1[Think] --> T2[Plan]
+        T2 --> T3[Code]
+        T3 --> T4[Debug]
+        T4 --> T5[Refactor]
+        T5 -.->|"Repeat"| T3
+    end
+    
+    subgraph "Vibe Coding"
+        V1[Intent] --> V2[Describe to AI]
+        V2 --> V3[Review Output]
+        V3 --> V4{Good?}
+        V4 -->|"No"| V5[Redirect AI]
+        V5 --> V3
+        V4 -->|"Yes"| V6[Verify & Ship]
+    end
+    
+    style V1 fill:#e8f5e9
+    style V2 fill:#c8e6c9
+    style V3 fill:#a5d6a7
+    style V6 fill:#81c784
+`}
+/>
+
+### Practical Vibe Coding Patterns
+
+These patterns will help you collaborate effectively with AI coding assistants:
+
+#### 1. Start with Intent, Not Implementation
+
+Don't tell the AI _how_ to code—tell it _what_ you want to achieve.
+
+```python
+# ❌ Too implementation-focused
+"Write a for loop that iterates through the list and checks
+if each item's 'status' field equals 'active', then append
+it to a new list called 'active_items'"
+
+# ✅ Intent-focused
+"Filter this list to only include items with active status"
+```
+
+The AI knows how to write loops. Your job is to communicate the goal clearly.
+
+#### 2. Iterate Rapidly with Feedback
+
+Vibe coding is conversational. Don't try to get everything perfect in one prompt.
+
+```
+You: "Create a function to validate email addresses"
+AI: [generates basic regex validation]
+You: "Good start, but also check for disposable email domains"
+AI: [adds domain checking]
+You: "Now add rate limiting to prevent abuse"
+AI: [adds rate limiting logic]
+```
+
+Each iteration builds on the last. This is faster than trying to specify everything upfront.
+
+#### 3. Trust but Verify
+
+AI-generated code can be impressively correct—or subtly wrong. Always verify.
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Accepting AI code without running it",
+      fix: "Always execute and test AI-generated code before committing",
+    },
+    {
+      mistake: "Assuming AI understands your codebase context",
+      fix: "Provide relevant context: 'In our codebase, we use X pattern for Y'",
+    },
+    {
+      mistake: "Not reviewing edge cases",
+      fix: "Ask: 'What edge cases should I test for this function?'",
+    },
+  ]}
+/>
+
+```python
+# After AI generates code, always:
+# 1. Read it to understand what it does
+# 2. Run it with test inputs
+# 3. Check edge cases
+# 4. Verify it integrates correctly with existing code
+
+def verify_ai_code(generated_code):
+    """
+    The vibe coder's verification checklist:
+    - Does it do what I asked?
+    - Does it handle errors gracefully?
+    - Does it match our codebase style?
+    - Are there any security concerns?
+    - Would I be comfortable explaining this in a code review?
+    """
+    pass
+```
+
+#### 4. Use AI for Boilerplate, Focus Human Effort on Architecture
+
+AI excels at generating repetitive code. Save your mental energy for the hard problems.
+
+| Let AI Handle               | Focus Your Energy On              |
+| :-------------------------- | :-------------------------------- |
+| Boilerplate and scaffolding | System architecture decisions     |
+| Standard CRUD operations    | Complex business logic            |
+| Test case generation        | Test strategy and coverage        |
+| Documentation drafts        | API design and contracts          |
+| Regex patterns              | Security considerations           |
+| Data transformations        | Performance optimization strategy |
+
+#### 5. Know When to Override
+
+Sometimes the AI's suggestion isn't right for your context. Recognize these moments:
+
+<Callout type="warning">
+  **Override the AI when:** - It suggests a pattern that doesn't match your
+  codebase conventions - The solution is technically correct but overly complex
+  for your needs - It misses domain-specific requirements you haven't explicitly
+  stated - Security or performance concerns aren't adequately addressed - Your
+  intuition says something is off (then investigate why)
+</Callout>
+
+```python
+# AI might suggest:
+def get_user(user_id: str) -> User:
+    return db.query(User).filter(User.id == user_id).first()
+
+# But you know your system needs:
+def get_user(user_id: str) -> User:
+    # Our system requires audit logging for all user lookups
+    user = db.query(User).filter(User.id == user_id).first()
+    audit_log.record("user_lookup", user_id, current_user.id)
+    return user
+```
+
+### Common Vibe Coding Pitfalls
+
+<ProsCons
+  title="Vibe Coding: Benefits vs. Risks"
+  pros={[
+    "10x faster for boilerplate and standard patterns",
+    "Reduces cognitive load on syntax and APIs",
+    "Enables exploration of unfamiliar technologies",
+    "Great for prototyping and iteration",
+    "Helps overcome blank page paralysis",
+  ]}
+  cons={[
+    "Risk of accepting incorrect code without understanding",
+    "Can create technical debt if not reviewed carefully",
+    "May miss edge cases the AI doesn't consider",
+    "Over-reliance can atrophy fundamental skills",
+    "Context limitations can lead to inconsistent suggestions",
+  ]}
+/>
+
+#### Pitfall 1: The Copy-Paste Trap
+
+```python
+# ❌ Dangerous: Blindly accepting AI output
+ai_response = get_ai_suggestion("write auth middleware")
+# Just paste it in and move on... what could go wrong?
+
+# ✅ Safe: Understanding before accepting
+ai_response = get_ai_suggestion("write auth middleware")
+# 1. Read and understand the code
+# 2. Check: Does it validate tokens correctly?
+# 3. Check: Does it handle expired tokens?
+# 4. Check: Does it match our auth patterns?
+# 5. Test with valid and invalid tokens
+# 6. Only then: integrate into codebase
+```
+
+#### Pitfall 2: Context Starvation
+
+AI can only work with what you give it. Insufficient context leads to generic or wrong solutions.
+
+```
+# ❌ Insufficient context
+"Write a function to process orders"
+
+# ✅ Rich context
+"Write a function to process orders in our e-commerce system.
+We use:
+- SQLAlchemy for database access
+- Stripe for payments
+- Our Order model has: id, user_id, items, status, total
+- Orders go through states: pending → paid → shipped → delivered
+- We need to emit events for each state change"
+```
+
+#### Pitfall 3: Fighting Instead of Guiding
+
+When AI gives you something wrong, don't argue—redirect.
+
+```
+# ❌ Fighting the AI
+"No, that's wrong. I said use async. Why did you use sync?
+This is completely wrong. Try again."
+
+# ✅ Guiding the AI
+"This needs to be async because we're calling external APIs.
+Please rewrite using async/await, and add proper error handling
+for network timeouts."
+```
+
+#### Pitfall 4: Skill Atrophy
+
+<Callout type="important">
+  **The Fundamental Skills Paradox:** Vibe coding works best when you deeply
+  understand programming. If you rely on AI without building foundational
+  knowledge, you won't be able to verify correctness, debug issues, or guide the
+  AI effectively. Use AI to accelerate, not replace, your learning.
+</Callout>
+
+```python
+# The vibe coder's skill maintenance checklist:
+skills_to_maintain = [
+    "Reading and understanding code (even AI-generated)",
+    "Debugging and troubleshooting",
+    "System design and architecture",
+    "Security awareness",
+    "Performance intuition",
+    "Testing strategies",
+]
+
+# These skills make you a BETTER vibe coder, not obsolete
+```
+
+### Vibe Coding for Agent Development
+
+The vibe coding philosophy is especially powerful when building AI agents:
+
+#### Using AI to Design Agent Architectures
+
+```
+You: "I'm building an agent that helps users analyze their
+     spending habits. What tools should it have?"
+
+AI: [suggests tools: bank_api, categorize_transaction,
+     generate_report, send_alert]
+
+You: "Good. Now help me design the state machine for the
+     agent's workflow"
+
+AI: [generates state diagram and transitions]
+
+You: "The categorization needs to handle edge cases like
+     refunds and transfers between accounts"
+
+AI: [refines the categorization logic]
+```
+
+#### Iterating on Prompts and Tool Definitions
+
+Agent development involves lots of prompt engineering. Vibe coding accelerates this:
+
+```python
+# Iteration 1: Basic prompt
+system_prompt = "You are a helpful financial assistant."
+
+# After testing: "It's too generic, doesn't stay on topic"
+
+# Iteration 2: More specific
+system_prompt = """You are a financial analysis assistant.
+Your role is to help users understand their spending patterns.
+Always ask clarifying questions before making assumptions."""
+
+# After testing: "Better, but it's not using the tools effectively"
+
+# Iteration 3: Tool-aware
+system_prompt = """You are a financial analysis assistant.
+Your role is to help users understand their spending patterns.
+
+Available tools:
+- get_transactions: Fetch user's transaction history
+- categorize: Classify transactions by type
+- generate_insights: Create spending analysis
+
+Always use get_transactions first to understand the user's
+financial picture before providing advice."""
+```
+
+#### The Agent Development Vibe Loop
+
+<Mermaid
+  chart={`
+graph TB
+    A[Define Agent Goal] --> B[Describe to AI]
+    B --> C[AI Generates Initial Agent]
+    C --> D[Test with Sample Inputs]
+    D --> E{Works?}
+    E -->|"No"| F[Identify Issue]
+    F --> G[Describe Fix to AI]
+    G --> C
+    E -->|"Partially"| H[Refine Prompts/Tools]
+    H --> D
+    E -->|"Yes"| I[Add Edge Cases]
+    I --> D
+    D --> J{Production Ready?}
+    J -->|"No"| K[Describe Improvements]
+    K --> C
+    J -->|"Yes"| L[Deploy & Monitor]
+    
+    style A fill:#e3f2fd
+    style L fill:#c8e6c9
+`}
+/>
+
+### Vibe Coding Best Practices Summary
+
+<ModuleSummary
+  points={[
+    "Start with intent and outcomes, not implementation details",
+    "Iterate rapidly—don't try to get everything perfect in one prompt",
+    "Always verify AI-generated code before committing",
+    "Use AI for boilerplate; focus your energy on architecture and design",
+    "Provide rich context to get better suggestions",
+    "Guide the AI with redirects, don't fight with corrections",
+    "Maintain fundamental programming skills—they make you a better vibe coder",
+    "For agents: use vibe coding to rapidly iterate on prompts and tool definitions",
+  ]}
+/>
+
+<Callout type="tip">
+  **The Vibe Coder's Mantra:** "I guide the direction, AI handles the details. I
+  verify the output, AI accelerates the iteration. Together, we ship faster than
+  either could alone."
+</Callout>
+
+---
+
 <ProgressCheckpoint
   title="Foundation Knowledge Check"
   questions={[

@@ -71,7 +71,38 @@ day: 37
 
 Today we put everything together—LangChain, multi-agent collaboration, and MCP—to build a production-ready content creation system. We'll explore CrewAI's latest features including Flows, memory systems, and structured outputs.
 
-{/* IMAGE_PLACEHOLDER: A vibrant, modern illustration showing a collaborative workspace with multiple AI agents working together. Each agent should be represented as a distinct character with visual indicators of their role (researcher with magnifying glass, writer with pen, editor with checklist). The agents should be connected by flowing lines representing information exchange. Style: Clean, professional, with a tech-forward aesthetic. Colors: Blues, purples, and greens. Placement: Full-width hero image at the top of this section. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Workspace"
+        subgraph "Research Team 🔍"
+            R1[Researcher]
+            R2[Analyst]
+        end
+        
+        subgraph "Creative Team ✍️"
+            W[Writer]
+            E[Editor]
+        end
+        
+        subgraph "Strategy Team 📊"
+            PM[Manager]
+        end
+        
+        PM -->|Directive| R1 & R2 & W
+        R1 & R2 -->|Insights| W
+        W -->|Draft| E
+        E -->|Final| PM
+    end
+    
+    style PM fill:#e1bee7
+    style R1 fill:#bbdefb
+    style R2 fill:#bbdefb
+    style W fill:#c8e6c9
+    style E fill:#c8e6c9
+`}
+  caption="The Content Crew: Specialized agents collaborating on a shared goal."
+/>
 
 <Callout type="info">
   **CrewAI in 2025:** CrewAI has evolved significantly with new features like
@@ -95,8 +126,6 @@ Build a multi-agent system that:
 ---
 
 ## 37.2 Architecture
-
-![Robotic Newsroom](/images/crewai_newsroom.png)
 
 <Mermaid
   chart={`
@@ -125,7 +154,34 @@ graph TD
 
 CrewAI models AI collaboration after real-world organizational structures. Rather than abstract pipelines or conversation threads, CrewAI organizes agents into **crews**—teams with distinct roles, goals, and areas of expertise that mirror how human teams tackle complex projects.
 
-{/* IMAGE_PLACEHOLDER: An infographic comparing traditional software pipelines (shown as rigid, linear flowcharts) versus CrewAI's team-based approach (shown as interconnected team members with flexible communication paths). Include icons representing different agent roles. Style: Split-screen comparison with clear visual distinction. Colors: Left side (traditional) in grays, right side (CrewAI) in vibrant colors. Placement: Inline, centered, medium size. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    subgraph Traditional [Linear Pipeline]
+        A[Step 1] --> B[Step 2] --> C[Step 3]
+    end
+    
+    subgraph CrewAI [Collaborative Team]
+        Mgr[Manager]
+        A1[Agent A]
+        A2[Agent B]
+        A3[Agent C]
+        
+        Mgr <--> A1
+        Mgr <--> A2
+        Mgr <--> A3
+        A1 <--> A2
+        A2 <--> A3
+    end
+    
+    style Traditional fill:#eceff1,stroke:#607d8b
+    style CrewAI fill:#e3f2fd,stroke:#2196f3
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Linear vs. Collaborative Architecture</p>
 
 This approach provides several advantages:
 
@@ -225,7 +281,23 @@ social_media_agent = Agent(
 
 One of CrewAI's powerful features is the ability to enforce structured outputs using Pydantic models. This ensures consistent, parseable results:
 
-{/* IMAGE_PLACEHOLDER: A visual diagram showing the transformation from unstructured text output (shown as messy, free-form text) to structured JSON output (shown as clean, organized data with clear fields and types). Include arrows showing the Pydantic validation process. Style: Before/after comparison with validation checkmarks. Colors: Red/yellow for unstructured, green for structured. Placement: Inline, centered, medium size. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    Input[Unstructured Text] --> Validator{Pydantic Model}
+    Validator -->|Success| API[Structured JSON]
+    Validator -->|Fail| Retry[Retry with Error]
+    Retry --> Validator
+    
+    style Input fill:#ffebee,stroke:#ef5350
+    style Validator fill:#fff9c4,stroke:#fbc02d
+    style API fill:#e8f5e9,stroke:#66bb6a
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Structured Output Validation Flow</p>
 
 ```python
 from pydantic import BaseModel, Field
@@ -545,7 +617,28 @@ Flows combine the autonomous collaboration of Crews with structured automation a
 - **Multiple crews**: Orchestrate several crews in sequence or parallel
 - **Error handling**: Graceful recovery and retry logic
 
-{/* IMAGE_PLACEHOLDER: An animated workflow diagram showing a Flow in action. Display nodes representing different crews (Research, Writing, Review) with decision diamonds for quality checks. Show state flowing between nodes with animated arrows. Include a "retry loop" path for failed quality checks. Style: Professional flowchart with modern UI elements. Colors: Use color coding for different states (blue=in progress, green=success, yellow=retry, red=error). Placement: Full-width, interactive-looking diagram. */}
+<Mermaid
+  chart={`
+graph LR
+    Start([Start]) --> Research[Research Cew]
+    Research --> Decision{Quality Pass?}
+    
+    Decision -->|No| Rework[Rework Loop 🔄]
+    Rework --> Research
+    
+    Decision -->|Yes| Writing[Writing Crew]
+    Writing --> Review{Editor Pass?}
+    
+    Review -->|No| Rework
+    Review -->|Yes| Publish([Publish Flow])
+    
+    style Decision fill:#fff9c4
+    style Review fill:#fff9c4
+    style Rework fill:#ffcdd2
+    style Publish fill:#c8e6c9
+`}
+  caption="CrewAI Flow: Orchestrating multiple crews with logic and loops."
+/>
 
 **Real-World Analogy**: Think of Flows like a manufacturing assembly line with quality control checkpoints. Products (content) move through different stations (crews), but if quality control detects an issue, the product loops back for rework. The assembly line (Flow) manages the routing, state tracking, and ensures nothing falls through the cracks.
 
@@ -722,8 +815,6 @@ class ParallelResearchFlow(Flow[ContentState]):
 
 CrewAI's memory system enables agents to retain context, learn from interactions, and build on previous work. Understanding memory types is crucial for building effective multi-agent systems.
 
-{/* IMAGE_PLACEHOLDER: A layered memory architecture diagram showing four distinct memory types as stacked layers: Short-Term Memory (top, glowing/active), Long-Term Memory (middle, database-like), Entity Memory (knowledge graph visualization), and Contextual Memory (task-specific bubbles). Show arrows indicating how information flows between layers and to/from agents. Style: Technical architecture diagram with modern UI elements. Colors: Different color for each memory type (yellow=short-term, blue=long-term, purple=entity, green=contextual). Placement: Full-width diagram above the Mermaid chart. */}
-
 <Mermaid
   chart={`
 graph TB
@@ -750,14 +841,15 @@ graph TB
 
 ### Memory Types Explained
 
-| Memory Type    | Purpose                      | Persistence       | Use Case                         | Human Analogy                    |
-| :------------- | :--------------------------- | :---------------- | :------------------------------- | :------------------------------- |
-| **Short-Term** | Current execution context    | Session only      | Sharing results between tasks    | Working memory during a meeting  |
-| **Long-Term**  | Historical learnings         | Across executions | Improving over time              | Lessons learned from past projects |
+| Memory Type    | Purpose                      | Persistence       | Use Case                         | Human Analogy                       |
+| :------------- | :--------------------------- | :---------------- | :------------------------------- | :---------------------------------- |
+| **Short-Term** | Current execution context    | Session only      | Sharing results between tasks    | Working memory during a meeting     |
+| **Long-Term**  | Historical learnings         | Across executions | Improving over time              | Lessons learned from past projects  |
 | **Entity**     | Key people, places, concepts | Across executions | Maintaining entity relationships | Your contact list and relationships |
-| **Contextual** | Task-specific context        | Per task          | Understanding nuances            | Context-specific expertise       |
+| **Contextual** | Task-specific context        | Per task          | Understanding nuances            | Context-specific expertise          |
 
 **Real-World Analogy**: Think of memory types like a professional's knowledge system:
+
 - **Short-Term**: Notes you take during today's meetings (forgotten after the day)
 - **Long-Term**: Your career experience and lessons learned over years
 - **Entity**: Your professional network—who knows what, who works where
@@ -848,7 +940,25 @@ support_task = Task(
 
 CrewAI supports asynchronous execution for running multiple crews or tasks concurrently, significantly reducing total execution time.
 
-{/* IMAGE_PLACEHOLDER: A side-by-side comparison showing sequential vs parallel execution. Left side: Tasks stacked vertically with a long timeline. Right side: Tasks running in parallel with a much shorter timeline. Include time savings calculation (e.g., "60s → 20s, 3x faster"). Style: Timeline visualization with task blocks. Colors: Sequential in gray/blue, parallel in green with overlapping blocks. Placement: Inline, centered, medium-large size. */}
+<Mermaid
+  chart={`
+gantt
+    title Execution Time: Sequential vs Async
+    dateFormat s
+    axisFormat %s
+    
+    section Sequential (180s)
+    Task A :a1, 0, 60
+    Task B :a2, 60, 60
+    Task C :a3, 120, 60
+    
+    section Async (60s)
+    Task A :b1, 0, 60
+    Task B :b2, 0, 60
+    Task C :b3, 0, 60
+`}
+  caption="Async Execution: 3x speedup for independent tasks."
+/>
 
 **Real-World Analogy**: Sequential execution is like doing laundry one load at a time—wash, dry, fold, repeat. Parallel execution is like running multiple washers and dryers simultaneously. If you have 3 loads and each takes 60 minutes sequentially (180 min total), running them in parallel takes just 60 minutes. Same concept applies to independent agent tasks.
 
@@ -1215,7 +1325,25 @@ def test_agent_with_mock_llm():
 
 Understanding when to use each framework is crucial for production success. Each represents a different philosophy for building multi-agent systems.
 
-{/* IMAGE_PLACEHOLDER: A quadrant chart comparing the four frameworks on two axes: "Control Precision" (x-axis, low to high) and "Ease of Use" (y-axis, easy to complex). Plot each framework as a distinct icon/logo in its quadrant: Swarm (high ease, low control), CrewAI (moderate ease, moderate control), AutoGen (moderate ease, low control), LangGraph (low ease, high control). Include brief labels for each. Style: Professional comparison chart with clear quadrants. Colors: Different color for each framework. Placement: Full-width chart above the comparison matrix. */}
+<Mermaid
+  chart={`
+quadrantChart
+    title Multi-Agent Framework Landscape
+    x-axis Low Control --> High Control
+    y-axis Hard to Use --> Easy to Use
+    
+    quadrant-1 CrewAI
+    quadrant-2 Swarm
+    quadrant-3 AutoGen
+    quadrant-4 LangGraph
+    
+    "Swarm": [0.2, 0.8]
+    "CrewAI": [0.6, 0.7]
+    "AutoGen": [0.3, 0.4]
+    "LangGraph": [0.9, 0.2]
+`}
+  caption="Choosing the Right Framework: Trade-offs between Control and Ease."
+/>
 
 ### Comparison Matrix
 
@@ -1257,7 +1385,25 @@ Understanding when to use each framework is crucial for production success. Each
 
 ### Framework Decision Tree
 
-{/* IMAGE_PLACEHOLDER: An interactive decision tree flowchart with clickable nodes. Start with "What type of multi-agent system?" at the top, branching to different questions with yes/no paths leading to framework recommendations. Each endpoint should show the framework logo/name with a brief "Best for:" description. Style: Modern flowchart with rounded nodes and smooth connecting lines. Colors: Use framework-specific colors for endpoints. Placement: Full-width, interactive-style diagram. */}
+<Mermaid
+  chart={`
+graph TD
+    Start{Problem Type?}
+    
+    Start -->|Role-based Team| Q1{Fine Control?}
+    Start -->|Conversational| AutoGen[AutoGen 💬]
+    Start -->|Simple Handoffs| Swarm[Swarm 🏃]
+    
+    Q1 -->|Yes| LangGraph[LangGraph 🕸️]
+    Q1 -->|No| CrewAI[CrewAI 👥]
+    
+    style CrewAI fill:#bbdefb
+    style LangGraph fill:#e1bee7
+    style AutoGen fill:#c8e6c9
+    style Swarm fill:#ffccbc
+`}
+  caption="Decision Tree: Framework Selection Guide."
+/>
 
 ```
 Is your problem naturally a "team of specialists"?
@@ -1274,6 +1420,7 @@ Is your problem naturally a "team of specialists"?
 ```
 
 **Real-World Analogies**:
+
 - **CrewAI**: Like managing a film production crew—clear roles, coordinated tasks
 - **LangGraph**: Like programming a state machine or game engine—precise control over every transition
 - **AutoGen**: Like facilitating a brainstorming session—agents discuss and iterate
@@ -1347,7 +1494,31 @@ response = client.run(agent=researcher, messages=[{"role": "user", "content": "A
 
 Understanding how agents communicate is essential for designing effective multi-agent systems.
 
-{/* IMAGE_PLACEHOLDER: A comprehensive diagram showing all four communication patterns side-by-side. Each pattern should be illustrated with agent icons and communication flow arrows: 1) Direct Messaging (two agents with direct arrow), 2) Shared State (multiple agents connected to central database), 3) Pub/Sub (agents connected through message broker), 4) Hierarchical (manager at top with workers below). Style: Clean, technical diagram with consistent iconography. Colors: Different color scheme for each pattern. Placement: Full-width diagram above the Mermaid chart. */}
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Direct"
+        A1 --> A2
+    end
+    
+    subgraph "Shared Memory"
+        B1 <--> Mem[(Memory)]
+        B2 <--> Mem
+    end
+    
+    subgraph "Pub/Sub"
+        C1 -->|Pub| Bus((Bus))
+        Bus -->|Sub| C2
+        Bus -->|Sub| C3
+    end
+    
+    subgraph "Hierarchical"
+        Mgr[Manager] --> W1
+        Mgr --> W2
+    end
+`}
+  caption="Communication Patterns: How agents exchange information."
+/>
 
 <Mermaid
   chart={`

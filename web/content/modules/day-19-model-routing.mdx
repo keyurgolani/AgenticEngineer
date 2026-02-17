@@ -1,0 +1,2800 @@
+---
+title: "Day 19: Model Routing & Cost Optimization"
+description: "Build intelligent routing systems that select the optimal model for each query, reducing costs by 60-80% while maintaining quality."
+week: 3
+day: 19
+---
+
+<ReadingTime minutes={45} />
+
+<SkillLevel
+  level="intermediate"
+  description="Production-ready implementations"
+/>
+
+<Prerequisites
+  items={[
+    "Completed Days 01-18 (especially Day 17: RAG)",
+    "Understanding of LLM APIs (OpenAI, Anthropic)",
+    "Python async/await patterns",
+    "Basic understanding of embeddings",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Assess query complexity to route to appropriate model tiers",
+    "Implement intelligent model selection with fallback strategies",
+    "Build semantic caching to avoid redundant API calls",
+    "Leverage prompt caching for repeated system prompts",
+    "Track and monitor costs across model tiers",
+    "Combine all components into a production-ready router",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Model Routing",
+      definition:
+        "Dynamically selecting the optimal LLM for each query based on complexity, cost, and latency requirements",
+    },
+    {
+      term: "Complexity Assessment",
+      definition:
+        "Analyzing query characteristics to determine required model capability",
+    },
+    {
+      term: "Semantic Caching",
+      definition:
+        "Caching responses based on semantic similarity rather than exact string matching",
+    },
+    {
+      term: "Prompt Caching",
+      definition:
+        "Provider-specific feature that caches system prompts to reduce token costs on repeated calls",
+    },
+    {
+      term: "Cost Per Token",
+      definition:
+        "The price charged by LLM providers per input/output token, varying significantly by model tier",
+    },
+  ]}
+/>
+
+---
+
+## The Cost Problem
+
+<ConceptIntro
+  title="Model Routing"
+  analogy="Think of model routing like a hospital triage system. Not every patient needs a specialist—a nurse can handle a simple bandage, a general practitioner can treat common illnesses, and specialists are reserved for complex cases. Similarly, not every query needs GPT-4o or Claude 3.5 Sonnet. Simple questions can be handled by faster, cheaper models, while complex reasoning tasks get routed to premium models."
+  technicalDef="Model routing is a system that analyzes incoming queries and dynamically selects the optimal LLM based on complexity, required capabilities, cost constraints, and latency requirements. It typically combines complexity assessment, model tier selection, caching layers, and fallback strategies."
+  whyItMatters="LLM costs can spiral quickly in production. A well-designed routing system can reduce costs by 60-80% while maintaining quality for complex queries. This is the difference between a sustainable AI product and one that bleeds money."
+/>
+
+Most production applications send every query to their most capable (and expensive) model. This is wasteful:
+
+- **80% of queries are simple**: Greetings, factual lookups, basic formatting
+- **15% are moderate**: Summarization, simple analysis, structured extraction
+- **5% are complex**: Multi-step reasoning, creative tasks, nuanced analysis
+
+<Callout type="warning">
+  **The Hidden Cost:** A single GPT-4o call costs ~$0.01. That seems cheap until
+  you're handling 1M requests/month = $10,000. Route 80% to GPT-4o-mini at
+  $0.0003/call and you're at $2,600—a 74% reduction.
+</Callout>
+
+### Model Tier Comparison
+
+| Model                 | Input Cost (per 1M tokens) | Output Cost (per 1M tokens) | Latency | Best For                                   |
+| :-------------------- | :------------------------- | :-------------------------- | :------ | :----------------------------------------- |
+| **GPT-4o-mini**       | $0.15                      | $0.60                       | ~200ms  | Simple queries, classification, extraction |
+| **GPT-4o**            | $2.50                      | $10.00                      | ~500ms  | Complex analysis, nuanced responses        |
+| **o1-mini**           | $3.00                      | $12.00                      | ~2s     | Math, logic, structured reasoning          |
+| **o1**                | $15.00                     | $60.00                      | ~5s     | Research-level reasoning, complex problems |
+| **Claude 3.5 Sonnet** | $3.00                      | $15.00                      | ~400ms  | Long context, coding, analysis             |
+| **Claude 3.5 Haiku**  | $0.25                      | $1.25                       | ~150ms  | Fast responses, simple tasks               |
+
+<Mermaid
+  chart={`
+flowchart TD
+    Q[Incoming Query] --> CA[Complexity Assessment]
+    
+    CA --> |Score 0-30| FAST[Fast Tier<br/>GPT-4o-mini / Haiku]
+    CA --> |Score 31-70| STD[Standard Tier<br/>GPT-4o / Sonnet]
+    CA --> |Score 71-100| REASON[Reasoning Tier<br/>o1 / o1-mini]
+    
+    FAST --> CACHE{Semantic Cache<br/>Hit?}
+    STD --> CACHE
+    REASON --> CACHE
+    
+    CACHE --> |Yes| CACHED[Return Cached<br/>Response]
+    CACHE --> |No| CALL[Call Selected<br/>Model]
+    
+    CALL --> STORE[Store in Cache]
+    STORE --> RESP[Return Response]
+    CACHED --> RESP
+    
+    style CA fill:#f9f,stroke:#333
+    style CACHE fill:#bbf,stroke:#333
+    style FAST fill:#bfb,stroke:#333
+    style STD fill:#ff9,stroke:#333
+    style REASON fill:#f99,stroke:#333
+`}
+/>
+
+---
+
+## 19.1 Complexity Assessment
+
+The foundation of intelligent routing is accurately assessing query complexity. We analyze multiple signals:
+
+- **Query length**: Longer queries often indicate more complex requests
+- **Technical vocabulary**: Domain-specific terms suggest specialized knowledge needed
+- **Reasoning indicators**: Words like "analyze", "compare", "explain why" signal deeper thinking
+- **Multi-step detection**: Queries with multiple sub-questions or "and then" patterns
+- **Ambiguity markers**: Vague or open-ended questions need more capable models
+
+```python title="complexity_assessor.py"
+from dataclasses import dataclass
+from typing import List, Set
+import re
+
+
+@dataclass
+class ComplexityScore:
+    """Result of complexity assessment."""
+
+    score: int  # 0-100
+    factors: dict[str, int]  # Individual factor scores
+    reasoning: str  # Human-readable explanation
+    recommended_tier: str  # "fast", "standard", or "reasoning"
+
+
+class ComplexityAssessor:
+    """
+    Assess query complexity to determine optimal model tier.
+
+    Scoring is based on multiple weighted factors that indicate
+    the cognitive load required to answer the query well.
+    """
+
+    # Indicators of complex reasoning requirements
+    REASONING_INDICATORS: Set[str] = {
+        "analyze", "compare", "contrast", "evaluate", "explain why",
+        "what if", "implications", "trade-offs", "pros and cons",
+        "step by step", "reasoning", "logic", "prove", "derive",
+        "synthesize", "critique", "assess", "hypothesize"
+    }
+
+    # Technical domains that benefit from stronger models
+    TECHNICAL_DOMAINS: Set[str] = {
+        "algorithm", "complexity", "optimization", "architecture",
+        "distributed", "concurrent", "async", "cryptography",
+        "machine learning", "neural network", "gradient", "backprop",
+        "kubernetes", "microservices", "database", "sql", "nosql",
+        "security", "authentication", "authorization", "encryption"
+    }
+
+    # Simple query patterns (likely don't need powerful models)
+    SIMPLE_PATTERNS: List[str] = [
+        r"^(hi|hello|hey|thanks|thank you|bye|goodbye)",
+        r"^what is (a |an |the )?[\w\s]{1,20}\??$",
+        r"^(yes|no|ok|okay|sure|got it)",
+        r"^(define|meaning of) [\w\s]{1,30}$",
+    ]
+
+    def __init__(
+        self,
+        length_weight: float = 0.15,
+        technical_weight: float = 0.25,
+        reasoning_weight: float = 0.30,
+        multistep_weight: float = 0.20,
+        ambiguity_weight: float = 0.10,
+    ):
+        """
+        Initialize with configurable weights for each factor.
+
+        Args:
+            length_weight: Weight for query length factor
+            technical_weight: Weight for technical vocabulary
+            reasoning_weight: Weight for reasoning indicators
+            multistep_weight: Weight for multi-step detection
+            ambiguity_weight: Weight for ambiguity markers
+        """
+        self.weights = {
+            "length": length_weight,
+            "technical": technical_weight,
+            "reasoning": reasoning_weight,
+            "multistep": multistep_weight,
+            "ambiguity": ambiguity_weight,
+        }
+
+        # Compile simple patterns for efficiency
+        self._simple_patterns = [
+            re.compile(p, re.IGNORECASE) for p in self.SIMPLE_PATTERNS
+        ]
+
+    def assess(self, query: str) -> ComplexityScore:
+        """
+        Assess the complexity of a query.
+
+        Args:
+            query: The user's query text
+
+        Returns:
+            ComplexityScore with score, factors, and recommendation
+        """
+        # Check for simple patterns first (fast path)
+        if self._is_simple_query(query):
+            return ComplexityScore(
+                score=10,
+                factors={"simple_pattern": 10},
+                reasoning="Query matches simple pattern (greeting, basic definition)",
+                recommended_tier="fast"
+            )
+
+        # Calculate individual factor scores
+        factors = {
+            "length": self._score_length(query),
+            "technical": self._score_technical(query),
+            "reasoning": self._score_reasoning(query),
+            "multistep": self._score_multistep(query),
+            "ambiguity": self._score_ambiguity(query),
+        }
+
+        # Calculate weighted total
+        total = sum(
+            factors[k] * self.weights[k] * 100
+            for k in factors
+        )
+        score = min(100, int(total))
+
+        # Determine tier
+        if score <= 30:
+            tier = "fast"
+        elif score <= 70:
+            tier = "standard"
+        else:
+            tier = "reasoning"
+
+        # Generate reasoning
+        top_factors = sorted(
+            factors.items(), key=lambda x: x[1], reverse=True
+        )[:2]
+        reasoning = f"Score {score}: driven by {top_factors[0][0]} ({top_factors[0][1]:.0%})"
+        if top_factors[1][1] > 0.3:
+            reasoning += f" and {top_factors[1][0]} ({top_factors[1][1]:.0%})"
+
+        return ComplexityScore(
+            score=score,
+            factors={k: int(v * 100) for k, v in factors.items()},
+            reasoning=reasoning,
+            recommended_tier=tier
+        )
+
+    def _is_simple_query(self, query: str) -> bool:
+        """Check if query matches simple patterns."""
+        query_lower = query.lower().strip()
+        return any(p.match(query_lower) for p in self._simple_patterns)
+
+    def _score_length(self, query: str) -> float:
+        """Score based on query length (0-1)."""
+        words = len(query.split())
+        if words <= 5:
+            return 0.1
+        elif words <= 15:
+            return 0.3
+        elif words <= 30:
+            return 0.5
+        elif words <= 50:
+            return 0.7
+        else:
+            return 0.9
+
+    def _score_technical(self, query: str) -> float:
+        """Score based on technical vocabulary (0-1)."""
+        query_lower = query.lower()
+        matches = sum(
+            1 for term in self.TECHNICAL_DOMAINS
+            if term in query_lower
+        )
+        if matches == 0:
+            return 0.0
+        elif matches == 1:
+            return 0.4
+        elif matches <= 3:
+            return 0.7
+        else:
+            return 1.0
+
+    def _score_reasoning(self, query: str) -> float:
+        """Score based on reasoning indicators (0-1)."""
+        query_lower = query.lower()
+        matches = sum(
+            1 for indicator in self.REASONING_INDICATORS
+            if indicator in query_lower
+        )
+        if matches == 0:
+            return 0.0
+        elif matches == 1:
+            return 0.5
+        elif matches == 2:
+            return 0.75
+        else:
+            return 1.0
+
+    def _score_multistep(self, query: str) -> float:
+        """Score based on multi-step indicators (0-1)."""
+        query_lower = query.lower()
+
+        # Count question marks (multiple questions)
+        question_count = query.count("?")
+
+        # Check for sequence indicators
+        sequence_indicators = [
+            "and then", "after that", "next", "finally",
+            "first", "second", "third", "step",
+            "1.", "2.", "3.", "a)", "b)", "c)"
+        ]
+        sequence_matches = sum(
+            1 for ind in sequence_indicators if ind in query_lower
+        )
+
+        # Check for list requests
+        list_indicators = ["list", "enumerate", "all the", "each of"]
+        list_matches = sum(
+            1 for ind in list_indicators if ind in query_lower
+        )
+
+        total_signals = question_count + sequence_matches + list_matches
+
+        if total_signals == 0:
+            return 0.0
+        elif total_signals == 1:
+            return 0.3
+        elif total_signals <= 3:
+            return 0.6
+        else:
+            return 0.9
+
+    def _score_ambiguity(self, query: str) -> float:
+        """Score based on ambiguity markers (0-1)."""
+        query_lower = query.lower()
+
+        ambiguity_markers = [
+            "best", "should i", "recommend", "opinion",
+            "what do you think", "how would you", "creative",
+            "interesting", "good", "better", "optimal"
+        ]
+
+        matches = sum(
+            1 for marker in ambiguity_markers if marker in query_lower
+        )
+
+        if matches == 0:
+            return 0.0
+        elif matches == 1:
+            return 0.4
+        elif matches == 2:
+            return 0.7
+        else:
+            return 1.0
+
+
+# Example usage
+if __name__ == "__main__":
+    assessor = ComplexityAssessor()
+
+    test_queries = [
+        "Hello!",
+        "What is Python?",
+        "Explain the trade-offs between SQL and NoSQL databases for a high-throughput event streaming system",
+        "Compare and contrast microservices vs monolithic architecture, analyzing the implications for team structure, deployment complexity, and system reliability",
+    ]
+
+    for query in test_queries:
+        result = assessor.assess(query)
+        print(f"\nQuery: {query[:50]}...")
+        print(f"  Score: {result.score} -> {result.recommended_tier}")
+        print(f"  Factors: {result.factors}")
+        print(f"  Reasoning: {result.reasoning}")
+```
+
+<Callout type="tip">
+  **Tuning Tips:** Start with these default weights and adjust based on your
+  domain. If you're building a coding assistant, increase `technical_weight`.
+  For a research tool, increase `reasoning_weight`. Monitor misrouted queries
+  and adjust thresholds accordingly.
+</Callout>
+
+---
+
+## 19.2 Model Tier Selection
+
+With complexity scores in hand, we need a router that selects the appropriate model and handles failures gracefully.
+
+<Mermaid
+  chart={`
+flowchart TD
+    subgraph Selection["Model Selection"]
+        SCORE[Complexity Score] --> TIER{Select Tier}
+        TIER --> |0-30| T1[Tier 1: Fast]
+        TIER --> |31-70| T2[Tier 2: Standard]
+        TIER --> |71-100| T3[Tier 3: Reasoning]
+    end
+    
+    subgraph Fallback["Fallback Chain"]
+        T1 --> M1[GPT-4o-mini]
+        M1 --> |Fail| M1B[Claude Haiku]
+        M1B --> |Fail| M2[Escalate to Standard]
+        
+        T2 --> M2A[GPT-4o]
+        M2A --> |Fail| M2B[Claude Sonnet]
+        M2B --> |Fail| M3[Escalate to Reasoning]
+        
+        T3 --> M3A[o1-mini]
+        M3A --> |Fail| M3B[o1]
+        M3B --> |Fail| ERR[Return Error]
+    end
+    
+    style TIER fill:#f9f,stroke:#333
+    style T1 fill:#bfb,stroke:#333
+    style T2 fill:#ff9,stroke:#333
+    style T3 fill:#f99,stroke:#333
+`}
+/>
+
+```python title="model_router.py"
+from dataclasses import dataclass
+from typing import Optional, List, Callable, Any
+from enum import Enum
+import asyncio
+import logging
+from openai import AsyncOpenAI
+from anthropic import AsyncAnthropic
+
+from complexity_assessor import ComplexityAssessor, ComplexityScore
+
+
+logger = logging.getLogger(__name__)
+
+
+class ModelTier(Enum):
+    """Model capability tiers."""
+    FAST = "fast"
+    STANDARD = "standard"
+    REASONING = "reasoning"
+
+
+@dataclass
+class ModelConfig:
+    """Configuration for a specific model."""
+
+    name: str
+    provider: str  # "openai" or "anthropic"
+    model_id: str
+    input_cost_per_1m: float  # Cost per 1M input tokens
+    output_cost_per_1m: float  # Cost per 1M output tokens
+    max_tokens: int = 4096
+    timeout: float = 30.0
+
+
+@dataclass
+class RoutingResult:
+    """Result of a routing decision."""
+
+    response: str
+    model_used: str
+    tier: ModelTier
+    complexity_score: int
+    tokens_used: dict[str, int]
+    cost: float
+    latency_ms: float
+    cache_hit: bool = False
+    fallback_used: bool = False
+
+
+class ModelRouter:
+    """
+    Intelligent model router with tiered selection and fallbacks.
+
+    Routes queries to the optimal model based on complexity assessment,
+    with automatic fallback to alternative models on failure.
+    """
+
+    # Default model configurations
+    DEFAULT_MODELS: dict[ModelTier, List[ModelConfig]] = {
+        ModelTier.FAST: [
+            ModelConfig(
+                name="gpt-4o-mini",
+                provider="openai",
+                model_id="gpt-4o-mini",
+                input_cost_per_1m=0.15,
+                output_cost_per_1m=0.60,
+                timeout=15.0
+            ),
+            ModelConfig(
+                name="claude-haiku",
+                provider="anthropic",
+                model_id="claude-3-5-haiku-latest",
+                input_cost_per_1m=0.25,
+                output_cost_per_1m=1.25,
+                timeout=15.0
+            ),
+        ],
+        ModelTier.STANDARD: [
+            ModelConfig(
+                name="gpt-4o",
+                provider="openai",
+                model_id="gpt-4o",
+                input_cost_per_1m=2.50,
+                output_cost_per_1m=10.00,
+                timeout=30.0
+            ),
+            ModelConfig(
+                name="claude-sonnet",
+                provider="anthropic",
+                model_id="claude-3-5-sonnet-latest",
+                input_cost_per_1m=3.00,
+                output_cost_per_1m=15.00,
+                timeout=30.0
+            ),
+        ],
+        ModelTier.REASONING: [
+            ModelConfig(
+                name="o1-mini",
+                provider="openai",
+                model_id="o1-mini",
+                input_cost_per_1m=3.00,
+                output_cost_per_1m=12.00,
+                timeout=60.0
+            ),
+            ModelConfig(
+                name="o1",
+                provider="openai",
+                model_id="o1",
+                input_cost_per_1m=15.00,
+                output_cost_per_1m=60.00,
+                timeout=120.0
+            ),
+        ],
+    }
+
+    def __init__(
+        self,
+        openai_client: Optional[AsyncOpenAI] = None,
+        anthropic_client: Optional[AsyncAnthropic] = None,
+        models: Optional[dict[ModelTier, List[ModelConfig]]] = None,
+        assessor: Optional[ComplexityAssessor] = None,
+        escalate_on_failure: bool = True,
+    ):
+        """
+        Initialize the model router.
+
+        Args:
+            openai_client: AsyncOpenAI client instance
+            anthropic_client: AsyncAnthropic client instance
+            models: Custom model configurations per tier
+            assessor: ComplexityAssessor instance
+            escalate_on_failure: Whether to try higher tiers on failure
+        """
+        self.openai = openai_client or AsyncOpenAI()
+        self.anthropic = anthropic_client or AsyncAnthropic()
+        self.models = models or self.DEFAULT_MODELS
+        self.assessor = assessor or ComplexityAssessor()
+        self.escalate_on_failure = escalate_on_failure
+
+    async def route(
+        self,
+        query: str,
+        system_prompt: Optional[str] = None,
+        force_tier: Optional[ModelTier] = None,
+        max_retries: int = 2,
+    ) -> RoutingResult:
+        """
+        Route a query to the optimal model.
+
+        Args:
+            query: User's query text
+            system_prompt: Optional system prompt
+            force_tier: Force a specific tier (bypasses assessment)
+            max_retries: Max retries per model before fallback
+
+        Returns:
+            RoutingResult with response and metadata
+        """
+        import time
+        start_time = time.perf_counter()
+
+        # Assess complexity (or use forced tier)
+        if force_tier:
+            tier = force_tier
+            complexity = ComplexityScore(
+                score=50, factors={}, reasoning="Forced tier",
+                recommended_tier=force_tier.value
+            )
+        else:
+            complexity = self.assessor.assess(query)
+            tier = ModelTier(complexity.recommended_tier)
+
+        logger.info(
+            f"Routing query (score={complexity.score}) to tier={tier.value}"
+        )
+
+        # Try models in the selected tier
+        models_to_try = list(self.models[tier])
+
+        # Add escalation tiers if enabled
+        if self.escalate_on_failure:
+            tier_order = [ModelTier.FAST, ModelTier.STANDARD, ModelTier.REASONING]
+            current_idx = tier_order.index(tier)
+            for higher_tier in tier_order[current_idx + 1:]:
+                models_to_try.extend(self.models[higher_tier])
+
+        last_error: Optional[Exception] = None
+        fallback_used = False
+
+        for i, model in enumerate(models_to_try):
+            if i > 0:
+                fallback_used = True
+                logger.warning(f"Falling back to {model.name}")
+
+            for attempt in range(max_retries):
+                try:
+                    response, tokens = await self._call_model(
+                        model, query, system_prompt
+                    )
+
+                    latency_ms = (time.perf_counter() - start_time) * 1000
+                    cost = self._calculate_cost(model, tokens)
+
+                    return RoutingResult(
+                        response=response,
+                        model_used=model.name,
+                        tier=tier,
+                        complexity_score=complexity.score,
+                        tokens_used=tokens,
+                        cost=cost,
+                        latency_ms=latency_ms,
+                        fallback_used=fallback_used,
+                    )
+
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        f"Attempt {attempt + 1}/{max_retries} failed for "
+                        f"{model.name}: {e}"
+                    )
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1.0 * (attempt + 1))  # Backoff
+
+        # All models failed
+        raise RuntimeError(
+            f"All models failed. Last error: {last_error}"
+        )
+
+    async def _call_model(
+        self,
+        model: ModelConfig,
+        query: str,
+        system_prompt: Optional[str],
+    ) -> tuple[str, dict[str, int]]:
+        """Call a specific model and return response with token counts."""
+
+        if model.provider == "openai":
+            return await self._call_openai(model, query, system_prompt)
+        elif model.provider == "anthropic":
+            return await self._call_anthropic(model, query, system_prompt)
+        else:
+            raise ValueError(f"Unknown provider: {model.provider}")
+
+    async def _call_openai(
+        self,
+        model: ModelConfig,
+        query: str,
+        system_prompt: Optional[str],
+    ) -> tuple[str, dict[str, int]]:
+        """Call OpenAI model."""
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": query})
+
+        response = await asyncio.wait_for(
+            self.openai.chat.completions.create(
+                model=model.model_id,
+                messages=messages,
+                max_tokens=model.max_tokens,
+            ),
+            timeout=model.timeout
+        )
+
+        return (
+            response.choices[0].message.content,
+            {
+                "input": response.usage.prompt_tokens,
+                "output": response.usage.completion_tokens,
+            }
+        )
+
+    async def _call_anthropic(
+        self,
+        model: ModelConfig,
+        query: str,
+        system_prompt: Optional[str],
+    ) -> tuple[str, dict[str, int]]:
+        """Call Anthropic model."""
+        response = await asyncio.wait_for(
+            self.anthropic.messages.create(
+                model=model.model_id,
+                max_tokens=model.max_tokens,
+                system=system_prompt or "",
+                messages=[{"role": "user", "content": query}],
+            ),
+            timeout=model.timeout
+        )
+
+        return (
+            response.content[0].text,
+            {
+                "input": response.usage.input_tokens,
+                "output": response.usage.output_tokens,
+            }
+        )
+
+    def _calculate_cost(
+        self,
+        model: ModelConfig,
+        tokens: dict[str, int],
+    ) -> float:
+        """Calculate cost for a request."""
+        input_cost = (tokens["input"] / 1_000_000) * model.input_cost_per_1m
+        output_cost = (tokens["output"] / 1_000_000) * model.output_cost_per_1m
+        return input_cost + output_cost
+
+
+# Example usage
+async def main():
+    router = ModelRouter()
+
+    # Simple query -> fast tier
+    result = await router.route("What is Python?")
+    print(f"Simple: {result.model_used} (${result.cost:.6f})")
+
+    # Complex query -> reasoning tier
+    result = await router.route(
+        "Analyze the trade-offs between eventual consistency and strong "
+        "consistency in distributed databases, considering CAP theorem "
+        "implications for a global e-commerce platform."
+    )
+    print(f"Complex: {result.model_used} (${result.cost:.6f})")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+<Callout type="info">
+  **Provider Diversity:** Using multiple providers (OpenAI + Anthropic) provides
+  resilience. If one provider has an outage, your system continues working. This
+  is critical for production systems with SLAs.
+</Callout>
+
+---
+
+## 19.3 Semantic Caching
+
+Exact-match caching misses semantically identical queries. "What's the weather?" and "Tell me the weather" are different strings but the same intent. Semantic caching uses embeddings to find similar past queries.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant U as User
+    participant R as Router
+    participant C as Semantic Cache
+    participant E as Embeddings
+    participant M as Model
+    
+    U->>R: "What's the capital of France?"
+    R->>E: Generate embedding
+    E-->>R: [0.12, -0.34, ...]
+    R->>C: Search similar (threshold=0.95)
+    
+    alt Cache Hit
+        C-->>R: Found: "capital of France?" → "Paris"
+        R-->>U: "Paris" (cached, 0ms)
+    else Cache Miss
+        C-->>R: No match found
+        R->>M: Query model
+        M-->>R: "Paris is the capital..."
+        R->>C: Store (embedding, response)
+        R-->>U: "Paris is the capital..."
+    end
+`}
+/>
+
+```python title="semantic_cache.py"
+from dataclasses import dataclass
+from typing import Optional, List, Tuple
+from datetime import datetime, timedelta
+import hashlib
+import json
+import numpy as np
+from openai import OpenAI
+
+
+@dataclass
+class CacheEntry:
+    """A cached query-response pair."""
+
+    query: str
+    response: str
+    embedding: List[float]
+    model_used: str
+    created_at: datetime
+    ttl_seconds: int
+    hit_count: int = 0
+
+    def is_expired(self) -> bool:
+        """Check if this entry has expired."""
+        expiry = self.created_at + timedelta(seconds=self.ttl_seconds)
+        return datetime.now() > expiry
+
+
+class SemanticCache:
+    """
+    Semantic cache using embeddings for similarity matching.
+
+    Uses cosine similarity to find semantically similar queries,
+    avoiding redundant API calls for paraphrased questions.
+    """
+
+    def __init__(
+        self,
+        similarity_threshold: float = 0.95,
+        default_ttl: int = 3600,
+        max_entries: int = 10000,
+        embedding_model: str = "text-embedding-3-small",
+    ):
+        """
+        Initialize the semantic cache.
+
+        Args:
+            similarity_threshold: Minimum similarity for cache hit (0.92-0.98 recommended)
+            default_ttl: Default time-to-live in seconds
+            max_entries: Maximum cache entries before eviction
+            embedding_model: OpenAI embedding model to use
+        """
+        self.threshold = similarity_threshold
+        self.default_ttl = default_ttl
+        self.max_entries = max_entries
+        self.embedding_model = embedding_model
+
+        self.client = OpenAI()
+        self.entries: dict[str, CacheEntry] = {}
+        self._embeddings_matrix: Optional[np.ndarray] = None
+        self._entry_keys: List[str] = []
+
+        # Stats
+        self.hits = 0
+        self.misses = 0
+
+    def get(
+        self,
+        query: str,
+        threshold: Optional[float] = None,
+    ) -> Optional[Tuple[str, float]]:
+        """
+        Look up a query in the cache.
+
+        Args:
+            query: The query to look up
+            threshold: Override similarity threshold
+
+        Returns:
+            Tuple of (cached_response, similarity_score) or None
+        """
+        if not self.entries:
+            self.misses += 1
+            return None
+
+        threshold = threshold or self.threshold
+
+        # Generate embedding for query
+        query_embedding = self._get_embedding(query)
+
+        # Find most similar cached entry
+        best_match, similarity = self._find_similar(query_embedding)
+
+        if best_match and similarity >= threshold:
+            # Check expiration
+            if best_match.is_expired():
+                self._remove_entry(best_match.query)
+                self.misses += 1
+                return None
+
+            # Cache hit
+            best_match.hit_count += 1
+            self.hits += 1
+            return (best_match.response, similarity)
+
+        self.misses += 1
+        return None
+
+    def set(
+        self,
+        query: str,
+        response: str,
+        model_used: str,
+        ttl: Optional[int] = None,
+    ) -> None:
+        """
+        Store a query-response pair in the cache.
+
+        Args:
+            query: The original query
+            response: The model's response
+            model_used: Which model generated the response
+            ttl: Time-to-live in seconds (uses default if not specified)
+        """
+        # Evict if at capacity
+        if len(self.entries) >= self.max_entries:
+            self._evict_oldest()
+
+        embedding = self._get_embedding(query)
+
+        entry = CacheEntry(
+            query=query,
+            response=response,
+            embedding=embedding,
+            model_used=model_used,
+            created_at=datetime.now(),
+            ttl_seconds=ttl or self.default_ttl,
+        )
+
+        key = self._make_key(query)
+        self.entries[key] = entry
+        self._rebuild_matrix()
+
+    def invalidate(self, query: str) -> bool:
+        """
+        Remove a specific query from the cache.
+
+        Args:
+            query: The query to invalidate
+
+        Returns:
+            True if entry was found and removed
+        """
+        key = self._make_key(query)
+        if key in self.entries:
+            del self.entries[key]
+            self._rebuild_matrix()
+            return True
+        return False
+
+    def invalidate_similar(
+        self,
+        query: str,
+        threshold: float = 0.90,
+    ) -> int:
+        """
+        Remove all entries similar to a query.
+
+        Useful for invalidating cached responses when underlying
+        data changes (e.g., document updates in RAG).
+
+        Args:
+            query: The query to match against
+            threshold: Similarity threshold for invalidation
+
+        Returns:
+            Number of entries removed
+        """
+        if not self.entries:
+            return 0
+
+        query_embedding = self._get_embedding(query)
+
+        # Find all similar entries
+        to_remove = []
+        for key, entry in self.entries.items():
+            similarity = self._cosine_similarity(
+                query_embedding, entry.embedding
+            )
+            if similarity >= threshold:
+                to_remove.append(key)
+
+        # Remove them
+        for key in to_remove:
+            del self.entries[key]
+
+        if to_remove:
+            self._rebuild_matrix()
+
+        return len(to_remove)
+
+    def clear(self) -> None:
+        """Clear all cache entries."""
+        self.entries.clear()
+        self._embeddings_matrix = None
+        self._entry_keys = []
+
+    def stats(self) -> dict:
+        """Get cache statistics."""
+        total = self.hits + self.misses
+        hit_rate = self.hits / total if total > 0 else 0
+
+        return {
+            "entries": len(self.entries),
+            "hits": self.hits,
+            "misses": self.misses,
+            "hit_rate": hit_rate,
+            "max_entries": self.max_entries,
+        }
+
+    def _get_embedding(self, text: str) -> List[float]:
+        """Generate embedding for text."""
+        response = self.client.embeddings.create(
+            model=self.embedding_model,
+            input=text,
+        )
+        return response.data[0].embedding
+
+    def _find_similar(
+        self,
+        query_embedding: List[float],
+    ) -> Tuple[Optional[CacheEntry], float]:
+        """Find the most similar cached entry."""
+        if self._embeddings_matrix is None or len(self._entry_keys) == 0:
+            return None, 0.0
+
+        # Vectorized cosine similarity
+        query_vec = np.array(query_embedding)
+        query_norm = query_vec / np.linalg.norm(query_vec)
+
+        similarities = np.dot(self._embeddings_matrix, query_norm)
+        best_idx = np.argmax(similarities)
+        best_similarity = similarities[best_idx]
+
+        best_key = self._entry_keys[best_idx]
+        return self.entries[best_key], float(best_similarity)
+
+    def _cosine_similarity(
+        self,
+        vec1: List[float],
+        vec2: List[float],
+    ) -> float:
+        """Calculate cosine similarity between two vectors."""
+        a = np.array(vec1)
+        b = np.array(vec2)
+        return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+
+    def _rebuild_matrix(self) -> None:
+        """Rebuild the embeddings matrix for fast similarity search."""
+        if not self.entries:
+            self._embeddings_matrix = None
+            self._entry_keys = []
+            return
+
+        self._entry_keys = list(self.entries.keys())
+        embeddings = [
+            self.entries[k].embedding for k in self._entry_keys
+        ]
+
+        # Normalize for cosine similarity
+        matrix = np.array(embeddings)
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        self._embeddings_matrix = matrix / norms
+
+    def _make_key(self, query: str) -> str:
+        """Generate a unique key for a query."""
+        return hashlib.sha256(query.encode()).hexdigest()[:16]
+
+    def _remove_entry(self, query: str) -> None:
+        """Remove an entry by query."""
+        key = self._make_key(query)
+        if key in self.entries:
+            del self.entries[key]
+            self._rebuild_matrix()
+
+    def _evict_oldest(self) -> None:
+        """Evict the oldest entry (LRU-style)."""
+        if not self.entries:
+            return
+
+        oldest_key = min(
+            self.entries.keys(),
+            key=lambda k: self.entries[k].created_at
+        )
+        del self.entries[oldest_key]
+        self._rebuild_matrix()
+
+
+# Example usage
+if __name__ == "__main__":
+    cache = SemanticCache(similarity_threshold=0.92)
+
+    # Store a response
+    cache.set(
+        query="What is the capital of France?",
+        response="The capital of France is Paris.",
+        model_used="gpt-4o-mini"
+    )
+
+    # Try similar queries
+    test_queries = [
+        "What is the capital of France?",  # Exact match
+        "What's France's capital?",  # Paraphrase
+        "Tell me the capital of France",  # Different phrasing
+        "What is the capital of Germany?",  # Different question
+    ]
+
+    for q in test_queries:
+        result = cache.get(q)
+        if result:
+            response, similarity = result
+            print(f"✓ HIT ({similarity:.2%}): {q[:40]}")
+        else:
+            print(f"✗ MISS: {q[:40]}")
+
+    print(f"\nStats: {cache.stats()}")
+```
+
+<Callout type="warning">
+  **Threshold Tuning:** A threshold of 0.95+ is conservative (fewer false
+  positives but more cache misses). 0.90-0.92 is aggressive (more hits but risk
+  of returning wrong cached answers). Start at 0.95 and lower based on your
+  error tolerance.
+</Callout>
+
+### Integration with Vector Databases
+
+For production systems with millions of cached entries, use a proper vector database:
+
+```python title="semantic_cache_chromadb.py"
+import chromadb
+from chromadb.config import Settings
+from typing import Optional, Tuple
+from datetime import datetime
+import json
+
+
+class ProductionSemanticCache:
+    """
+    Production-ready semantic cache using ChromaDB.
+
+    Scales to millions of entries with efficient ANN search.
+    """
+
+    def __init__(
+        self,
+        persist_path: str = "./cache_db",
+        collection_name: str = "semantic_cache",
+        similarity_threshold: float = 0.95,
+    ):
+        self.threshold = similarity_threshold
+
+        # Initialize ChromaDB with persistence
+        self.client = chromadb.PersistentClient(
+            path=persist_path,
+            settings=Settings(anonymized_telemetry=False)
+        )
+
+        self.collection = self.client.get_or_create_collection(
+            name=collection_name,
+            metadata={"hnsw:space": "cosine"}
+        )
+
+    def get(self, query: str) -> Optional[Tuple[str, float]]:
+        """Look up a query in the cache."""
+        results = self.collection.query(
+            query_texts=[query],
+            n_results=1,
+            include=["documents", "metadatas", "distances"]
+        )
+
+        if not results["ids"][0]:
+            return None
+
+        # ChromaDB returns distance, convert to similarity
+        distance = results["distances"][0][0]
+        similarity = 1 - distance
+
+        if similarity >= self.threshold:
+            metadata = results["metadatas"][0][0]
+
+            # Check TTL
+            created = datetime.fromisoformat(metadata["created_at"])
+            ttl = metadata.get("ttl_seconds", 3600)
+            if (datetime.now() - created).total_seconds() > ttl:
+                # Expired - delete and return miss
+                self.collection.delete(ids=[results["ids"][0][0]])
+                return None
+
+            return (metadata["response"], similarity)
+
+        return None
+
+    def set(
+        self,
+        query: str,
+        response: str,
+        model_used: str,
+        ttl: int = 3600,
+    ) -> None:
+        """Store a query-response pair."""
+        cache_id = f"cache_{hash(query) % 10**12}"
+
+        self.collection.upsert(
+            ids=[cache_id],
+            documents=[query],
+            metadatas=[{
+                "response": response,
+                "model_used": model_used,
+                "created_at": datetime.now().isoformat(),
+                "ttl_seconds": ttl,
+            }]
+        )
+
+    def invalidate_by_prefix(self, prefix: str) -> int:
+        """Invalidate all entries matching a prefix pattern."""
+        # Use metadata filtering if you tag entries by topic/domain
+        results = self.collection.get(
+            where={"topic": {"$eq": prefix}},
+            include=["metadatas"]
+        )
+
+        if results["ids"]:
+            self.collection.delete(ids=results["ids"])
+            return len(results["ids"])
+        return 0
+```
+
+---
+
+## 19.4 Prompt Caching
+
+Prompt caching is a provider-specific feature that caches system prompts server-side, reducing costs when the same system prompt is used repeatedly.
+
+<ConceptIntro
+  title="Prompt Caching"
+  analogy="Imagine you're a teacher who gives the same introduction every class: 'Welcome to Math 101, here are the rules...' Instead of writing it on the board each time, you print it on a poster that stays up. Prompt caching is similar—the provider stores your system prompt so you don't pay to send it every time."
+  technicalDef="Prompt caching stores frequently-used prompt prefixes on the provider's servers. When you send a request with a cached prefix, you pay reduced rates for those tokens (often 50-90% less). The cache is keyed by exact token sequence."
+  whyItMatters="System prompts can be 1000+ tokens. If you're making 100K requests/day with the same system prompt, prompt caching can save thousands of dollars monthly."
+/>
+
+### Anthropic Prompt Caching
+
+Anthropic's prompt caching is explicit—you mark which parts to cache:
+
+```python title="anthropic_prompt_caching.py"
+from anthropic import Anthropic
+
+
+def call_with_prompt_caching(
+    client: Anthropic,
+    system_prompt: str,
+    user_message: str,
+    model: str = "claude-3-5-sonnet-latest",
+) -> dict:
+    """
+    Call Claude with prompt caching enabled.
+
+    The system prompt is marked for caching. On subsequent calls
+    with the same system prompt, you pay reduced rates.
+
+    Args:
+        client: Anthropic client
+        system_prompt: System prompt to cache
+        user_message: User's message
+        model: Model to use
+
+    Returns:
+        Response with cache statistics
+    """
+    response = client.messages.create(
+        model=model,
+        max_tokens=1024,
+        system=[
+            {
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"}  # Enable caching
+            }
+        ],
+        messages=[
+            {"role": "user", "content": user_message}
+        ]
+    )
+
+    # Extract cache statistics from response
+    usage = response.usage
+
+    return {
+        "response": response.content[0].text,
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "cache_creation_input_tokens": getattr(
+            usage, "cache_creation_input_tokens", 0
+        ),
+        "cache_read_input_tokens": getattr(
+            usage, "cache_read_input_tokens", 0
+        ),
+    }
+
+
+# Example usage
+if __name__ == "__main__":
+    client = Anthropic()
+
+    # Long system prompt (benefits most from caching)
+    system_prompt = """You are an expert code reviewer for a Python codebase.
+
+## Code Standards
+- Follow PEP 8 style guidelines
+- Use type hints for all function parameters and returns
+- Write docstrings for all public functions
+- Keep functions under 50 lines
+- Use meaningful variable names
+
+## Review Checklist
+1. Check for security vulnerabilities (SQL injection, XSS, etc.)
+2. Verify error handling is comprehensive
+3. Ensure logging is appropriate
+4. Check for performance issues
+5. Verify tests are adequate
+
+## Response Format
+Provide feedback in this structure:
+- **Summary**: One-line overview
+- **Issues**: Numbered list of problems
+- **Suggestions**: Improvements to consider
+- **Verdict**: APPROVE, REQUEST_CHANGES, or NEEDS_DISCUSSION
+"""
+
+    # First call - creates cache
+    result1 = call_with_prompt_caching(
+        client, system_prompt, "Review this: def add(a, b): return a + b"
+    )
+    print(f"Call 1 - Cache created: {result1['cache_creation_input_tokens']} tokens")
+
+    # Second call - reads from cache
+    result2 = call_with_prompt_caching(
+        client, system_prompt, "Review this: def multiply(x, y): return x * y"
+    )
+    print(f"Call 2 - Cache read: {result2['cache_read_input_tokens']} tokens")
+```
+
+### OpenAI Automatic Prompt Caching
+
+OpenAI automatically caches prompts—no code changes needed:
+
+```python title="openai_prompt_caching.py"
+from openai import OpenAI
+
+
+def demonstrate_openai_caching(client: OpenAI) -> None:
+    """
+    OpenAI automatically caches prompts >= 1024 tokens.
+
+    Caching is automatic and transparent. You'll see reduced
+    costs in your billing for repeated system prompts.
+
+    Cache behavior:
+    - Prompts >= 1024 tokens are eligible
+    - Cache persists for 5-10 minutes of inactivity
+    - 50% discount on cached input tokens
+    - Works with gpt-4o, gpt-4o-mini, o1-preview, o1-mini
+    """
+    # Long system prompt (>1024 tokens for caching)
+    system_prompt = """You are an AI assistant specialized in...""" * 50  # Make it long
+
+    # Multiple calls with same system prompt benefit from caching
+    for i in range(5):
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Question {i}: What is {i} + {i}?"}
+            ]
+        )
+
+        # Check usage for cache statistics (when available)
+        usage = response.usage
+        print(f"Call {i}: {usage.prompt_tokens} input, {usage.completion_tokens} output")
+
+        # Note: OpenAI doesn't expose cache hit/miss in the API response
+        # You'll see the savings in your billing dashboard
+```
+
+### When to Use Each Caching Strategy
+
+| Strategy           | Best For                | Savings                | Complexity |
+| :----------------- | :---------------------- | :--------------------- | :--------- |
+| **Semantic Cache** | Repeated user queries   | 100% (no API call)     | Medium     |
+| **Prompt Cache**   | Repeated system prompts | 50-90% on input tokens | Low        |
+| **Both**           | High-volume production  | Maximum savings        | Medium     |
+
+<Callout type="tip">
+  **Combine Both:** Use semantic caching for user queries AND prompt caching for
+  system prompts. They're complementary—semantic cache avoids the call entirely,
+  prompt cache reduces cost when you do call.
+</Callout>
+
+---
+
+## 19.5 Cost Tracking & Monitoring
+
+You can't optimize what you don't measure. A robust cost tracking system is essential for understanding spending patterns and setting budgets.
+
+```python title="cost_tracker.py"
+from dataclasses import dataclass, field
+from typing import Optional, List, Dict
+from datetime import datetime, date
+from collections import defaultdict
+import json
+from pathlib import Path
+import threading
+
+
+@dataclass
+class UsageRecord:
+    """Record of a single API call."""
+
+    timestamp: datetime
+    model: str
+    tier: str
+    input_tokens: int
+    output_tokens: int
+    cost: float
+    latency_ms: float
+    cache_hit: bool
+    user_id: Optional[str] = None
+    request_id: Optional[str] = None
+
+
+@dataclass
+class CostSummary:
+    """Aggregated cost summary."""
+
+    total_cost: float
+    total_requests: int
+    total_input_tokens: int
+    total_output_tokens: int
+    cache_hit_rate: float
+    avg_latency_ms: float
+    cost_by_model: Dict[str, float]
+    cost_by_tier: Dict[str, float]
+    requests_by_model: Dict[str, int]
+
+
+class CostTracker:
+    """
+    Track and analyze LLM API costs.
+
+    Provides real-time cost tracking, budget alerts, and
+    detailed analytics for cost optimization.
+    """
+
+    def __init__(
+        self,
+        persist_path: Optional[str] = None,
+        daily_budget: Optional[float] = None,
+        monthly_budget: Optional[float] = None,
+        alert_callback: Optional[callable] = None,
+    ):
+        """
+        Initialize the cost tracker.
+
+        Args:
+            persist_path: Path to persist usage data
+            daily_budget: Daily spending limit (triggers alert)
+            monthly_budget: Monthly spending limit (triggers alert)
+            alert_callback: Function to call when budget exceeded
+        """
+        self.persist_path = Path(persist_path) if persist_path else None
+        self.daily_budget = daily_budget
+        self.monthly_budget = monthly_budget
+        self.alert_callback = alert_callback
+
+        self._records: List[UsageRecord] = []
+        self._lock = threading.Lock()
+
+        # Load existing records
+        if self.persist_path and self.persist_path.exists():
+            self._load_records()
+
+    def record(
+        self,
+        model: str,
+        tier: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost: float,
+        latency_ms: float,
+        cache_hit: bool = False,
+        user_id: Optional[str] = None,
+        request_id: Optional[str] = None,
+    ) -> None:
+        """
+        Record a single API call.
+
+        Args:
+            model: Model name used
+            tier: Model tier (fast/standard/reasoning)
+            input_tokens: Number of input tokens
+            output_tokens: Number of output tokens
+            cost: Total cost in dollars
+            latency_ms: Request latency in milliseconds
+            cache_hit: Whether this was a cache hit
+            user_id: Optional user identifier
+            request_id: Optional request identifier
+        """
+        record = UsageRecord(
+            timestamp=datetime.now(),
+            model=model,
+            tier=tier,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost=cost,
+            latency_ms=latency_ms,
+            cache_hit=cache_hit,
+            user_id=user_id,
+            request_id=request_id,
+        )
+
+        with self._lock:
+            self._records.append(record)
+            self._check_budgets()
+
+            if self.persist_path:
+                self._persist_record(record)
+
+    def get_summary(
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        user_id: Optional[str] = None,
+    ) -> CostSummary:
+        """
+        Get aggregated cost summary.
+
+        Args:
+            start_date: Filter by start date
+            end_date: Filter by end date
+            user_id: Filter by user
+
+        Returns:
+            CostSummary with aggregated metrics
+        """
+        with self._lock:
+            records = self._filter_records(start_date, end_date, user_id)
+
+        if not records:
+            return CostSummary(
+                total_cost=0,
+                total_requests=0,
+                total_input_tokens=0,
+                total_output_tokens=0,
+                cache_hit_rate=0,
+                avg_latency_ms=0,
+                cost_by_model={},
+                cost_by_tier={},
+                requests_by_model={},
+            )
+
+        total_cost = sum(r.cost for r in records)
+        total_requests = len(records)
+        total_input = sum(r.input_tokens for r in records)
+        total_output = sum(r.output_tokens for r in records)
+        cache_hits = sum(1 for r in records if r.cache_hit)
+        avg_latency = sum(r.latency_ms for r in records) / len(records)
+
+        cost_by_model: Dict[str, float] = defaultdict(float)
+        cost_by_tier: Dict[str, float] = defaultdict(float)
+        requests_by_model: Dict[str, int] = defaultdict(int)
+
+        for r in records:
+            cost_by_model[r.model] += r.cost
+            cost_by_tier[r.tier] += r.cost
+            requests_by_model[r.model] += 1
+
+        return CostSummary(
+            total_cost=total_cost,
+            total_requests=total_requests,
+            total_input_tokens=total_input,
+            total_output_tokens=total_output,
+            cache_hit_rate=cache_hits / total_requests,
+            avg_latency_ms=avg_latency,
+            cost_by_model=dict(cost_by_model),
+            cost_by_tier=dict(cost_by_tier),
+            requests_by_model=dict(requests_by_model),
+        )
+
+    def get_daily_cost(self, target_date: Optional[date] = None) -> float:
+        """Get total cost for a specific day."""
+        target = target_date or date.today()
+        summary = self.get_summary(start_date=target, end_date=target)
+        return summary.total_cost
+
+    def get_monthly_cost(
+        self,
+        year: Optional[int] = None,
+        month: Optional[int] = None,
+    ) -> float:
+        """Get total cost for a specific month."""
+        today = date.today()
+        year = year or today.year
+        month = month or today.month
+
+        start = date(year, month, 1)
+        if month == 12:
+            end = date(year + 1, 1, 1)
+        else:
+            end = date(year, month + 1, 1)
+
+        summary = self.get_summary(start_date=start, end_date=end)
+        return summary.total_cost
+
+    def get_top_users(self, n: int = 10) -> List[tuple[str, float]]:
+        """Get top N users by cost."""
+        with self._lock:
+            user_costs: Dict[str, float] = defaultdict(float)
+            for r in self._records:
+                if r.user_id:
+                    user_costs[r.user_id] += r.cost
+
+        sorted_users = sorted(
+            user_costs.items(), key=lambda x: x[1], reverse=True
+        )
+        return sorted_users[:n]
+
+    def export_prometheus_metrics(self) -> str:
+        """Export metrics in Prometheus format."""
+        summary = self.get_summary()
+
+        lines = [
+            "# HELP llm_total_cost_dollars Total LLM API cost in dollars",
+            "# TYPE llm_total_cost_dollars counter",
+            f"llm_total_cost_dollars {summary.total_cost:.6f}",
+            "",
+            "# HELP llm_requests_total Total number of LLM API requests",
+            "# TYPE llm_requests_total counter",
+            f"llm_requests_total {summary.total_requests}",
+            "",
+            "# HELP llm_cache_hit_rate Cache hit rate",
+            "# TYPE llm_cache_hit_rate gauge",
+            f"llm_cache_hit_rate {summary.cache_hit_rate:.4f}",
+            "",
+            "# HELP llm_avg_latency_ms Average request latency in milliseconds",
+            "# TYPE llm_avg_latency_ms gauge",
+            f"llm_avg_latency_ms {summary.avg_latency_ms:.2f}",
+        ]
+
+        # Per-model metrics
+        lines.extend([
+            "",
+            "# HELP llm_cost_by_model_dollars Cost by model in dollars",
+            "# TYPE llm_cost_by_model_dollars counter",
+        ])
+        for model, cost in summary.cost_by_model.items():
+            lines.append(f'llm_cost_by_model_dollars{{model="{model}"}} {cost:.6f}')
+
+        # Per-tier metrics
+        lines.extend([
+            "",
+            "# HELP llm_cost_by_tier_dollars Cost by tier in dollars",
+            "# TYPE llm_cost_by_tier_dollars counter",
+        ])
+        for tier, cost in summary.cost_by_tier.items():
+            lines.append(f'llm_cost_by_tier_dollars{{tier="{tier}"}} {cost:.6f}')
+
+        return "\n".join(lines)
+
+    def _filter_records(
+        self,
+        start_date: Optional[date],
+        end_date: Optional[date],
+        user_id: Optional[str],
+    ) -> List[UsageRecord]:
+        """Filter records by criteria."""
+        records = self._records
+
+        if start_date:
+            records = [r for r in records if r.timestamp.date() >= start_date]
+        if end_date:
+            records = [r for r in records if r.timestamp.date() <= end_date]
+        if user_id:
+            records = [r for r in records if r.user_id == user_id]
+
+        return records
+
+    def _check_budgets(self) -> None:
+        """Check if budgets are exceeded and trigger alerts."""
+        if self.daily_budget:
+            daily_cost = self.get_daily_cost()
+            if daily_cost > self.daily_budget:
+                self._trigger_alert(
+                    "daily", daily_cost, self.daily_budget
+                )
+
+        if self.monthly_budget:
+            monthly_cost = self.get_monthly_cost()
+            if monthly_cost > self.monthly_budget:
+                self._trigger_alert(
+                    "monthly", monthly_cost, self.monthly_budget
+                )
+
+    def _trigger_alert(
+        self,
+        period: str,
+        current: float,
+        budget: float,
+    ) -> None:
+        """Trigger a budget alert."""
+        if self.alert_callback:
+            self.alert_callback(
+                period=period,
+                current_cost=current,
+                budget=budget,
+                overage=current - budget,
+            )
+
+    def _persist_record(self, record: UsageRecord) -> None:
+        """Persist a record to disk."""
+        if not self.persist_path:
+            return
+
+        self.persist_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(self.persist_path, "a") as f:
+            data = {
+                "timestamp": record.timestamp.isoformat(),
+                "model": record.model,
+                "tier": record.tier,
+                "input_tokens": record.input_tokens,
+                "output_tokens": record.output_tokens,
+                "cost": record.cost,
+                "latency_ms": record.latency_ms,
+                "cache_hit": record.cache_hit,
+                "user_id": record.user_id,
+                "request_id": record.request_id,
+            }
+            f.write(json.dumps(data) + "\n")
+
+    def _load_records(self) -> None:
+        """Load records from disk."""
+        if not self.persist_path or not self.persist_path.exists():
+            return
+
+        with open(self.persist_path, "r") as f:
+            for line in f:
+                data = json.loads(line)
+                record = UsageRecord(
+                    timestamp=datetime.fromisoformat(data["timestamp"]),
+                    model=data["model"],
+                    tier=data["tier"],
+                    input_tokens=data["input_tokens"],
+                    output_tokens=data["output_tokens"],
+                    cost=data["cost"],
+                    latency_ms=data["latency_ms"],
+                    cache_hit=data["cache_hit"],
+                    user_id=data.get("user_id"),
+                    request_id=data.get("request_id"),
+                )
+                self._records.append(record)
+
+
+# Example usage
+if __name__ == "__main__":
+    def budget_alert(period, current_cost, budget, overage):
+        print(f"⚠️ {period.upper()} BUDGET EXCEEDED!")
+        print(f"   Current: ${current_cost:.2f} / Budget: ${budget:.2f}")
+        print(f"   Overage: ${overage:.2f}")
+
+    tracker = CostTracker(
+        persist_path="./usage_data.jsonl",
+        daily_budget=10.0,
+        monthly_budget=100.0,
+        alert_callback=budget_alert,
+    )
+
+    # Simulate some usage
+    tracker.record(
+        model="gpt-4o-mini",
+        tier="fast",
+        input_tokens=100,
+        output_tokens=50,
+        cost=0.0001,
+        latency_ms=150,
+    )
+
+    tracker.record(
+        model="gpt-4o",
+        tier="standard",
+        input_tokens=500,
+        output_tokens=200,
+        cost=0.003,
+        latency_ms=450,
+    )
+
+    # Get summary
+    summary = tracker.get_summary()
+    print(f"\nTotal cost: ${summary.total_cost:.4f}")
+    print(f"Requests: {summary.total_requests}")
+    print(f"Cache hit rate: {summary.cache_hit_rate:.1%}")
+    print(f"Cost by tier: {summary.cost_by_tier}")
+
+    # Export Prometheus metrics
+    print("\n--- Prometheus Metrics ---")
+    print(tracker.export_prometheus_metrics())
+```
+
+---
+
+## 19.6 Production Router Implementation
+
+Now let's combine all components into a production-ready intelligent router:
+
+<Mermaid
+  chart={`
+flowchart TB
+    subgraph Input["Request Processing"]
+        REQ[Incoming Request] --> ASSESS[Complexity Assessment]
+        ASSESS --> TIER[Tier Selection]
+    end
+    
+    subgraph Caching["Cache Layer"]
+        TIER --> SCACHE{Semantic Cache}
+        SCACHE --> |Hit| CACHED[Return Cached]
+        SCACHE --> |Miss| MODEL[Select Model]
+    end
+    
+    subgraph Execution["Model Execution"]
+        MODEL --> PCACHE[Prompt Cache Check]
+        PCACHE --> CALL[API Call]
+        CALL --> |Success| STORE[Store in Cache]
+        CALL --> |Fail| FALLBACK[Try Fallback]
+        FALLBACK --> |Success| STORE
+        FALLBACK --> |All Failed| ERROR[Return Error]
+    end
+    
+    subgraph Tracking["Observability"]
+        STORE --> TRACK[Cost Tracking]
+        CACHED --> TRACK
+        TRACK --> LOG[Logging]
+        LOG --> RESP[Return Response]
+    end
+    
+    style SCACHE fill:#bbf,stroke:#333
+    style ASSESS fill:#f9f,stroke:#333
+    style TRACK fill:#bfb,stroke:#333
+`}
+/>
+
+```python title="intelligent_router.py"
+from dataclasses import dataclass
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+import asyncio
+import logging
+import time
+from openai import AsyncOpenAI
+from anthropic import AsyncAnthropic
+
+from complexity_assessor import ComplexityAssessor, ComplexityScore
+from model_router import ModelRouter, ModelTier, ModelConfig, RoutingResult
+from semantic_cache import SemanticCache
+from cost_tracker import CostTracker
+
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class RouterConfig:
+    """Configuration for the intelligent router."""
+
+    # Complexity thresholds
+    fast_threshold: int = 30
+    standard_threshold: int = 70
+
+    # Cache settings
+    cache_enabled: bool = True
+    cache_similarity_threshold: float = 0.95
+    cache_ttl_seconds: int = 3600
+
+    # Fallback settings
+    escalate_on_failure: bool = True
+    max_retries: int = 2
+
+    # Budget settings
+    daily_budget: Optional[float] = None
+    monthly_budget: Optional[float] = None
+
+    # Logging
+    log_requests: bool = True
+    log_responses: bool = False  # Be careful with PII
+
+
+class IntelligentRouter:
+    """
+    Production-ready intelligent model router.
+
+    Combines complexity assessment, semantic caching, model routing,
+    and cost tracking into a unified interface.
+    """
+
+    def __init__(
+        self,
+        config: Optional[RouterConfig] = None,
+        openai_client: Optional[AsyncOpenAI] = None,
+        anthropic_client: Optional[AsyncAnthropic] = None,
+    ):
+        """
+        Initialize the intelligent router.
+
+        Args:
+            config: Router configuration
+            openai_client: AsyncOpenAI client
+            anthropic_client: AsyncAnthropic client
+        """
+        self.config = config or RouterConfig()
+
+        # Initialize components
+        self.assessor = ComplexityAssessor()
+
+        self.model_router = ModelRouter(
+            openai_client=openai_client or AsyncOpenAI(),
+            anthropic_client=anthropic_client or AsyncAnthropic(),
+            escalate_on_failure=self.config.escalate_on_failure,
+        )
+
+        self.cache = SemanticCache(
+            similarity_threshold=self.config.cache_similarity_threshold,
+            default_ttl=self.config.cache_ttl_seconds,
+        ) if self.config.cache_enabled else None
+
+        self.cost_tracker = CostTracker(
+            daily_budget=self.config.daily_budget,
+            monthly_budget=self.config.monthly_budget,
+            alert_callback=self._handle_budget_alert,
+        )
+
+        # Request counter for logging
+        self._request_count = 0
+
+    async def route(
+        self,
+        query: str,
+        system_prompt: Optional[str] = None,
+        user_id: Optional[str] = None,
+        force_tier: Optional[ModelTier] = None,
+        bypass_cache: bool = False,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> RoutingResult:
+        """
+        Route a query through the intelligent routing system.
+
+        Args:
+            query: User's query
+            system_prompt: Optional system prompt
+            user_id: User identifier for tracking
+            force_tier: Force a specific model tier
+            bypass_cache: Skip cache lookup
+            metadata: Additional metadata for logging
+
+        Returns:
+            RoutingResult with response and metrics
+        """
+        start_time = time.perf_counter()
+        self._request_count += 1
+        request_id = f"req_{self._request_count}_{int(time.time())}"
+
+        if self.config.log_requests:
+            logger.info(
+                f"[{request_id}] Routing query: {query[:100]}..."
+            )
+
+        # Step 1: Check semantic cache
+        if self.cache and not bypass_cache:
+            cache_result = self.cache.get(query)
+            if cache_result:
+                response, similarity = cache_result
+                latency_ms = (time.perf_counter() - start_time) * 1000
+
+                logger.info(
+                    f"[{request_id}] Cache hit (similarity={similarity:.2%})"
+                )
+
+                # Record cache hit (zero cost)
+                self.cost_tracker.record(
+                    model="cache",
+                    tier="cache",
+                    input_tokens=0,
+                    output_tokens=0,
+                    cost=0,
+                    latency_ms=latency_ms,
+                    cache_hit=True,
+                    user_id=user_id,
+                    request_id=request_id,
+                )
+
+                return RoutingResult(
+                    response=response,
+                    model_used="cache",
+                    tier=ModelTier.FAST,
+                    complexity_score=0,
+                    tokens_used={"input": 0, "output": 0},
+                    cost=0,
+                    latency_ms=latency_ms,
+                    cache_hit=True,
+                )
+
+        # Step 2: Assess complexity and route
+        try:
+            result = await self.model_router.route(
+                query=query,
+                system_prompt=system_prompt,
+                force_tier=force_tier,
+                max_retries=self.config.max_retries,
+            )
+        except Exception as e:
+            logger.error(f"[{request_id}] Routing failed: {e}")
+            raise
+
+        # Step 3: Store in cache
+        if self.cache and not bypass_cache:
+            self.cache.set(
+                query=query,
+                response=result.response,
+                model_used=result.model_used,
+                ttl=self.config.cache_ttl_seconds,
+            )
+
+        # Step 4: Track costs
+        self.cost_tracker.record(
+            model=result.model_used,
+            tier=result.tier.value,
+            input_tokens=result.tokens_used["input"],
+            output_tokens=result.tokens_used["output"],
+            cost=result.cost,
+            latency_ms=result.latency_ms,
+            cache_hit=False,
+            user_id=user_id,
+            request_id=request_id,
+        )
+
+        if self.config.log_requests:
+            logger.info(
+                f"[{request_id}] Completed: model={result.model_used}, "
+                f"cost=${result.cost:.6f}, latency={result.latency_ms:.0f}ms"
+            )
+
+        return result
+
+    async def route_batch(
+        self,
+        queries: List[str],
+        system_prompt: Optional[str] = None,
+        user_id: Optional[str] = None,
+        max_concurrency: int = 10,
+    ) -> List[RoutingResult]:
+        """
+        Route multiple queries concurrently.
+
+        Args:
+            queries: List of queries to route
+            system_prompt: Shared system prompt
+            user_id: User identifier
+            max_concurrency: Maximum concurrent requests
+
+        Returns:
+            List of RoutingResults in same order as queries
+        """
+        semaphore = asyncio.Semaphore(max_concurrency)
+
+        async def route_with_semaphore(query: str) -> RoutingResult:
+            async with semaphore:
+                return await self.route(
+                    query=query,
+                    system_prompt=system_prompt,
+                    user_id=user_id,
+                )
+
+        tasks = [route_with_semaphore(q) for q in queries]
+        return await asyncio.gather(*tasks)
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get comprehensive router statistics."""
+        cost_summary = self.cost_tracker.get_summary()
+        cache_stats = self.cache.stats() if self.cache else {}
+
+        return {
+            "requests": {
+                "total": cost_summary.total_requests,
+                "by_model": cost_summary.requests_by_model,
+            },
+            "costs": {
+                "total": cost_summary.total_cost,
+                "by_model": cost_summary.cost_by_model,
+                "by_tier": cost_summary.cost_by_tier,
+            },
+            "performance": {
+                "avg_latency_ms": cost_summary.avg_latency_ms,
+                "cache_hit_rate": cache_stats.get("hit_rate", 0),
+            },
+            "tokens": {
+                "total_input": cost_summary.total_input_tokens,
+                "total_output": cost_summary.total_output_tokens,
+            },
+            "cache": cache_stats,
+        }
+
+    def invalidate_cache(self, query: str) -> bool:
+        """Invalidate a specific cache entry."""
+        if self.cache:
+            return self.cache.invalidate(query)
+        return False
+
+    def invalidate_similar(self, query: str, threshold: float = 0.90) -> int:
+        """Invalidate all cache entries similar to a query."""
+        if self.cache:
+            return self.cache.invalidate_similar(query, threshold)
+        return 0
+
+    def _handle_budget_alert(
+        self,
+        period: str,
+        current_cost: float,
+        budget: float,
+        overage: float,
+    ) -> None:
+        """Handle budget exceeded alerts."""
+        logger.warning(
+            f"BUDGET ALERT: {period} budget exceeded! "
+            f"Current: ${current_cost:.2f}, Budget: ${budget:.2f}, "
+            f"Overage: ${overage:.2f}"
+        )
+        # In production, you might:
+        # - Send Slack/PagerDuty alert
+        # - Temporarily disable expensive tiers
+        # - Rate limit requests
+
+
+# Example usage
+async def main():
+    # Initialize router with configuration
+    config = RouterConfig(
+        cache_enabled=True,
+        cache_similarity_threshold=0.93,
+        daily_budget=50.0,
+        monthly_budget=500.0,
+    )
+
+    router = IntelligentRouter(config=config)
+
+    # Route some queries
+    queries = [
+        "Hello!",
+        "What is Python?",
+        "What's Python?",  # Should hit cache
+        "Explain the trade-offs between microservices and monoliths",
+        "Compare SQL vs NoSQL for high-throughput event streaming",
+    ]
+
+    for query in queries:
+        result = await router.route(query, user_id="demo_user")
+        print(f"\nQuery: {query[:50]}...")
+        print(f"  Model: {result.model_used}")
+        print(f"  Tier: {result.tier.value}")
+        print(f"  Cost: ${result.cost:.6f}")
+        print(f"  Cache hit: {result.cache_hit}")
+        print(f"  Latency: {result.latency_ms:.0f}ms")
+
+    # Print stats
+    print("\n" + "="*50)
+    print("Router Statistics:")
+    stats = router.get_stats()
+    print(f"  Total requests: {stats['requests']['total']}")
+    print(f"  Total cost: ${stats['costs']['total']:.4f}")
+    print(f"  Cache hit rate: {stats['performance']['cache_hit_rate']:.1%}")
+    print(f"  Avg latency: {stats['performance']['avg_latency_ms']:.0f}ms")
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
+```
+
+---
+
+## 19.7 Batch Processing
+
+For bulk operations, batching requests can significantly reduce costs and improve throughput.
+
+<ConceptIntro
+  title="Batch Processing"
+  analogy="Imagine shipping packages. Sending 100 individual packages costs more than loading them all into one truck. Similarly, batching LLM requests reduces overhead and often qualifies for volume discounts."
+  technicalDef="Batch processing groups multiple requests into a single API call or optimized queue. OpenAI's Batch API offers 50% cost reduction for non-time-sensitive workloads with 24-hour completion windows."
+  whyItMatters="Many use cases don't need real-time responses: document processing, data enrichment, content generation. Batching these saves 50%+ while freeing up rate limits for interactive requests."
+/>
+
+```python title="batch_processor.py"
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Any, Callable
+from datetime import datetime
+import asyncio
+import json
+from pathlib import Path
+from openai import OpenAI, AsyncOpenAI
+
+
+@dataclass
+class BatchJob:
+    """A batch processing job."""
+
+    job_id: str
+    status: str  # "pending", "processing", "completed", "failed"
+    total_requests: int
+    completed_requests: int
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+    results: Optional[List[Dict]] = None
+    error: Optional[str] = None
+
+
+@dataclass
+class BatchRequest:
+    """A single request in a batch."""
+
+    custom_id: str
+    query: str
+    system_prompt: Optional[str] = None
+    model: str = "gpt-4o-mini"
+    max_tokens: int = 1024
+
+
+class BatchProcessor:
+    """
+    Process large volumes of requests using OpenAI's Batch API.
+
+    Offers 50% cost reduction for non-time-sensitive workloads.
+    Requests are processed within 24 hours.
+    """
+
+    def __init__(
+        self,
+        client: Optional[OpenAI] = None,
+        output_dir: str = "./batch_output",
+    ):
+        """
+        Initialize the batch processor.
+
+        Args:
+            client: OpenAI client
+            output_dir: Directory for batch files
+        """
+        self.client = client or OpenAI()
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def create_batch(
+        self,
+        requests: List[BatchRequest],
+        description: Optional[str] = None,
+    ) -> BatchJob:
+        """
+        Create a batch job from a list of requests.
+
+        Args:
+            requests: List of BatchRequest objects
+            description: Optional job description
+
+        Returns:
+            BatchJob with job_id for tracking
+        """
+        # Create JSONL file for batch input
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        input_file = self.output_dir / f"batch_input_{timestamp}.jsonl"
+
+        with open(input_file, "w") as f:
+            for req in requests:
+                batch_request = {
+                    "custom_id": req.custom_id,
+                    "method": "POST",
+                    "url": "/v1/chat/completions",
+                    "body": {
+                        "model": req.model,
+                        "max_tokens": req.max_tokens,
+                        "messages": self._build_messages(req),
+                    }
+                }
+                f.write(json.dumps(batch_request) + "\n")
+
+        # Upload file to OpenAI
+        with open(input_file, "rb") as f:
+            file_response = self.client.files.create(
+                file=f,
+                purpose="batch"
+            )
+
+        # Create batch job
+        batch_response = self.client.batches.create(
+            input_file_id=file_response.id,
+            endpoint="/v1/chat/completions",
+            completion_window="24h",
+            metadata={
+                "description": description or f"Batch {timestamp}",
+                "request_count": str(len(requests)),
+            }
+        )
+
+        return BatchJob(
+            job_id=batch_response.id,
+            status="pending",
+            total_requests=len(requests),
+            completed_requests=0,
+            created_at=datetime.now(),
+        )
+
+    def get_status(self, job_id: str) -> BatchJob:
+        """
+        Get the status of a batch job.
+
+        Args:
+            job_id: The batch job ID
+
+        Returns:
+            Updated BatchJob with current status
+        """
+        batch = self.client.batches.retrieve(job_id)
+
+        status_map = {
+            "validating": "pending",
+            "in_progress": "processing",
+            "completed": "completed",
+            "failed": "failed",
+            "expired": "failed",
+            "cancelled": "failed",
+        }
+
+        return BatchJob(
+            job_id=batch.id,
+            status=status_map.get(batch.status, batch.status),
+            total_requests=batch.request_counts.total,
+            completed_requests=batch.request_counts.completed,
+            created_at=datetime.fromtimestamp(batch.created_at),
+            completed_at=(
+                datetime.fromtimestamp(batch.completed_at)
+                if batch.completed_at else None
+            ),
+            error=batch.errors.data[0].message if batch.errors else None,
+        )
+
+    def get_results(self, job_id: str) -> List[Dict[str, Any]]:
+        """
+        Retrieve results from a completed batch job.
+
+        Args:
+            job_id: The batch job ID
+
+        Returns:
+            List of results with custom_id and response
+        """
+        batch = self.client.batches.retrieve(job_id)
+
+        if batch.status != "completed":
+            raise ValueError(
+                f"Batch not completed. Status: {batch.status}"
+            )
+
+        if not batch.output_file_id:
+            raise ValueError("No output file available")
+
+        # Download results
+        content = self.client.files.content(batch.output_file_id)
+
+        results = []
+        for line in content.text.strip().split("\n"):
+            result = json.loads(line)
+            results.append({
+                "custom_id": result["custom_id"],
+                "response": result["response"]["body"]["choices"][0]["message"]["content"],
+                "usage": result["response"]["body"]["usage"],
+            })
+
+        return results
+
+    async def wait_for_completion(
+        self,
+        job_id: str,
+        poll_interval: int = 60,
+        timeout: int = 86400,  # 24 hours
+        progress_callback: Optional[Callable[[BatchJob], None]] = None,
+    ) -> BatchJob:
+        """
+        Wait for a batch job to complete.
+
+        Args:
+            job_id: The batch job ID
+            poll_interval: Seconds between status checks
+            timeout: Maximum wait time in seconds
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            Completed BatchJob with results
+        """
+        start_time = datetime.now()
+
+        while True:
+            job = self.get_status(job_id)
+
+            if progress_callback:
+                progress_callback(job)
+
+            if job.status == "completed":
+                job.results = self.get_results(job_id)
+                return job
+
+            if job.status == "failed":
+                raise RuntimeError(f"Batch failed: {job.error}")
+
+            elapsed = (datetime.now() - start_time).total_seconds()
+            if elapsed > timeout:
+                raise TimeoutError(
+                    f"Batch did not complete within {timeout}s"
+                )
+
+            await asyncio.sleep(poll_interval)
+
+    def _build_messages(self, req: BatchRequest) -> List[Dict]:
+        """Build messages array for a request."""
+        messages = []
+        if req.system_prompt:
+            messages.append({
+                "role": "system",
+                "content": req.system_prompt
+            })
+        messages.append({
+            "role": "user",
+            "content": req.query
+        })
+        return messages
+
+
+# Convenience function for simple batch processing
+async def process_batch_simple(
+    queries: List[str],
+    system_prompt: Optional[str] = None,
+    model: str = "gpt-4o-mini",
+) -> List[str]:
+    """
+    Simple batch processing for a list of queries.
+
+    Args:
+        queries: List of query strings
+        system_prompt: Optional shared system prompt
+        model: Model to use
+
+    Returns:
+        List of response strings in same order
+    """
+    processor = BatchProcessor()
+
+    # Create batch requests
+    requests = [
+        BatchRequest(
+            custom_id=f"req_{i}",
+            query=q,
+            system_prompt=system_prompt,
+            model=model,
+        )
+        for i, q in enumerate(queries)
+    ]
+
+    # Submit batch
+    job = processor.create_batch(requests, "Simple batch")
+    print(f"Batch submitted: {job.job_id}")
+
+    # Wait for completion
+    def progress(j: BatchJob):
+        print(f"Progress: {j.completed_requests}/{j.total_requests}")
+
+    completed = await processor.wait_for_completion(
+        job.job_id,
+        progress_callback=progress
+    )
+
+    # Sort results by custom_id to maintain order
+    results_map = {r["custom_id"]: r["response"] for r in completed.results}
+    return [results_map[f"req_{i}"] for i in range(len(queries))]
+
+
+# Example usage
+if __name__ == "__main__":
+    # Example: Process 100 product descriptions
+    products = [
+        f"Product {i}: A high-quality item for everyday use"
+        for i in range(100)
+    ]
+
+    system_prompt = """Generate a compelling 2-sentence marketing description
+for the following product. Be creative and highlight benefits."""
+
+    async def main():
+        descriptions = await process_batch_simple(
+            queries=products,
+            system_prompt=system_prompt,
+            model="gpt-4o-mini",
+        )
+
+        for i, desc in enumerate(descriptions[:5]):
+            print(f"\nProduct {i}: {desc}")
+
+    asyncio.run(main())
+```
+
+### When to Use Batch Processing
+
+| Scenario               | Use Batch? | Reason                           |
+| :--------------------- | :--------- | :------------------------------- |
+| Real-time chat         | ❌ No      | Users expect immediate responses |
+| Document summarization | ✅ Yes     | Can wait hours for results       |
+| Data enrichment        | ✅ Yes     | Processing thousands of records  |
+| Content generation     | ✅ Yes     | Blog posts, descriptions, etc.   |
+| Nightly reports        | ✅ Yes     | Scheduled, non-urgent            |
+| Interactive search     | ❌ No      | Latency-sensitive                |
+
+<Callout type="info">
+  **Cost Comparison:** 100,000 GPT-4o-mini requests at standard pricing: ~$15.
+  Same requests via Batch API: ~$7.50. That's $7.50 saved per 100K requests—adds
+  up quickly at scale.
+</Callout>
+
+---
+
+## Exercise: Build a Customer Support Router
+
+<Exercise
+  title="Customer Support Routing System"
+  difficulty="intermediate"
+  timeEstimate="60-90 minutes"
+>
+
+Build an intelligent routing system for a customer support chatbot that:
+
+1. **Routes by complexity**: Simple FAQs → fast tier, complaints → standard tier, technical issues → reasoning tier
+2. **Caches common questions**: "What are your hours?" shouldn't hit the API every time
+3. **Tracks costs per customer**: Identify high-cost customers for review
+4. **Handles escalation**: If fast tier fails, automatically try standard
+
+### Requirements
+
+```python
+class SupportRouter:
+    """Your implementation should support these methods."""
+
+    async def handle_ticket(
+        self,
+        customer_id: str,
+        message: str,
+        ticket_type: str,  # "faq", "complaint", "technical", "billing"
+    ) -> SupportResponse:
+        """Route and respond to a support ticket."""
+        pass
+
+    def get_customer_costs(self, customer_id: str) -> float:
+        """Get total costs for a customer."""
+        pass
+
+    def get_category_stats(self) -> Dict[str, Dict]:
+        """Get stats by ticket category."""
+        pass
+```
+
+### Acceptance Criteria
+
+- [ ] FAQ queries ("What are your hours?") use fast tier and cache responses
+- [ ] Complaints ("I'm very unhappy with...") route to standard tier
+- [ ] Technical issues with error codes route to reasoning tier
+- [ ] Cache hit rate > 50% for FAQ category after 10 similar queries
+- [ ] Cost tracking shows breakdown by customer and category
+- [ ] Fallback works: if fast tier times out, standard tier is tried
+
+### Test Cases
+
+```python
+# Test 1: FAQ should cache
+response1 = await router.handle_ticket("c1", "What are your business hours?", "faq")
+response2 = await router.handle_ticket("c2", "When are you open?", "faq")
+assert response2.cache_hit == True  # Semantic match
+
+# Test 2: Complaints route to standard
+response = await router.handle_ticket("c1", "I'm extremely frustrated with your service!", "complaint")
+assert response.tier == "standard"
+
+# Test 3: Technical routes to reasoning
+response = await router.handle_ticket("c1", "Error 0x8007045D during installation, tried reinstalling drivers", "technical")
+assert response.tier == "reasoning"
+
+# Test 4: Cost tracking
+costs = router.get_customer_costs("c1")
+assert costs > 0
+```
+
+### Starter Code
+
+```python
+from dataclasses import dataclass
+from typing import Optional, Dict
+from enum import Enum
+
+
+class TicketType(Enum):
+    FAQ = "faq"
+    COMPLAINT = "complaint"
+    TECHNICAL = "technical"
+    BILLING = "billing"
+
+
+@dataclass
+class SupportResponse:
+    response: str
+    tier: str
+    model_used: str
+    cost: float
+    latency_ms: float
+    cache_hit: bool
+    ticket_type: TicketType
+
+
+class SupportRouter:
+    """
+    Implement your customer support router here.
+
+    Hints:
+    - Use ComplexityAssessor but override thresholds for support context
+    - Add ticket_type as a routing signal (complaints always >= standard)
+    - Track costs in a dict keyed by customer_id
+    - Use SemanticCache with category-specific TTLs
+    """
+
+    # Ticket type to minimum tier mapping
+    TICKET_TIER_MINIMUMS = {
+        TicketType.FAQ: "fast",
+        TicketType.COMPLAINT: "standard",  # Complaints need nuance
+        TicketType.TECHNICAL: "standard",  # May escalate to reasoning
+        TicketType.BILLING: "fast",
+    }
+
+    def __init__(self):
+        # TODO: Initialize your components
+        pass
+
+    async def handle_ticket(
+        self,
+        customer_id: str,
+        message: str,
+        ticket_type: str,
+    ) -> SupportResponse:
+        # TODO: Implement routing logic
+        pass
+```
+
+### Extension Challenges
+
+1. **Sentiment-based routing**: Use sentiment analysis to escalate angry customers regardless of ticket type
+2. **Priority queue**: Implement priority levels where VIP customers always get standard+ tier
+3. **A/B testing**: Route 10% of traffic to a new model and compare quality scores
+4. **Rate limiting**: Implement per-customer rate limits to prevent abuse
+
+</Exercise>
+
+---
+
+## Key Takeaways
+
+<Callout type="success">
+**What You Learned Today:**
+
+1. **Complexity Assessment** — Analyze queries to determine required model capability using weighted factors (length, technical terms, reasoning indicators, multi-step detection)
+
+2. **Tiered Model Selection** — Route simple queries to fast/cheap models (GPT-4o-mini, Haiku), complex queries to capable models (GPT-4o, Sonnet), and reasoning tasks to specialized models (o1)
+
+3. **Semantic Caching** — Cache responses by semantic similarity, not exact match. A 0.95 similarity threshold catches paraphrased questions while avoiding false positives
+
+4. **Prompt Caching** — Leverage provider-specific prompt caching (Anthropic explicit, OpenAI automatic) to reduce costs on repeated system prompts by 50-90%
+
+5. **Cost Tracking** — Implement comprehensive cost tracking with per-request logging, budget alerts, and Prometheus-compatible metrics export
+
+6. **Production Router** — Combine all components into a unified system with fallback chains, cache invalidation, and observability
+
+7. **Batch Processing** — Use OpenAI's Batch API for non-time-sensitive workloads to achieve 50% cost reduction
+
+**Cost Reduction Formula:**
+
+```
+Savings = (Cache Hit Rate × 100%) +
+          (Fast Tier % × 90%) +
+          (Prompt Cache × 50%) +
+          (Batch Processing × 50%)
+```
+
+A well-tuned system can achieve 60-80% cost reduction while maintaining quality for complex queries.
+
+</Callout>
+
+### Quick Reference: Routing Decision Tree
+
+<Mermaid
+  chart={`
+flowchart TD
+    START[New Query] --> CACHE{In Semantic<br/>Cache?}
+    CACHE -->|Yes| RETURN[Return Cached<br/>Cost: $0]
+    CACHE -->|No| ASSESS[Assess Complexity]
+    
+    ASSESS --> SCORE{Score?}
+    SCORE -->|0-30| FAST[Fast Tier<br/>$0.15-0.25/1M]
+    SCORE -->|31-70| STD[Standard Tier<br/>$2.50-3.00/1M]
+    SCORE -->|71-100| REASON[Reasoning Tier<br/>$3.00-15.00/1M]
+    
+    FAST --> PROMPT{Prompt<br/>Cached?}
+    STD --> PROMPT
+    REASON --> PROMPT
+    
+    PROMPT -->|Yes| CALL50[Call Model<br/>50% Input Discount]
+    PROMPT -->|No| CALL[Call Model<br/>Full Price]
+    
+    CALL50 --> STORE[Store in Cache]
+    CALL --> STORE
+    STORE --> TRACK[Track Cost]
+    TRACK --> RETURN2[Return Response]
+    
+    style CACHE fill:#bbf,stroke:#333
+    style ASSESS fill:#f9f,stroke:#333
+    style FAST fill:#bfb,stroke:#333
+    style STD fill:#ff9,stroke:#333
+    style REASON fill:#f99,stroke:#333
+`}
+/>
+
+### Cost Optimization Checklist
+
+- [ ] Implement complexity assessment with domain-specific tuning
+- [ ] Set up semantic caching with appropriate similarity threshold
+- [ ] Enable prompt caching for repeated system prompts
+- [ ] Configure fallback chains across providers
+- [ ] Set up cost tracking with budget alerts
+- [ ] Use batch processing for non-urgent workloads
+- [ ] Monitor cache hit rates and adjust thresholds
+- [ ] Review top-cost users/queries weekly
+
+---
+
+## Related Modules
+
+<Callout type="info" title="Continue Your Learning">
+  - **[Day 17: RAG](/modules/day-17-rag)** - Semantic caching pairs well with
+  RAG pipelines for cost-effective retrieval - **[Day 21: Durable
+  Execution](/modules/day-21-durable-execution)** - Combine model routing with
+  checkpointing for resilient workflows - **[Day 44:
+  Observability](/modules/day-44-observability)** - Monitor your routing
+  decisions and cost metrics in production
+</Callout>
+
+---
+
+<PageNavigation
+  prev={{
+    title: "Day 18: RAG Lab",
+    href: "/modules/day-18-rag-lab",
+  }}
+  next={{
+    title: "Day 20: Agent Memory Systems",
+    href: "/modules/day-20-memory",
+  }}
+/>

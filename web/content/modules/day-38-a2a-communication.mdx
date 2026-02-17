@@ -1,0 +1,2813 @@
+---
+title: "Day 38: Agent-to-Agent Communication"
+description: "Build agent ecosystems with standardized inter-agent communication using the A2A protocol, agent discovery, and capability negotiation."
+week: 6
+day: 38
+---
+
+<ReadingTime minutes={45} />
+
+<SkillLevel level="advanced" description="Multi-agent ecosystem design" />
+
+<Prerequisites
+  items={[
+    "Completed Days 01-37 (agent fundamentals, LangGraph, MCP)",
+    "Understanding of MCP protocol (Day 15)",
+    "Multi-agent basics from CrewAI Lab (Day 37)",
+    "Familiarity with async Python and HTTP APIs",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Understand the A2A (Agent-to-Agent) protocol and its role in agent ecosystems",
+    "Implement agent discovery mechanisms using registries and DNS patterns",
+    "Build capability negotiation systems for matching agent needs with providers",
+    "Design trust and authentication models for secure inter-agent communication",
+    "Create production-ready inter-agent messaging with error handling and retries",
+    "Build a mini agent marketplace demonstrating ecosystem patterns",
+  ]}
+/>
+
+---
+
+## The Multi-Agent Future
+
+Today's AI agents are powerful—but isolated. Each agent operates in its own silo, unable to leverage the capabilities of other specialized agents. Imagine if your research agent could seamlessly delegate to a specialized legal analysis agent, or your coding assistant could consult a security expert agent for vulnerability reviews.
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Today: Siloed Agents"
+        A1[Research Agent] 
+        A2[Code Agent]
+        A3[Analysis Agent]
+        A4[Writing Agent]
+    end
+    
+    subgraph "Tomorrow: Connected Ecosystem"
+        B1[Research Agent] <--> B2[Code Agent]
+        B2 <--> B3[Analysis Agent]
+        B3 <--> B4[Writing Agent]
+        B4 <--> B1
+        B1 <--> B3
+        B2 <--> B4
+    end
+    
+    style A1 fill:#ffcdd2
+    style A2 fill:#ffcdd2
+    style A3 fill:#ffcdd2
+    style A4 fill:#ffcdd2
+    style B1 fill:#c8e6c9
+    style B2 fill:#c8e6c9
+    style B3 fill:#c8e6c9
+    style B4 fill:#c8e6c9
+`}
+  caption="From isolated agents to a connected ecosystem."
+/>
+
+> **Key Insight**: The next evolution in AI isn't smarter individual agents—it's agents that can collaborate, delegate, and specialize. This requires standardized communication protocols.
+
+> **Analogy**: Think of the early internet. Before HTTP and TCP/IP, computers existed but couldn't easily communicate. The web exploded once we had standards. A2A is HTTP for agents—the protocol that enables an agent ecosystem.
+
+<ConceptIntro
+  title="Agent-to-Agent (A2A) Protocol"
+  description="A standardized protocol for agents to discover, authenticate, and communicate with each other. A2A enables agents to advertise capabilities, negotiate interactions, and exchange structured messages—creating the foundation for agent ecosystems."
+/>
+
+---
+
+## 38.1 Why Agent-to-Agent Communication?
+
+### The Multi-Agent Ecosystem Vision
+
+The future of AI isn't a single super-agent that does everything. It's an ecosystem of specialized agents that collaborate:
+
+| Agent Type         | Specialization                | Why Specialize?                      |
+| :----------------- | :---------------------------- | :----------------------------------- |
+| **Research Agent** | Web search, fact verification | Optimized prompts, specialized tools |
+| **Code Agent**     | Programming, debugging        | Fine-tuned on code, IDE integration  |
+| **Legal Agent**    | Contract analysis, compliance | Domain-specific training, liability  |
+| **Security Agent** | Vulnerability scanning        | Specialized models, threat databases |
+| **Creative Agent** | Writing, design               | Different temperature, style tuning  |
+
+<Callout type="info">
+  **Why Not One Agent?** Specialization enables: - **Better performance**:
+  Focused training and prompts - **Cost efficiency**: Use cheaper models for
+  simple tasks - **Liability isolation**: Legal/medical agents can have separate
+  compliance - **Independent scaling**: Scale hot agents without affecting
+  others
+</Callout>
+
+### Current Limitations
+
+Today's multi-agent systems face significant challenges:
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Current Problems"
+        P1[Proprietary Protocols]
+        P2[No Discovery]
+        P3[Trust Issues]
+        P4[Format Mismatches]
+    end
+    
+    P1 --> Lock[Vendor Lock-in]
+    P2 --> Manual[Manual Integration]
+    P3 --> Security[Security Risks]
+    P4 --> Errors[Integration Errors]
+    
+    style P1 fill:#ffcdd2
+    style P2 fill:#ffcdd2
+    style P3 fill:#ffcdd2
+    style P4 fill:#ffcdd2
+`}
+  caption="Current challenges in multi-agent systems."
+/>
+
+### Benefits of Standardized Communication
+
+| Benefit              | Description                                   | Example                               |
+| :------------------- | :-------------------------------------------- | :------------------------------------ |
+| **Interoperability** | Agents from different vendors can communicate | OpenAI agent talks to Anthropic agent |
+| **Discovery**        | Agents can find each other dynamically        | "Find me a legal analysis agent"      |
+| **Trust**            | Standardized authentication and authorization | Verified agent identities             |
+| **Composability**    | Build complex workflows from simple agents    | Chain research → analysis → writing   |
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Agent Ecosystem"
+        Registry[(Agent Registry)]
+        
+        subgraph "Provider Agents"
+            PA1[Research Agent]
+            PA2[Code Agent]
+            PA3[Legal Agent]
+        end
+        
+        subgraph "Consumer Agents"
+            CA1[Orchestrator Agent]
+            CA2[User Assistant]
+        end
+        
+        PA1 & PA2 & PA3 -->|Register| Registry
+        CA1 & CA2 -->|Discover| Registry
+        CA1 <-->|A2A Protocol| PA1
+        CA1 <-->|A2A Protocol| PA2
+        CA2 <-->|A2A Protocol| PA3
+    end
+    
+    style Registry fill:#e3f2fd
+    style PA1 fill:#c8e6c9
+    style PA2 fill:#c8e6c9
+    style PA3 fill:#c8e6c9
+    style CA1 fill:#fff9c4
+    style CA2 fill:#fff9c4
+`}
+  caption="Agent ecosystem with registry-based discovery and A2A communication."
+/>
+
+---
+
+## 38.2 The A2A Protocol
+
+<ConceptIntro
+  title="A2A Protocol"
+  description="Google's Agent-to-Agent protocol defines how agents advertise capabilities (Agent Cards), discover each other, authenticate, and exchange messages. It's designed for enterprise-grade agent ecosystems with security and scalability in mind."
+/>
+
+### Protocol Overview
+
+The A2A protocol consists of four core components:
+
+1. **Agent Cards**: JSON documents describing agent capabilities
+2. **Discovery**: Mechanisms for finding agents (registry, DNS, well-known URLs)
+3. **Authentication**: Mutual authentication between agents
+4. **Messaging**: Structured request/response and event patterns
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Client as Client Agent
+    participant Registry as Agent Registry
+    participant Provider as Provider Agent
+    
+    Note over Client,Provider: Discovery Phase
+    Client->>Registry: Search for "code review" capability
+    Registry-->>Client: Agent Card for CodeReviewAgent
+    
+    Note over Client,Provider: Authentication Phase
+    Client->>Provider: GET /.well-known/agent.json
+    Provider-->>Client: Agent Card + Auth requirements
+    Client->>Provider: Auth request (OAuth/API Key)
+    Provider-->>Client: Auth token
+    
+    Note over Client,Provider: Communication Phase
+    Client->>Provider: A2A Request (review this code)
+    Provider-->>Client: A2A Response (review results)
+    
+    Note over Client,Provider: Optional: Streaming
+    Client->>Provider: Subscribe to events
+    Provider-->>Client: Event stream
+`}
+  caption="A2A protocol flow: Discovery → Authentication → Communication"
+/>
+
+### Agent Cards
+
+Agent Cards are the cornerstone of A2A—they describe what an agent can do:
+
+```python
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict, Any
+from enum import Enum
+import json
+
+
+class AuthType(Enum):
+    """Supported authentication types."""
+    API_KEY = "api_key"
+    OAUTH2 = "oauth2"
+    MTLS = "mtls"
+    NONE = "none"
+
+
+@dataclass
+class Capability:
+    """A single capability an agent provides."""
+    name: str
+    description: str
+    version: str
+    input_schema: Dict[str, Any]
+    output_schema: Dict[str, Any]
+    cost_per_request: Optional[float] = None
+    avg_latency_ms: Optional[int] = None
+    rate_limit: Optional[int] = None  # requests per minute
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "version": self.version,
+            "inputSchema": self.input_schema,
+            "outputSchema": self.output_schema,
+            "costPerRequest": self.cost_per_request,
+            "avgLatencyMs": self.avg_latency_ms,
+            "rateLimit": self.rate_limit,
+        }
+
+
+@dataclass
+class AgentCard:
+    """
+    Agent Card: The identity and capability advertisement for an agent.
+
+    This is the A2A equivalent of an OpenAPI spec—it tells other agents
+    what this agent can do and how to interact with it.
+    """
+    # Identity
+    agent_id: str
+    name: str
+    description: str
+    version: str
+
+    # Endpoint
+    endpoint: str
+
+    # Capabilities
+    capabilities: List[Capability]
+
+    # Authentication
+    auth_types: List[AuthType] = field(default_factory=lambda: [AuthType.API_KEY])
+    auth_endpoint: Optional[str] = None
+
+    # Metadata
+    provider: Optional[str] = None
+    documentation_url: Optional[str] = None
+    support_email: Optional[str] = None
+    tags: List[str] = field(default_factory=list)
+
+    # Trust
+    trust_score: Optional[float] = None  # 0.0 - 1.0
+    verified: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to A2A-compliant JSON."""
+        return {
+            "agentId": self.agent_id,
+            "name": self.name,
+            "description": self.description,
+            "version": self.version,
+            "endpoint": self.endpoint,
+            "capabilities": [c.to_dict() for c in self.capabilities],
+            "authentication": {
+                "types": [t.value for t in self.auth_types],
+                "endpoint": self.auth_endpoint,
+            },
+            "metadata": {
+                "provider": self.provider,
+                "documentationUrl": self.documentation_url,
+                "supportEmail": self.support_email,
+                "tags": self.tags,
+            },
+            "trust": {
+                "score": self.trust_score,
+                "verified": self.verified,
+            }
+        }
+
+    def to_json(self) -> str:
+        """Serialize to JSON string."""
+        return json.dumps(self.to_dict(), indent=2)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AgentCard":
+        """Deserialize from A2A JSON."""
+        capabilities = [
+            Capability(
+                name=c["name"],
+                description=c["description"],
+                version=c["version"],
+                input_schema=c["inputSchema"],
+                output_schema=c["outputSchema"],
+                cost_per_request=c.get("costPerRequest"),
+                avg_latency_ms=c.get("avgLatencyMs"),
+                rate_limit=c.get("rateLimit"),
+            )
+            for c in data.get("capabilities", [])
+        ]
+
+        auth_types = [
+            AuthType(t) for t in data.get("authentication", {}).get("types", ["api_key"])
+        ]
+
+        return cls(
+            agent_id=data["agentId"],
+            name=data["name"],
+            description=data["description"],
+            version=data["version"],
+            endpoint=data["endpoint"],
+            capabilities=capabilities,
+            auth_types=auth_types,
+            auth_endpoint=data.get("authentication", {}).get("endpoint"),
+            provider=data.get("metadata", {}).get("provider"),
+            documentation_url=data.get("metadata", {}).get("documentationUrl"),
+            support_email=data.get("metadata", {}).get("supportEmail"),
+            tags=data.get("metadata", {}).get("tags", []),
+            trust_score=data.get("trust", {}).get("score"),
+            verified=data.get("trust", {}).get("verified", False),
+        )
+```
+
+### Example Agent Card
+
+```python
+# Create an Agent Card for a code review agent
+code_review_agent = AgentCard(
+    agent_id="code-review-agent-v1",
+    name="Code Review Agent",
+    description="AI-powered code review with security analysis and best practices.",
+    version="1.0.0",
+    endpoint="https://api.example.com/agents/code-review",
+    capabilities=[
+        Capability(
+            name="review_code",
+            description="Review code for bugs, security issues, and best practices",
+            version="1.0",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "Code to review"},
+                    "language": {"type": "string", "description": "Programming language"},
+                    "focus": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Areas to focus on: security, performance, style"
+                    }
+                },
+                "required": ["code", "language"]
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "issues": {"type": "array", "items": {"type": "object"}},
+                    "suggestions": {"type": "array", "items": {"type": "string"}},
+                    "score": {"type": "number", "minimum": 0, "maximum": 100}
+                }
+            },
+            cost_per_request=0.05,
+            avg_latency_ms=2000,
+            rate_limit=100
+        ),
+    ],
+    auth_types=[AuthType.API_KEY, AuthType.OAUTH2],
+    auth_endpoint="https://api.example.com/auth",
+    provider="ExampleAI Inc.",
+    documentation_url="https://docs.example.com/code-review-agent",
+    tags=["code", "security", "review", "development"],
+    trust_score=0.95,
+    verified=True
+)
+
+print(code_review_agent.to_json())
+```
+
+### A2A Client Implementation
+
+```python
+import httpx
+import asyncio
+from typing import Optional, Dict, Any, AsyncIterator
+from dataclasses import dataclass
+from enum import Enum
+import json
+import logging
+import uuid
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+
+class A2AMessageType(Enum):
+    """Types of A2A messages."""
+    REQUEST = "request"
+    RESPONSE = "response"
+    EVENT = "event"
+    ERROR = "error"
+
+
+@dataclass
+class A2AMessage:
+    """A2A Protocol Message."""
+    message_type: A2AMessageType
+    message_id: str
+    sender_id: str
+    recipient_id: str
+    capability: str
+    payload: Dict[str, Any]
+    correlation_id: Optional[str] = None
+    timestamp: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "messageType": self.message_type.value,
+            "messageId": self.message_id,
+            "senderId": self.sender_id,
+            "recipientId": self.recipient_id,
+            "capability": self.capability,
+            "payload": self.payload,
+            "correlationId": self.correlation_id,
+            "timestamp": self.timestamp,
+        }
+
+
+class A2AClient:
+    """
+    A2A Protocol Client.
+
+    Handles discovery, authentication, and communication with other agents
+    following the A2A protocol specification.
+    """
+
+    def __init__(
+        self,
+        agent_id: str,
+        timeout: float = 30.0,
+        max_retries: int = 3
+    ):
+        self.agent_id = agent_id
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self._client = httpx.AsyncClient(timeout=timeout)
+        self._auth_tokens: Dict[str, str] = {}
+        self._agent_cards: Dict[str, AgentCard] = {}
+
+    async def discover_agent(self, endpoint: str) -> AgentCard:
+        """Discover an agent by fetching its Agent Card."""
+        well_known_url = f"{endpoint.rstrip('/')}/.well-known/agent.json"
+
+        response = await self._client.get(well_known_url)
+        response.raise_for_status()
+
+        card = AgentCard.from_dict(response.json())
+        self._agent_cards[card.agent_id] = card
+        logger.info(f"Discovered agent: {card.name} ({card.agent_id})")
+        return card
+
+    async def authenticate(
+        self,
+        agent_card: AgentCard,
+        credentials: Dict[str, str]
+    ) -> str:
+        """Authenticate with an agent."""
+        if AuthType.API_KEY in agent_card.auth_types and "api_key" in credentials:
+            token = credentials["api_key"]
+            self._auth_tokens[agent_card.agent_id] = token
+            return token
+
+        if AuthType.OAUTH2 in agent_card.auth_types:
+            auth_endpoint = agent_card.auth_endpoint or f"{agent_card.endpoint}/auth/token"
+            response = await self._client.post(
+                auth_endpoint,
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": credentials.get("client_id"),
+                    "client_secret": credentials.get("client_secret"),
+                }
+            )
+            response.raise_for_status()
+            token = response.json()["access_token"]
+            self._auth_tokens[agent_card.agent_id] = token
+            return token
+
+        raise ValueError(f"No supported auth type for agent {agent_card.agent_id}")
+
+    async def send_request(
+        self,
+        agent_card: AgentCard,
+        capability: str,
+        payload: Dict[str, Any],
+        timeout: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """Send a request to another agent."""
+        message = A2AMessage(
+            message_type=A2AMessageType.REQUEST,
+            message_id=str(uuid.uuid4()),
+            sender_id=self.agent_id,
+            recipient_id=agent_card.agent_id,
+            capability=capability,
+            payload=payload,
+            timestamp=datetime.utcnow().isoformat()
+        )
+
+        headers = {"Content-Type": "application/json"}
+        if agent_card.agent_id in self._auth_tokens:
+            headers["Authorization"] = f"Bearer {self._auth_tokens[agent_card.agent_id]}"
+
+        last_error = None
+        for attempt in range(self.max_retries):
+            try:
+                response = await self._client.post(
+                    f"{agent_card.endpoint}/a2a/invoke",
+                    json=message.to_dict(),
+                    headers=headers,
+                    timeout=timeout or self.timeout
+                )
+                response.raise_for_status()
+                result = response.json()
+                return result.get("payload", result)
+
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    wait_time = int(e.response.headers.get("Retry-After", 5))
+                    await asyncio.sleep(wait_time)
+                    continue
+                last_error = e
+            except httpx.TimeoutException as e:
+                last_error = e
+                await asyncio.sleep(2 ** attempt)
+
+        raise last_error or Exception("Request failed after retries")
+
+    async def stream_events(
+        self,
+        agent_card: AgentCard,
+        capability: str,
+        payload: Dict[str, Any]
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """Stream events from an agent using Server-Sent Events."""
+        message = A2AMessage(
+            message_type=A2AMessageType.REQUEST,
+            message_id=str(uuid.uuid4()),
+            sender_id=self.agent_id,
+            recipient_id=agent_card.agent_id,
+            capability=capability,
+            payload=payload,
+            timestamp=datetime.utcnow().isoformat()
+        )
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream"
+        }
+        if agent_card.agent_id in self._auth_tokens:
+            headers["Authorization"] = f"Bearer {self._auth_tokens[agent_card.agent_id]}"
+
+        async with self._client.stream(
+            "POST",
+            f"{agent_card.endpoint}/a2a/stream",
+            json=message.to_dict(),
+            headers=headers
+        ) as response:
+            async for line in response.aiter_lines():
+                if line.startswith("data: "):
+                    yield json.loads(line[6:])
+
+    async def close(self):
+        """Close the HTTP client."""
+        await self._client.aclose()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+```
+
+### Using the A2A Client
+
+```python
+async def main():
+    """Example: Using A2A to communicate with a code review agent."""
+
+    async with A2AClient(agent_id="my-orchestrator-agent") as client:
+        # 1. Discover the agent
+        code_review_card = await client.discover_agent(
+            "https://api.example.com/agents/code-review"
+        )
+        print(f"Found agent: {code_review_card.name}")
+
+        # 2. Authenticate
+        await client.authenticate(
+            code_review_card,
+            credentials={"api_key": "sk-xxx"}
+        )
+
+        # 3. Send a request
+        result = await client.send_request(
+            agent_card=code_review_card,
+            capability="review_code",
+            payload={
+                "code": "def hello(): print('world')",
+                "language": "python",
+                "focus": ["security", "best_practices"]
+            }
+        )
+        print(f"Review Results: {json.dumps(result, indent=2)}")
+
+# asyncio.run(main())
+```
+
+---
+
+## 38.3 Agent Discovery
+
+<ConceptIntro
+  title="Agent Discovery"
+  description="The process by which agents find each other in an ecosystem. Discovery mechanisms include centralized registries, DNS-based discovery, and well-known URLs. Effective discovery enables dynamic agent ecosystems where new agents can join and be found automatically."
+/>
+
+### Discovery Patterns
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Discovery Patterns"
+        subgraph "Centralized Registry"
+            R[(Registry)]
+            A1[Agent 1] -->|Register| R
+            A2[Agent 2] -->|Register| R
+            C1[Client] -->|Search| R
+        end
+        
+        subgraph "DNS-Based"
+            DNS[(DNS)]
+            A3[Agent 3] -->|TXT Record| DNS
+            C2[Client] -->|Lookup| DNS
+        end
+        
+        subgraph "Well-Known URL"
+            A4[Agent 4]
+            C3[Client] -->|GET /.well-known/agent.json| A4
+        end
+    end
+    
+    style R fill:#e3f2fd
+    style DNS fill:#fff9c4
+    style A4 fill:#c8e6c9
+`}
+  caption="Three patterns for agent discovery."
+/>
+
+| Pattern                  | Pros                       | Cons                    | Best For              |
+| :----------------------- | :------------------------- | :---------------------- | :-------------------- |
+| **Centralized Registry** | Easy search, rich metadata | Single point of failure | Enterprise ecosystems |
+| **DNS-Based**            | Decentralized, standard    | Limited metadata        | Public agents         |
+| **Well-Known URL**       | Simple, no infrastructure  | Must know endpoint      | Direct integration    |
+
+### Agent Registry Implementation
+
+```python
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Set
+from datetime import datetime
+from enum import Enum
+import asyncio
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class AgentStatus(Enum):
+    """Health status of a registered agent."""
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNHEALTHY = "unhealthy"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class RegisteredAgent:
+    """An agent registered in the registry."""
+    card: AgentCard
+    registered_at: datetime
+    last_health_check: Optional[datetime] = None
+    status: AgentStatus = AgentStatus.UNKNOWN
+    consecutive_failures: int = 0
+
+
+class AgentRegistry:
+    """
+    Centralized Agent Registry.
+
+    Provides agent registration, discovery, and health monitoring
+    for an agent ecosystem.
+    """
+
+    def __init__(
+        self,
+        health_check_interval: int = 60,
+        unhealthy_threshold: int = 3
+    ):
+        self._agents: Dict[str, RegisteredAgent] = {}
+        self._capability_index: Dict[str, Set[str]] = {}
+        self._tag_index: Dict[str, Set[str]] = {}
+        self._health_check_interval = health_check_interval
+        self._unhealthy_threshold = unhealthy_threshold
+        self._health_check_task: Optional[asyncio.Task] = None
+
+    async def register(self, card: AgentCard) -> bool:
+        """Register an agent with the registry."""
+        if card.agent_id in self._agents:
+            logger.warning(f"Agent {card.agent_id} already registered, updating")
+
+        registered = RegisteredAgent(
+            card=card,
+            registered_at=datetime.utcnow()
+        )
+        self._agents[card.agent_id] = registered
+
+        # Index by capabilities
+        for capability in card.capabilities:
+            if capability.name not in self._capability_index:
+                self._capability_index[capability.name] = set()
+            self._capability_index[capability.name].add(card.agent_id)
+
+        # Index by tags
+        for tag in card.tags:
+            if tag not in self._tag_index:
+                self._tag_index[tag] = set()
+            self._tag_index[tag].add(card.agent_id)
+
+        logger.info(f"Registered agent: {card.name} ({card.agent_id})")
+        await self._check_agent_health(card.agent_id)
+        return True
+
+    async def deregister(self, agent_id: str) -> bool:
+        """Remove an agent from the registry."""
+        if agent_id not in self._agents:
+            return False
+
+        registered = self._agents[agent_id]
+        card = registered.card
+
+        # Remove from indexes
+        for capability in card.capabilities:
+            if capability.name in self._capability_index:
+                self._capability_index[capability.name].discard(agent_id)
+
+        for tag in card.tags:
+            if tag in self._tag_index:
+                self._tag_index[tag].discard(agent_id)
+
+        del self._agents[agent_id]
+        logger.info(f"Deregistered agent: {agent_id}")
+        return True
+
+    def search_by_capability(
+        self,
+        capability: str,
+        only_healthy: bool = True
+    ) -> List[AgentCard]:
+        """Find agents that provide a specific capability."""
+        agent_ids = self._capability_index.get(capability, set())
+
+        results = []
+        for agent_id in agent_ids:
+            registered = self._agents.get(agent_id)
+            if registered:
+                if only_healthy and registered.status != AgentStatus.HEALTHY:
+                    continue
+                results.append(registered.card)
+
+        results.sort(key=lambda c: c.trust_score or 0, reverse=True)
+        return results
+
+    def search_by_tags(
+        self,
+        tags: List[str],
+        match_all: bool = False,
+        only_healthy: bool = True
+    ) -> List[AgentCard]:
+        """Find agents by tags."""
+        if not tags:
+            return []
+
+        tag_sets = [self._tag_index.get(tag, set()) for tag in tags]
+
+        if match_all:
+            matching_ids = set.intersection(*tag_sets) if tag_sets else set()
+        else:
+            matching_ids = set.union(*tag_sets) if tag_sets else set()
+
+        results = []
+        for agent_id in matching_ids:
+            registered = self._agents.get(agent_id)
+            if registered:
+                if only_healthy and registered.status != AgentStatus.HEALTHY:
+                    continue
+                results.append(registered.card)
+
+        return results
+
+    def search(self, query: str, only_healthy: bool = True) -> List[AgentCard]:
+        """Full-text search across agent names and descriptions."""
+        query_lower = query.lower()
+        results = []
+
+        for agent_id, registered in self._agents.items():
+            if only_healthy and registered.status != AgentStatus.HEALTHY:
+                continue
+
+            card = registered.card
+            searchable = f"{card.name} {card.description}"
+            for cap in card.capabilities:
+                searchable += f" {cap.name} {cap.description}"
+
+            if query_lower in searchable.lower():
+                results.append(card)
+
+        return results
+
+    async def _check_agent_health(self, agent_id: str) -> AgentStatus:
+        """Check health of a single agent."""
+        registered = self._agents.get(agent_id)
+        if not registered:
+            return AgentStatus.UNKNOWN
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(f"{registered.card.endpoint}/health")
+
+                if response.status_code == 200:
+                    registered.status = AgentStatus.HEALTHY
+                    registered.consecutive_failures = 0
+                else:
+                    raise Exception(f"Health check returned {response.status_code}")
+
+        except Exception as e:
+            registered.consecutive_failures += 1
+            if registered.consecutive_failures >= self._unhealthy_threshold:
+                registered.status = AgentStatus.UNHEALTHY
+            else:
+                registered.status = AgentStatus.DEGRADED
+
+        registered.last_health_check = datetime.utcnow()
+        return registered.status
+
+    async def _health_check_loop(self):
+        """Background task to periodically check agent health."""
+        while True:
+            try:
+                for agent_id in list(self._agents.keys()):
+                    await self._check_agent_health(agent_id)
+                    await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Health check error: {e}")
+
+            await asyncio.sleep(self._health_check_interval)
+
+    def start_health_checks(self):
+        """Start the background health check task."""
+        if self._health_check_task is None:
+            self._health_check_task = asyncio.create_task(self._health_check_loop())
+
+    def stop_health_checks(self):
+        """Stop the background health check task."""
+        if self._health_check_task:
+            self._health_check_task.cancel()
+            self._health_check_task = None
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get registry statistics."""
+        status_counts = {s: 0 for s in AgentStatus}
+        for registered in self._agents.values():
+            status_counts[registered.status] += 1
+
+        return {
+            "total_agents": len(self._agents),
+            "total_capabilities": len(self._capability_index),
+            "total_tags": len(self._tag_index),
+            "status_breakdown": {s.value: c for s, c in status_counts.items()},
+        }
+```
+
+---
+
+## 38.4 Capability Negotiation
+
+<ConceptIntro
+  title="Capability Negotiation"
+  description="The process of matching a requester's needs with a provider's capabilities. Negotiation considers semantic similarity, version compatibility, cost constraints, and latency requirements to find the best agent for a task."
+/>
+
+When multiple agents can fulfill a request, how do you choose the best one? Capability negotiation handles this matching process.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Client as Client Agent
+    participant Matcher as Capability Matcher
+    participant Registry as Agent Registry
+    
+    Client->>Matcher: Need: "analyze code for security"
+    Matcher->>Registry: Search capabilities
+    Registry-->>Matcher: [Agent A, Agent B, Agent C]
+    
+    Note over Matcher: Score each agent
+    Matcher->>Matcher: Semantic match: 0.95, 0.87, 0.72
+    Matcher->>Matcher: Apply constraints (cost, latency)
+    Matcher->>Matcher: Rank by composite score
+    
+    Matcher-->>Client: Best match: Agent A (score: 0.92)
+`}
+  caption="Capability negotiation flow."
+/>
+
+### Capability Matcher Implementation
+
+```python
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Any, Tuple
+from enum import Enum
+import numpy as np
+
+
+class MatchStrategy(Enum):
+    """Strategies for capability matching."""
+    EXACT = "exact"
+    SEMANTIC = "semantic"
+    HYBRID = "hybrid"
+
+
+@dataclass
+class MatchConstraints:
+    """Constraints for capability matching."""
+    max_cost_per_request: Optional[float] = None
+    max_latency_ms: Optional[int] = None
+    min_trust_score: Optional[float] = None
+    required_auth_types: Optional[List[AuthType]] = None
+    preferred_providers: Optional[List[str]] = None
+    required_version: Optional[str] = None
+
+
+@dataclass
+class MatchResult:
+    """Result of capability matching."""
+    agent_card: AgentCard
+    capability: Capability
+    semantic_score: float
+    constraint_score: float
+    composite_score: float
+    match_details: Dict[str, Any]
+
+
+class CapabilityMatcher:
+    """
+    Matches requester needs with provider capabilities.
+
+    Uses semantic similarity, version compatibility, and constraint
+    satisfaction to find the best agent for a task.
+    """
+
+    def __init__(
+        self,
+        embedding_model: str = "text-embedding-3-small",
+        strategy: MatchStrategy = MatchStrategy.HYBRID
+    ):
+        self.embedding_model = embedding_model
+        self.strategy = strategy
+        self._embedding_cache: Dict[str, List[float]] = {}
+
+    async def _get_embedding(self, text: str) -> List[float]:
+        """Get embedding for text (with caching)."""
+        if text in self._embedding_cache:
+            return self._embedding_cache[text]
+
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI()
+
+        response = await client.embeddings.create(
+            model=self.embedding_model,
+            input=text
+        )
+
+        embedding = response.data[0].embedding
+        self._embedding_cache[text] = embedding
+        return embedding
+
+    def _cosine_similarity(self, a: List[float], b: List[float]) -> float:
+        """Calculate cosine similarity between two vectors."""
+        a_np = np.array(a)
+        b_np = np.array(b)
+        return float(np.dot(a_np, b_np) / (np.linalg.norm(a_np) * np.linalg.norm(b_np)))
+
+    async def _calculate_semantic_score(
+        self,
+        query: str,
+        capability: Capability
+    ) -> float:
+        """Calculate semantic similarity between query and capability."""
+        if self.strategy == MatchStrategy.EXACT:
+            return 1.0 if query.lower() == capability.name.lower() else 0.0
+
+        query_embedding = await self._get_embedding(query)
+        capability_text = f"{capability.name}: {capability.description}"
+        capability_embedding = await self._get_embedding(capability_text)
+
+        semantic_score = self._cosine_similarity(query_embedding, capability_embedding)
+
+        if self.strategy == MatchStrategy.HYBRID:
+            if query.lower() in capability.name.lower():
+                semantic_score = min(1.0, semantic_score + 0.2)
+
+        return semantic_score
+
+    def _calculate_constraint_score(
+        self,
+        card: AgentCard,
+        capability: Capability,
+        constraints: MatchConstraints
+    ) -> Tuple[float, Dict[str, Any]]:
+        """Calculate how well an agent satisfies constraints."""
+        score = 1.0
+        details = {}
+
+        # Cost constraint
+        if constraints.max_cost_per_request is not None:
+            if capability.cost_per_request is not None:
+                if capability.cost_per_request <= constraints.max_cost_per_request:
+                    cost_ratio = capability.cost_per_request / constraints.max_cost_per_request
+                    details["cost"] = {"passed": True, "ratio": cost_ratio}
+                else:
+                    score *= 0.0
+                    details["cost"] = {"passed": False}
+
+        # Latency constraint
+        if constraints.max_latency_ms is not None:
+            if capability.avg_latency_ms is not None:
+                if capability.avg_latency_ms <= constraints.max_latency_ms:
+                    details["latency"] = {"passed": True}
+                else:
+                    score *= 0.5
+                    details["latency"] = {"passed": False, "penalty": 0.5}
+
+        # Trust score constraint
+        if constraints.min_trust_score is not None:
+            if card.trust_score is not None:
+                if card.trust_score >= constraints.min_trust_score:
+                    trust_bonus = (card.trust_score - constraints.min_trust_score) * 0.2
+                    score *= (1.0 + trust_bonus)
+                    details["trust"] = {"passed": True, "bonus": trust_bonus}
+                else:
+                    score *= 0.0
+                    details["trust"] = {"passed": False}
+
+        # Auth type constraint
+        if constraints.required_auth_types:
+            has_required_auth = any(
+                auth in card.auth_types
+                for auth in constraints.required_auth_types
+            )
+            if not has_required_auth:
+                score *= 0.0
+                details["auth"] = {"passed": False}
+
+        # Provider preference
+        if constraints.preferred_providers and card.provider:
+            if card.provider in constraints.preferred_providers:
+                score *= 1.1
+                details["provider"] = {"preferred": True}
+
+        return score, details
+
+    async def match(
+        self,
+        query: str,
+        candidates: List[AgentCard],
+        constraints: Optional[MatchConstraints] = None,
+        top_k: int = 5
+    ) -> List[MatchResult]:
+        """Find the best matching agents for a capability query."""
+        constraints = constraints or MatchConstraints()
+        results = []
+
+        for card in candidates:
+            for capability in card.capabilities:
+                semantic_score = await self._calculate_semantic_score(query, capability)
+
+                if semantic_score < 0.5:
+                    continue
+
+                constraint_score, details = self._calculate_constraint_score(
+                    card, capability, constraints
+                )
+
+                if constraint_score == 0:
+                    continue
+
+                composite_score = semantic_score * 0.6 + constraint_score * 0.4
+
+                results.append(MatchResult(
+                    agent_card=card,
+                    capability=capability,
+                    semantic_score=semantic_score,
+                    constraint_score=constraint_score,
+                    composite_score=composite_score,
+                    match_details=details
+                ))
+
+        results.sort(key=lambda r: r.composite_score, reverse=True)
+        return results[:top_k]
+
+    async def negotiate(
+        self,
+        query: str,
+        registry: AgentRegistry,
+        constraints: Optional[MatchConstraints] = None
+    ) -> Optional[MatchResult]:
+        """Full negotiation: search registry and find best match."""
+        candidates = registry.search_by_capability(query)
+
+        if not candidates:
+            candidates = registry.search(query)
+
+        if not candidates:
+            return None
+
+        results = await self.match(query, candidates, constraints, top_k=1)
+        return results[0] if results else None
+```
+
+### Using the Capability Matcher
+
+```python
+async def find_best_agent():
+    """Example: Finding the best agent for a task."""
+
+    registry = AgentRegistry()
+    await registry.register(code_review_agent)
+
+    matcher = CapabilityMatcher(strategy=MatchStrategy.HYBRID)
+
+    constraints = MatchConstraints(
+        max_cost_per_request=0.10,
+        max_latency_ms=5000,
+        min_trust_score=0.8,
+        required_auth_types=[AuthType.API_KEY]
+    )
+
+    result = await matcher.negotiate(
+        query="analyze code for security vulnerabilities",
+        registry=registry,
+        constraints=constraints
+    )
+
+    if result:
+        print(f"Best match: {result.agent_card.name}")
+        print(f"Capability: {result.capability.name}")
+        print(f"Score: {result.composite_score:.2f}")
+```
+
+---
+
+## 38.5 Trust and Authentication
+
+<Callout type="warning">
+  **Security is Critical**: In an agent ecosystem, a malicious agent could steal
+  data, inject harmful content, or compromise other agents. Trust and
+  authentication aren't optional—they're foundational.
+</Callout>
+
+### Why Trust Matters
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Without Trust"
+        MA[Malicious Agent] -->|Fake Capabilities| V1[Victim Agent]
+        MA -->|Data Theft| V2[User Data]
+        MA -->|Injection| V3[Other Agents]
+    end
+    
+    subgraph "With Trust"
+        TA[Trusted Agent] -->|Verified| TM[Trust Manager]
+        TM -->|Authenticated| TA2[Other Agent]
+        TM -->|Audit Log| Log[(Logs)]
+    end
+    
+    style MA fill:#ffcdd2
+    style TA fill:#c8e6c9
+    style TM fill:#e3f2fd
+`}
+  caption="Trust prevents malicious agents from compromising the ecosystem."
+/>
+
+### Authentication Patterns
+
+| Pattern             | Security Level | Complexity | Use Case                            |
+| :------------------ | :------------- | :--------- | :---------------------------------- |
+| **API Keys**        | Medium         | Low        | Internal agents, development        |
+| **OAuth 2.0**       | High           | Medium     | Third-party agents, user delegation |
+| **mTLS**            | Very High      | High       | Enterprise, zero-trust environments |
+| **JWT with Claims** | High           | Medium     | Fine-grained permissions            |
+
+### Trust Manager Implementation
+
+```python
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Set, Any
+from datetime import datetime, timedelta
+from enum import Enum
+import hashlib
+import hmac
+import secrets
+import jwt
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class Permission(Enum):
+    """Permissions that can be granted to agents."""
+    READ = "read"
+    WRITE = "write"
+    EXECUTE = "execute"
+    DELEGATE = "delegate"
+    ADMIN = "admin"
+
+
+@dataclass
+class AgentCredentials:
+    """Credentials for an agent."""
+    agent_id: str
+    api_key_hash: str
+    permissions: Set[Permission]
+    rate_limit: int
+    created_at: datetime
+    expires_at: Optional[datetime] = None
+    allowed_capabilities: Optional[Set[str]] = None
+
+
+@dataclass
+class AuditLogEntry:
+    """Audit log entry for agent actions."""
+    timestamp: datetime
+    source_agent: str
+    target_agent: str
+    action: str
+    capability: str
+    success: bool
+    details: Dict[str, Any]
+
+
+class TrustManager:
+    """
+    Manages trust, authentication, and authorization for agent ecosystems.
+
+    Provides:
+    - API key generation and validation
+    - JWT token issuance and verification
+    - Permission checking
+    - Rate limiting
+    - Audit logging
+    """
+
+    def __init__(
+        self,
+        jwt_secret: str,
+        jwt_algorithm: str = "HS256",
+        token_expiry_hours: int = 24
+    ):
+        self._jwt_secret = jwt_secret
+        self._jwt_algorithm = jwt_algorithm
+        self._token_expiry_hours = token_expiry_hours
+        self._credentials: Dict[str, AgentCredentials] = {}
+        self._rate_limit_counters: Dict[str, List[datetime]] = {}
+        self._audit_log: List[AuditLogEntry] = []
+        self._revoked_tokens: Set[str] = set()
+
+    def generate_api_key(self, agent_id: str) -> str:
+        """Generate a new API key for an agent."""
+        return f"a2a_{secrets.token_urlsafe(32)}"
+
+    def register_agent(
+        self,
+        agent_id: str,
+        api_key: str,
+        permissions: Set[Permission],
+        rate_limit: int = 100,
+        expires_in_days: Optional[int] = None,
+        allowed_capabilities: Optional[Set[str]] = None
+    ) -> AgentCredentials:
+        """Register an agent with credentials."""
+        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+
+        expires_at = None
+        if expires_in_days:
+            expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+
+        credentials = AgentCredentials(
+            agent_id=agent_id,
+            api_key_hash=api_key_hash,
+            permissions=permissions,
+            rate_limit=rate_limit,
+            created_at=datetime.utcnow(),
+            expires_at=expires_at,
+            allowed_capabilities=allowed_capabilities
+        )
+
+        self._credentials[agent_id] = credentials
+        logger.info(f"Registered agent credentials: {agent_id}")
+        return credentials
+
+    def validate_api_key(self, agent_id: str, api_key: str) -> bool:
+        """Validate an API key for an agent."""
+        credentials = self._credentials.get(agent_id)
+        if not credentials:
+            return False
+
+        if credentials.expires_at and datetime.utcnow() > credentials.expires_at:
+            return False
+
+        api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        return hmac.compare_digest(api_key_hash, credentials.api_key_hash)
+
+    def issue_token(
+        self,
+        agent_id: str,
+        target_agent_id: str,
+        capabilities: List[str]
+    ) -> str:
+        """Issue a JWT token for agent-to-agent communication."""
+        credentials = self._credentials.get(agent_id)
+        if not credentials:
+            raise ValueError(f"Unknown agent: {agent_id}")
+
+        if credentials.allowed_capabilities:
+            for cap in capabilities:
+                if cap not in credentials.allowed_capabilities:
+                    raise PermissionError(f"Agent {agent_id} not allowed: {cap}")
+
+        now = datetime.utcnow()
+        payload = {
+            "iss": "a2a-trust-manager",
+            "sub": agent_id,
+            "aud": target_agent_id,
+            "iat": now.timestamp(),
+            "exp": (now + timedelta(hours=self._token_expiry_hours)).timestamp(),
+            "jti": secrets.token_urlsafe(16),
+            "capabilities": capabilities,
+            "permissions": [p.value for p in credentials.permissions],
+        }
+
+        return jwt.encode(payload, self._jwt_secret, algorithm=self._jwt_algorithm)
+
+    def verify_token(self, token: str, expected_audience: str) -> Dict[str, Any]:
+        """Verify a JWT token."""
+        try:
+            unverified = jwt.decode(token, options={"verify_signature": False})
+            if unverified.get("jti") in self._revoked_tokens:
+                raise jwt.InvalidTokenError("Token has been revoked")
+        except jwt.DecodeError:
+            raise jwt.InvalidTokenError("Invalid token format")
+
+        return jwt.decode(
+            token,
+            self._jwt_secret,
+            algorithms=[self._jwt_algorithm],
+            audience=expected_audience
+        )
+
+    def revoke_token(self, token: str):
+        """Revoke a token."""
+        try:
+            payload = jwt.decode(token, options={"verify_signature": False})
+            jti = payload.get("jti")
+            if jti:
+                self._revoked_tokens.add(jti)
+        except jwt.DecodeError:
+            pass
+
+    def check_permission(self, agent_id: str, required: Permission) -> bool:
+        """Check if an agent has a specific permission."""
+        credentials = self._credentials.get(agent_id)
+        if not credentials:
+            return False
+
+        if Permission.ADMIN in credentials.permissions:
+            return True
+
+        return required in credentials.permissions
+
+    def check_rate_limit(self, agent_id: str) -> bool:
+        """Check if an agent is within rate limits."""
+        credentials = self._credentials.get(agent_id)
+        if not credentials:
+            return False
+
+        now = datetime.utcnow()
+        window_start = now - timedelta(minutes=1)
+
+        if agent_id not in self._rate_limit_counters:
+            self._rate_limit_counters[agent_id] = []
+
+        self._rate_limit_counters[agent_id] = [
+            ts for ts in self._rate_limit_counters[agent_id]
+            if ts > window_start
+        ]
+
+        if len(self._rate_limit_counters[agent_id]) >= credentials.rate_limit:
+            return False
+
+        self._rate_limit_counters[agent_id].append(now)
+        return True
+
+    def log_action(
+        self,
+        source_agent: str,
+        target_agent: str,
+        action: str,
+        capability: str,
+        success: bool,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        """Log an agent action for audit purposes."""
+        entry = AuditLogEntry(
+            timestamp=datetime.utcnow(),
+            source_agent=source_agent,
+            target_agent=target_agent,
+            action=action,
+            capability=capability,
+            success=success,
+            details=details or {}
+        )
+        self._audit_log.append(entry)
+
+    def get_audit_log(
+        self,
+        agent_id: Optional[str] = None,
+        since: Optional[datetime] = None,
+        limit: int = 100
+    ) -> List[AuditLogEntry]:
+        """Retrieve audit log entries."""
+        entries = self._audit_log
+
+        if agent_id:
+            entries = [
+                e for e in entries
+                if e.source_agent == agent_id or e.target_agent == agent_id
+            ]
+
+        if since:
+            entries = [e for e in entries if e.timestamp >= since]
+
+        return sorted(entries, key=lambda e: e.timestamp, reverse=True)[:limit]
+```
+
+---
+
+## 38.6 Inter-Agent Messaging
+
+Effective inter-agent communication requires more than simple request/response. Production systems need event streaming, error handling, and async patterns.
+
+### Message Types
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Message Types"
+        REQ[Request] -->|Invoke capability| RESP[Response]
+        EVT[Event] -->|Notify| SUB[Subscriber]
+        ERR[Error] -->|Report failure| HANDLER[Error Handler]
+    end
+    
+    style REQ fill:#e3f2fd
+    style RESP fill:#c8e6c9
+    style EVT fill:#fff9c4
+    style ERR fill:#ffcdd2
+`}
+  caption="A2A message types and communication patterns."
+/>
+
+| Message Type | Purpose             | Pattern             | Example               |
+| :----------- | :------------------ | :------------------ | :-------------------- |
+| **Request**  | Invoke a capability | Sync or Async       | "Review this code"    |
+| **Response** | Return results      | Paired with Request | "Found 3 issues"      |
+| **Event**    | Notify of changes   | Pub/Sub             | "Analysis complete"   |
+| **Error**    | Report failures     | Any                 | "Rate limit exceeded" |
+
+### A2A Messenger Implementation
+
+```python
+from dataclasses import dataclass
+from typing import Dict, Any, Optional, Callable, Awaitable, List, AsyncIterator
+from enum import Enum
+import asyncio
+import uuid
+from datetime import datetime
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class MessagePriority(Enum):
+    """Message priority levels."""
+    LOW = 0
+    NORMAL = 1
+    HIGH = 2
+    CRITICAL = 3
+
+
+@dataclass
+class A2AError:
+    """Structured error for A2A communication."""
+    code: str
+    message: str
+    details: Optional[Dict[str, Any]] = None
+    retryable: bool = False
+    retry_after_seconds: Optional[int] = None
+
+
+class A2AMessenger:
+    """
+    High-level messenger for A2A communication.
+
+    Provides:
+    - Synchronous and asynchronous request/response
+    - Event streaming with Server-Sent Events
+    - Automatic retries with exponential backoff
+    - Request timeout handling
+    - Error normalization
+    """
+
+    def __init__(
+        self,
+        agent_id: str,
+        trust_manager: TrustManager,
+        default_timeout: float = 30.0,
+        max_retries: int = 3,
+        retry_base_delay: float = 1.0
+    ):
+        self.agent_id = agent_id
+        self.trust_manager = trust_manager
+        self.default_timeout = default_timeout
+        self.max_retries = max_retries
+        self.retry_base_delay = retry_base_delay
+        self._client = httpx.AsyncClient()
+        self._event_handlers: Dict[str, List[Callable]] = {}
+
+    async def send_request(
+        self,
+        target: AgentCard,
+        capability: str,
+        payload: Dict[str, Any],
+        timeout: Optional[float] = None,
+        priority: MessagePriority = MessagePriority.NORMAL
+    ) -> Dict[str, Any]:
+        """Send a synchronous request to another agent."""
+        timeout = timeout or self.default_timeout
+        message_id = str(uuid.uuid4())
+
+        token = self.trust_manager.issue_token(
+            self.agent_id,
+            target.agent_id,
+            [capability]
+        )
+
+        message = {
+            "messageType": "request",
+            "messageId": message_id,
+            "senderId": self.agent_id,
+            "recipientId": target.agent_id,
+            "capability": capability,
+            "payload": payload,
+            "timestamp": datetime.utcnow().isoformat(),
+            "priority": priority.value
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+            "X-A2A-Message-Id": message_id,
+        }
+
+        last_error = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                if not self.trust_manager.check_rate_limit(self.agent_id):
+                    raise A2AError(
+                        code="RATE_LIMITED",
+                        message="Rate limit exceeded",
+                        retryable=True,
+                        retry_after_seconds=60
+                    )
+
+                response = await self._client.post(
+                    f"{target.endpoint}/a2a/invoke",
+                    json=message,
+                    headers=headers,
+                    timeout=timeout
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    self.trust_manager.log_action(
+                        source_agent=self.agent_id,
+                        target_agent=target.agent_id,
+                        action="request",
+                        capability=capability,
+                        success=True,
+                        details={"message_id": message_id}
+                    )
+                    return result.get("payload", result)
+
+                elif response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    raise A2AError(
+                        code="RATE_LIMITED",
+                        message="Target agent rate limited",
+                        retryable=True,
+                        retry_after_seconds=retry_after
+                    )
+
+                elif response.status_code >= 500:
+                    raise A2AError(
+                        code="SERVER_ERROR",
+                        message=f"Server error: {response.status_code}",
+                        retryable=True
+                    )
+
+                else:
+                    error_body = response.json() if response.content else {}
+                    raise A2AError(
+                        code=error_body.get("code", "CLIENT_ERROR"),
+                        message=error_body.get("message", f"Error: {response.status_code}"),
+                        retryable=False
+                    )
+
+            except A2AError as e:
+                last_error = e
+                if e.retryable and attempt < self.max_retries:
+                    delay = self.retry_base_delay * (2 ** attempt)
+                    if e.retry_after_seconds:
+                        delay = max(delay, e.retry_after_seconds)
+                    await asyncio.sleep(delay)
+                    continue
+                break
+
+            except httpx.TimeoutException:
+                last_error = A2AError(
+                    code="TIMEOUT",
+                    message=f"Request timed out after {timeout}s",
+                    retryable=True
+                )
+                if attempt < self.max_retries:
+                    await asyncio.sleep(self.retry_base_delay * (2 ** attempt))
+                    continue
+                break
+
+        self.trust_manager.log_action(
+            source_agent=self.agent_id,
+            target_agent=target.agent_id,
+            action="request",
+            capability=capability,
+            success=False,
+            details={"message_id": message_id, "error": last_error.code if last_error else "unknown"}
+        )
+
+        raise last_error or A2AError(code="UNKNOWN", message="Request failed")
+
+    async def send_async_request(
+        self,
+        target: AgentCard,
+        capability: str,
+        payload: Dict[str, Any],
+        callback_url: str
+    ) -> str:
+        """Send an asynchronous request with callback."""
+        message_id = str(uuid.uuid4())
+
+        token = self.trust_manager.issue_token(
+            self.agent_id,
+            target.agent_id,
+            [capability]
+        )
+
+        message = {
+            "messageType": "request",
+            "messageId": message_id,
+            "senderId": self.agent_id,
+            "recipientId": target.agent_id,
+            "capability": capability,
+            "payload": payload,
+            "timestamp": datetime.utcnow().isoformat(),
+            "async": True,
+            "callbackUrl": callback_url
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+            "X-A2A-Async": "true"
+        }
+
+        response = await self._client.post(
+            f"{target.endpoint}/a2a/invoke",
+            json=message,
+            headers=headers,
+            timeout=self.default_timeout
+        )
+
+        if response.status_code not in (200, 202):
+            raise A2AError(
+                code="ASYNC_SUBMIT_FAILED",
+                message=f"Failed to submit async request: {response.status_code}"
+            )
+
+        return message_id
+
+    async def stream_events(
+        self,
+        target: AgentCard,
+        capability: str,
+        payload: Dict[str, Any]
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """Stream events from an agent using Server-Sent Events."""
+        message_id = str(uuid.uuid4())
+
+        token = self.trust_manager.issue_token(
+            self.agent_id,
+            target.agent_id,
+            [capability]
+        )
+
+        message = {
+            "messageType": "request",
+            "messageId": message_id,
+            "senderId": self.agent_id,
+            "recipientId": target.agent_id,
+            "capability": capability,
+            "payload": payload,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+            "Accept": "text/event-stream"
+        }
+
+        async with self._client.stream(
+            "POST",
+            f"{target.endpoint}/a2a/stream",
+            json=message,
+            headers=headers
+        ) as response:
+            buffer = ""
+            async for chunk in response.aiter_text():
+                buffer += chunk
+                while "\n\n" in buffer:
+                    event_str, buffer = buffer.split("\n\n", 1)
+                    for line in event_str.split("\n"):
+                        if line.startswith("data: "):
+                            yield json.loads(line[6:])
+
+    def on_event(self, event_type: str, handler: Callable[[Dict[str, Any]], Awaitable[None]]):
+        """Register an event handler."""
+        if event_type not in self._event_handlers:
+            self._event_handlers[event_type] = []
+        self._event_handlers[event_type].append(handler)
+
+    async def close(self):
+        """Close the messenger."""
+        await self._client.aclose()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+```
+
+### Using the Messenger
+
+```python
+async def messaging_example():
+    """Example: Using A2AMessenger for inter-agent communication."""
+
+    trust_manager = TrustManager(jwt_secret="your-secret-key")
+
+    api_key = trust_manager.generate_api_key("orchestrator-agent")
+    trust_manager.register_agent(
+        agent_id="orchestrator-agent",
+        api_key=api_key,
+        permissions={Permission.READ, Permission.EXECUTE},
+        rate_limit=100
+    )
+
+    async with A2AMessenger(
+        agent_id="orchestrator-agent",
+        trust_manager=trust_manager
+    ) as messenger:
+
+        # Synchronous request
+        result = await messenger.send_request(
+            target=code_review_agent,
+            capability="review_code",
+            payload={
+                "code": "def hello(): print('world')",
+                "language": "python"
+            }
+        )
+        print(f"Review result: {result}")
+
+        # Streaming request
+        async for event in messenger.stream_events(
+            target=code_review_agent,
+            capability="analyze_codebase",
+            payload={"repo_url": "https://github.com/example/repo"}
+        ):
+            print(f"Event: {event}")
+```
+
+---
+
+## 38.7 Building an Agent Marketplace
+
+An agent marketplace brings together all the concepts we've covered: discovery, capability matching, trust, and messaging.
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Agent Marketplace"
+        UI[Marketplace UI]
+        API[Marketplace API]
+        
+        subgraph "Core Services"
+            Registry[(Agent Registry)]
+            Matcher[Capability Matcher]
+            Trust[Trust Manager]
+            Billing[Usage & Billing]
+        end
+        
+        subgraph "Provider Agents"
+            P1[Code Review Agent]
+            P2[Security Scanner]
+            P3[Doc Generator]
+        end
+        
+        subgraph "Consumer Agents"
+            C1[Dev Assistant]
+            C2[CI/CD Agent]
+        end
+    end
+    
+    UI --> API
+    API --> Registry
+    API --> Matcher
+    API --> Trust
+    API --> Billing
+    
+    P1 & P2 & P3 -->|Register| Registry
+    C1 & C2 -->|Discover| API
+    C1 <-->|A2A| P1
+    C2 <-->|A2A| P2
+    
+    style Registry fill:#e3f2fd
+    style Matcher fill:#fff9c4
+    style Trust fill:#c8e6c9
+    style Billing fill:#f3e5f5
+`}
+  caption="Agent marketplace architecture."
+/>
+
+### Marketplace Implementation
+
+```python
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Any
+from datetime import datetime
+
+
+@dataclass
+class UsageRecord:
+    """Record of agent usage for billing."""
+    consumer_id: str
+    provider_id: str
+    capability: str
+    timestamp: datetime
+    tokens_used: int
+    cost: float
+    latency_ms: int
+    success: bool
+
+
+@dataclass
+class AgentRating:
+    """Rating for an agent."""
+    agent_id: str
+    rater_id: str
+    rating: float  # 1-5
+    review: Optional[str]
+    timestamp: datetime
+
+
+@dataclass
+class MarketplaceListing:
+    """A listing in the marketplace."""
+    card: AgentCard
+    registered: RegisteredAgent
+    ratings: List[AgentRating] = field(default_factory=list)
+    total_requests: int = 0
+    success_rate: float = 1.0
+    avg_latency_ms: float = 0.0
+
+    @property
+    def average_rating(self) -> float:
+        if not self.ratings:
+            return 0.0
+        return sum(r.rating for r in self.ratings) / len(self.ratings)
+
+
+class AgentMarketplace:
+    """
+    Agent Marketplace: A platform for discovering, using, and rating agents.
+
+    Provides:
+    - Agent listing and search
+    - Capability-based routing
+    - Usage tracking and billing
+    - Rating and reviews
+    """
+
+    def __init__(
+        self,
+        registry: AgentRegistry,
+        trust_manager: TrustManager,
+        capability_matcher: CapabilityMatcher
+    ):
+        self.registry = registry
+        self.trust_manager = trust_manager
+        self.matcher = capability_matcher
+        self._listings: Dict[str, MarketplaceListing] = {}
+        self._usage_records: List[UsageRecord] = []
+
+    async def list_agent(self, card: AgentCard) -> MarketplaceListing:
+        """List an agent in the marketplace."""
+        await self.registry.register(card)
+
+        registered = self.registry._agents[card.agent_id]
+        listing = MarketplaceListing(card=card, registered=registered)
+        self._listings[card.agent_id] = listing
+
+        logger.info(f"Listed agent in marketplace: {card.name}")
+        return listing
+
+    async def unlist_agent(self, agent_id: str) -> bool:
+        """Remove an agent from the marketplace."""
+        if agent_id in self._listings:
+            del self._listings[agent_id]
+            await self.registry.deregister(agent_id)
+            return True
+        return False
+
+    def search_listings(
+        self,
+        query: Optional[str] = None,
+        capability: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        min_rating: Optional[float] = None,
+        max_cost: Optional[float] = None,
+        verified_only: bool = False
+    ) -> List[MarketplaceListing]:
+        """Search marketplace listings."""
+        results = list(self._listings.values())
+
+        if query:
+            query_lower = query.lower()
+            results = [
+                l for l in results
+                if query_lower in l.card.name.lower()
+                or query_lower in l.card.description.lower()
+            ]
+
+        if capability:
+            results = [
+                l for l in results
+                if any(c.name == capability for c in l.card.capabilities)
+            ]
+
+        if tags:
+            results = [
+                l for l in results
+                if any(t in l.card.tags for t in tags)
+            ]
+
+        if min_rating is not None:
+            results = [l for l in results if l.average_rating >= min_rating]
+
+        if max_cost is not None:
+            results = [
+                l for l in results
+                if any(
+                    c.cost_per_request and c.cost_per_request <= max_cost
+                    for c in l.card.capabilities
+                )
+            ]
+
+        if verified_only:
+            results = [l for l in results if l.card.verified]
+
+        results.sort(key=lambda l: (l.average_rating, l.success_rate), reverse=True)
+        return results
+
+    async def find_best_agent(
+        self,
+        capability_query: str,
+        constraints: Optional[MatchConstraints] = None
+    ) -> Optional[MarketplaceListing]:
+        """Find the best agent for a capability using semantic matching."""
+        cards = [l.card for l in self._listings.values()]
+
+        results = await self.matcher.match(
+            query=capability_query,
+            candidates=cards,
+            constraints=constraints,
+            top_k=1
+        )
+
+        if results:
+            return self._listings.get(results[0].agent_card.agent_id)
+        return None
+
+    async def invoke_agent(
+        self,
+        consumer_id: str,
+        provider_id: str,
+        capability: str,
+        payload: Dict[str, Any],
+        messenger: A2AMessenger
+    ) -> Dict[str, Any]:
+        """Invoke an agent through the marketplace (with tracking)."""
+        listing = self._listings.get(provider_id)
+        if not listing:
+            raise ValueError(f"Agent not found: {provider_id}")
+
+        cap = next(
+            (c for c in listing.card.capabilities if c.name == capability),
+            None
+        )
+        cost = cap.cost_per_request if cap else 0.0
+
+        start_time = datetime.utcnow()
+        success = False
+        result = None
+
+        try:
+            result = await messenger.send_request(
+                target=listing.card,
+                capability=capability,
+                payload=payload
+            )
+            success = True
+        finally:
+            latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+
+            record = UsageRecord(
+                consumer_id=consumer_id,
+                provider_id=provider_id,
+                capability=capability,
+                timestamp=start_time,
+                tokens_used=payload.get("_tokens", 0),
+                cost=cost if success else 0.0,
+                latency_ms=latency_ms,
+                success=success
+            )
+            self._usage_records.append(record)
+
+            listing.total_requests += 1
+            if success:
+                n = listing.total_requests
+                listing.avg_latency_ms = (listing.avg_latency_ms * (n - 1) + latency_ms) / n
+
+            successful = sum(1 for r in self._usage_records if r.provider_id == provider_id and r.success)
+            total = sum(1 for r in self._usage_records if r.provider_id == provider_id)
+            listing.success_rate = successful / total if total > 0 else 1.0
+
+        return result
+
+    async def rate_agent(
+        self,
+        agent_id: str,
+        rater_id: str,
+        rating: float,
+        review: Optional[str] = None
+    ) -> AgentRating:
+        """Rate an agent."""
+        if rating < 1 or rating > 5:
+            raise ValueError("Rating must be between 1 and 5")
+
+        listing = self._listings.get(agent_id)
+        if not listing:
+            raise ValueError(f"Agent not found: {agent_id}")
+
+        agent_rating = AgentRating(
+            agent_id=agent_id,
+            rater_id=rater_id,
+            rating=rating,
+            review=review,
+            timestamp=datetime.utcnow()
+        )
+
+        listing.ratings.append(agent_rating)
+        return agent_rating
+
+    def get_usage_report(
+        self,
+        agent_id: Optional[str] = None,
+        since: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """Get usage report for billing."""
+        records = self._usage_records
+
+        if agent_id:
+            records = [
+                r for r in records
+                if r.consumer_id == agent_id or r.provider_id == agent_id
+            ]
+
+        if since:
+            records = [r for r in records if r.timestamp >= since]
+
+        total_cost = sum(r.cost for r in records)
+        total_requests = len(records)
+        successful_requests = sum(1 for r in records if r.success)
+
+        by_provider: Dict[str, Dict[str, Any]] = {}
+        for record in records:
+            if record.provider_id not in by_provider:
+                by_provider[record.provider_id] = {"requests": 0, "cost": 0.0}
+            by_provider[record.provider_id]["requests"] += 1
+            by_provider[record.provider_id]["cost"] += record.cost
+
+        return {
+            "total_requests": total_requests,
+            "successful_requests": successful_requests,
+            "success_rate": successful_requests / total_requests if total_requests > 0 else 0,
+            "total_cost": total_cost,
+            "by_provider": by_provider,
+        }
+
+    def get_leaderboard(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get top-rated agents."""
+        listings = sorted(
+            self._listings.values(),
+            key=lambda l: (l.average_rating, l.total_requests),
+            reverse=True
+        )[:limit]
+
+        return [
+            {
+                "agent_id": l.card.agent_id,
+                "name": l.card.name,
+                "rating": l.average_rating,
+                "total_requests": l.total_requests,
+                "success_rate": l.success_rate,
+                "verified": l.card.verified
+            }
+            for l in listings
+        ]
+```
+
+### Using the Marketplace
+
+```python
+async def marketplace_example():
+    """Example: Using the agent marketplace."""
+
+    # Set up infrastructure
+    registry = AgentRegistry()
+    trust_manager = TrustManager(jwt_secret="secret")
+    matcher = CapabilityMatcher()
+
+    marketplace = AgentMarketplace(registry, trust_manager, matcher)
+
+    # List agents
+    await marketplace.list_agent(code_review_agent)
+    await marketplace.list_agent(security_scanner_agent)
+
+    # Search for agents
+    results = marketplace.search_listings(
+        capability="review_code",
+        min_rating=4.0,
+        verified_only=True
+    )
+    print(f"Found {len(results)} agents")
+
+    # Find best agent semantically
+    best = await marketplace.find_best_agent(
+        capability_query="analyze my Python code for security issues",
+        constraints=MatchConstraints(max_cost_per_request=0.10)
+    )
+
+    if best:
+        print(f"Best match: {best.card.name}")
+
+        # Invoke through marketplace
+        async with A2AMessenger("my-agent", trust_manager) as messenger:
+            result = await marketplace.invoke_agent(
+                consumer_id="my-agent",
+                provider_id=best.card.agent_id,
+                capability="review_code",
+                payload={"code": "...", "language": "python"},
+                messenger=messenger
+            )
+
+        # Rate the agent
+        await marketplace.rate_agent(
+            agent_id=best.card.agent_id,
+            rater_id="my-agent",
+            rating=5.0,
+            review="Excellent security analysis!"
+        )
+
+    # Get usage report
+    report = marketplace.get_usage_report()
+    print(f"Total cost: ${report['total_cost']:.2f}")
+```
+
+---
+
+## 38.8 Production Patterns
+
+Building production-ready agent ecosystems requires additional patterns for reliability, observability, and cost control.
+
+### Circuit Breakers for Agent Calls
+
+```python
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Optional, Callable, Any
+import asyncio
+
+
+class CircuitState(Enum):
+    CLOSED = "closed"      # Normal operation
+    OPEN = "open"          # Failing, reject requests
+    HALF_OPEN = "half_open"  # Testing if recovered
+
+
+@dataclass
+class CircuitBreakerConfig:
+    failure_threshold: int = 5
+    success_threshold: int = 2
+    timeout_seconds: int = 30
+    half_open_max_calls: int = 3
+
+
+class CircuitBreaker:
+    """
+    Circuit breaker for agent calls.
+
+    Prevents cascading failures by stopping calls to failing agents
+    and allowing them time to recover.
+    """
+
+    def __init__(self, config: CircuitBreakerConfig = None):
+        self.config = config or CircuitBreakerConfig()
+        self.state = CircuitState.CLOSED
+        self.failure_count = 0
+        self.success_count = 0
+        self.last_failure_time: Optional[datetime] = None
+        self.half_open_calls = 0
+        self._lock = asyncio.Lock()
+
+    async def call(self, func: Callable, *args, **kwargs) -> Any:
+        """Execute a function through the circuit breaker."""
+        async with self._lock:
+            if self.state == CircuitState.OPEN:
+                if self._should_attempt_reset():
+                    self.state = CircuitState.HALF_OPEN
+                    self.half_open_calls = 0
+                else:
+                    raise Exception("Circuit breaker is OPEN")
+
+            if self.state == CircuitState.HALF_OPEN:
+                if self.half_open_calls >= self.config.half_open_max_calls:
+                    raise Exception("Circuit breaker HALF_OPEN limit reached")
+                self.half_open_calls += 1
+
+        try:
+            result = await func(*args, **kwargs)
+            await self._on_success()
+            return result
+        except Exception as e:
+            await self._on_failure()
+            raise
+
+    def _should_attempt_reset(self) -> bool:
+        if self.last_failure_time is None:
+            return True
+        elapsed = datetime.utcnow() - self.last_failure_time
+        return elapsed.total_seconds() >= self.config.timeout_seconds
+
+    async def _on_success(self):
+        async with self._lock:
+            if self.state == CircuitState.HALF_OPEN:
+                self.success_count += 1
+                if self.success_count >= self.config.success_threshold:
+                    self.state = CircuitState.CLOSED
+                    self.failure_count = 0
+                    self.success_count = 0
+            elif self.state == CircuitState.CLOSED:
+                self.failure_count = 0
+
+    async def _on_failure(self):
+        async with self._lock:
+            self.failure_count += 1
+            self.last_failure_time = datetime.utcnow()
+
+            if self.state == CircuitState.HALF_OPEN:
+                self.state = CircuitState.OPEN
+                self.success_count = 0
+            elif self.failure_count >= self.config.failure_threshold:
+                self.state = CircuitState.OPEN
+
+
+# Usage with agents
+class ResilientAgentClient:
+    """Agent client with circuit breaker protection."""
+
+    def __init__(self, client: A2AClient):
+        self.client = client
+        self._breakers: Dict[str, CircuitBreaker] = {}
+
+    def _get_breaker(self, agent_id: str) -> CircuitBreaker:
+        if agent_id not in self._breakers:
+            self._breakers[agent_id] = CircuitBreaker()
+        return self._breakers[agent_id]
+
+    async def send_request(
+        self,
+        agent_card: AgentCard,
+        capability: str,
+        payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        breaker = self._get_breaker(agent_card.agent_id)
+
+        return await breaker.call(
+            self.client.send_request,
+            agent_card,
+            capability,
+            payload
+        )
+```
+
+### Rate Limiting Between Agents
+
+```python
+from collections import defaultdict
+from datetime import datetime, timedelta
+import asyncio
+
+
+class TokenBucketRateLimiter:
+    """
+    Token bucket rate limiter for inter-agent communication.
+
+    Allows bursts while maintaining average rate limits.
+    """
+
+    def __init__(
+        self,
+        rate: float,  # tokens per second
+        capacity: int  # max burst size
+    ):
+        self.rate = rate
+        self.capacity = capacity
+        self._buckets: Dict[str, float] = defaultdict(lambda: capacity)
+        self._last_update: Dict[str, datetime] = {}
+        self._lock = asyncio.Lock()
+
+    async def acquire(self, key: str, tokens: int = 1) -> bool:
+        """Try to acquire tokens. Returns True if successful."""
+        async with self._lock:
+            now = datetime.utcnow()
+
+            # Refill bucket
+            if key in self._last_update:
+                elapsed = (now - self._last_update[key]).total_seconds()
+                self._buckets[key] = min(
+                    self.capacity,
+                    self._buckets[key] + elapsed * self.rate
+                )
+
+            self._last_update[key] = now
+
+            # Try to consume tokens
+            if self._buckets[key] >= tokens:
+                self._buckets[key] -= tokens
+                return True
+
+            return False
+
+    async def wait_and_acquire(self, key: str, tokens: int = 1, timeout: float = 30.0):
+        """Wait until tokens are available or timeout."""
+        start = datetime.utcnow()
+
+        while True:
+            if await self.acquire(key, tokens):
+                return True
+
+            elapsed = (datetime.utcnow() - start).total_seconds()
+            if elapsed >= timeout:
+                raise TimeoutError("Rate limit timeout")
+
+            # Wait for tokens to refill
+            wait_time = tokens / self.rate
+            await asyncio.sleep(min(wait_time, timeout - elapsed))
+
+
+class RateLimitedMessenger(A2AMessenger):
+    """Messenger with per-agent rate limiting."""
+
+    def __init__(self, *args, rate: float = 10.0, capacity: int = 20, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._limiter = TokenBucketRateLimiter(rate, capacity)
+
+    async def send_request(
+        self,
+        target: AgentCard,
+        capability: str,
+        payload: Dict[str, Any],
+        **kwargs
+    ) -> Dict[str, Any]:
+        # Wait for rate limit
+        await self._limiter.wait_and_acquire(target.agent_id)
+
+        return await super().send_request(target, capability, payload, **kwargs)
+```
+
+### Fallback Agents
+
+```python
+class FallbackAgentRouter:
+    """
+    Routes requests to fallback agents when primary fails.
+    """
+
+    def __init__(
+        self,
+        primary: AgentCard,
+        fallbacks: List[AgentCard],
+        messenger: A2AMessenger
+    ):
+        self.primary = primary
+        self.fallbacks = fallbacks
+        self.messenger = messenger
+
+    async def send_request(
+        self,
+        capability: str,
+        payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Try primary, then fallbacks in order."""
+        agents = [self.primary] + self.fallbacks
+        last_error = None
+
+        for i, agent in enumerate(agents):
+            try:
+                result = await self.messenger.send_request(
+                    target=agent,
+                    capability=capability,
+                    payload=payload
+                )
+
+                if i > 0:
+                    logger.info(f"Fallback to {agent.name} succeeded")
+
+                return result
+
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Agent {agent.name} failed: {e}")
+                continue
+
+        raise last_error or Exception("All agents failed")
+```
+
+### Monitoring Inter-Agent Communication
+
+```python
+from prometheus_client import Counter, Histogram, Gauge
+import time
+
+
+# Prometheus metrics
+a2a_requests_total = Counter(
+    'a2a_requests_total',
+    'Total A2A requests',
+    ['source', 'target', 'capability', 'status']
+)
+
+a2a_request_duration = Histogram(
+    'a2a_request_duration_seconds',
+    'A2A request duration',
+    ['source', 'target', 'capability']
+)
+
+a2a_circuit_breaker_state = Gauge(
+    'a2a_circuit_breaker_state',
+    'Circuit breaker state (0=closed, 1=open, 2=half_open)',
+    ['target']
+)
+
+
+class MonitoredMessenger(A2AMessenger):
+    """Messenger with Prometheus metrics."""
+
+    async def send_request(
+        self,
+        target: AgentCard,
+        capability: str,
+        payload: Dict[str, Any],
+        **kwargs
+    ) -> Dict[str, Any]:
+        start_time = time.time()
+        status = "success"
+
+        try:
+            result = await super().send_request(target, capability, payload, **kwargs)
+            return result
+        except Exception as e:
+            status = "error"
+            raise
+        finally:
+            duration = time.time() - start_time
+
+            a2a_requests_total.labels(
+                source=self.agent_id,
+                target=target.agent_id,
+                capability=capability,
+                status=status
+            ).inc()
+
+            a2a_request_duration.labels(
+                source=self.agent_id,
+                target=target.agent_id,
+                capability=capability
+            ).observe(duration)
+```
+
+---
+
+## Exercise: Build a Mini Agent Marketplace
+
+Put everything together by building a mini agent marketplace with three specialized agents.
+
+### Requirements
+
+Build a system with:
+
+1. **Three Specialized Agents**:
+   - **Code Review Agent**: Reviews code for bugs and style
+   - **Security Scanner Agent**: Scans for vulnerabilities
+   - **Documentation Agent**: Generates documentation
+
+2. **Marketplace Features**:
+   - Agent registration and discovery
+   - Capability-based routing
+   - Usage tracking
+   - Simple rating system
+
+3. **Orchestrator Agent**:
+   - Discovers agents from marketplace
+   - Routes requests based on capability
+   - Handles failures with fallbacks
+
+### Starter Code
+
+```python
+import asyncio
+from typing import Dict, Any
+
+
+async def build_marketplace():
+    """Build and run the mini marketplace."""
+
+    # 1. Create the infrastructure
+    registry = AgentRegistry()
+    trust_manager = TrustManager(jwt_secret="demo-secret")
+    matcher = CapabilityMatcher()
+    marketplace = AgentMarketplace(registry, trust_manager, matcher)
+
+    # 2. Define the three agents
+    code_review = AgentCard(
+        agent_id="code-review-v1",
+        name="Code Review Agent",
+        description="Reviews code for bugs, style issues, and best practices",
+        version="1.0.0",
+        endpoint="http://localhost:8001",
+        capabilities=[
+            Capability(
+                name="review_code",
+                description="Review code quality and style",
+                version="1.0",
+                input_schema={"type": "object", "properties": {"code": {"type": "string"}}},
+                output_schema={"type": "object"},
+                cost_per_request=0.02,
+                avg_latency_ms=1500
+            )
+        ],
+        tags=["code", "review", "quality"],
+        trust_score=0.9,
+        verified=True
+    )
+
+    security_scanner = AgentCard(
+        agent_id="security-scanner-v1",
+        name="Security Scanner Agent",
+        description="Scans code for security vulnerabilities",
+        version="1.0.0",
+        endpoint="http://localhost:8002",
+        capabilities=[
+            Capability(
+                name="scan_security",
+                description="Scan for security vulnerabilities",
+                version="1.0",
+                input_schema={"type": "object", "properties": {"code": {"type": "string"}}},
+                output_schema={"type": "object"},
+                cost_per_request=0.05,
+                avg_latency_ms=3000
+            )
+        ],
+        tags=["security", "vulnerabilities", "scan"],
+        trust_score=0.95,
+        verified=True
+    )
+
+    doc_generator = AgentCard(
+        agent_id="doc-generator-v1",
+        name="Documentation Agent",
+        description="Generates documentation from code",
+        version="1.0.0",
+        endpoint="http://localhost:8003",
+        capabilities=[
+            Capability(
+                name="generate_docs",
+                description="Generate documentation from code",
+                version="1.0",
+                input_schema={"type": "object", "properties": {"code": {"type": "string"}}},
+                output_schema={"type": "object"},
+                cost_per_request=0.03,
+                avg_latency_ms=2000
+            )
+        ],
+        tags=["documentation", "docs", "generate"],
+        trust_score=0.85,
+        verified=True
+    )
+
+    # 3. Register agents
+    await marketplace.list_agent(code_review)
+    await marketplace.list_agent(security_scanner)
+    await marketplace.list_agent(doc_generator)
+
+    # 4. Register orchestrator credentials
+    api_key = trust_manager.generate_api_key("orchestrator")
+    trust_manager.register_agent(
+        agent_id="orchestrator",
+        api_key=api_key,
+        permissions={Permission.READ, Permission.EXECUTE},
+        rate_limit=100
+    )
+
+    # 5. Create orchestrator
+    async with A2AMessenger("orchestrator", trust_manager) as messenger:
+
+        # Search for agents
+        print("=== Searching Marketplace ===")
+        code_agents = marketplace.search_listings(tags=["code"])
+        print(f"Found {len(code_agents)} code-related agents")
+
+        # Find best agent for security
+        print("\n=== Finding Best Security Agent ===")
+        best_security = await marketplace.find_best_agent(
+            capability_query="scan code for security issues",
+            constraints=MatchConstraints(max_cost_per_request=0.10)
+        )
+        if best_security:
+            print(f"Best match: {best_security.card.name}")
+
+        # Show leaderboard
+        print("\n=== Agent Leaderboard ===")
+        for agent in marketplace.get_leaderboard():
+            print(f"  {agent['name']}: {agent['rating']:.1f}★")
+
+    return marketplace
+
+
+# Run the example
+# asyncio.run(build_marketplace())
+```
+
+### Acceptance Criteria
+
+- [ ] All three agents registered in marketplace
+- [ ] Capability-based search returns correct agents
+- [ ] Semantic matching finds relevant agents
+- [ ] Usage tracking records all invocations
+- [ ] Rating system updates agent scores
+- [ ] Leaderboard shows agents sorted by rating
+
+---
+
+## Key Takeaways
+
+<KeyTakeaways
+  takeaways={[
+    "A2A protocol enables standardized communication between agents from different vendors",
+    "Agent Cards advertise capabilities, authentication requirements, and trust information",
+    "Discovery patterns include centralized registries, DNS-based lookup, and well-known URLs",
+    "Capability negotiation uses semantic matching and constraint satisfaction to find the best agent",
+    "Trust and authentication are foundational—use API keys, OAuth, or mTLS based on security needs",
+    "Production systems need circuit breakers, rate limiting, and fallback agents for reliability",
+    "Agent marketplaces combine discovery, matching, trust, and billing into a unified platform",
+  ]}
+/>
+
+### A2A vs MCP
+
+| Aspect        | MCP                          | A2A                      |
+| :------------ | :--------------------------- | :----------------------- |
+| **Purpose**   | Connect agents to tools/data | Connect agents to agents |
+| **Direction** | Agent → Resources            | Agent ↔ Agent            |
+| **Discovery** | Local configuration          | Registry/DNS             |
+| **Trust**     | Implicit (same system)       | Explicit (cross-system)  |
+| **Use Case**  | Tool integration             | Agent ecosystems         |
+
+<Callout type="tip">
+  **MCP + A2A Together**: Use MCP to give your agent access to tools and data.
+  Use A2A to let your agent collaborate with other specialized agents. They're
+  complementary protocols for building powerful agent systems.
+</Callout>
+
+---
+
+## Related Modules
+
+<Callout type="info" title="Continue Your Learning">
+  - **[Day 15: MCP Standard](/modules/day-15-mcp-standard)** - MCP for tool
+  integration, A2A for agent communication - **[Day 31:
+  Orchestration](/modules/day-31-orchestration)** - Multi-agent patterns that
+  benefit from A2A - **[Day 36: AGENTS.md](/modules/day-36-agents-md)** -
+  Document your agent capabilities for A2A discovery
+</Callout>
+
+---
+
+<PageNavigation
+  prev={{ href: "/modules/day-37-crewai-lab", title: "Day 37: CrewAI Lab" }}
+  next={{
+    href: "/modules/day-44-observability",
+    title: "Day 44: Observability & Debugging",
+  }}
+/>

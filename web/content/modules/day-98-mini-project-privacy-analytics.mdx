@@ -1,0 +1,3361 @@
+---
+title: "Mini Project: Privacy-Preserving Analytics Agent"
+description: "Build an intelligent agent that analyzes sensitive data while preserving privacy through differential privacy, schema-only analysis, synthetic data generation, and comprehensive audit logging."
+week: 14
+day: 98
+---
+
+<ReadingTime minutes={90} />
+
+<SkillLevel
+  level="advanced"
+  description="Differential privacy, secure computation, privacy-preserving analytics"
+/>
+
+<Prerequisites
+  items={[
+    "Strong Python experience with FastAPI",
+    "Understanding of statistical concepts (mean, variance, distributions)",
+    "Familiarity with database operations and SQL",
+    "Basic knowledge of privacy regulations (GDPR, HIPAA concepts)",
+    "Experience with LLM structured outputs",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Implement differential privacy using the Laplace mechanism",
+    "Build schema-only analysis that never exposes raw data",
+    "Create realistic synthetic data generation for testing",
+    "Design privacy budget tracking with epsilon accounting",
+    "Implement comprehensive audit logging for compliance",
+    "Build query interfaces with automatic noise injection",
+    "Understand privacy-utility tradeoffs in analytics",
+  ]}
+/>
+
+<Callout type="warning">
+  **Privacy Notice:** This project teaches privacy-preserving techniques for
+  educational purposes. Production systems handling real sensitive data
+  (healthcare, finance) require additional security measures, legal review, and
+  compliance certification beyond what's covered here.
+</Callout>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Differential Privacy",
+      definition:
+        "A mathematical framework that provides provable privacy guarantees by adding calibrated noise to query results",
+    },
+    {
+      term: "Epsilon (ε)",
+      definition:
+        "The privacy parameter that controls the privacy-utility tradeoff; smaller epsilon means stronger privacy but noisier results",
+    },
+    {
+      term: "Laplace Mechanism",
+      definition:
+        "A method for achieving differential privacy by adding noise drawn from a Laplace distribution",
+    },
+    {
+      term: "Privacy Budget",
+      definition:
+        "The cumulative epsilon spent across queries; once exhausted, no more queries are allowed",
+    },
+    {
+      term: "Sensitivity",
+      definition:
+        "The maximum change in a query's output when a single record is added or removed",
+    },
+    {
+      term: "Schema-Only Analysis",
+      definition:
+        "Analyzing data structure and metadata without accessing individual records",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build a Privacy-Preserving Analytics Agent that enables data analysis on sensitive datasets (healthcare, finance) while providing mathematical privacy guarantees through differential privacy, schema-only analysis, and comprehensive audit logging.
+
+**Why This Matters**: Organizations hold vast amounts of sensitive data that could yield valuable insights, but privacy regulations (GDPR, HIPAA, CCPA) and ethical considerations restrict direct access. A privacy-preserving analytics system allows data scientists to extract aggregate insights without exposing individual records—enabling innovation while protecting privacy.
+
+<Mermaid
+  chart={`
+graph LR
+    User[👤 Analyst] -->|"Average salary by dept?"| Agent[🔒 Privacy Agent]
+    
+    Agent -->|1. Parse| Parser[Query Parser]
+    Parser -->|2. Validate| Budget[Budget Check]
+    Budget -->|3. Analyze| Schema[Schema Analysis]
+    Schema -->|4. Execute| Engine[DP Engine]
+    Engine -->|5. Add Noise| Noise[Laplace Noise]
+    Noise -->|6. Audit| Logger[Audit Logger]
+    
+    Logger -->|Private Result| User
+    
+    style Agent fill:#e8f5e9,stroke:#2e7d32
+    style Engine fill:#fff9c4,stroke:#fbc02d
+    style Noise fill:#ffcdd2,stroke:#c62828
+`}
+  caption="Privacy Agent Pipeline: From query to differentially private result."
+/>
+
+**Real-World Analogy**: Imagine a trusted librarian who can answer questions about library patrons' reading habits ("What's the average number of books borrowed per month?") but adds a small random adjustment to every answer. This noise is calibrated so that no individual patron's data can be inferred, yet the aggregate statistics remain useful. That's differential privacy in action.
+
+**Skills Showcased**:
+
+- Differential privacy implementation (Laplace mechanism)
+- Privacy budget management and epsilon accounting
+- Schema-only data analysis patterns
+- Synthetic data generation for testing
+- Compliance-ready audit logging
+- Secure query interface design
+
+## Module Summary
+
+In this project, you'll build a complete Privacy-Preserving Analytics Agent:
+
+1. **Schema-Only Analysis**: Extract metadata and statistics without raw data access
+2. **Differential Privacy Engine**: Implement Laplace mechanism with sensitivity calculation
+3. **Privacy Budget Tracker**: Manage cumulative epsilon with per-user and global limits
+4. **Synthetic Data Generator**: Create realistic test data preserving statistical properties
+5. **Audit Logger**: Comprehensive logging for compliance and forensics
+6. **Query Interface**: Natural language queries with automatic privacy protection
+7. **LLM Integration**: Use AI to translate questions while respecting privacy constraints
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> ParseQuery
+    ParseQuery --> ValidateBudget
+    ValidateBudget --> Reject: Budget Exhausted
+    ValidateBudget --> AnalyzeSchema: Budget Available
+    
+    AnalyzeSchema --> CalculateSensitivity
+    CalculateSensitivity --> ExecuteQuery
+    ExecuteQuery --> AddNoise
+    AddNoise --> DeductBudget
+    DeductBudget --> LogAudit
+    LogAudit --> ReturnResult
+    ReturnResult --> [*]
+    
+    Reject --> [*]
+`}
+  caption="Privacy Agent State Machine: Every query goes through budget validation and noise injection."
+/>
+
+## Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Privacy-Preserving Analytics Agent"
+        API[FastAPI Server] --> Parser[Query Parser]
+        Parser --> BudgetMgr[Budget Manager]
+        
+        BudgetMgr --> SchemaAnalyzer[Schema Analyzer]
+        SchemaAnalyzer --> DPEngine[DP Engine]
+        
+        DPEngine --> NoiseInjector[Noise Injector]
+        NoiseInjector --> AuditLogger[Audit Logger]
+        
+        SyntheticGen[Synthetic Generator] --> TestData[Test Data]
+    end
+    
+    subgraph "Data Layer"
+        DB[(SQLite + RLS)]
+        Schema[Schema Cache]
+    end
+    
+    subgraph "External"
+        LLM[GPT-4o / Local LLM]
+    end
+    
+    SchemaAnalyzer <-->|Metadata Only| Schema
+    DPEngine <-->|Aggregates Only| DB
+    Parser <-->|Query Translation| LLM
+    
+    style API fill:#fff9c4,stroke:#fbc02d
+    style DPEngine fill:#e8f5e9,stroke:#2e7d32
+    style NoiseInjector fill:#ffcdd2,stroke:#c62828
+    style AuditLogger fill:#e3f2fd,stroke:#0277bd
+`}
+  caption="System Architecture: Privacy protection at every layer."
+/>
+
+**Architecture Principles**:
+
+- **Defense in Depth**: Multiple privacy layers—schema-only access, differential privacy, audit logging
+- **Privacy by Design**: Raw data never leaves the database; only noisy aggregates are returned
+- **Budget Enforcement**: Hard limits prevent privacy degradation through repeated queries
+- **Audit Trail**: Every query is logged with full context for compliance review
+
+---
+
+## Detailed Requirements Specification
+
+| Requirement              | Priority | FR    | NFR    | Status |
+| :----------------------- | :------- | :---- | :----- | :----- |
+| **Differential Privacy** | P0       | FR-01 | NFR-01 | ✅ Met |
+| **Schema-Only Analysis** | P0       | FR-02 |        | ✅ Met |
+| **Privacy Budget**       | P0       | FR-03 | NFR-02 | ✅ Met |
+| **Audit Logging**        | P0       | FR-04 | NFR-03 | ✅ Met |
+| **Synthetic Data**       | P1       | FR-05 |        | ✅ Met |
+| **Query Interface**      | P1       | FR-06 |        | ✅ Met |
+| **LLM Integration**      | P2       | FR-07 |        | ✅ Met |
+
+### Functional Requirements (FR)
+
+| ID    | Requirement             | Description                                                                      | Priority |
+| ----- | ----------------------- | -------------------------------------------------------------------------------- | -------- |
+| FR-01 | Differential Privacy    | Apply Laplace mechanism to all numeric query results with configurable epsilon   | P0       |
+| FR-02 | Schema-Only Analysis    | Provide schema metadata, column statistics, and data profiles without raw access | P0       |
+| FR-03 | Privacy Budget Tracking | Track cumulative epsilon per user and globally; reject queries exceeding budget  | P0       |
+| FR-04 | Audit Logging           | Log all queries with timestamp, user, epsilon spent, and result metadata         | P0       |
+| FR-05 | Synthetic Data          | Generate realistic synthetic datasets preserving statistical properties          | P1       |
+| FR-06 | Query Interface         | Accept natural language queries and translate to privacy-safe operations         | P1       |
+| FR-07 | LLM Integration         | Use LLM for query understanding while preventing data leakage through prompts    | P2       |
+| FR-08 | Supported Queries       | Support COUNT, SUM, AVG, MIN, MAX, PERCENTILE with appropriate sensitivity       | P0       |
+| FR-09 | Result Bounds           | Clamp results to valid ranges (e.g., counts ≥ 0) after noise addition            | P1       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement        | Target                                                    | Measurement        |
+| ------ | ------------------ | --------------------------------------------------------- | ------------------ |
+| NFR-01 | Privacy Guarantee  | ε-differential privacy for all query results              | Mathematical proof |
+| NFR-02 | Budget Accuracy    | Budget tracking accurate to 0.001 epsilon                 | Unit tests         |
+| NFR-03 | Audit Completeness | 100% of queries logged with required fields               | Log analysis       |
+| NFR-04 | Query Latency      | < 500ms for simple aggregates on tables up to 1M rows     | Performance tests  |
+| NFR-05 | Synthetic Fidelity | Synthetic data within 5% of original distribution moments | Statistical tests  |
+| NFR-06 | Availability       | System remains available even when budget exhausted       | Integration tests  |
+
+### API Contract
+
+#### POST /query - Execute Privacy-Preserving Query
+
+**Request Body:**
+
+```json
+{
+  "question": "string (required) - Natural language question or structured query",
+  "epsilon": "float (default: 0.1, range: 0.01-1.0) - Privacy budget for this query",
+  "user_id": "string (required) - User identifier for budget tracking",
+  "query_type": "string (optional) - 'count' | 'sum' | 'avg' | 'min' | 'max'",
+  "table": "string (optional) - Target table name",
+  "column": "string (optional) - Target column for aggregation",
+  "filters": "object (optional) - WHERE clause conditions"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "query_id": "string (uuid)",
+  "result": {
+    "value": "float (noisy result)",
+    "noise_added": "boolean (always true)",
+    "epsilon_used": "float",
+    "confidence_interval": {
+      "lower": "float",
+      "upper": "float",
+      "confidence": "float (0.95)"
+    }
+  },
+  "budget": {
+    "user_remaining": "float",
+    "user_total": "float",
+    "global_remaining": "float"
+  },
+  "metadata": {
+    "query_type": "string",
+    "table": "string",
+    "column": "string",
+    "sensitivity": "float",
+    "execution_time_ms": "integer"
+  }
+}
+```
+
+**Error Responses:**
+
+```json
+// 400 Bad Request - Invalid query
+{
+  "detail": "Cannot determine query type from question",
+  "suggestion": "Please specify query_type explicitly"
+}
+
+// 403 Forbidden - Budget exhausted
+{
+  "detail": "Privacy budget exhausted",
+  "budget": {
+    "requested": 0.1,
+    "remaining": 0.05,
+    "user_id": "analyst_1"
+  }
+}
+
+// 422 Unprocessable Entity - Unsupported operation
+{
+  "detail": "Query type not supported for differential privacy",
+  "supported_types": ["count", "sum", "avg", "min", "max"]
+}
+```
+
+#### GET /schema - Get Schema Information (No Privacy Cost)
+
+**Response (200 OK):**
+
+```json
+{
+  "database": "string",
+  "tables": [
+    {
+      "name": "string",
+      "columns": [
+        {
+          "name": "string",
+          "type": "string",
+          "nullable": "boolean",
+          "is_sensitive": "boolean"
+        }
+      ],
+      "row_count_range": "string (e.g., '10K-100K')",
+      "description": "string"
+    }
+  ]
+}
+```
+
+#### GET /budget/{user_id} - Check Privacy Budget
+
+**Response (200 OK):**
+
+```json
+{
+  "user_id": "string",
+  "budget": {
+    "total": "float",
+    "used": "float",
+    "remaining": "float"
+  },
+  "queries_executed": "integer",
+  "last_query_at": "string (ISO timestamp)"
+}
+```
+
+#### POST /synthetic - Generate Synthetic Data
+
+**Request Body:**
+
+```json
+{
+  "table": "string (required) - Source table name",
+  "num_rows": "integer (default: 1000, max: 100000)",
+  "preserve_correlations": "boolean (default: true)",
+  "seed": "integer (optional) - Random seed for reproducibility"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "synthetic_table_id": "string (uuid)",
+  "num_rows": "integer",
+  "columns": ["string"],
+  "download_url": "string (temporary URL)",
+  "statistics_comparison": {
+    "column_name": {
+      "original_mean": "float",
+      "synthetic_mean": "float",
+      "original_std": "float",
+      "synthetic_std": "float"
+    }
+  }
+}
+```
+
+#### GET /audit - Get Audit Log
+
+**Query Parameters:**
+
+- `user_id` (optional): Filter by user
+- `start_date` (optional): Start of date range
+- `end_date` (optional): End of date range
+- `limit` (optional, default: 100): Number of records
+
+**Response (200 OK):**
+
+```json
+{
+  "entries": [
+    {
+      "id": "string (uuid)",
+      "timestamp": "string (ISO)",
+      "user_id": "string",
+      "query_type": "string",
+      "table": "string",
+      "column": "string",
+      "epsilon_used": "float",
+      "result_returned": "boolean",
+      "error": "string | null",
+      "ip_address": "string",
+      "user_agent": "string"
+    }
+  ],
+  "total": "integer",
+  "limit": "integer"
+}
+```
+
+### Data Models
+
+```
+Privacy Budget:
+┌─────────────────────────────────────────────────────────────┐
+│                     PrivacyBudget                           │
+├─────────────────────────────────────────────────────────────┤
+│ user_id: STRING                                             │
+│ total_budget: FLOAT (default: 10.0)                         │
+│ used_budget: FLOAT                                          │
+│ remaining_budget: FLOAT (computed)                          │
+│ queries_count: INTEGER                                      │
+│ created_at: TIMESTAMP                                       │
+│ last_query_at: TIMESTAMP                                    │
+└─────────────────────────────────────────────────────────────┘
+
+Audit Entry:
+┌─────────────────────────────────────────────────────────────┐
+│                     AuditEntry                              │
+├─────────────────────────────────────────────────────────────┤
+│ id: UUID                                                    │
+│ timestamp: TIMESTAMP                                        │
+│ user_id: STRING                                             │
+│ query_type: ENUM (count, sum, avg, min, max)                │
+│ table_name: STRING                                          │
+│ column_name: STRING                                         │
+│ filters: JSON                                               │
+│ epsilon_requested: FLOAT                                    │
+│ epsilon_used: FLOAT                                         │
+│ sensitivity: FLOAT                                          │
+│ true_result: FLOAT (encrypted/hashed)                       │
+│ noisy_result: FLOAT                                         │
+│ success: BOOLEAN                                            │
+│ error_message: STRING | null                                │
+│ ip_address: STRING                                          │
+│ user_agent: STRING                                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Security Requirements
+
+<Mermaid
+  chart={`
+graph TD
+    Query[User Query] --> L1[Layer 1: Authentication]
+    L1 --> L2[Layer 2: Budget Validation]
+    L2 --> L3[Layer 3: Query Sanitization]
+    L3 --> L4[Layer 4: Schema-Only Access]
+    L4 --> L5[Layer 5: Noise Injection]
+    L5 --> L6[Layer 6: Audit Logging]
+    L6 --> Result[Private Result]
+    
+    L1 -->|Fail| Reject1[401 Unauthorized]
+    L2 -->|Fail| Reject2[403 Budget Exhausted]
+    L3 -->|Fail| Reject3[400 Invalid Query]
+    
+    style L5 fill:#ffcdd2,stroke:#c62828
+    style L6 fill:#e3f2fd,stroke:#0277bd
+    style Result fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Security Layers: Defense in depth for privacy protection."
+/>
+
+| Security Layer     | Implementation                                                         |
+| ------------------ | ---------------------------------------------------------------------- |
+| Authentication     | API key or JWT token required for all endpoints                        |
+| Budget Enforcement | Hard limit on epsilon per user; queries rejected when budget exhausted |
+| Query Sanitization | Parameterized queries only; no raw SQL execution                       |
+| Schema-Only Access | Application never returns individual records; aggregates only          |
+| Noise Injection    | Laplace noise added to all numeric results before returning            |
+| Result Clamping    | Results clamped to valid ranges (e.g., counts ≥ 0)                     |
+| Audit Logging      | All queries logged with full context; logs are append-only             |
+| Data Encryption    | Sensitive columns encrypted at rest; true results hashed in audit logs |
+
+---
+
+## Core Implementation
+
+### Project Structure
+
+```
+privacy-analytics-agent/
+├── main.py                    # FastAPI application entry point
+├── config.py                  # Configuration management
+├── requirements.txt           # Python dependencies
+├── docker-compose.yml         # Docker setup
+│
+├── services/
+│   ├── __init__.py
+│   ├── differential_privacy.py  # DP engine with Laplace mechanism
+│   ├── privacy_budget.py        # Budget tracking and enforcement
+│   ├── schema_analyzer.py       # Schema-only data analysis
+│   ├── synthetic_generator.py   # Synthetic data generation
+│   ├── audit_logger.py          # Compliance audit logging
+│   ├── query_parser.py          # Query parsing and validation
+│   └── llm_interface.py         # LLM integration for NL queries
+│
+├── models/
+│   ├── __init__.py
+│   ├── query.py               # Query request/response models
+│   ├── budget.py              # Privacy budget models
+│   ├── audit.py               # Audit log models
+│   └── schema.py              # Schema representation models
+│
+├── routers/
+│   ├── __init__.py
+│   ├── query.py               # Query endpoints
+│   ├── schema.py              # Schema endpoints
+│   ├── budget.py              # Budget endpoints
+│   ├── synthetic.py           # Synthetic data endpoints
+│   └── audit.py               # Audit log endpoints
+│
+├── database/
+│   ├── connection.py          # Database connection management
+│   ├── sample_data.py         # Sample sensitive data generator
+│   └── migrations/            # Database migrations
+│
+└── tests/
+    ├── test_differential_privacy.py
+    ├── test_privacy_budget.py
+    ├── test_synthetic_generator.py
+    └── test_integration.py
+```
+
+### Configuration
+
+```python
+# config.py
+"""Configuration management for Privacy-Preserving Analytics Agent."""
+
+from pydantic_settings import BaseSettings
+from typing import Literal
+from functools import lru_cache
+
+
+class Settings(BaseSettings):
+    """Application settings with environment variable support."""
+
+    # Application
+    app_name: str = "Privacy-Preserving Analytics Agent"
+    debug: bool = False
+
+    # Database
+    database_url: str = "sqlite:///./sensitive_data.db"
+
+    # Privacy Settings
+    default_epsilon: float = 0.1
+    min_epsilon: float = 0.01
+    max_epsilon: float = 1.0
+    default_user_budget: float = 10.0
+    global_daily_budget: float = 100.0
+
+    # Query Limits
+    max_query_timeout_seconds: int = 30
+    min_group_size: int = 5  # Minimum records for a group to be reported
+
+    # LLM Configuration
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o"
+    llm_temperature: float = 0.0
+
+    # Audit Settings
+    audit_log_retention_days: int = 365
+    hash_true_results: bool = True
+
+    # Synthetic Data
+    max_synthetic_rows: int = 100000
+    synthetic_data_ttl_hours: int = 24
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    return Settings()
+```
+
+### Data Models
+
+```python
+# models/query.py
+"""Query request and response models."""
+
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, Any, Dict, List
+from datetime import datetime
+from enum import Enum
+import uuid
+
+
+class QueryType(str, Enum):
+    """Supported differentially private query types."""
+    COUNT = "count"
+    SUM = "sum"
+    AVG = "avg"
+    MIN = "min"
+    MAX = "max"
+
+
+class ConfidenceInterval(BaseModel):
+    """Confidence interval for noisy result."""
+    lower: float
+    upper: float
+    confidence: float = 0.95
+
+
+class QueryRequest(BaseModel):
+    """Request model for privacy-preserving query."""
+    question: Optional[str] = Field(None, max_length=500)
+    epsilon: float = Field(default=0.1, ge=0.01, le=1.0)
+    user_id: str = Field(..., min_length=1, max_length=100)
+    query_type: Optional[QueryType] = None
+    table: Optional[str] = None
+    column: Optional[str] = None
+    filters: Optional[Dict[str, Any]] = None
+
+    @field_validator("user_id")
+    @classmethod
+    def validate_user_id(cls, v: str) -> str:
+        """Sanitize user ID."""
+        return v.strip().lower()
+
+
+class QueryResult(BaseModel):
+    """Result of a privacy-preserving query."""
+    value: float
+    noise_added: bool = True
+    epsilon_used: float
+    confidence_interval: ConfidenceInterval
+
+
+class BudgetInfo(BaseModel):
+    """Privacy budget information."""
+    user_remaining: float
+    user_total: float
+    global_remaining: float
+
+
+class QueryMetadata(BaseModel):
+    """Metadata about query execution."""
+    query_type: QueryType
+    table: str
+    column: Optional[str]
+    sensitivity: float
+    execution_time_ms: int
+
+
+class QueryResponse(BaseModel):
+    """Complete response for a privacy-preserving query."""
+    query_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    result: QueryResult
+    budget: BudgetInfo
+    metadata: QueryMetadata
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+```
+
+```python
+# models/budget.py
+"""Privacy budget models."""
+
+from pydantic import BaseModel, Field
+from datetime import datetime
+from typing import Optional
+
+
+class PrivacyBudget(BaseModel):
+    """User's privacy budget state."""
+    user_id: str
+    total_budget: float = Field(default=10.0)
+    used_budget: float = Field(default=0.0)
+    queries_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_query_at: Optional[datetime] = None
+
+    @property
+    def remaining_budget(self) -> float:
+        """Calculate remaining budget."""
+        return max(0.0, self.total_budget - self.used_budget)
+
+    def can_spend(self, epsilon: float) -> bool:
+        """Check if budget allows spending epsilon."""
+        return self.remaining_budget >= epsilon
+
+    def spend(self, epsilon: float) -> None:
+        """Deduct epsilon from budget."""
+        if not self.can_spend(epsilon):
+            raise ValueError(f"Insufficient budget: {self.remaining_budget} < {epsilon}")
+        self.used_budget += epsilon
+        self.queries_count += 1
+        self.last_query_at = datetime.utcnow()
+
+
+class BudgetCheckResponse(BaseModel):
+    """Response for budget check endpoint."""
+    user_id: str
+    budget: dict
+    queries_executed: int
+    last_query_at: Optional[datetime]
+```
+
+```python
+# models/audit.py
+"""Audit logging models."""
+
+from pydantic import BaseModel, Field
+from datetime import datetime
+from typing import Optional, Dict, Any
+from enum import Enum
+import uuid
+
+
+class AuditEntry(BaseModel):
+    """Single audit log entry."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    user_id: str
+    query_type: str
+    table_name: str
+    column_name: Optional[str] = None
+    filters: Optional[Dict[str, Any]] = None
+    epsilon_requested: float
+    epsilon_used: float
+    sensitivity: float
+    true_result_hash: Optional[str] = None  # Hashed for compliance
+    noisy_result: float
+    success: bool
+    error_message: Optional[str] = None
+    ip_address: str = "unknown"
+    user_agent: str = "unknown"
+
+
+class AuditLogResponse(BaseModel):
+    """Response for audit log query."""
+    entries: list[AuditEntry]
+    total: int
+    limit: int
+```
+
+### Differential Privacy Engine
+
+<Mermaid
+  chart={`
+graph TD
+    Query[Aggregate Query] --> Sensitivity[Calculate Sensitivity]
+    Sensitivity --> TrueResult[Execute Query]
+    TrueResult --> Scale[Scale = Sensitivity / ε]
+    Scale --> Laplace[Sample Laplace(0, Scale)]
+    Laplace --> Add[Add Noise to Result]
+    Add --> Clamp[Clamp to Valid Range]
+    Clamp --> Return[Return Noisy Result]
+    
+    style Laplace fill:#ffcdd2,stroke:#c62828
+    style Return fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Laplace Mechanism: Calibrated noise provides ε-differential privacy."
+/>
+
+```python
+# services/differential_privacy.py
+"""Differential privacy engine implementing the Laplace mechanism."""
+
+import math
+import logging
+from typing import Tuple, Optional
+from dataclasses import dataclass
+import numpy as np
+
+from models.query import QueryType, ConfidenceInterval
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SensitivityConfig:
+    """Configuration for sensitivity calculation."""
+    # For bounded queries, these define the data range
+    lower_bound: Optional[float] = None
+    upper_bound: Optional[float] = None
+    # For COUNT queries
+    max_contributions_per_user: int = 1
+
+
+class DifferentialPrivacyEngine:
+    """
+    Implements differential privacy using the Laplace mechanism.
+
+    The Laplace mechanism adds noise drawn from Laplace(0, sensitivity/epsilon)
+    to query results, providing ε-differential privacy.
+    """
+
+    def __init__(self, seed: Optional[int] = None):
+        """Initialize with optional random seed for reproducibility in tests."""
+        self.rng = np.random.default_rng(seed)
+
+    def add_noise(
+        self,
+        true_value: float,
+        sensitivity: float,
+        epsilon: float,
+        lower_bound: Optional[float] = None,
+        upper_bound: Optional[float] = None
+    ) -> Tuple[float, ConfidenceInterval]:
+        """
+        Add Laplace noise to achieve ε-differential privacy.
+
+        Args:
+            true_value: The actual query result
+            sensitivity: Query sensitivity (max change from one record)
+            epsilon: Privacy parameter (smaller = more private)
+            lower_bound: Optional lower bound for result clamping
+            upper_bound: Optional upper bound for result clamping
+
+        Returns:
+            Tuple of (noisy_value, confidence_interval)
+        """
+        if epsilon <= 0:
+            raise ValueError(f"Epsilon must be positive, got {epsilon}")
+        if sensitivity < 0:
+            raise ValueError(f"Sensitivity must be non-negative, got {sensitivity}")
+
+        # Calculate scale parameter for Laplace distribution
+        scale = sensitivity / epsilon
+
+        # Sample noise from Laplace distribution
+        noise = self.rng.laplace(0, scale)
+        noisy_value = true_value + noise
+
+        # Clamp to valid range if bounds provided
+        if lower_bound is not None:
+            noisy_value = max(lower_bound, noisy_value)
+        if upper_bound is not None:
+            noisy_value = min(upper_bound, noisy_value)
+
+        # Calculate confidence interval
+        confidence_interval = self._calculate_confidence_interval(
+            noisy_value, scale, lower_bound, upper_bound
+        )
+
+        logger.debug(
+            f"DP: true={true_value:.4f}, noise={noise:.4f}, "
+            f"noisy={noisy_value:.4f}, scale={scale:.4f}"
+        )
+
+        return noisy_value, confidence_interval
+
+    def _calculate_confidence_interval(
+        self,
+        noisy_value: float,
+        scale: float,
+        lower_bound: Optional[float],
+        upper_bound: Optional[float],
+        confidence: float = 0.95
+    ) -> ConfidenceInterval:
+        """
+        Calculate confidence interval for the noisy result.
+
+        For Laplace distribution, the 95% CI is approximately ±3*scale.
+        """
+        # For Laplace, P(|X| < k*scale) = 1 - exp(-k)
+        # For 95% confidence: k = -ln(0.05/2) ≈ 2.996
+        k = -math.log((1 - confidence) / 2)
+        margin = k * scale
+
+        lower = noisy_value - margin
+        upper = noisy_value + margin
+
+        # Apply bounds if provided
+        if lower_bound is not None:
+            lower = max(lower_bound, lower)
+        if upper_bound is not None:
+            upper = min(upper_bound, upper)
+
+        return ConfidenceInterval(
+            lower=lower,
+            upper=upper,
+            confidence=confidence
+        )
+
+    def calculate_sensitivity(
+        self,
+        query_type: QueryType,
+        config: SensitivityConfig
+    ) -> float:
+        """
+        Calculate the sensitivity for a given query type.
+
+        Sensitivity is the maximum change in query output when
+        a single record is added or removed.
+        """
+        if query_type == QueryType.COUNT:
+            # Adding/removing one record changes count by at most 1
+            return float(config.max_contributions_per_user)
+
+        elif query_type == QueryType.SUM:
+            # Sensitivity depends on the range of values
+            if config.lower_bound is None or config.upper_bound is None:
+                raise ValueError("SUM queries require bounded data range")
+            return config.upper_bound - config.lower_bound
+
+        elif query_type == QueryType.AVG:
+            # For average, sensitivity = range / n, but we use range for safety
+            # In practice, use bounded average mechanisms
+            if config.lower_bound is None or config.upper_bound is None:
+                raise ValueError("AVG queries require bounded data range")
+            return config.upper_bound - config.lower_bound
+
+        elif query_type in (QueryType.MIN, QueryType.MAX):
+            # MIN/MAX have high sensitivity in general
+            # We use the full range as a conservative estimate
+            if config.lower_bound is None or config.upper_bound is None:
+                raise ValueError("MIN/MAX queries require bounded data range")
+            return config.upper_bound - config.lower_bound
+
+        else:
+            raise ValueError(f"Unsupported query type: {query_type}")
+
+
+# Global instance
+dp_engine = DifferentialPrivacyEngine()
+```
+
+**Key Implementation Details**:
+
+- **Laplace Mechanism**: The core of differential privacy—noise is drawn from Laplace(0, sensitivity/ε)
+- **Sensitivity Calculation**: Different query types have different sensitivities; COUNT has sensitivity 1, while SUM depends on data range
+- **Result Clamping**: After adding noise, results are clamped to valid ranges (e.g., counts can't be negative)
+- **Confidence Intervals**: Users see uncertainty bounds to understand result reliability
+- **Reproducibility**: Optional seed for deterministic testing
+
+### Privacy Budget Manager
+
+```python
+# services/privacy_budget.py
+"""Privacy budget tracking and enforcement."""
+
+import logging
+from typing import Dict, Optional
+from datetime import datetime, timedelta
+from threading import Lock
+
+from models.budget import PrivacyBudget
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+class BudgetExhaustedError(Exception):
+    """Raised when privacy budget is exhausted."""
+    def __init__(self, user_id: str, requested: float, remaining: float):
+        self.user_id = user_id
+        self.requested = requested
+        self.remaining = remaining
+        super().__init__(
+            f"Budget exhausted for user {user_id}: "
+            f"requested {requested}, remaining {remaining}"
+        )
+
+
+class PrivacyBudgetManager:
+    """
+    Manages privacy budgets for users and globally.
+
+    Privacy budget (epsilon) is a finite resource. Each query consumes
+    some epsilon, and once exhausted, no more queries are allowed.
+    This prevents privacy degradation through repeated queries.
+    """
+
+    def __init__(self):
+        self.settings = get_settings()
+        self._user_budgets: Dict[str, PrivacyBudget] = {}
+        self._global_used_today: float = 0.0
+        self._global_reset_date: datetime = datetime.utcnow().date()
+        self._lock = Lock()
+
+    def get_or_create_budget(self, user_id: str) -> PrivacyBudget:
+        """Get existing budget or create new one for user."""
+        with self._lock:
+            if user_id not in self._user_budgets:
+                self._user_budgets[user_id] = PrivacyBudget(
+                    user_id=user_id,
+                    total_budget=self.settings.default_user_budget
+                )
+                logger.info(f"Created new budget for user {user_id}")
+            return self._user_budgets[user_id]
+
+    def check_budget(self, user_id: str, epsilon: float) -> bool:
+        """
+        Check if user has sufficient budget for query.
+
+        Returns True if budget is available, False otherwise.
+        """
+        self._maybe_reset_global_budget()
+        budget = self.get_or_create_budget(user_id)
+
+        # Check user budget
+        if not budget.can_spend(epsilon):
+            return False
+
+        # Check global daily budget
+        with self._lock:
+            if self._global_used_today + epsilon > self.settings.global_daily_budget:
+                return False
+
+        return True
+
+    def spend_budget(self, user_id: str, epsilon: float) -> PrivacyBudget:
+        """
+        Deduct epsilon from user's budget.
+
+        Raises BudgetExhaustedError if insufficient budget.
+        """
+        self._maybe_reset_global_budget()
+        budget = self.get_or_create_budget(user_id)
+
+        with self._lock:
+            # Double-check budget availability
+            if not budget.can_spend(epsilon):
+                raise BudgetExhaustedError(
+                    user_id, epsilon, budget.remaining_budget
+                )
+
+            if self._global_used_today + epsilon > self.settings.global_daily_budget:
+                raise BudgetExhaustedError(
+                    user_id, epsilon,
+                    self.settings.global_daily_budget - self._global_used_today
+                )
+
+            # Deduct from both budgets
+            budget.spend(epsilon)
+            self._global_used_today += epsilon
+
+            logger.info(
+                f"Budget spent: user={user_id}, epsilon={epsilon}, "
+                f"user_remaining={budget.remaining_budget:.4f}, "
+                f"global_remaining={self.get_global_remaining():.4f}"
+            )
+
+        return budget
+
+    def get_global_remaining(self) -> float:
+        """Get remaining global daily budget."""
+        self._maybe_reset_global_budget()
+        return self.settings.global_daily_budget - self._global_used_today
+
+    def _maybe_reset_global_budget(self) -> None:
+        """Reset global budget if it's a new day."""
+        today = datetime.utcnow().date()
+        with self._lock:
+            if today > self._global_reset_date:
+                logger.info(f"Resetting global budget for new day: {today}")
+                self._global_used_today = 0.0
+                self._global_reset_date = today
+
+    def get_budget_info(self, user_id: str) -> dict:
+        """Get budget information for a user."""
+        budget = self.get_or_create_budget(user_id)
+        return {
+            "user_id": user_id,
+            "budget": {
+                "total": budget.total_budget,
+                "used": budget.used_budget,
+                "remaining": budget.remaining_budget
+            },
+            "queries_executed": budget.queries_count,
+            "last_query_at": budget.last_query_at
+        }
+
+
+# Global instance
+budget_manager = PrivacyBudgetManager()
+```
+
+**Budget Management Principles**:
+
+- **Per-User Budgets**: Each user has their own epsilon allocation (default: 10.0)
+- **Global Daily Budget**: Prevents system-wide privacy degradation (default: 100.0/day)
+- **Atomic Operations**: Thread-safe budget deduction prevents race conditions
+- **Automatic Reset**: Global budget resets daily for ongoing analytics needs
+- **Fail-Safe**: Queries are rejected before execution if budget is insufficient
+
+### Schema Analyzer Service
+
+```python
+# services/schema_analyzer.py
+"""Schema-only data analysis without raw data access."""
+
+import logging
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine import Engine
+
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ColumnProfile:
+    """Statistical profile of a column (computed with DP where needed)."""
+    name: str
+    data_type: str
+    nullable: bool
+    is_sensitive: bool
+    # These are approximate/noisy for sensitive columns
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    distinct_count_range: Optional[str] = None  # e.g., "100-1000"
+
+
+@dataclass
+class TableProfile:
+    """Profile of a database table."""
+    name: str
+    columns: List[ColumnProfile]
+    row_count_range: str  # Bucketed for privacy, e.g., "10K-100K"
+    description: Optional[str] = None
+
+
+class SchemaAnalyzer:
+    """
+    Analyzes database schema without exposing raw data.
+
+    This service provides metadata and statistical profiles that help
+    analysts understand data structure without seeing individual records.
+    """
+
+    # Columns with these keywords are marked as sensitive
+    SENSITIVE_KEYWORDS = {
+        "ssn", "social_security", "tax_id", "passport",
+        "salary", "income", "wage", "compensation",
+        "diagnosis", "condition", "medication", "treatment",
+        "password", "secret", "token", "key",
+        "phone", "email", "address", "dob", "birth"
+    }
+
+    def __init__(self):
+        self.settings = get_settings()
+        self._engine: Optional[Engine] = None
+        self._schema_cache: Optional[Dict[str, TableProfile]] = None
+
+    @property
+    def engine(self) -> Engine:
+        """Get or create database engine."""
+        if self._engine is None:
+            self._engine = create_engine(
+                self.settings.database_url,
+                echo=self.settings.debug
+            )
+        return self._engine
+
+    def get_schema(self, force_refresh: bool = False) -> List[TableProfile]:
+        """
+        Get schema information for all tables.
+
+        This is a privacy-free operation as it only returns metadata.
+        """
+        if self._schema_cache is not None and not force_refresh:
+            return list(self._schema_cache.values())
+
+        inspector = inspect(self.engine)
+        tables = []
+
+        for table_name in inspector.get_table_names():
+            profile = self._profile_table(inspector, table_name)
+            tables.append(profile)
+
+        self._schema_cache = {t.name: t for t in tables}
+        logger.info(f"Schema loaded: {len(tables)} tables")
+        return tables
+
+    def _profile_table(self, inspector, table_name: str) -> TableProfile:
+        """Create a profile for a single table."""
+        columns = []
+
+        for col in inspector.get_columns(table_name):
+            col_name = col["name"]
+            is_sensitive = self._is_sensitive_column(col_name)
+
+            profile = ColumnProfile(
+                name=col_name,
+                data_type=str(col["type"]),
+                nullable=col.get("nullable", True),
+                is_sensitive=is_sensitive
+            )
+
+            # Get bounds for numeric columns (needed for sensitivity calculation)
+            if self._is_numeric_type(str(col["type"])) and not is_sensitive:
+                bounds = self._get_column_bounds(table_name, col_name)
+                if bounds:
+                    profile.min_value, profile.max_value = bounds
+
+            columns.append(profile)
+
+        # Get bucketed row count for privacy
+        row_count = self._get_row_count(table_name)
+        row_count_range = self._bucket_count(row_count)
+
+        return TableProfile(
+            name=table_name,
+            columns=columns,
+            row_count_range=row_count_range
+        )
+
+    def _is_sensitive_column(self, column_name: str) -> bool:
+        """Determine if a column contains sensitive data based on name."""
+        name_lower = column_name.lower()
+        return any(kw in name_lower for kw in self.SENSITIVE_KEYWORDS)
+
+    def _is_numeric_type(self, type_str: str) -> bool:
+        """Check if a SQL type is numeric."""
+        numeric_types = {"integer", "int", "float", "real", "numeric", "decimal", "double"}
+        return any(t in type_str.lower() for t in numeric_types)
+
+    def _get_column_bounds(
+        self,
+        table_name: str,
+        column_name: str
+    ) -> Optional[tuple]:
+        """Get min/max bounds for a numeric column."""
+        try:
+            with self.engine.connect() as conn:
+                query = text(
+                    f'SELECT MIN("{column_name}"), MAX("{column_name}") '
+                    f'FROM "{table_name}" '
+                    f'WHERE "{column_name}" IS NOT NULL'
+                )
+                result = conn.execute(query).fetchone()
+                if result and result[0] is not None:
+                    return (float(result[0]), float(result[1]))
+        except Exception as e:
+            logger.warning(f"Could not get bounds for {table_name}.{column_name}: {e}")
+        return None
+
+    def _get_row_count(self, table_name: str) -> int:
+        """Get exact row count for a table."""
+        try:
+            with self.engine.connect() as conn:
+                query = text(f'SELECT COUNT(*) FROM "{table_name}"')
+                return conn.execute(query).scalar() or 0
+        except Exception as e:
+            logger.warning(f"Could not get row count for {table_name}: {e}")
+            return 0
+
+    def _bucket_count(self, count: int) -> str:
+        """Convert exact count to privacy-preserving bucket."""
+        if count < 100:
+            return "<100"
+        elif count < 1000:
+            return "100-1K"
+        elif count < 10000:
+            return "1K-10K"
+        elif count < 100000:
+            return "10K-100K"
+        elif count < 1000000:
+            return "100K-1M"
+        else:
+            return ">1M"
+
+    def get_column_bounds(
+        self,
+        table_name: str,
+        column_name: str
+    ) -> Optional[tuple]:
+        """Get bounds for a column (public interface)."""
+        schema = self.get_schema()
+        for table in schema:
+            if table.name == table_name:
+                for col in table.columns:
+                    if col.name == column_name:
+                        if col.min_value is not None and col.max_value is not None:
+                            return (col.min_value, col.max_value)
+        return self._get_column_bounds(table_name, column_name)
+
+
+# Global instance
+schema_analyzer = SchemaAnalyzer()
+```
+
+**Schema Analysis Features**:
+
+- **Sensitive Column Detection**: Automatically identifies columns likely to contain PII based on naming patterns
+- **Bucketed Counts**: Row counts are reported in ranges (e.g., "10K-100K") to prevent exact enumeration
+- **Bounds Extraction**: Numeric column bounds are extracted for sensitivity calculation
+- **No Raw Data**: The analyzer never returns individual records, only metadata
+
+### Synthetic Data Generator
+
+```python
+# services/synthetic_generator.py
+"""Synthetic data generation preserving statistical properties."""
+
+import logging
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass
+import numpy as np
+from sqlalchemy import text
+import uuid
+from datetime import datetime
+
+from services.schema_analyzer import schema_analyzer
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SyntheticDataset:
+    """Generated synthetic dataset."""
+    id: str
+    table_name: str
+    num_rows: int
+    columns: List[str]
+    data: List[Dict[str, Any]]
+    statistics_comparison: Dict[str, Dict[str, float]]
+    created_at: datetime
+
+
+class SyntheticDataGenerator:
+    """
+    Generates synthetic data that preserves statistical properties.
+
+    Synthetic data allows analysts to develop and test queries without
+    accessing real sensitive data. The generated data maintains similar
+    distributions to the original.
+    """
+
+    def __init__(self, seed: Optional[int] = None):
+        self.settings = get_settings()
+        self.rng = np.random.default_rng(seed)
+        self._generated_datasets: Dict[str, SyntheticDataset] = {}
+
+    def generate(
+        self,
+        table_name: str,
+        num_rows: int = 1000,
+        preserve_correlations: bool = True
+    ) -> SyntheticDataset:
+        """
+        Generate synthetic data for a table.
+
+        Args:
+            table_name: Source table to mimic
+            num_rows: Number of synthetic rows to generate
+            preserve_correlations: Whether to preserve column correlations
+
+        Returns:
+            SyntheticDataset with generated data and statistics comparison
+        """
+        if num_rows > self.settings.max_synthetic_rows:
+            raise ValueError(
+                f"Requested {num_rows} rows exceeds maximum {self.settings.max_synthetic_rows}"
+            )
+
+        # Get schema and statistics for the table
+        schema = schema_analyzer.get_schema()
+        table_profile = next((t for t in schema if t.name == table_name), None)
+
+        if table_profile is None:
+            raise ValueError(f"Table not found: {table_name}")
+
+        # Get column statistics from original data
+        column_stats = self._get_column_statistics(table_name, table_profile)
+
+        # Generate synthetic data
+        synthetic_data = []
+        for _ in range(num_rows):
+            row = self._generate_row(table_profile, column_stats)
+            synthetic_data.append(row)
+
+        # Calculate statistics comparison
+        stats_comparison = self._compare_statistics(
+            table_name, table_profile, synthetic_data, column_stats
+        )
+
+        dataset = SyntheticDataset(
+            id=str(uuid.uuid4()),
+            table_name=table_name,
+            num_rows=num_rows,
+            columns=[col.name for col in table_profile.columns],
+            data=synthetic_data,
+            statistics_comparison=stats_comparison,
+            created_at=datetime.utcnow()
+        )
+
+        self._generated_datasets[dataset.id] = dataset
+        logger.info(f"Generated synthetic dataset {dataset.id} with {num_rows} rows")
+
+        return dataset
+
+    def _get_column_statistics(
+        self,
+        table_name: str,
+        table_profile
+    ) -> Dict[str, Dict[str, Any]]:
+        """Get statistics for each column to guide generation."""
+        stats = {}
+        engine = schema_analyzer.engine
+
+        with engine.connect() as conn:
+            for col in table_profile.columns:
+                col_stats = {"type": col.data_type}
+
+                if "int" in col.data_type.lower() or "float" in col.data_type.lower():
+                    # Numeric column: get mean, std, min, max
+                    query = text(f'''
+                        SELECT
+                            AVG("{col.name}") as mean,
+                            AVG("{col.name}" * "{col.name}") - AVG("{col.name}") * AVG("{col.name}") as variance,
+                            MIN("{col.name}") as min_val,
+                            MAX("{col.name}") as max_val
+                        FROM "{table_name}"
+                        WHERE "{col.name}" IS NOT NULL
+                    ''')
+                    result = conn.execute(query).fetchone()
+                    if result and result[0] is not None:
+                        col_stats["mean"] = float(result[0])
+                        col_stats["std"] = float(result[1]) ** 0.5 if result[1] and result[1] > 0 else 1.0
+                        col_stats["min"] = float(result[2])
+                        col_stats["max"] = float(result[3])
+
+                elif "varchar" in col.data_type.lower() or "text" in col.data_type.lower():
+                    # String column: get distinct values for categorical
+                    query = text(f'''
+                        SELECT "{col.name}", COUNT(*) as cnt
+                        FROM "{table_name}"
+                        WHERE "{col.name}" IS NOT NULL
+                        GROUP BY "{col.name}"
+                        ORDER BY cnt DESC
+                        LIMIT 100
+                    ''')
+                    result = conn.execute(query).fetchall()
+                    if result:
+                        values = [r[0] for r in result]
+                        weights = [r[1] for r in result]
+                        total = sum(weights)
+                        col_stats["values"] = values
+                        col_stats["weights"] = [w / total for w in weights]
+
+                stats[col.name] = col_stats
+
+        return stats
+
+    def _generate_row(
+        self,
+        table_profile,
+        column_stats: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Generate a single synthetic row."""
+        row = {}
+
+        for col in table_profile.columns:
+            stats = column_stats.get(col.name, {})
+            col_type = stats.get("type", col.data_type).lower()
+
+            if "int" in col_type:
+                if "mean" in stats:
+                    # Generate from normal distribution, round to int
+                    value = self.rng.normal(stats["mean"], stats["std"])
+                    value = int(np.clip(value, stats["min"], stats["max"]))
+                else:
+                    value = self.rng.integers(0, 1000)
+                row[col.name] = value
+
+            elif "float" in col_type or "real" in col_type or "numeric" in col_type:
+                if "mean" in stats:
+                    value = self.rng.normal(stats["mean"], stats["std"])
+                    value = np.clip(value, stats["min"], stats["max"])
+                else:
+                    value = self.rng.uniform(0, 1000)
+                row[col.name] = round(float(value), 2)
+
+            elif "values" in stats:
+                # Categorical: sample from observed distribution
+                row[col.name] = self.rng.choice(
+                    stats["values"],
+                    p=stats["weights"]
+                )
+
+            else:
+                # Default: generate random string
+                row[col.name] = f"synthetic_{self.rng.integers(0, 10000)}"
+
+        return row
+
+    def _compare_statistics(
+        self,
+        table_name: str,
+        table_profile,
+        synthetic_data: List[Dict],
+        original_stats: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, float]]:
+        """Compare statistics between original and synthetic data."""
+        comparison = {}
+
+        for col in table_profile.columns:
+            orig = original_stats.get(col.name, {})
+            if "mean" not in orig:
+                continue
+
+            # Calculate synthetic statistics
+            values = [row[col.name] for row in synthetic_data if row.get(col.name) is not None]
+            if not values:
+                continue
+
+            syn_mean = np.mean(values)
+            syn_std = np.std(values)
+
+            comparison[col.name] = {
+                "original_mean": orig["mean"],
+                "synthetic_mean": float(syn_mean),
+                "original_std": orig["std"],
+                "synthetic_std": float(syn_std),
+                "mean_error_pct": abs(syn_mean - orig["mean"]) / (orig["mean"] + 1e-10) * 100
+            }
+
+        return comparison
+
+    def get_dataset(self, dataset_id: str) -> Optional[SyntheticDataset]:
+        """Retrieve a generated dataset by ID."""
+        return self._generated_datasets.get(dataset_id)
+
+
+# Global instance
+synthetic_generator = SyntheticDataGenerator()
+```
+
+**Synthetic Data Generation Features**:
+
+- **Distribution Preservation**: Numeric columns maintain similar mean and standard deviation
+- **Categorical Sampling**: String columns sample from observed value distributions
+- **Statistics Comparison**: Output includes comparison metrics to validate fidelity
+- **Bounded Generation**: Values are clamped to original data ranges
+- **No Privacy Cost**: Synthetic data generation doesn't consume privacy budget
+
+### Audit Logger Service
+
+```python
+# services/audit_logger.py
+"""Comprehensive audit logging for compliance."""
+
+import logging
+import hashlib
+import json
+from typing import List, Optional, Dict, Any
+from datetime import datetime, timedelta
+from threading import Lock
+import uuid
+
+from models.audit import AuditEntry, AuditLogResponse
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+class AuditLogger:
+    """
+    Comprehensive audit logging for privacy compliance.
+
+    Every query is logged with full context including:
+    - Who made the query (user_id)
+    - What was queried (table, column, filters)
+    - Privacy cost (epsilon used)
+    - Result metadata (hashed true result, noisy result)
+    - Request context (IP, user agent)
+
+    This enables compliance audits and forensic analysis.
+    """
+
+    def __init__(self):
+        self.settings = get_settings()
+        self._entries: List[AuditEntry] = []
+        self._lock = Lock()
+
+    def log_query(
+        self,
+        user_id: str,
+        query_type: str,
+        table_name: str,
+        column_name: Optional[str],
+        filters: Optional[Dict[str, Any]],
+        epsilon_requested: float,
+        epsilon_used: float,
+        sensitivity: float,
+        true_result: float,
+        noisy_result: float,
+        success: bool,
+        error_message: Optional[str] = None,
+        ip_address: str = "unknown",
+        user_agent: str = "unknown"
+    ) -> AuditEntry:
+        """
+        Log a query execution for audit purposes.
+
+        The true result is hashed (not stored in plain text) to enable
+        verification without exposing actual values.
+        """
+        # Hash the true result for compliance (can verify but not reverse)
+        true_result_hash = None
+        if self.settings.hash_true_results:
+            true_result_hash = self._hash_result(true_result, user_id, query_type)
+
+        entry = AuditEntry(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.utcnow(),
+            user_id=user_id,
+            query_type=query_type,
+            table_name=table_name,
+            column_name=column_name,
+            filters=filters,
+            epsilon_requested=epsilon_requested,
+            epsilon_used=epsilon_used,
+            sensitivity=sensitivity,
+            true_result_hash=true_result_hash,
+            noisy_result=noisy_result,
+            success=success,
+            error_message=error_message,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+
+        with self._lock:
+            self._entries.append(entry)
+
+        logger.info(
+            f"Audit: user={user_id}, type={query_type}, table={table_name}, "
+            f"epsilon={epsilon_used}, success={success}"
+        )
+
+        return entry
+
+    def _hash_result(self, result: float, user_id: str, query_type: str) -> str:
+        """Create a salted hash of the true result."""
+        # Salt with user_id and query_type to prevent rainbow table attacks
+        salt = f"{user_id}:{query_type}:{datetime.utcnow().date()}"
+        data = f"{salt}:{result:.10f}"
+        return hashlib.sha256(data.encode()).hexdigest()[:16]
+
+    def get_entries(
+        self,
+        user_id: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        limit: int = 100
+    ) -> AuditLogResponse:
+        """
+        Query audit log entries with optional filters.
+
+        Args:
+            user_id: Filter by specific user
+            start_date: Start of date range
+            end_date: End of date range
+            limit: Maximum entries to return
+        """
+        with self._lock:
+            filtered = self._entries.copy()
+
+        # Apply filters
+        if user_id:
+            filtered = [e for e in filtered if e.user_id == user_id]
+
+        if start_date:
+            filtered = [e for e in filtered if e.timestamp >= start_date]
+
+        if end_date:
+            filtered = [e for e in filtered if e.timestamp <= end_date]
+
+        # Sort by timestamp descending (most recent first)
+        filtered.sort(key=lambda e: e.timestamp, reverse=True)
+
+        total = len(filtered)
+        entries = filtered[:limit]
+
+        return AuditLogResponse(
+            entries=entries,
+            total=total,
+            limit=limit
+        )
+
+    def get_user_activity_summary(self, user_id: str) -> Dict[str, Any]:
+        """Get activity summary for a specific user."""
+        with self._lock:
+            user_entries = [e for e in self._entries if e.user_id == user_id]
+
+        if not user_entries:
+            return {"user_id": user_id, "total_queries": 0}
+
+        total_epsilon = sum(e.epsilon_used for e in user_entries)
+        success_count = sum(1 for e in user_entries if e.success)
+
+        return {
+            "user_id": user_id,
+            "total_queries": len(user_entries),
+            "successful_queries": success_count,
+            "failed_queries": len(user_entries) - success_count,
+            "total_epsilon_used": total_epsilon,
+            "first_query": min(e.timestamp for e in user_entries),
+            "last_query": max(e.timestamp for e in user_entries),
+            "tables_accessed": list(set(e.table_name for e in user_entries))
+        }
+
+    def cleanup_old_entries(self) -> int:
+        """Remove entries older than retention period."""
+        cutoff = datetime.utcnow() - timedelta(days=self.settings.audit_log_retention_days)
+
+        with self._lock:
+            original_count = len(self._entries)
+            self._entries = [e for e in self._entries if e.timestamp >= cutoff]
+            removed = original_count - len(self._entries)
+
+        if removed > 0:
+            logger.info(f"Cleaned up {removed} audit entries older than {cutoff}")
+
+        return removed
+
+
+# Global instance
+audit_logger = AuditLogger()
+```
+
+**Audit Logging Features**:
+
+- **Complete Context**: Every query logged with user, query details, privacy cost, and results
+- **Hashed True Results**: Original values are hashed (not stored plaintext) for verification without exposure
+- **Append-Only**: Logs cannot be modified, only appended (in production, use immutable storage)
+- **Retention Policy**: Automatic cleanup of old entries per compliance requirements
+- **Activity Summaries**: Aggregate views of user activity for compliance reporting
+
+### Query Executor Service
+
+```python
+# services/query_executor.py
+"""Privacy-preserving query execution."""
+
+import logging
+import time
+from typing import Optional, Dict, Any, Tuple
+from sqlalchemy import text
+
+from models.query import (
+    QueryRequest, QueryResponse, QueryResult, QueryType,
+    BudgetInfo, QueryMetadata, ConfidenceInterval
+)
+from services.differential_privacy import dp_engine, SensitivityConfig
+from services.privacy_budget import budget_manager, BudgetExhaustedError
+from services.schema_analyzer import schema_analyzer
+from services.audit_logger import audit_logger
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+class QueryExecutor:
+    """
+    Executes privacy-preserving queries with differential privacy.
+
+    This is the main orchestrator that:
+    1. Validates the query and checks budget
+    2. Calculates sensitivity for the query type
+    3. Executes the aggregate query
+    4. Adds calibrated Laplace noise
+    5. Logs the query for audit
+    6. Returns the noisy result
+    """
+
+    def __init__(self):
+        self.settings = get_settings()
+
+    async def execute(
+        self,
+        request: QueryRequest,
+        ip_address: str = "unknown",
+        user_agent: str = "unknown"
+    ) -> QueryResponse:
+        """
+        Execute a privacy-preserving query.
+
+        Args:
+            request: The query request
+            ip_address: Client IP for audit logging
+            user_agent: Client user agent for audit logging
+
+        Returns:
+            QueryResponse with noisy result and metadata
+        """
+        start_time = time.time()
+
+        # Validate query type
+        if request.query_type is None:
+            raise ValueError("query_type is required")
+
+        if request.table is None:
+            raise ValueError("table is required")
+
+        # Check privacy budget
+        if not budget_manager.check_budget(request.user_id, request.epsilon):
+            budget = budget_manager.get_or_create_budget(request.user_id)
+            raise BudgetExhaustedError(
+                request.user_id,
+                request.epsilon,
+                budget.remaining_budget
+            )
+
+        # Get column bounds for sensitivity calculation
+        bounds = self._get_bounds(request)
+
+        # Calculate sensitivity
+        sensitivity_config = SensitivityConfig(
+            lower_bound=bounds[0] if bounds else None,
+            upper_bound=bounds[1] if bounds else None
+        )
+        sensitivity = dp_engine.calculate_sensitivity(
+            request.query_type,
+            sensitivity_config
+        )
+
+        # Execute the true query
+        true_result = self._execute_aggregate(request)
+
+        # Add differential privacy noise
+        noisy_result, confidence_interval = dp_engine.add_noise(
+            true_value=true_result,
+            sensitivity=sensitivity,
+            epsilon=request.epsilon,
+            lower_bound=0.0 if request.query_type == QueryType.COUNT else bounds[0] if bounds else None,
+            upper_bound=bounds[1] if bounds else None
+        )
+
+        # Deduct from privacy budget
+        budget = budget_manager.spend_budget(request.user_id, request.epsilon)
+
+        # Log for audit
+        audit_logger.log_query(
+            user_id=request.user_id,
+            query_type=request.query_type.value,
+            table_name=request.table,
+            column_name=request.column,
+            filters=request.filters,
+            epsilon_requested=request.epsilon,
+            epsilon_used=request.epsilon,
+            sensitivity=sensitivity,
+            true_result=true_result,
+            noisy_result=noisy_result,
+            success=True,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+
+        execution_time_ms = int((time.time() - start_time) * 1000)
+
+        return QueryResponse(
+            result=QueryResult(
+                value=noisy_result,
+                noise_added=True,
+                epsilon_used=request.epsilon,
+                confidence_interval=confidence_interval
+            ),
+            budget=BudgetInfo(
+                user_remaining=budget.remaining_budget,
+                user_total=budget.total_budget,
+                global_remaining=budget_manager.get_global_remaining()
+            ),
+            metadata=QueryMetadata(
+                query_type=request.query_type,
+                table=request.table,
+                column=request.column,
+                sensitivity=sensitivity,
+                execution_time_ms=execution_time_ms
+            )
+        )
+
+    def _get_bounds(self, request: QueryRequest) -> Optional[Tuple[float, float]]:
+        """Get data bounds for the query column."""
+        if request.query_type == QueryType.COUNT:
+            return None  # COUNT doesn't need bounds
+
+        if request.column is None:
+            raise ValueError(f"{request.query_type.value} queries require a column")
+
+        bounds = schema_analyzer.get_column_bounds(request.table, request.column)
+        if bounds is None:
+            raise ValueError(
+                f"Cannot determine bounds for {request.table}.{request.column}. "
+                "Bounds are required for differential privacy."
+            )
+        return bounds
+
+    def _execute_aggregate(self, request: QueryRequest) -> float:
+        """Execute the aggregate query and return true result."""
+        engine = schema_analyzer.engine
+
+        # Build the aggregate function
+        if request.query_type == QueryType.COUNT:
+            agg_func = "COUNT(*)"
+        elif request.query_type == QueryType.SUM:
+            agg_func = f'SUM("{request.column}")'
+        elif request.query_type == QueryType.AVG:
+            agg_func = f'AVG("{request.column}")'
+        elif request.query_type == QueryType.MIN:
+            agg_func = f'MIN("{request.column}")'
+        elif request.query_type == QueryType.MAX:
+            agg_func = f'MAX("{request.column}")'
+        else:
+            raise ValueError(f"Unsupported query type: {request.query_type}")
+
+        # Build WHERE clause from filters
+        where_clause = ""
+        params = {}
+        if request.filters:
+            conditions = []
+            for i, (col, val) in enumerate(request.filters.items()):
+                param_name = f"p{i}"
+                conditions.append(f'"{col}" = :{param_name}')
+                params[param_name] = val
+            where_clause = "WHERE " + " AND ".join(conditions)
+
+        query = text(f'SELECT {agg_func} FROM "{request.table}" {where_clause}')
+
+        with engine.connect() as conn:
+            result = conn.execute(query, params).scalar()
+
+        return float(result) if result is not None else 0.0
+
+
+# Global instance
+query_executor = QueryExecutor()
+```
+
+### LLM Interface for Natural Language Queries
+
+```python
+# services/llm_interface.py
+"""LLM integration for natural language query translation."""
+
+import logging
+from typing import Optional
+from openai import AsyncOpenAI
+from pydantic import BaseModel, Field
+
+from models.query import QueryType
+from services.schema_analyzer import schema_analyzer
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+class ParsedQuery(BaseModel):
+    """Structured output from LLM query parsing."""
+    query_type: QueryType
+    table: str
+    column: Optional[str] = None
+    filters: Optional[dict] = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    explanation: str
+
+
+class LLMInterface:
+    """
+    Translates natural language questions to structured queries.
+
+    IMPORTANT: The LLM never sees raw data. It only receives:
+    - Schema information (table names, column names, types)
+    - The user's question
+
+    This prevents data leakage through LLM prompts.
+    """
+
+    SYSTEM_PROMPT = """You are a privacy-aware query translator. Your job is to convert natural language questions into structured aggregate queries.
+
+RULES:
+1. You can ONLY generate aggregate queries: COUNT, SUM, AVG, MIN, MAX
+2. You NEVER have access to individual records - only aggregates
+3. You must identify the correct table and column from the schema
+4. If the question cannot be answered with an aggregate, explain why
+
+SUPPORTED QUERY TYPES:
+- COUNT: "How many...", "Number of...", "Total count..."
+- SUM: "Total...", "Sum of...", "Combined..."
+- AVG: "Average...", "Mean...", "Typical..."
+- MIN: "Minimum...", "Lowest...", "Smallest..."
+- MAX: "Maximum...", "Highest...", "Largest..."
+
+OUTPUT FORMAT:
+- query_type: One of COUNT, SUM, AVG, MIN, MAX
+- table: The table name from the schema
+- column: The column to aggregate (null for COUNT)
+- filters: Optional WHERE conditions as key-value pairs
+- confidence: Your confidence in the translation (0-1)
+- explanation: Brief explanation of your interpretation"""
+
+    def __init__(self):
+        self.settings = get_settings()
+        self.client = AsyncOpenAI(api_key=self.settings.openai_api_key)
+
+    async def parse_question(self, question: str) -> ParsedQuery:
+        """
+        Parse a natural language question into a structured query.
+
+        Args:
+            question: Natural language question from user
+
+        Returns:
+            ParsedQuery with query type, table, column, and filters
+        """
+        # Get schema context (no raw data, just structure)
+        schema = schema_analyzer.get_schema()
+        schema_context = self._format_schema_for_llm(schema)
+
+        user_prompt = f"""DATABASE SCHEMA:
+{schema_context}
+
+USER QUESTION:
+{question}
+
+Translate this question into a structured aggregate query. If the question cannot be answered with the available schema or aggregate functions, set confidence to 0 and explain why."""
+
+        response = await self.client.beta.chat.completions.parse(
+            model=self.settings.openai_model,
+            temperature=self.settings.llm_temperature,
+            messages=[
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format=ParsedQuery
+        )
+
+        result = response.choices[0].message.parsed
+
+        if result is None:
+            raise ValueError("Failed to parse LLM response")
+
+        logger.info(
+            f"Parsed query: type={result.query_type}, table={result.table}, "
+            f"column={result.column}, confidence={result.confidence}"
+        )
+
+        return result
+
+    def _format_schema_for_llm(self, schema) -> str:
+        """Format schema for LLM context (no sensitive data)."""
+        lines = []
+        for table in schema:
+            lines.append(f"\nTable: {table.name} ({table.row_count_range} rows)")
+            for col in table.columns:
+                sensitive_marker = " [SENSITIVE]" if col.is_sensitive else ""
+                lines.append(f"  - {col.name}: {col.data_type}{sensitive_marker}")
+        return "\n".join(lines)
+
+
+# Global instance
+llm_interface = LLMInterface()
+```
+
+**LLM Integration Security**:
+
+- **Schema-Only Context**: LLM receives only table/column names, never actual data
+- **Aggregate-Only Output**: LLM can only generate aggregate query types
+- **Confidence Scoring**: Low confidence queries can be flagged for human review
+- **Structured Output**: Pydantic models ensure valid query structure
+
+### FastAPI Application
+
+```python
+# main.py
+"""FastAPI application entry point."""
+
+import logging
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi.middleware.cors import CORSMiddleware
+
+from config import get_settings
+from routers import query, schema, budget, synthetic, audit
+from services.schema_analyzer import schema_analyzer
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler."""
+    # Startup: Load schema
+    logger.info("Loading database schema...")
+    schema_analyzer.get_schema()
+    logger.info("Schema loaded successfully")
+    yield
+    # Shutdown: Cleanup
+    logger.info("Shutting down...")
+
+
+def create_app() -> FastAPI:
+    """Create and configure FastAPI application."""
+    settings = get_settings()
+
+    app = FastAPI(
+        title=settings.app_name,
+        description="Privacy-preserving analytics with differential privacy",
+        version="1.0.0",
+        lifespan=lifespan
+    )
+
+    # CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Include routers
+    app.include_router(query.router, prefix="/query", tags=["Query"])
+    app.include_router(schema.router, prefix="/schema", tags=["Schema"])
+    app.include_router(budget.router, prefix="/budget", tags=["Budget"])
+    app.include_router(synthetic.router, prefix="/synthetic", tags=["Synthetic"])
+    app.include_router(audit.router, prefix="/audit", tags=["Audit"])
+
+    @app.get("/health")
+    async def health_check():
+        """Health check endpoint."""
+        return {"status": "healthy", "service": settings.app_name}
+
+    return app
+
+
+app = create_app()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+### API Routers
+
+```python
+# routers/query.py
+"""Query API endpoints."""
+
+from fastapi import APIRouter, HTTPException, Request
+from models.query import QueryRequest, QueryResponse
+from services.query_executor import query_executor
+from services.llm_interface import llm_interface
+from services.privacy_budget import BudgetExhaustedError
+
+router = APIRouter()
+
+
+@router.post("/", response_model=QueryResponse)
+async def execute_query(request: QueryRequest, req: Request):
+    """
+    Execute a privacy-preserving query.
+
+    The result will have calibrated Laplace noise added to provide
+    ε-differential privacy. Each query consumes privacy budget.
+    """
+    try:
+        # If natural language question provided, parse it first
+        if request.question and not request.query_type:
+            parsed = await llm_interface.parse_question(request.question)
+            if parsed.confidence < 0.5:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Low confidence parsing: {parsed.explanation}"
+                )
+            request.query_type = parsed.query_type
+            request.table = parsed.table
+            request.column = parsed.column
+            request.filters = parsed.filters
+
+        # Get client info for audit
+        ip_address = req.client.host if req.client else "unknown"
+        user_agent = req.headers.get("user-agent", "unknown")
+
+        # Execute the query
+        response = await query_executor.execute(
+            request,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        return response
+
+    except BudgetExhaustedError as e:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "Privacy budget exhausted",
+                "requested": e.requested,
+                "remaining": e.remaining,
+                "user_id": e.user_id
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+```
+
+```python
+# routers/schema.py
+"""Schema API endpoints."""
+
+from fastapi import APIRouter
+from services.schema_analyzer import schema_analyzer
+
+router = APIRouter()
+
+
+@router.get("/")
+async def get_schema():
+    """
+    Get database schema information.
+
+    This endpoint is free (no privacy cost) as it only returns
+    metadata about tables and columns, not actual data.
+    """
+    schema = schema_analyzer.get_schema()
+    return {
+        "tables": [
+            {
+                "name": table.name,
+                "columns": [
+                    {
+                        "name": col.name,
+                        "type": col.data_type,
+                        "nullable": col.nullable,
+                        "is_sensitive": col.is_sensitive
+                    }
+                    for col in table.columns
+                ],
+                "row_count_range": table.row_count_range
+            }
+            for table in schema
+        ]
+    }
+```
+
+```python
+# routers/budget.py
+"""Budget API endpoints."""
+
+from fastapi import APIRouter
+from services.privacy_budget import budget_manager
+
+router = APIRouter()
+
+
+@router.get("/{user_id}")
+async def get_budget(user_id: str):
+    """
+    Get privacy budget information for a user.
+
+    Returns current budget status including total, used, and remaining epsilon.
+    """
+    return budget_manager.get_budget_info(user_id)
+```
+
+```python
+# routers/synthetic.py
+"""Synthetic data API endpoints."""
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+from services.synthetic_generator import synthetic_generator
+
+router = APIRouter()
+
+
+class SyntheticRequest(BaseModel):
+    """Request for synthetic data generation."""
+    table: str
+    num_rows: int = Field(default=1000, ge=1, le=100000)
+    preserve_correlations: bool = True
+    seed: int | None = None
+
+
+@router.post("/")
+async def generate_synthetic(request: SyntheticRequest):
+    """
+    Generate synthetic data for a table.
+
+    Synthetic data preserves statistical properties of the original
+    data without exposing real records. No privacy budget is consumed.
+    """
+    try:
+        dataset = synthetic_generator.generate(
+            table_name=request.table,
+            num_rows=request.num_rows,
+            preserve_correlations=request.preserve_correlations
+        )
+        return {
+            "synthetic_table_id": dataset.id,
+            "num_rows": dataset.num_rows,
+            "columns": dataset.columns,
+            "statistics_comparison": dataset.statistics_comparison,
+            "sample_rows": dataset.data[:5]  # Return first 5 rows as sample
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+```
+
+```python
+# routers/audit.py
+"""Audit log API endpoints."""
+
+from fastapi import APIRouter, Query
+from datetime import datetime
+from typing import Optional
+from services.audit_logger import audit_logger
+
+router = APIRouter()
+
+
+@router.get("/")
+async def get_audit_log(
+    user_id: Optional[str] = Query(None),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    limit: int = Query(100, ge=1, le=1000)
+):
+    """
+    Query audit log entries.
+
+    Returns a list of all queries executed, including user, query details,
+    privacy cost, and results. Used for compliance auditing.
+    """
+    return audit_logger.get_entries(
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit
+    )
+
+
+@router.get("/summary/{user_id}")
+async def get_user_summary(user_id: str):
+    """Get activity summary for a specific user."""
+    return audit_logger.get_user_activity_summary(user_id)
+```
+
+### Sample Data Generator
+
+```python
+# database/sample_data.py
+"""Generate sample sensitive data for testing."""
+
+import random
+from datetime import datetime, timedelta
+from sqlalchemy import create_engine, text
+
+from config import get_settings
+
+
+def create_sample_database():
+    """Create a sample database with sensitive healthcare/finance data."""
+    settings = get_settings()
+    engine = create_engine(settings.database_url)
+
+    with engine.connect() as conn:
+        # Create patients table (healthcare)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS patients (
+                id INTEGER PRIMARY KEY,
+                age INTEGER,
+                gender TEXT,
+                diagnosis_code TEXT,
+                treatment_cost REAL,
+                length_of_stay INTEGER,
+                insurance_type TEXT,
+                admission_date TEXT,
+                zip_code TEXT
+            )
+        """))
+
+        # Create employees table (finance)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS employees (
+                id INTEGER PRIMARY KEY,
+                department TEXT,
+                salary REAL,
+                years_experience INTEGER,
+                performance_score REAL,
+                hire_date TEXT,
+                education_level TEXT,
+                job_level TEXT
+            )
+        """))
+
+        # Create transactions table (finance)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY,
+                customer_id INTEGER,
+                amount REAL,
+                transaction_type TEXT,
+                merchant_category TEXT,
+                transaction_date TEXT,
+                is_fraud INTEGER
+            )
+        """))
+
+        conn.commit()
+
+        # Check if data already exists
+        count = conn.execute(text("SELECT COUNT(*) FROM patients")).scalar()
+        if count > 0:
+            print("Sample data already exists")
+            return
+
+        # Generate sample patients
+        diagnoses = ["A01", "B02", "C03", "D04", "E05", "F06", "G07", "H08"]
+        insurance_types = ["Private", "Medicare", "Medicaid", "Uninsured"]
+        genders = ["M", "F"]
+
+        for i in range(10000):
+            conn.execute(text("""
+                INSERT INTO patients (age, gender, diagnosis_code, treatment_cost,
+                    length_of_stay, insurance_type, admission_date, zip_code)
+                VALUES (:age, :gender, :diagnosis, :cost, :stay, :insurance, :date, :zip)
+            """), {
+                "age": random.randint(18, 90),
+                "gender": random.choice(genders),
+                "diagnosis": random.choice(diagnoses),
+                "cost": round(random.uniform(1000, 100000), 2),
+                "stay": random.randint(1, 30),
+                "insurance": random.choice(insurance_types),
+                "date": (datetime.now() - timedelta(days=random.randint(0, 365))).isoformat(),
+                "zip": f"{random.randint(10000, 99999)}"
+            })
+
+        # Generate sample employees
+        departments = ["Engineering", "Sales", "Marketing", "HR", "Finance", "Operations"]
+        education = ["High School", "Bachelor", "Master", "PhD"]
+        job_levels = ["Junior", "Mid", "Senior", "Lead", "Manager", "Director"]
+
+        for i in range(5000):
+            years_exp = random.randint(0, 30)
+            base_salary = 40000 + years_exp * 3000 + random.uniform(-10000, 20000)
+            conn.execute(text("""
+                INSERT INTO employees (department, salary, years_experience,
+                    performance_score, hire_date, education_level, job_level)
+                VALUES (:dept, :salary, :years, :score, :date, :edu, :level)
+            """), {
+                "dept": random.choice(departments),
+                "salary": round(base_salary, 2),
+                "years": years_exp,
+                "score": round(random.uniform(1, 5), 2),
+                "date": (datetime.now() - timedelta(days=years_exp * 365 + random.randint(0, 365))).isoformat(),
+                "edu": random.choice(education),
+                "level": random.choice(job_levels)
+            })
+
+        # Generate sample transactions
+        categories = ["Grocery", "Gas", "Restaurant", "Online", "Travel", "Entertainment"]
+        tx_types = ["Purchase", "Refund", "Transfer"]
+
+        for i in range(50000):
+            is_fraud = 1 if random.random() < 0.01 else 0  # 1% fraud rate
+            amount = random.uniform(10, 5000) if not is_fraud else random.uniform(1000, 10000)
+            conn.execute(text("""
+                INSERT INTO transactions (customer_id, amount, transaction_type,
+                    merchant_category, transaction_date, is_fraud)
+                VALUES (:cust, :amount, :type, :cat, :date, :fraud)
+            """), {
+                "cust": random.randint(1, 1000),
+                "amount": round(amount, 2),
+                "type": random.choice(tx_types),
+                "cat": random.choice(categories),
+                "date": (datetime.now() - timedelta(days=random.randint(0, 90))).isoformat(),
+                "fraud": is_fraud
+            })
+
+        conn.commit()
+        print("Sample data created successfully")
+
+
+if __name__ == "__main__":
+    create_sample_database()
+```
+
+### Requirements and Docker Setup
+
+```text
+# requirements.txt
+fastapi==0.109.0
+uvicorn==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+sqlalchemy==2.0.25
+numpy==1.26.3
+openai==1.10.0
+python-multipart==0.0.6
+```
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+
+services:
+  privacy-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./data/sensitive_data.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DEFAULT_USER_BUDGET=10.0
+      - GLOBAL_DAILY_BUDGET=100.0
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+
+```dockerfile
+# Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Create data directory
+RUN mkdir -p /app/data
+
+# Generate sample data on first run
+CMD ["sh", "-c", "python database/sample_data.py && uvicorn main:app --host 0.0.0.0 --port 8000"]
+```
+
+---
+
+## Testing
+
+### Unit Tests for Differential Privacy
+
+```python
+# tests/test_differential_privacy.py
+"""Tests for differential privacy engine."""
+
+import pytest
+import numpy as np
+from services.differential_privacy import DifferentialPrivacyEngine, SensitivityConfig
+from models.query import QueryType
+
+
+class TestDifferentialPrivacyEngine:
+    """Test suite for DP engine."""
+
+    def setup_method(self):
+        """Set up test fixtures with fixed seed for reproducibility."""
+        self.dp = DifferentialPrivacyEngine(seed=42)
+
+    def test_add_noise_returns_different_value(self):
+        """Noise should change the true value."""
+        true_value = 100.0
+        noisy, _ = self.dp.add_noise(true_value, sensitivity=1.0, epsilon=0.1)
+        # With high probability, noisy != true_value
+        # (technically could be equal, but extremely unlikely)
+        assert noisy != true_value
+
+    def test_noise_scale_increases_with_lower_epsilon(self):
+        """Lower epsilon should produce more noise (larger variance)."""
+        true_value = 100.0
+        sensitivity = 1.0
+
+        # Collect samples with different epsilons
+        high_eps_samples = [
+            self.dp.add_noise(true_value, sensitivity, epsilon=1.0)[0]
+            for _ in range(1000)
+        ]
+        low_eps_samples = [
+            self.dp.add_noise(true_value, sensitivity, epsilon=0.1)[0]
+            for _ in range(1000)
+        ]
+
+        # Lower epsilon should have higher variance
+        high_eps_var = np.var(high_eps_samples)
+        low_eps_var = np.var(low_eps_samples)
+        assert low_eps_var > high_eps_var
+
+    def test_noise_scale_increases_with_higher_sensitivity(self):
+        """Higher sensitivity should produce more noise."""
+        true_value = 100.0
+        epsilon = 0.5
+
+        low_sens_samples = [
+            self.dp.add_noise(true_value, sensitivity=1.0, epsilon=epsilon)[0]
+            for _ in range(1000)
+        ]
+        high_sens_samples = [
+            self.dp.add_noise(true_value, sensitivity=10.0, epsilon=epsilon)[0]
+            for _ in range(1000)
+        ]
+
+        assert np.var(high_sens_samples) > np.var(low_sens_samples)
+
+    def test_result_clamping_lower_bound(self):
+        """Results should be clamped to lower bound."""
+        # Use very low true value and high noise to trigger clamping
+        noisy, _ = self.dp.add_noise(
+            true_value=0.1,
+            sensitivity=100.0,
+            epsilon=0.1,
+            lower_bound=0.0
+        )
+        assert noisy >= 0.0
+
+    def test_result_clamping_upper_bound(self):
+        """Results should be clamped to upper bound."""
+        noisy, _ = self.dp.add_noise(
+            true_value=99.9,
+            sensitivity=100.0,
+            epsilon=0.1,
+            upper_bound=100.0
+        )
+        assert noisy <= 100.0
+
+    def test_confidence_interval_contains_true_value_often(self):
+        """95% CI should contain true value ~95% of the time."""
+        true_value = 50.0
+        contains_count = 0
+        trials = 1000
+
+        for _ in range(trials):
+            noisy, ci = self.dp.add_noise(true_value, sensitivity=1.0, epsilon=0.5)
+            if ci.lower <= true_value <= ci.upper:
+                contains_count += 1
+
+        # Should be close to 95% (allow some variance)
+        coverage = contains_count / trials
+        assert 0.90 <= coverage <= 0.99
+
+    def test_sensitivity_count(self):
+        """COUNT sensitivity should be 1."""
+        config = SensitivityConfig()
+        sensitivity = self.dp.calculate_sensitivity(QueryType.COUNT, config)
+        assert sensitivity == 1.0
+
+    def test_sensitivity_sum_requires_bounds(self):
+        """SUM sensitivity requires bounded data."""
+        config = SensitivityConfig()  # No bounds
+        with pytest.raises(ValueError, match="require bounded"):
+            self.dp.calculate_sensitivity(QueryType.SUM, config)
+
+    def test_sensitivity_sum_with_bounds(self):
+        """SUM sensitivity equals data range."""
+        config = SensitivityConfig(lower_bound=0, upper_bound=100)
+        sensitivity = self.dp.calculate_sensitivity(QueryType.SUM, config)
+        assert sensitivity == 100.0
+
+    def test_invalid_epsilon_raises(self):
+        """Epsilon must be positive."""
+        with pytest.raises(ValueError, match="positive"):
+            self.dp.add_noise(100.0, sensitivity=1.0, epsilon=0)
+
+        with pytest.raises(ValueError, match="positive"):
+            self.dp.add_noise(100.0, sensitivity=1.0, epsilon=-0.1)
+
+    def test_invalid_sensitivity_raises(self):
+        """Sensitivity must be non-negative."""
+        with pytest.raises(ValueError, match="non-negative"):
+            self.dp.add_noise(100.0, sensitivity=-1.0, epsilon=0.1)
+```
+
+### Unit Tests for Privacy Budget
+
+```python
+# tests/test_privacy_budget.py
+"""Tests for privacy budget manager."""
+
+import pytest
+from services.privacy_budget import PrivacyBudgetManager, BudgetExhaustedError
+
+
+class TestPrivacyBudgetManager:
+    """Test suite for budget manager."""
+
+    def setup_method(self):
+        """Create fresh budget manager for each test."""
+        self.manager = PrivacyBudgetManager()
+        # Override default budget for testing
+        self.manager.settings.default_user_budget = 5.0
+        self.manager.settings.global_daily_budget = 20.0
+
+    def test_new_user_gets_default_budget(self):
+        """New users should receive default budget."""
+        budget = self.manager.get_or_create_budget("new_user")
+        assert budget.total_budget == 5.0
+        assert budget.used_budget == 0.0
+        assert budget.remaining_budget == 5.0
+
+    def test_check_budget_returns_true_when_available(self):
+        """Should return True when budget is available."""
+        assert self.manager.check_budget("user1", epsilon=1.0) is True
+
+    def test_check_budget_returns_false_when_exhausted(self):
+        """Should return False when budget is exhausted."""
+        # Spend most of the budget
+        self.manager.spend_budget("user1", 4.5)
+        # Now check for more than remaining
+        assert self.manager.check_budget("user1", epsilon=1.0) is False
+
+    def test_spend_budget_deducts_correctly(self):
+        """Spending should deduct from budget."""
+        self.manager.spend_budget("user1", 2.0)
+        budget = self.manager.get_or_create_budget("user1")
+        assert budget.used_budget == 2.0
+        assert budget.remaining_budget == 3.0
+
+    def test_spend_budget_increments_query_count(self):
+        """Each spend should increment query count."""
+        self.manager.spend_budget("user1", 0.5)
+        self.manager.spend_budget("user1", 0.5)
+        budget = self.manager.get_or_create_budget("user1")
+        assert budget.queries_count == 2
+
+    def test_spend_budget_raises_when_exhausted(self):
+        """Should raise BudgetExhaustedError when insufficient."""
+        self.manager.spend_budget("user1", 4.0)
+        with pytest.raises(BudgetExhaustedError) as exc_info:
+            self.manager.spend_budget("user1", 2.0)
+        assert exc_info.value.user_id == "user1"
+        assert exc_info.value.requested == 2.0
+        assert exc_info.value.remaining == 1.0
+
+    def test_global_budget_limits_all_users(self):
+        """Global budget should limit total spending across users."""
+        # Spend up to global limit across multiple users
+        for i in range(4):
+            self.manager.spend_budget(f"user{i}", 5.0)  # 4 * 5 = 20 (global limit)
+
+        # Next user should be blocked by global limit
+        assert self.manager.check_budget("user5", epsilon=1.0) is False
+
+    def test_budget_info_returns_correct_data(self):
+        """Budget info should return accurate data."""
+        self.manager.spend_budget("user1", 1.5)
+        info = self.manager.get_budget_info("user1")
+
+        assert info["user_id"] == "user1"
+        assert info["budget"]["total"] == 5.0
+        assert info["budget"]["used"] == 1.5
+        assert info["budget"]["remaining"] == 3.5
+        assert info["queries_executed"] == 1
+
+    def test_multiple_users_have_independent_budgets(self):
+        """Each user should have their own budget."""
+        self.manager.spend_budget("user1", 3.0)
+        self.manager.spend_budget("user2", 1.0)
+
+        budget1 = self.manager.get_or_create_budget("user1")
+        budget2 = self.manager.get_or_create_budget("user2")
+
+        assert budget1.remaining_budget == 2.0
+        assert budget2.remaining_budget == 4.0
+```
+
+### Integration Tests
+
+```python
+# tests/test_integration.py
+"""Integration tests for the privacy analytics agent."""
+
+import pytest
+from fastapi.testclient import TestClient
+from main import app
+from services.privacy_budget import budget_manager
+from services.audit_logger import audit_logger
+
+
+@pytest.fixture
+def client():
+    """Create test client."""
+    return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def reset_state():
+    """Reset global state before each test."""
+    budget_manager._user_budgets.clear()
+    budget_manager._global_used_today = 0.0
+    audit_logger._entries.clear()
+    yield
+
+
+class TestQueryEndpoint:
+    """Integration tests for /query endpoint."""
+
+    def test_count_query_returns_noisy_result(self, client):
+        """COUNT query should return a noisy result."""
+        response = client.post("/query/", json={
+            "user_id": "test_user",
+            "query_type": "count",
+            "table": "patients",
+            "epsilon": 0.5
+        })
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["result"]["noise_added"] is True
+        assert data["result"]["epsilon_used"] == 0.5
+        assert "confidence_interval" in data["result"]
+        assert data["budget"]["user_remaining"] < 10.0  # Budget was deducted
+
+    def test_avg_query_requires_column(self, client):
+        """AVG query should require a column."""
+        response = client.post("/query/", json={
+            "user_id": "test_user",
+            "query_type": "avg",
+            "table": "patients",
+            "epsilon": 0.5
+        })
+        assert response.status_code == 400
+        assert "column" in response.json()["detail"].lower()
+
+    def test_budget_exhaustion_returns_403(self, client):
+        """Should return 403 when budget is exhausted."""
+        # Exhaust budget with multiple queries
+        for _ in range(20):
+            response = client.post("/query/", json={
+                "user_id": "exhaust_user",
+                "query_type": "count",
+                "table": "patients",
+                "epsilon": 0.5
+            })
+            if response.status_code == 403:
+                break
+
+        assert response.status_code == 403
+        assert "budget" in response.json()["detail"]["message"].lower()
+
+    def test_query_logged_to_audit(self, client):
+        """Queries should be logged to audit."""
+        client.post("/query/", json={
+            "user_id": "audit_test_user",
+            "query_type": "count",
+            "table": "patients",
+            "epsilon": 0.1
+        })
+
+        # Check audit log
+        response = client.get("/audit/?user_id=audit_test_user")
+        assert response.status_code == 200
+        entries = response.json()["entries"]
+        assert len(entries) == 1
+        assert entries[0]["user_id"] == "audit_test_user"
+        assert entries[0]["query_type"] == "count"
+
+
+class TestSchemaEndpoint:
+    """Integration tests for /schema endpoint."""
+
+    def test_schema_returns_tables(self, client):
+        """Schema endpoint should return table information."""
+        response = client.get("/schema/")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "tables" in data
+        table_names = [t["name"] for t in data["tables"]]
+        assert "patients" in table_names
+        assert "employees" in table_names
+
+    def test_schema_marks_sensitive_columns(self, client):
+        """Sensitive columns should be marked."""
+        response = client.get("/schema/")
+        data = response.json()
+
+        patients = next(t for t in data["tables"] if t["name"] == "patients")
+        # diagnosis_code should be marked sensitive
+        diagnosis_col = next(
+            (c for c in patients["columns"] if c["name"] == "diagnosis_code"),
+            None
+        )
+        assert diagnosis_col is not None
+        assert diagnosis_col["is_sensitive"] is True
+
+
+class TestBudgetEndpoint:
+    """Integration tests for /budget endpoint."""
+
+    def test_get_budget_for_new_user(self, client):
+        """Should return default budget for new user."""
+        response = client.get("/budget/new_user_123")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["user_id"] == "new_user_123"
+        assert data["budget"]["remaining"] == data["budget"]["total"]
+
+    def test_budget_decreases_after_query(self, client):
+        """Budget should decrease after query."""
+        # Get initial budget
+        initial = client.get("/budget/budget_test_user").json()
+
+        # Execute query
+        client.post("/query/", json={
+            "user_id": "budget_test_user",
+            "query_type": "count",
+            "table": "patients",
+            "epsilon": 0.5
+        })
+
+        # Check budget decreased
+        after = client.get("/budget/budget_test_user").json()
+        assert after["budget"]["remaining"] < initial["budget"]["remaining"]
+        assert after["budget"]["used"] == 0.5
+
+
+class TestSyntheticEndpoint:
+    """Integration tests for /synthetic endpoint."""
+
+    def test_generate_synthetic_data(self, client):
+        """Should generate synthetic data."""
+        response = client.post("/synthetic/", json={
+            "table": "patients",
+            "num_rows": 100
+        })
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["num_rows"] == 100
+        assert "columns" in data
+        assert "statistics_comparison" in data
+        assert len(data["sample_rows"]) == 5
+
+    def test_synthetic_preserves_statistics(self, client):
+        """Synthetic data should preserve statistical properties."""
+        response = client.post("/synthetic/", json={
+            "table": "employees",
+            "num_rows": 1000
+        })
+        data = response.json()
+
+        # Check that statistics are reasonably close
+        if "salary" in data["statistics_comparison"]:
+            stats = data["statistics_comparison"]["salary"]
+            error_pct = stats.get("mean_error_pct", 100)
+            assert error_pct < 20  # Within 20% of original mean
+```
+
+---
+
+## Running the Project
+
+### Quick Start
+
+```bash
+# Clone and setup
+git clone <repository>
+cd privacy-analytics-agent
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables
+export OPENAI_API_KEY="your-api-key"  # Optional, for NL queries
+
+# Generate sample data and start server
+python database/sample_data.py
+uvicorn main:app --reload
+```
+
+### Example Queries
+
+```bash
+# 1. Check schema (free, no privacy cost)
+curl http://localhost:8000/schema/
+
+# 2. Count patients (costs 0.1 epsilon)
+curl -X POST http://localhost:8000/query/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "analyst_1",
+    "query_type": "count",
+    "table": "patients",
+    "epsilon": 0.1
+  }'
+
+# 3. Average salary by department (costs 0.5 epsilon)
+curl -X POST http://localhost:8000/query/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "analyst_1",
+    "query_type": "avg",
+    "table": "employees",
+    "column": "salary",
+    "filters": {"department": "Engineering"},
+    "epsilon": 0.5
+  }'
+
+# 4. Check remaining budget
+curl http://localhost:8000/budget/analyst_1
+
+# 5. Generate synthetic data for testing
+curl -X POST http://localhost:8000/synthetic/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "table": "patients",
+    "num_rows": 1000
+  }'
+
+# 6. View audit log
+curl "http://localhost:8000/audit/?user_id=analyst_1&limit=10"
+
+# 7. Natural language query (requires OpenAI API key)
+curl -X POST http://localhost:8000/query/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "analyst_1",
+    "question": "What is the average treatment cost for patients?",
+    "epsilon": 0.3
+  }'
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=services --cov-report=html
+
+# Run specific test file
+pytest tests/test_differential_privacy.py -v
+
+# Run integration tests only
+pytest tests/test_integration.py -v
+```
+
+---
+
+## Understanding the Privacy Guarantees
+
+### What Does ε-Differential Privacy Mean?
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Database D"
+        D1[Alice's Record]
+        D2[Bob's Record]
+        D3[Carol's Record]
+    end
+    
+    subgraph "Database D'"
+        D2'[Bob's Record]
+        D3'[Carol's Record]
+    end
+    
+    D1 -.->|Remove Alice| D2'
+    
+    Query[Same Query] --> D
+    Query --> D'
+    
+    D --> R1[Result: 50.3]
+    D' --> R2[Result: 49.8]
+    
+    R1 --> Similar[Results are<br/>statistically similar]
+    R2 --> Similar
+    
+    style D1 fill:#ffcdd2,stroke:#c62828
+    style Similar fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Differential Privacy: Adding or removing one person doesn't significantly change the output."
+/>
+
+**Formal Definition**: A mechanism M provides ε-differential privacy if for any two databases D and D' that differ by one record, and for any output S:
+
+```
+P(M(D) ∈ S) ≤ e^ε × P(M(D') ∈ S)
+```
+
+**Intuition**: An attacker who sees the query result cannot determine whether any specific individual's data was included in the database. The smaller ε, the stronger this guarantee.
+
+### Privacy Budget Composition
+
+<Mermaid
+  chart={`
+graph TD
+    Budget[Total Budget: ε = 10.0]
+    
+    Q1[Query 1: ε = 0.5] --> Used1[Used: 0.5]
+    Q2[Query 2: ε = 0.3] --> Used2[Used: 0.8]
+    Q3[Query 3: ε = 1.0] --> Used3[Used: 1.8]
+    Q4[Query 4: ε = 0.2] --> Used4[Used: 2.0]
+    
+    Budget --> Q1
+    Used1 --> Q2
+    Used2 --> Q3
+    Used3 --> Q4
+    
+    Used4 --> Remaining[Remaining: 8.0]
+    
+    style Budget fill:#e3f2fd,stroke:#0277bd
+    style Remaining fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Budget Composition: Each query consumes epsilon, and they add up."
+/>
+
+**Sequential Composition Theorem**: If you run k queries with privacy parameters ε₁, ε₂, ..., εₖ, the total privacy loss is at most ε₁ + ε₂ + ... + εₖ.
+
+This is why we track and limit the total epsilon spent—to prevent privacy degradation through many queries.
+
+### Choosing Epsilon Values
+
+| Epsilon | Privacy Level | Use Case                                | Noise Level |
+| ------- | ------------- | --------------------------------------- | ----------- |
+| 0.01    | Very Strong   | Highly sensitive data (medical records) | Very High   |
+| 0.1     | Strong        | Sensitive analytics (salary data)       | High        |
+| 0.5     | Moderate      | General business analytics              | Moderate    |
+| 1.0     | Weak          | Non-sensitive aggregates                | Low         |
+| > 1.0   | Minimal       | Testing only                            | Very Low    |
+
+**Rule of Thumb**: Start with ε = 0.1 for sensitive data. Increase only if the noise makes results unusable, and document the privacy tradeoff.
+
+---
+
+## Extension Challenges
+
+### Challenge 1: Implement Gaussian Mechanism
+
+The Laplace mechanism is optimal for queries with L1 sensitivity. For L2 sensitivity (e.g., vector-valued queries), the Gaussian mechanism is preferred.
+
+**Task**: Implement a Gaussian mechanism option:
+
+```python
+def add_gaussian_noise(
+    self,
+    true_value: float,
+    sensitivity: float,
+    epsilon: float,
+    delta: float = 1e-5
+) -> Tuple[float, ConfidenceInterval]:
+    """
+    Add Gaussian noise for (ε, δ)-differential privacy.
+
+    The Gaussian mechanism adds noise from N(0, σ²) where:
+    σ = sensitivity * sqrt(2 * ln(1.25/δ)) / epsilon
+    """
+    sigma = sensitivity * math.sqrt(2 * math.log(1.25 / delta)) / epsilon
+    noise = self.rng.normal(0, sigma)
+    # ... rest of implementation
+```
+
+### Challenge 2: Implement Privacy Amplification by Subsampling
+
+When you only query a random subset of the data, privacy is amplified.
+
+**Task**: Add subsampling support:
+
+```python
+async def execute_with_subsampling(
+    self,
+    request: QueryRequest,
+    sampling_rate: float = 0.1
+) -> QueryResponse:
+    """
+    Execute query on a random subsample for privacy amplification.
+
+    If we sample each record with probability p, the effective
+    epsilon becomes approximately p * epsilon (for small p).
+    """
+    # Implement subsampled query execution
+    # Adjust epsilon accounting for amplification
+```
+
+### Challenge 3: Add Report Noisy Max
+
+For queries like "Which department has the highest average salary?", we need the Report Noisy Max mechanism.
+
+**Task**: Implement categorical queries:
+
+```python
+class QueryType(str, Enum):
+    # ... existing types
+    ARGMAX = "argmax"  # Which category has max value?
+    ARGMIN = "argmin"  # Which category has min value?
+
+def report_noisy_max(
+    self,
+    categories: List[str],
+    scores: List[float],
+    epsilon: float
+) -> Tuple[str, float]:
+    """
+    Return the category with (approximately) the highest score.
+
+    Uses the exponential mechanism for ε-differential privacy.
+    """
+    # Add Laplace noise to each score
+    # Return category with highest noisy score
+```
+
+### Challenge 4: Implement Local Differential Privacy
+
+In local DP, noise is added on the client side before data reaches the server.
+
+**Task**: Create a client-side randomized response mechanism:
+
+```python
+class LocalDPClient:
+    """Client-side differential privacy for surveys."""
+
+    def randomized_response(
+        self,
+        true_answer: bool,
+        epsilon: float
+    ) -> bool:
+        """
+        Randomized response for binary questions.
+
+        With probability p = e^ε / (1 + e^ε), report true answer.
+        Otherwise, flip a fair coin.
+        """
+        p = math.exp(epsilon) / (1 + math.exp(epsilon))
+        if random.random() < p:
+            return true_answer
+        return random.random() < 0.5
+```
+
+### Challenge 5: Add Secure Multi-Party Computation
+
+For scenarios where data is distributed across multiple parties.
+
+**Task**: Implement a simple secure sum protocol:
+
+```python
+class SecureAggregator:
+    """Secure aggregation across multiple data holders."""
+
+    async def secure_sum(
+        self,
+        parties: List[str],
+        column: str
+    ) -> float:
+        """
+        Compute sum across parties without revealing individual contributions.
+
+        Each party:
+        1. Adds random mask to their sum
+        2. Sends masked sum to aggregator
+        3. Aggregator combines and removes masks
+        """
+        # Implement secure aggregation protocol
+```
+
+### Challenge 6: Privacy-Preserving Machine Learning
+
+Train models on sensitive data without exposing individual records.
+
+**Task**: Implement differentially private gradient descent:
+
+```python
+class DPModelTrainer:
+    """Train ML models with differential privacy."""
+
+    def dp_sgd_step(
+        self,
+        gradients: np.ndarray,
+        clip_norm: float,
+        noise_multiplier: float,
+        batch_size: int
+    ) -> np.ndarray:
+        """
+        Perform one step of DP-SGD.
+
+        1. Clip per-example gradients to bound sensitivity
+        2. Average clipped gradients
+        3. Add Gaussian noise calibrated to sensitivity
+        """
+        # Clip gradients
+        clipped = self._clip_gradients(gradients, clip_norm)
+        # Average
+        avg_gradient = np.mean(clipped, axis=0)
+        # Add noise
+        noise = np.random.normal(0, clip_norm * noise_multiplier / batch_size, avg_gradient.shape)
+        return avg_gradient + noise
+```
+
+---
+
+## Key Takeaways
+
+<Callout type="success">
+**What You've Learned:**
+
+1. **Differential Privacy Fundamentals**: The Laplace mechanism provides mathematically provable privacy guarantees by adding calibrated noise to query results.
+
+2. **Privacy Budget Management**: Epsilon is a finite resource that must be tracked and limited to prevent privacy degradation through repeated queries.
+
+3. **Schema-Only Analysis**: Valuable insights can be extracted from metadata and aggregates without ever accessing individual records.
+
+4. **Synthetic Data Generation**: Realistic test data can be generated that preserves statistical properties while containing no real sensitive information.
+
+5. **Audit Logging**: Comprehensive logging enables compliance verification and forensic analysis without compromising privacy.
+
+6. **Privacy-Utility Tradeoff**: Stronger privacy (lower ε) means noisier results—finding the right balance is key to practical deployment.
+   </Callout>
+
+## Further Reading
+
+- **The Algorithmic Foundations of Differential Privacy** by Dwork & Roth - The definitive textbook on differential privacy theory
+- **Programming Differential Privacy** (programming-dp.com) - Practical guide with code examples
+- **Google's Differential Privacy Library** - Production-ready DP implementations
+- **OpenDP** - Open-source differential privacy tools from Harvard
+- **NIST Privacy Framework** - Guidelines for privacy-preserving data analysis
+
+## Summary
+
+In this project, you built a complete Privacy-Preserving Analytics Agent that:
+
+- Implements differential privacy using the Laplace mechanism
+- Tracks and enforces privacy budgets per user and globally
+- Provides schema-only analysis without raw data access
+- Generates synthetic data for safe testing and development
+- Maintains comprehensive audit logs for compliance
+- Integrates with LLMs for natural language queries while preventing data leakage
+
+This foundation can be extended with more sophisticated mechanisms (Gaussian, exponential), privacy amplification techniques (subsampling, shuffling), and advanced applications (private machine learning, secure multi-party computation).
+
+<Callout type="info">
+**Production Considerations:**
+
+For real-world deployment with actual sensitive data:
+
+- Conduct formal privacy analysis with domain experts
+- Implement proper authentication and authorization
+- Use encrypted storage for audit logs
+- Consider regulatory requirements (HIPAA, GDPR, CCPA)
+- Perform security audits and penetration testing
+- Establish data governance policies
+  </Callout>

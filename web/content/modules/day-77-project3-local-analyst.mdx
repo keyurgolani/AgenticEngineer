@@ -10,8 +10,8 @@ day: 77
 <Callout type="info">
   **Project Tier:** This is a **Tier 4 Project** (4-8 hours). It combines
   privacy engineering, local LLM deployment, and secure sandboxing into an
-  end-to-end system. Prerequisites: Complete foundational exercises from Days 1-30 and POC-01
-  (LangGraph State Machine) first.
+  end-to-end system. Prerequisites: Complete foundational exercises from Days
+  1-30 and POC-01 (LangGraph State Machine) first.
 </Callout>
 
 <SkillLevel level="advanced" description="Privacy engineering" />
@@ -451,11 +451,6 @@ FORBIDDEN_FUNCTIONS = [
 
 ## 15.1 The Privacy Challenge
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing two contrasting data analysis workflows side-by-side:
-LEFT SIDE (marked with red X): Traditional approach showing sensitive data (represented by documents with personal info icons like SSN, medical records) being uploaded directly to a cloud with "LLM API" label, with warning symbols indicating data exposure risk.
-RIGHT SIDE (marked with green checkmark): Privacy-first approach showing the same sensitive data staying in a secure vault/safe, with only a schema document (showing just column names and types, no actual data) being sent to the LLM, which generates code that executes back in the secure environment. Use lock icons and shield symbols to emphasize security.
-Style: Modern, clean infographic style with clear visual separation between the two approaches. Use red/orange for the risky approach and green/blue for the secure approach. */}
-
 <Mermaid
   chart={`
 graph LR
@@ -475,9 +470,35 @@ graph LR
 
 ### The "Blind Programmer" Pattern
 
-{/* IMAGE_PLACEHOLDER: Create a conceptual illustration of the "Blind Programmer" pattern:
-Show an LLM (represented as a robot or AI entity) wearing a blindfold, sitting at a desk with a blueprint/schema document in front of it (showing only column names like "age: int", "income: float", "region: string"). The LLM is writing code on a computer screen. Behind a secure wall/barrier, show the actual sensitive data (represented as a locked database or file cabinet with "CONFIDENTIAL" labels). An arrow shows the generated code going through a security checkpoint (validator) before entering the secure area to process the real data. The results (charts, numbers) come back out through the secure barrier.
-Style: Metaphorical illustration that makes the concept memorable. Use visual metaphors like blindfolds, walls, and locks to emphasize the privacy-preserving nature. Color scheme: blues and greens for security, with the LLM in neutral colors. */}
+<Mermaid
+  chart={`
+flowchart LR
+    subgraph "Secure Zone"
+        Data[(Sensitive Data)]
+        Schema[Schema Extractor]
+        Val[Validator]
+        Box[Sandbox]
+        Res[Results]
+    end
+
+    subgraph "External/Local LLM"
+        BlindBot[("Blind Analyst (LLM)")]
+    end
+
+    Data -->|Read Structure| Schema
+    Schema -->|Columns/Types Only| BlindBot
+    BlindBot -->|Python Code| Val
+    Val -->|Verified Safe| Box
+    Data -->|Load| Box
+    Box -->|Execute| Res
+
+    style BlindBot fill:#f96,stroke:#333,stroke-dasharray: 5 5
+    style Data fill:#f66,stroke:#333
+    style Box fill:#6f6,stroke:#333
+
+`}
+caption="The 'Blind Programmer' Pattern: The LLM writes code based on schema meta-data, never seeing the actual records."
+/>
 
 The LLM never sees the actual data—only the schema (column names, types). It writes code to analyze data it cannot see, and that code runs in an isolated sandbox.
 
@@ -523,9 +544,35 @@ graph TB
 
 ### Step 1: Schema Extraction
 
-{/* IMAGE_PLACEHOLDER: Create a diagram showing the schema extraction process:
-Show a database table with actual sensitive data (rows with values like "John Doe", "SSN: 123-45-6789", "$50,000") on the left. An arrow points to a "Schema Extractor" component in the middle. On the right, show the extracted schema as a clean document containing only metadata: column names ("name", "ssn", "salary"), data types ("string", "string", "float"), and statistics ("1000 rows", "3 null values") - but NO actual data values. Use a filter/funnel metaphor to show how actual data is stripped away.
-Style: Technical diagram with clear before/after comparison. Use icons for data types (text icon, number icon, etc.). Color code: raw data in gray/neutral, schema in blue/safe colors. */}
+<Mermaid
+  chart={`
+flowchart LR
+    subgraph "Raw Data (Sensitive)"
+        Row1["Row 1: {id:1, name:'John', salary:50k}"]
+        Row2["Row 2: {id:2, name:'Jane', salary:60k}"]
+    end
+
+    Extractor[("Schema Extractor")]
+
+    subgraph "Safe Schema (Meta-data)"
+        Meta1["Column: id (int)"]
+        Meta2["Column: name (str, masked)"]
+        Meta3["Column: salary (float)"]
+        Stat["Rows: 1000"]
+    end
+
+    Row1 & Row2 --> Extractor
+    Extractor -->|Strip Values| Meta1 & Meta2 & Meta3 & Stat
+
+    style Row1 fill:#f99,stroke:#333
+    style Row2 fill:#f99,stroke:#333
+    style Meta1 fill:#9f9,stroke:#333
+    style Meta2 fill:#9f9,stroke:#333
+    style Meta3 fill:#9f9,stroke:#333
+
+`}
+caption="Schema Extraction: Converting sensitive rows into harmless meta-data descriptions."
+/>
 
 ```python
 import pandas as pd
@@ -617,9 +664,29 @@ def generate_analysis_code(schema: dict, query: str) -> str:
 
 ### Step 3: Code Validation
 
-{/* IMAGE_PLACEHOLDER: Create an illustration of the code validation security checkpoint:
-Show generated Python code entering a security scanner (represented as a checkpoint gate or TSA-style scanner). Inside the scanner, show multiple validation layers: 1) AST Parser checking syntax, 2) Import Blocker with a list of forbidden modules (os, sys, subprocess) marked with X symbols, 3) Function Blocker checking for dangerous functions (exec, eval, open) also marked with X, 4) Pattern Detector scanning for data exfiltration attempts (base64 encoding, network calls). Safe code gets a green checkmark and passes through; malicious code gets a red X and is blocked. Show examples of blocked code snippets in red bubbles.
-Style: Security-focused illustration with checkpoint/scanner metaphor. Use red for threats, green for safe code, yellow for warnings. Include visual representations of code snippets being analyzed. */}
+<Mermaid
+  chart={`
+flowchart TD
+    Input[Generated Code] --> AST[1. AST Parser]
+    AST --> Imports{Forbidden Imports?}
+    
+    Imports -->|Yes: os, sys, requests| Reject[❌ REJECT]
+    Imports -->|No| Funcs{Forbidden Funcs?}
+    
+    Funcs -->|Yes: exec, eval, open| Reject
+    Funcs -->|No| Patterns{Data Exfil Patterns?}
+    
+    Patterns -->|Yes: base64, to_json| Reject
+    Patterns -->|No| Approve[✅ APPROVE]
+    
+    Approve --> Sandbox[Execute in Sandbox]
+
+    style Reject fill:#f66,color:black
+    style Approve fill:#6f6,color:black
+
+`}
+caption="The Security Checkpoint: Every line of code is scanned before it can touch user data."
+/>
 
 ```python
 import ast
@@ -664,23 +731,33 @@ def validate_code(code: str) -> tuple[bool, str]:
 
 ### Enhanced Code Validation (2024-2025)
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Code Security Validator Playground
-Create an interactive security testing tool where learners can:
-1. Write or paste Python code snippets in a code editor
-2. Click "Validate" to run the security checks
-3. See real-time results showing:
-   - ✅ Passed checks (syntax valid, no forbidden imports, no forbidden functions)
-   - ❌ Failed checks with specific error messages ("Forbidden import: os", "Forbidden function: eval")
-   - ⚠️ Warnings (suspicious patterns detected, data export attempts)
-4. Provide preset "attack examples" they can test:
-   - "Direct Import Attack" - code with `import os`
-   - "Indirect Import Attack" - code with `__import__('requests')`
-   - "Base64 Exfiltration" - code with `base64.b64encode(df.to_json())`
-   - "Safe Code" - legitimate pandas analysis code
-5. Show which validation layer caught each issue (AST parser, import blocker, function blocker, pattern detector)
-6. Display a security score and explanation of why code passed/failed
-This hands-on tool helps learners understand security validation deeply and test their own code patterns.
-Component location: After the EnhancedCodeValidator class definition, before "Common Attack Vectors" section */}
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Validation Pipeline"
+        Input[User Code] --> AST{AST Parser}
+        
+        AST -->|Imports| ImportCheck{Import<br/>Blocker}
+        AST -->|Functions| FuncCheck{Function<br/>Blocker}
+        AST -->|Patterns| PatternCheck{Pattern<br/>Detector}
+        
+        ImportCheck -->|import os| Fail1[❌ Blocked]
+        FuncCheck -->|eval()| Fail2[❌ Blocked]
+        PatternCheck -->|base64| Warn[⚠️ Warning]
+        
+        ImportCheck -->|Safe| Pass{Clean}
+        FuncCheck -->|Safe| Pass
+        
+        Pass --> Score[Security Score<br/>✅ Safe to Execute]
+    end
+    
+    style Input fill:#e1bee7,stroke:#4a148c
+    style Fail1 fill:#ffcdd2,stroke:#c62828
+    style Fail2 fill:#ffcdd2,stroke:#c62828
+    style Pass fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Code Security Validator: Visualizing the multi-layer defense strategy."
+/>
 
 The basic validator above catches obvious attacks, but sophisticated exfiltration attempts require deeper analysis:
 
@@ -815,17 +892,42 @@ if not is_valid:
 
 ### Common Attack Vectors (2024-2025)
 
-{/* IMAGE_PLACEHOLDER: Create a security threat matrix visualization:
-Show a grid/matrix of common attack vectors with visual examples. Each cell should contain:
-1. Direct Import Attack: Code snippet "import os" with a red shield blocking it
-2. Indirect Import Attack: Code snippet "__import__('os')" with detection radar catching it
-3. Base64 Exfiltration: Data being encoded into base64 string, caught by pattern detector
-4. DNS Exfiltration: Data being embedded in DNS query, blocked by network isolation
-5. Steganography: Data hidden in image pixels, caught by output size limits
-6. Timing Attack: Clock showing data encoded in execution time, blocked by timeout
-7. Error Message Exfil: Exception containing data, caught by error sanitization
-Each attack should show: the attack method (in red), the detection mechanism (in yellow), and the blocking action (in green).
-Style: Security matrix/dashboard design with threat level indicators. Use traffic light colors (red=threat, yellow=detection, green=blocked). Include code snippets and visual metaphors for each attack type. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Attack Vectors"
+        Direct[Direct Import: import os]
+        Indirect[Indirect Import: __import__('os')]
+        Base64[Base64 Exfil]
+        DNS[DNS Exfil]
+        Stego[Steganography]
+        Time[Timing Attack]
+        Error[Error Exfil]
+    end
+    
+    subgraph "Detection & Mitigation"
+        IB[Import Blocklist]
+        FB[Function Blocklist]
+        Regex[Regex Patterns]
+        Net[Network Isolation]
+        Size[Output Limits]
+        Timeout[Timeout Limit]
+        Sanitize[Error Sanitization]
+    end
+    
+    Direct -->|Blocked By| IB
+    Indirect -->|Blocked By| FB
+    Base64 -->|Caught By| Regex
+    DNS -->|Blocked By| Net
+    Stego -->|Capped By| Size
+    Time -->|Halted By| Timeout
+    Error -->|Cleaned By| Sanitize
+    
+    style Direct fill:#ffcdd2,stroke:#c62828
+    style IB fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Security Threat Matrix: Multi-layered defense strategy against common attack vectors."
+/>
 
 <Callout type="warning">
   **Security Note**: LLMs can be manipulated via prompt injection to generate
@@ -875,9 +977,38 @@ def scan_with_bandit(code: str) -> Tuple[bool, str]:
 
 ### Step 4: Secure Sandbox Execution
 
-{/* IMAGE_PLACEHOLDER: Create an illustration of the E2B sandbox execution environment:
-Show a secure, isolated container/sandbox (represented as a transparent box with thick walls and a lock icon). Inside the sandbox, show: the validated Python code, the sensitive data file, pandas/matplotlib libraries, and a Python interpreter running the analysis. Outside the sandbox, show blocked/prohibited elements with X marks: no network access (WiFi icon crossed out), no file system access (folder icon crossed out), no external API calls (cloud icon crossed out). Show results (charts, numbers) being safely extracted from the sandbox through a secure output channel. Include a timeout clock showing 60-second limit.
-Style: Architectural diagram showing isolation boundaries. Use a glass box metaphor for the sandbox to show transparency while maintaining security. Color scheme: sandbox interior in light blue (safe zone), exterior in neutral gray, blocked items in red. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Glass Box (E2B Sandbox)"
+        Code[Validated Python Code]
+        Data[Sensitive Data File]
+        Libs[Pandas / Matplotlib]
+        Exec[Interpreter Process]
+        
+        Code --> Exec
+        Data --> Exec
+        Libs --> Exec
+    end
+    
+    subgraph "Blocked Resources (X)"
+        Net[Network Access]
+        Disk[File System Root]
+        Cloud[External APIs]
+    end
+    
+    Exec -.->|Results Only| Output[System Output]
+    Exec --x Net
+    Exec --x Disk
+    Exec --x Cloud
+    
+    style Net fill:#ffcdd2,stroke:#c62828
+    style Disk fill:#ffcdd2,stroke:#c62828
+    style Cloud fill:#ffcdd2,stroke:#c62828
+    style Exec fill:#e1f5fe,stroke:#01579b
+`}
+  caption="Execution Environment: The sandbox allows computation but prevents data exfiltration."
+/>
 
 ```python
 from e2b_code_interpreter import Sandbox
@@ -1071,11 +1202,27 @@ def execute_in_docker(code: str, data_path: str) -> dict:
 
 ## 15.4.1 Local LLM Option
 
-{/* IMAGE_PLACEHOLDER: Create a comparison diagram showing Cloud LLM vs Local LLM data flows:
-LEFT SIDE - Cloud LLM: Show schema data traveling over the internet (with WiFi/cloud icons) to external LLM API servers (OpenAI, Anthropic, etc.), with labels showing "Schema metadata exposed" and "Network latency 1-5s". Use orange/yellow colors to indicate some risk.
-RIGHT SIDE - Local LLM: Show schema data staying within a local boundary (represented by a house/building icon or local network), processed by Ollama running on local hardware (laptop/server icon), with labels showing "100% on-premises", "Zero external exposure", and "Network latency 5-30s". Use green colors to indicate maximum security.
-CENTER: Show a decision point/fork with factors to consider: "Hardware available?", "Quality requirements?", "Compliance needs?", "Latency tolerance?"
-Style: Side-by-side comparison diagram with clear visual distinction between cloud and local processing. Use network/connectivity icons, security badges, and performance indicators. Include a decision tree or flowchart element to help choose between options. */}
+<Mermaid
+  chart={`
+flowchart LR
+    subgraph "Cloud LLM (Higher Risk)"
+        Schema1[Schema] -->|Internet| Cloud[External API]
+        Cloud -->|Analysis| Result1[Results]
+        style Cloud fill:#ffccbc,stroke:#bf360c
+    end
+    
+    subgraph "Local LLM (Secure)"
+        Schema2[Schema] -->|Local Bus| Local[Ollama / Local Server]
+        Local -->|Analysis| Result2[Results]
+        
+        style Local fill:#c8e6c9,stroke:#2e7d32
+    end
+    
+    Decision{Needs?} -->|Privacy++| Local
+    Decision -->|Intelligence++| Cloud
+`}
+  caption="Deployment Options: Trade off between maximum privacy (Local) and maximum intelligence (Cloud)."
+/>
 
 For maximum privacy, use a local LLM:
 
@@ -1223,9 +1370,29 @@ llm = ChatAnthropic(
 
 ## 15.5 Vector Database: LanceDB
 
-{/* IMAGE_PLACEHOLDER: Create a diagram showing local-first RAG architecture with LanceDB:
-Show a complete data flow: 1) Sensitive documents (PDFs, reports) on the left, 2) Local embedding model (sentence-transformers) processing documents without any cloud API calls (emphasize "100% Local" badge), 3) LanceDB embedded database storing vectors on local disk (show disk icon with database symbol), 4) Query flow showing user question being embedded locally, searching LanceDB, and retrieving relevant chunks, 5) Results being used for analysis - all within a secure perimeter (drawn as a boundary around the entire system). Outside the perimeter, show crossed-out cloud APIs to emphasize no external calls.
-Style: Architecture diagram with clear data flow arrows. Use green/blue colors for the secure local environment, with a prominent boundary line. Include icons for documents, embeddings (vector representations), database, and local processing. Add "No Cloud API Calls" badges at key points. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Local Perimeter"
+        Docs[Documents] -->|Read| Embed[Embedding Model]
+        Embed -->|Vectors| DB[(LanceDB On-Disk)]
+        
+        User[Query] -->|Embed| Vector[Query Vector]
+        Vector -->|Search| DB
+        DB -->|Chunks| Context
+        
+        style Embed fill:#e1bee7,stroke:#4a148c
+        style DB fill:#bbdefb,stroke:#0d47a1
+    end
+    
+    Cloud[Cloud APIs]
+    Embed --x Cloud
+    DB --x Cloud
+    
+    style Cloud fill:#ffcdd2,stroke:#c62828
+`}
+  caption="Local-First RAG: All processing, including embeddings and storage, happens on-device."
+/>
 
 For local-first RAG over sensitive documents, [LanceDB](https://lancedb.github.io/lancedb/) provides an embedded vector database that runs entirely on your machine—no external API calls required.
 
@@ -1440,13 +1607,42 @@ print(result["final_answer"])
 
 ## 15.7 Privacy Guarantees
 
-{/* IMAGE_PLACEHOLDER: Create a privacy data flow diagram showing what data goes where:
-Create a vertical flow chart with three zones (color-coded):
-RED ZONE (Never Exposed): Raw data values shown in a locked vault - "Customer names", "SSN", "Medical records", "Financial transactions" - with multiple locks and "NEVER LEAVES SECURE PERIMETER" label
-YELLOW ZONE (Metadata Only): Schema information shown in transit to LLM - "Column names", "Data types", "Row counts", "Basic statistics" - with warning symbol and "ANONYMIZATION OPTIONAL" note
-GREEN ZONE (Safe to Share): Analysis results and charts shown being delivered to user - "Aggregated statistics", "Visualizations", "Insights", "Summaries" - with checkmark and "SAFE TO DISPLAY" label
-Use arrows to show the flow and barriers/walls between zones. Include a legend explaining the security levels.
-Style: Security-focused data flow diagram with clear visual separation between security zones. Use traffic light colors (red=sensitive, yellow=caution, green=safe). Include icons for different data types and security barriers. */}
+<Mermaid
+  chart={`
+flowchart TD
+    subgraph "Red Zone (Locked Vault)"
+        Raw[Raw Data Values]
+        SSN[PII / SSN]
+        Tx[Transactions]
+    end
+    
+    subgraph "Yellow Zone (Metadata)"
+        Schema[Column Names]
+        Types[Data Types]
+        Stats[Row Counts]
+    end
+    
+    subgraph "Green Zone (Safe)"
+        Agg[Aggregated Stats]
+        Viz[Visualizations]
+        Insights[Insights]
+    end
+    
+    Raw -->|Strip Values| Schema
+    Schema -->|Process| Agg
+    
+    style Raw fill:#ffcdd2,stroke:#c62828
+    style SSN fill:#ffcdd2,stroke:#c62828
+    style Tx fill:#ffcdd2,stroke:#c62828
+    
+    style Schema fill:#fff9c4,stroke:#fbc02d
+    style Types fill:#fff9c4,stroke:#fbc02d
+    
+    style Agg fill:#c8e6c9,stroke:#2e7d32
+    style Viz fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Data Privacy Zoning: Explicit boundaries prevent leakage of sensitive raw data."
+/>
 
 | Data             | Exposure                           |
 | :--------------- | :--------------------------------- |
@@ -1459,21 +1655,46 @@ Style: Security-focused data flow diagram with clear visual separation between s
 
 ### Additional Hardening
 
-{/* IMAGE_PLACEHOLDER: Create an interactive diagram showing the anonymization process:
-Show a before/after comparison with an interactive toggle. BEFORE: Real schema with sensitive column names highlighted in red ("ssn", "hiv_status", "criminal_record", "salary", "credit_score"). AFTER: Anonymized schema with generic labels ("column_0", "column_1", "column_2", "column_3", "column_4") in safe green color. Include a mapping table showing the transformation with bidirectional arrows. Add visual indicators showing this happens BEFORE sending to LLM (with a shield icon) and gets reversed AFTER code generation (with a key icon for de-anonymization).
-Style: Interactive educational diagram with toggle/slider to show transformation. Use color coding: red for sensitive names, green for anonymized names. Include arrows showing the flow and timing of anonymization/de-anonymization in the pipeline. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Schema as Original Schema
+    participant Anon as Anonymizer
+    participant LLM
+    participant Code as Generated Code
+    participant Deanon as De-anonymizer
+    
+    Schema->>Anon: {ssn, income, name}
+    Anon->>LLM: {col_0, col_1, col_2} (Mapping Saved)
+    LLM->>Code: df['col_0'].mean()
+    Code->>Deanon: df['col_0'].mean()
+    Note right of Deanon: Restore original names
+    Deanon->>Deanon: Replace col_0 -> ssn
+    Deanon-->>Code: df['ssn'].mean()
+    
+    Note over Schema, Anon: Sensitive names hidden from LLM
+`}
+  caption="Schema Anonymization: The LLM works with aliases, preventing potential PII leakage in prompts."
+/>
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Schema Anonymization Playground
-Create an interactive tool where learners can:
-1. Input their own column names (or use preset examples like "patient_ssn", "credit_card", "medical_diagnosis")
-2. See the anonymization process in real-time (column names → column_0, column_1, etc.)
-3. Input a sample query like "What's the average of patient_ssn?"
-4. See how the LLM receives the anonymized version: "What's the average of column_0?"
-5. View generated code with anonymized names
-6. See the de-anonymization step that converts code back to use real column names
-7. Toggle between "Show to LLM" view and "Execute in Sandbox" view
-This helps learners understand the complete anonymization workflow and builds confidence in the privacy-preserving approach.
-Component location: After the "Additional Hardening" code block, before section 15.8 */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant System
+    participant LLM
+    participant Sandbox
+    
+    User->>System: Query: "Avg of patient_ssn?"
+    System->>System: Anonymize: patient_ssn -> col_0
+    System->>LLM: Query: "Avg of col_0?"
+    LLM->>System: Code: df['col_0'].mean()
+    System->>System: De-anonymize: col_0 -> patient_ssn
+    System->>Sandbox: Execute: df['patient_ssn'].mean()
+    Sandbox-->>User: Result
+`}
+  caption="Privacy Flow: How data is masked before reaching the LLM."
+/>
 
 ```python
 def anonymize_schema(schema: dict) -> dict:
@@ -1501,12 +1722,25 @@ def deanonymize_code(code: str, column_map: dict) -> str:
 
 ## 15.8 Compliance Considerations
 
-{/* IMAGE_PLACEHOLDER: Create an infographic showing the three major compliance frameworks:
-Top section: GDPR shield with EU flag colors, showing key requirements (data minimization, right to erasure, human oversight, explainability) with checkmark icons.
-Middle section: HIPAA shield with medical cross symbol, showing technical safeguards (access control, audit controls, integrity controls, transmission security) with lock icons.
-Bottom section: SOC2 shield with enterprise/building icon, showing trust service criteria (logical access, system boundaries, data transmission, system monitoring, incident response) with monitoring icons.
-In the center, show how the Local Data Analyst architecture addresses all three: schema-only approach, local processing, audit logging, sandbox isolation. Use connecting lines to show which architectural features satisfy which compliance requirements.
-Style: Professional compliance infographic with shield/badge designs for each framework. Use official colors where applicable (EU blue/yellow for GDPR, medical blue for HIPAA, corporate blue/gray for SOC2). Clean, authoritative design suitable for enterprise presentations. */}
+<Mermaid
+  chart={`
+mindmap
+  root((Compliance))
+    GDPR
+        Data Minimization
+        Right to Erasure
+        Human Oversight
+    HIPAA
+        Access Control
+        Audit Trails
+        Transmission Sec
+    SOC2
+        System Boundaries
+        Monitoring
+        Incident Response
+`}
+  caption="Regulatory Alignment: The architecture maps directly to key compliance requirements."
+/>
 
 When deploying privacy-preserving agents in regulated industries, understanding compliance requirements is essential. This section covers key regulations and implementation patterns.
 
@@ -1702,25 +1936,24 @@ class DataRetentionManager:
 
 ### Compliance Checklist
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Compliance Assessment Tool
-Create an interactive compliance checker where learners can:
-1. Select their target compliance framework (GDPR, HIPAA, SOC2, or All)
-2. Answer yes/no questions about their implementation:
-   - "Do you send only schema (not data) to LLMs?" 
-   - "Do you validate all generated code?"
-   - "Do you log all data access attempts?"
-   - "Do you support data deletion requests?"
-   - etc.
-3. See real-time compliance score (e.g., "GDPR: 5/6 requirements met")
-4. Get specific recommendations for missing requirements
-5. Export a compliance report showing:
-   - Which requirements are satisfied
-   - Which need attention
-   - Implementation suggestions for gaps
-   - Relevant code examples from this module
-6. Compare their architecture against the reference implementation
-This tool helps learners assess their own implementations and understand compliance requirements practically.
-Component location: After the "Compliance Checklist" heading, before the GDPR/HIPAA/SOC2 checkbox lists */}
+<Mermaid
+  chart={`
+mindmap
+  root((Compliance))
+    GDPR
+        Schema Isolation ✅
+        Right to Delete ❌
+    HIPAA
+        No PHI to LLM ✅
+        Audit Logs ✅
+    SOC2
+        Access Control ✅
+        Change Mgmt ⚠️
+    
+    Score[Compliance Score: 4/6]
+`}
+  caption="Compliance Assessment: Verify implementation against standards."
+/>
 
 Use this checklist when deploying to regulated environments:
 

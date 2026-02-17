@@ -60,7 +60,32 @@ day: 25
 
 ## From Capstone to Production
 
-{/* IMAGE_PLACEHOLDER: A side-by-side comparison diagram showing "Day 07 Foundation" (simple flowchart with basic components) on the left and "Day 25 Production System" (complex architecture with parallel processing, quality loops, and monitoring) on the right. Use arrows and visual indicators to show the evolution. Style: Modern, technical diagram with blue/green color scheme. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Day 07 Foundation"
+        In[User Input] --> Res[Research Loop]
+        Res --> Rep[Report]
+    end
+    
+    subgraph "Day 25 Production"
+        Scope[Phase 1: Scope 🔍] --> Par[Phase 2: Parallel Research ⚡]
+        Par --> Write[Phase 3: Write & Critic ✍️]
+        
+        Write --> Q[Quality Gate 🛡️]
+        Q -->|Pass| Done[Final Report]
+        Q -->|Fail| Write
+        
+        Par -.-> Cache[(Cache)]
+        Par -.-> Limit[Cost Control]
+    end
+    
+    style Scope fill:#e3f2fd
+    style Par fill:#e8f5e9
+    style Write fill:#fff3e0
+`}
+  caption="Evolution: From basic loop to production orchestrator."
+/>
 
 In Day 07, you built a working Deep Research Agent that coordinates multiple agents to produce comprehensive reports. Today, we transform that foundation into a **production-grade system** by addressing the challenges that emerge at scale:
 
@@ -88,7 +113,21 @@ In Day 07, you built a working Deep Research Agent that coordinates multiple age
 
 ## The Deep Research Landscape in 2025
 
-{/* IMAGE_PLACEHOLDER: A timeline visualization showing the evolution of deep research agents from 2023-2025. Include key milestones: GPT-4 launch, LangGraph release, OpenAI Deep Research, Perplexity Deep Research, and Gemini Deep Research. Each milestone should have an icon and brief description. Style: Horizontal timeline with branching paths, modern tech aesthetic. */}
+<Mermaid
+  chart={`
+timeline
+    title Evolution of Deep Research Agents
+    2023 : GPT-4 Launch
+         : Basic AutoGPT agents
+    2024 : LangGraph Release
+         : Multi-agent patterns mature
+    Early 2025 : OpenAI Deep Research (o3)
+               : "Rabbit hole" reasoning
+    Mid 2025 : Perplexity Deep Research
+             : Gemini Deep Research (1M tokens)
+`}
+  caption="Timeline: From experimental scripts to production systems."
+/>
 
 Before diving into implementation, let's understand how production deep research agents have evolved:
 
@@ -379,7 +418,37 @@ graph TD
 
 ### Why Three Phases?
 
-{/* IMAGE_PLACEHOLDER: An infographic showing three phases as connected gears or pipeline stages. Phase 1 (Scoping) shows a funnel narrowing down from vague to specific. Phase 2 (Research) shows multiple parallel arrows branching out and converging. Phase 3 (Writing) shows a single stream with feedback loops. Include time savings and cost reduction metrics for each phase. Style: Clean, modern infographic with icons and data visualization. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "1. Scope"
+        A[Problem] -->|Refine| B[Brief]
+    end
+    
+    subgraph "2. Research (Fan-Out)"
+        B --> R1[Topic A]
+        B --> R2[Topic B]
+        B --> R3[Topic C]
+        R1 & R2 & R3 --> Agg[Aggregate]
+    end
+    
+    subgraph "3. Write & Critic"
+        Agg --> Draft[Draft]
+        Draft --> Critic{Critique}
+        Critic -->|Revise| Draft
+        Critic -->|Approve| Final[Report]
+    end
+    
+    style A fill:#e1bee7
+    style B fill:#ce93d8
+    style R1 fill:#b3e5fc
+    style R2 fill:#81d4fa
+    style R3 fill:#4fc3f7
+    style Draft fill:#c8e6c9
+    style Final fill:#81c784
+`}
+  caption="The Three Phases: Scoping, Parallel Research, and iterative Writing."
+/>
 
 **Phase 1 (Scoping)** prevents wasted computation. Research from OpenAI and Perplexity shows that users rarely provide sufficient context in their initial request. A 30-second clarification can save 10 minutes of misdirected research and significantly reduce costs.
 
@@ -595,7 +664,26 @@ class CritiqueResult(BaseModel):
 
 ## 8.4 Phase 1: Scoping Implementation
 
-{/* IMAGE_PLACEHOLDER: A flowchart showing the clarification decision tree. Start with "User Query" → "Clarity Check" (diamond decision) → If vague: "Ask 2-3 Questions" → "User Responds" → loop back. If clear: "Generate Brief" → "Brief Ready". Include example queries at each stage (vague: "AI", clear: "Impact of transformers on NLP since 2017"). Style: Clean flowchart with decision diamonds and process rectangles. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    Query([User Query]) --> ClarityCheck{Clarity Check}
+    ClarityCheck -->|Vague e.g. 'AI'| AskQuestions[Ask 2-3 Questions]
+    AskQuestions --> UserResponds[User Responds]
+    UserResponds --> ClarityCheck
+    ClarityCheck -->|Clear e.g. 'Transformer Impact'| GenerateBrief[Generate Brief]
+    GenerateBrief --> BriefReady([Brief Ready])
+    
+    style ClarityCheck fill:#fff9c4,stroke:#fbc02d
+    style AskQuestions fill:#ffccbc,stroke:#d84315
+    style GenerateBrief fill:#c8e6c9,stroke:#2e7d32
+    style Query fill:#e1f5fe,stroke:#0277bd
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Clarification Decision Logic</p>
 
 The scoping phase transforms a vague user query into a precise research brief. This is where we apply the **clarification pattern** used by OpenAI's Deep Research and Perplexity.
 
@@ -716,7 +804,33 @@ This is where the production architecture shines. We use LangGraph's `Send` API 
 
 ### The Context Isolation Pattern
 
-{/* IMAGE_PLACEHOLDER: A comparison diagram showing "Context Pollution" vs "Context Isolation". Left side: All researchers receiving full state (messy, overlapping circles with arrows everywhere). Right side: Each researcher receiving only their sub-topic (clean, isolated boxes with minimal connections). Include token count comparison: "Full State: 15,000 tokens" vs "Isolated: 2,000 tokens per researcher". Style: Clean technical diagram with color-coded data flows. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Context Pollution (Bad)"
+        Full[Full State: 15k tokens] --> A1[Agent 1]
+        Full --> A2[Agent 2]
+        Full --> A3[Agent 3]
+        A1 -.->|Noise| A2
+    end
+    
+    subgraph "Context Isolation (Good)"
+        Brief[Brief] --> ISO1[Topic A: 2k tokens]
+        Brief --> ISO2[Topic B: 2k tokens]
+        Brief --> ISO3[Topic C: 2k tokens]
+        
+        ISO1 --> WA[Worker A]
+        ISO2 --> WB[Worker B]
+        ISO3 --> WC[Worker C]
+    end
+    
+    style Full fill:#ffcdd2
+    style ISO1 fill:#c8e6c9
+    style ISO2 fill:#c8e6c9
+    style ISO3 fill:#c8e6c9
+`}
+  caption="Efficiency: Reducing token costs via context isolation."
+/>
 
 ```python
 # agents/research.py
@@ -917,8 +1031,6 @@ def researcher_node(state: dict) -> dict:
 
 ### Visualizing the Fan-Out/Fan-In Pattern
 
-{/* IMAGE_PLACEHOLDER: An animated visualization showing the fan-out/fan-in pattern in action. Start with a single supervisor node that splits into 3-5 parallel researcher nodes (fan-out), each with a progress indicator. Show data flowing back to the supervisor (fan-in) with a merge operation. Include timing indicators showing parallel execution saves time. Style: Interactive animation with play/pause controls, modern UI with smooth transitions. */}
-
 <div className="my-8">
   <Mermaid
     chart={`
@@ -950,7 +1062,28 @@ sequenceDiagram
 
 ### Understanding LangGraph's Super-Steps
 
-{/* IMAGE_PLACEHOLDER: A step-by-step visualization of LangGraph's super-step execution model. Show 3 super-steps as horizontal layers: Step 1 (supervisor runs), Step 2 (multiple researchers run in parallel with sync barrier), Step 3 (supervisor evaluates). Use a timeline view with synchronization points clearly marked. Include the Pregel model reference with a small Google logo. Style: Technical diagram with clear temporal flow, use different colors for each step. */}
+<Mermaid
+  chart={`
+gantt
+    title LangGraph Super-Step Execution
+    dateFormat X
+    axisFormat %s
+    
+    section Step 1
+    Supervisor Plan   :active, s1, 0, 10
+    
+    section Step 2 (Parallel)
+    Researcher A      :r1, 10, 40
+    Researcher B      :r2, 10, 35
+    Researcher C      :r3, 10, 45
+    Sync Barrier      :crit, milestone, 45, 0
+    
+    section Step 3
+    Supervisor Review :active, s3, 45, 55
+    Writer            :w1, 55, 75
+`}
+  caption="Parallel Execution: Researchers run concurrently in one super-step."
+/>
 
 LangGraph executes in discrete **super-steps**: nodes scheduled together run in parallel, then the system synchronizes before the next step. This is based on the Pregel model (used by Google for large-scale graph processing).
 
@@ -983,7 +1116,23 @@ LangGraph executes in discrete **super-steps**: nodes scheduled together run in 
 
 ## 8.6 Phase 3: Writing with Quality Loops
 
-{/* IMAGE_PLACEHOLDER: A circular feedback loop diagram showing the Writer-Critic cycle. Show: Writer generates draft → Critic evaluates (with scoring rubric visible) → Decision point (Approve/Revise) → If revise, loop back to Writer with critique. Include a counter showing "Revision 1 of 3" and quality score progression: "6.5 → 7.8 → 8.5". Style: Circular flow diagram with quality metrics visualization. */}
+<Mermaid
+  chart={`
+graph TD
+    Draft[Writer generates Draft] --> Review{Critic Reviews}
+    
+    Review -->|Score < 8| Critique[Generate Critique]
+    Critique -->|Feedback| Revise[Writer Revises]
+    Revise --> Draft
+    
+    Review -->|Score >= 8| Approve[Approve & Finalize]
+    
+    style Draft fill:#e8f5e9
+    style Review fill:#fff9c4
+    style Approve fill:#c8e6c9
+`}
+  caption="Quality Loop: The Writer-Critic reflection cycle."
+/>
 
 The writing phase uses a **reflection pattern** where a Critic reviews the Writer's output and requests revisions until quality thresholds are met.
 
@@ -1413,7 +1562,29 @@ graph TD
 
 ## 8.8 Human-in-the-Loop Approval Gates
 
-{/* IMAGE_PLACEHOLDER: A workflow diagram showing human-in-the-loop checkpoints. Show the agent workflow as a flowchart with three "pause" points marked with hand icons: 1) After clarification questions, 2) After brief generation (with approve/modify/cancel options), 3) Before expensive research phase. Include UI mockups of approval dialogs. Style: User-friendly workflow diagram with interactive UI elements. */}
+<Mermaid
+  chart={`
+graph TD
+    User -->|Submit Topic| Clarify
+    Clarify -->|Questions| User
+    Clarify -->|Brief| Gate1{Approval Gate ✋}
+    
+    Gate1 -->|Cancel| Stop
+    Gate1 -->|Modify| Refine[Update Brief]
+    Refine --> Gate1
+    Gate1 -->|Approve| Research[Expensive Research 💸]
+    
+    Research --> Write
+    Write --> Gate2{Final Review ✋}
+    
+    Gate2 -->|Approve| Publish
+    Gate2 -->|Revise| Write
+    
+    style Gate1 fill:#ffccbc,stroke:#d84315
+    style Gate2 fill:#ffccbc,stroke:#d84315
+`}
+  caption="Human-in-the-Loop: Checkpoints for cost and quality control."
+/>
 
 Production systems need human oversight at critical decision points. LangGraph's `interrupt` feature enables this pattern.
 
@@ -1467,7 +1638,30 @@ def brief_generation_node_with_approval(state: ResearchState) -> dict:
 
 ### Resuming After Interruption
 
-{/* IMAGE_PLACEHOLDER: A state diagram showing the interrupt-resume flow. Show: Agent running → Interrupt triggered (pause icon) → State saved to checkpoint → User reviews → User decision (approve/modify/cancel) → Resume from checkpoint → Agent continues. Include visual indicators for state persistence. Style: Technical state machine diagram with clear transitions. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+stateDiagram-v2
+    [*] --> Running
+    Running --> Interrupted: Interrupt Triggered
+    Interrupted --> CheckpointSaved: Save State
+    CheckpointSaved --> UserReview: Await User Input
+    
+    state UserReview {
+        [*] --> Decision
+        Decision --> Approve
+        Decision --> Modify
+        Decision --> Cancel
+    }
+    
+    UserReview --> Resuming: Approve/Modify
+    Resuming --> Running: Resume from Checkpoint
+    UserReview --> [*]: Cancel
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Human-in-the-Loop Interrupt Flow</p>
 
 ```python
 # Example: Handling the interrupt in an application
@@ -1515,7 +1709,17 @@ graph.invoke(
 
 ## 8.9 Cost Optimization Strategies
 
-{/* IMAGE_PLACEHOLDER: A cost breakdown visualization showing typical research agent expenses. Use a pie chart or stacked bar chart showing: Model API calls (60%), Search API calls (20%), Storage/Caching (10%), Observability (10%). Include a comparison showing costs before and after optimization techniques. Style: Financial dashboard aesthetic with dollar signs and percentage indicators. */}
+<Mermaid
+  chart={`
+pie
+    title "Typical Cost Breakdown (Standard Run)"
+    "Model API (Writing)" : 60
+    "Search API" : 20
+    "Model API (Research)" : 15
+    "Storage & Obs" : 5
+`}
+  caption="Cost Drivers: Why optimization matters (Writing is expensive!)."
+/>
 
 Production research agents can be expensive. Here are strategies to control costs, updated with 2025 pricing and techniques:
 
@@ -1559,7 +1763,26 @@ def get_model(task: str, temperature: float = 0.3):
 
 ### 2. Prompt Caching (Up to 90% Cost Reduction)
 
-{/* IMAGE_PLACEHOLDER: A before/after comparison showing prompt caching impact. Left side: Traditional approach with full prompt processing on each call (show repeated system prompts being processed). Right side: Cached approach with only dynamic content being processed (show cached prefix in green, new content in blue). Include cost savings calculation: "$2.00 → $0.20 (90% savings)". Style: Split-screen comparison with visual indicators for cached vs. fresh content. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Without Caching ($2.00)"
+        Req1[Prompt 1: Full Context]
+        Req2[Prompt 2: Full Context]
+        Req3[Prompt 3: Full Context]
+    end
+    
+    subgraph "With Caching ($0.20)"
+        Cache[Cached Prefix 📦]
+        Cache --> P1[Diff 1]
+        Cache --> P2[Diff 2]
+        Cache --> P3[Diff 3]
+    end
+    
+    style Cache fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Prompt Caching: Reuse static instructions to slash costs by 90%."
+/>
 
 Prompt caching is one of the most impactful cost optimizations available in 2025. By structuring prompts so providers can reuse processed prefixes, you can dramatically reduce costs.
 
@@ -1812,7 +2035,24 @@ def researcher_node_with_cost_tracking(state: dict, cost_tracker: CostTracker) -
 
 ## 8.10 Observability: Tracing Research Workflows
 
-{/* IMAGE_PLACEHOLDER: A dashboard mockup showing key observability metrics for a research agent. Include: Real-time trace visualization (waterfall chart), cost tracking graph over time, success/failure rate pie chart, latency distribution histogram, and error log panel. Style: Modern monitoring dashboard with dark theme, similar to Datadog or Grafana. */}
+<Mermaid
+  chart={`
+graph TD
+    Dashboard[Observability Dashboard]
+    
+    Dashboard --> Traces[Trace Waterfall\n(LangFuse)]
+    Dashboard --> Costs[Cost Tracker\n($1.45 / run)]
+    Dashboard --> Quality[Quality Scores\n(8.5/10)]
+    Dashboard --> Errors[Error Rate\n(2%)]
+    
+    style Dashboard fill:#263238,stroke:#eceff1,color:#fff
+    style Traces fill:#37474f,stroke:#cfd8dc,color:#fff
+    style Costs fill:#37474f,stroke:#cfd8dc,color:#fff
+    style Quality fill:#37474f,stroke:#cfd8dc,color:#fff
+    style Errors fill:#37474f,stroke:#cfd8dc,color:#fff
+`}
+  caption="Observability: Monitoring performance, cost, and quality."
+/>
 
 Production agents need observability. You can't debug what you can't see. In 2025, several platforms have emerged as leaders for AI agent observability:
 
@@ -1945,7 +2185,17 @@ OBSERVABILITY_CHECKLIST = {
 
 ## 8.11 Evaluating Research Agent Quality
 
-{/* IMAGE_PLACEHOLDER: A quality evaluation radar chart showing multiple dimensions: Factual Accuracy, Source Quality, Citation Coverage, Topic Coverage, Depth, Organization, Clarity, Actionability, and Audience Fit. Show two overlays: "Baseline Agent" (smaller polygon) and "Optimized Agent" (larger polygon) to demonstrate improvement. Include overall scores. Style: Professional radar/spider chart with clear labels and legend. */}
+<Mermaid
+  chart={`
+radar
+    title Research Quality Metrics
+    axes: Accuracy, Source Quality, Citation %, Depth, Clarity, Actionability
+    
+    "Baseline Agent" : [6, 5, 60, 5, 7, 4]
+    "Optimized Agent" : [9, 9, 95, 8, 9, 8]
+`}
+  caption="Quality Evaluation: Measuring improvement across multiple dimensions."
+/>
 
 How do you know if your research agent is actually good? Traditional metrics like accuracy don't capture the nuances of research quality. Here's a framework for evaluation:
 
@@ -2052,7 +2302,18 @@ def test_research_quality():
 
 ### Benchmarking Against Standards
 
-{/* IMAGE_PLACEHOLDER: A comparison matrix showing different agent benchmarks (SWE-bench, WebArena, τ-Bench, AgentBench) with columns for: What it tests, Sample tasks, Relevance score (1-10) for research agents, and Key metrics. Use a heatmap color scheme to show relevance levels. Style: Professional comparison matrix with color-coded cells. */}
+<Mermaid
+  chart={`
+graph LR
+    SWE[SWE-bench] -.->|Code| Agent
+    Web[WebArena] -.->|Browsing| Agent
+    Tau[τ-Bench] -.->|Tasks| Agent
+    Agent[Deep Research Agent] -->|Produces| Report
+    
+    style Agent fill:#e1f5fe
+`}
+  caption="Benchmarks: Validating agent capabilities against industry standards."
+/>
 
 For more rigorous evaluation, consider these agent benchmarks:
 
@@ -2393,7 +2654,42 @@ Add a "fact-checker" node after the writer that verifies claims against the orig
 
 ## Deployment Checklist
 
-{/* IMAGE_PLACEHOLDER: A deployment pipeline visualization showing stages: Pre-Deployment (environment setup, dependencies) → Smoke Tests (4 test scenarios with pass/fail indicators) → Production Deployment → Post-Deployment Monitoring (metrics dashboard) → Rollback Plan (emergency procedures). Use a horizontal pipeline with checkpoints and status indicators. Style: DevOps pipeline diagram with green/red status lights. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    Dev[Code Commit] --> Setup[Pre-Deploy Logic]
+    Setup --> Tests[Smoke Tests]
+    
+    subgraph Smoke_Tests [Test Suite]
+        direction TB
+        T1[Unit Tests]
+        T2[Integration]
+        T3[Security Scan]
+    end
+    
+    Tests --> T1
+    Tests --> T2
+    Tests --> T3
+    
+    T1 --> Deploy{Pass?}
+    T2 --> Deploy
+    T3 --> Deploy
+    
+    Deploy -->|Yes| Prod[Production]
+    Deploy -->|No| Block[Block & Notify]
+    
+    Prod --> Monitor[Monitoring]
+    Monitor --> Rollback[Rollback Plan]
+    
+    style Setup fill:#bbdefb
+    style Tests fill:#ffccbc
+    style Prod fill:#c8e6c9
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Research Agent Deployment Pipeline</p>
 
 Before deploying your research agent to production:
 

@@ -259,7 +259,13 @@ We use Node.js for the frontend (Next.js) and lightweight agents.
 ```bash
 # Install nvm (if not already installed)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+```
 
+<Callout type="warning">
+  **Important:** After installing nvm, you must restart your terminal or run `source ~/.bashrc` (or `source ~/.zshrc` for Zsh users) before the `nvm` command will be available.
+</Callout>
+
+```bash
 # Install and use LTS version
 nvm install --lts
 nvm use --lts
@@ -273,6 +279,8 @@ We use Python for backend agents, graph logic, and data processing.
 - **Requirement:** Python 3.10 or higher.
 - **Recommendation:** Use `uv` (a blazing-fast Python package manager written in Rust).
 
+**Option 1: Using uv (Recommended)**
+
 ```bash
 # Install uv (Recommended - replaces pip, venv, pyenv, and more)
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -281,12 +289,25 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv init my-agent-project
 cd my-agent-project
 uv add langgraph langchain-openai
+```
 
-# OR use standard pip/venv (slower but familiar)
+**Option 2: Using standard pip/venv**
+
+```bash
+# Standard pip/venv (slower but familiar)
 python3 -m venv venv
 source venv/bin/activate
 pip install langgraph langchain-openai
 ```
+
+<Callout type="info">
+  **VS Code Python Interpreter:** If VS Code doesn't automatically detect your virtual environment, you may need to manually select the interpreter:
+  1. Open Command Palette (`Cmd/Ctrl + Shift + P`)
+  2. Type "Python: Select Interpreter"
+  3. Choose the interpreter from your venv (`./venv/bin/python`)
+  
+  This is a [known VS Code issue](https://github.com/microsoft/vscode-python/issues/14327#issuecomment-757408341) that can cause import errors even when packages are installed correctly.
+</Callout>
 
 <Callout type="tip">
   **Why uv?** It's 10-100x faster than pip, handles Python version management,
@@ -322,14 +343,51 @@ Required for running local LLMs (Ollama) and sandboxed environments (E2B simulat
   caption="Your agent orchestrates intelligence from OpenAI/Anthropic, searches via Tavily, and is monitored by LangSmith."
 />
 
-You will need access to foundation models. We refrain from using "free tiers" for production-grade agent engineering as rate limits will block your progress.
+You will need access to foundation models. While we recommend paid tiers for production-grade work, there are budget-friendly options for learning.
+
+### LLM Providers
 
 | Provider      | Purpose                                       | Key Variable        |
 | :------------ | :-------------------------------------------- | :------------------ |
 | **OpenAI**    | General Reasoning (GPT-4o, GPT-5)             | `OPENAI_API_KEY`    |
 | **Anthropic** | Coding & Complex Logic (Claude 4 Sonnet/Opus) | `ANTHROPIC_API_KEY` |
-| **Tavily**    | Search Tool for Agents                        | `TAVILY_API_KEY`    |
-| **LangSmith** | Tracing & Debugging (highly recommended)      | `LANGSMITH_API_KEY` |
+
+<Callout type="warning">
+  **OpenAI Payment Required:** OpenAI allows you to generate API keys on free accounts, but **API calls require adding a payment method and credits**. You'll get authentication errors without credits loaded. Add at least **$5-10 in credits** to your account before starting to avoid confusion. Visit [platform.openai.com/settings/organization/billing](https://platform.openai.com/settings/organization/billing) to add credits.
+</Callout>
+
+**Budget-Friendly Alternatives:**
+
+- **OpenRouter** (Recommended for learning) — Provides access to many models (OpenAI, Anthropic, open-source) with pay-as-you-go pricing, often cheaper than direct API access. Great for experimenting with different models.
+- **Groq** — Free tier with rate limits, extremely fast inference. Perfect for initial testing and learning.
+- **Ollama** — Free, runs locally on your machine. We cover this in Day 16. Great for privacy-sensitive work and unlimited local experimentation.
+- **Together AI / Fireworks AI / Mistral API** — Alternative hosted providers with competitive pricing.
+
+### Search Tools
+
+| Provider   | Purpose              | Key Variable      |
+| :--------- | :------------------- | :---------------- |
+| **Tavily** | Search Tool for Agents | `TAVILY_API_KEY` |
+
+**Alternatives:**
+
+- **Tavily** (Recommended) — Best integration for AI agents, has a free tier with 1,000 searches/month.
+- **SerpAPI / Serper.dev** — Google search APIs with different pricing models.
+- **Brave Search API** — Privacy-focused search with a free tier.
+- **SearXNG** — Free, self-hosted metasearch engine for complete control.
+
+### Observability & Tracing
+
+| Provider      | Purpose                                  | Key Variable        |
+| :------------ | :--------------------------------------- | :------------------ |
+| **LangSmith** | Tracing & Debugging (highly recommended) | `LANGSMITH_API_KEY` |
+
+**Alternatives:**
+
+- **LangSmith** (Recommended for beginners) — Best LangChain integration, free tier available. Sign up at [smith.langchain.com](https://smith.langchain.com).
+- **Langfuse** — Open-source, self-hostable alternative with great features.
+- **Phoenix by Arize** — Open-source observability for LLM applications.
+- **Weights & Biases / Helicone** — Other options with different feature sets.
 
 <Callout type="info">
   **Model Evolution:** AI models are updated frequently. While we reference
@@ -344,13 +402,6 @@ You will need access to foundation models. We refrain from using "free tiers" fo
   similar. Budget $20-50 for completing this course, depending on how much you
   experiment. Use smaller models (GPT-4o-mini, Claude 3.5 Haiku) for initial
   testing to save costs.
-</Callout>
-
-<Callout type="info">
-  **LangSmith:** While optional for getting started, LangSmith is essential for
-  debugging agents in production. Sign up at
-  [smith.langchain.com](https://smith.langchain.com) for free tier access. We'll
-  use it extensively starting in Week 2.
 </Callout>
 
 _(Optional later: E2B for sandboxed code execution)_
@@ -421,16 +472,11 @@ cd AgenticEngineer
 # Navigate to the web directory and install dependencies
 cd web
 npm install
-
-# If using Python for later modules:
-uv sync  # If using uv (recommended)
-# OR
-pip install -r requirements.txt  # If using pip
 ```
 
 <Callout type="info">
   The course materials, code examples, and exercises are all included in this
-  repository under the `web/content/` directory.
+  repository under the `web/content/` directory. This is a **Node.js application** — the Python environment you set up in Step 2 will be used for later modules that involve Python-based agent development, not for running this web app.
 </Callout>
 
 ### Configure Environment

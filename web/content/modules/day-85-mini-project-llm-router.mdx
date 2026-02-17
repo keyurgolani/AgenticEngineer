@@ -28,12 +28,30 @@ day: 85
 />
 
 <Callout type="info">
-  **Series Context:** Mini-project 4 of 5 in the 90-day curriculum. This service routes requests to the
-  optimal LLM based on task type, cost, and availability—the brain switchboard
-  of your ecosystem. Part of Month 3's advanced architectures and mastery phase.
+  **Series Context:** Mini-project 4 of 5 in the 90-day curriculum. This service
+  routes requests to the optimal LLM based on task type, cost, and
+  availability—the brain switchboard of your ecosystem. Part of Month 3's
+  advanced architectures and mastery phase.
 </Callout>
 
-{/* IMAGE_PLACEHOLDER: Create an architectural diagram showing the LLM Router as a central hub with multiple spokes connecting to different LLM providers (OpenAI, Anthropic, Ollama, LM Studio). Each spoke should be color-coded by provider type (cloud vs local). Include visual indicators for health status (green checkmarks for healthy, red X for unhealthy), cost levels ($ symbols), and routing decisions (arrows showing request flow). Place this diagram at the top of the module, right after the Callout, to give learners an immediate visual understanding of the router's role as a traffic controller. Style: Modern, clean, with icons representing different providers and animated arrows showing request routing. */}
+<Mermaid
+  chart={`
+graph TD
+    Hub((LLM Router))
+    
+    Hub -->|Cloud| OpenAI[OpenAI<br/>$$$]
+    Hub -->|Cloud| Anthropic[Anthropic<br/>$$]
+    Hub -->|Local| Ollama[Ollama<br/>Free]
+    Hub -->|Local| LM[LM Studio<br/>Free]
+    
+    style Hub fill:#f9f,stroke:#333
+    style OpenAI fill:#e1f5fe,stroke:#01579b
+    style Anthropic fill:#e1f5fe,stroke:#01579b
+    style Ollama fill:#e8f5e9,stroke:#2e7d32
+    style LM fill:#e8f5e9,stroke:#2e7d32
+`}
+  caption="Hub and Spoke Architecture: Centralizing LLM access."
+/>
 
 <KeyTerms
   terms={[
@@ -71,7 +89,21 @@ day: 85
 
 **Why This Matters**: Relying on a single model provider creates vendor lock-in and single points of failure. A router optimizes for cost and performance while ensuring high availability. Think of it as a smart traffic controller for your AI infrastructure—directing each request to the most appropriate "lane" based on urgency, complexity, and budget.
 
-{/* IMAGE_PLACEHOLDER: Create an analogy illustration comparing the LLM Router to a smart traffic control system. Show different types of vehicles (representing different task types: fast cars for quick queries, heavy trucks for complex reasoning, economy cars for simple tasks) being directed to different lanes (representing different LLM providers). Include traffic signals, cost indicators (toll booth signs), and speed limits to represent the routing logic. This visual metaphor will help learners understand the router's decision-making process. Place this after the "Why This Matters" section. Style: Friendly, illustrative, with clear labels and a legend explaining the metaphor. */}
+<Mermaid
+  chart={`
+graph LR
+    Requests[Traffic/Requests] --> Router{Signal/Router}
+    
+    Router -->|Sports Car| Fast[Fast Lane<br/>Haiku/3.5-Turbo]
+    Router -->|Heavy Truck| Heavy[Heavy Lane<br/>Opus/GPT-4o]
+    Router -->|Economy| Eco[Economy Lane<br/>Local/Free]
+    
+    style Fast fill:#ffcc80,stroke:#e65100
+    style Heavy fill:#ef9a9a,stroke:#c62828
+    style Eco fill:#a5d6a7,stroke:#2e7d32
+`}
+  caption="Traffic Control Analogy: Routing based on payload and urgency."
+/>
 
 **Skills Showcased**:
 
@@ -90,19 +122,51 @@ In this mini-project, we built a smart "switchboard" for our agents—a critical
 3. **Resilience**: We added health checks and automatic fallbacks, so if a local model crashes or an API goes down, the system seamlessly switches to a backup.
 4. **Cost Control**: We built in cost tracking and budget constraints, allowing agents to operate efficiently across the 90-day learning journey.
 
-{/* IMAGE_PLACEHOLDER: Create a decision tree flowchart showing the routing logic. Start with "Incoming Request" at the top, then branch based on: 1) prefer_local flag, 2) task_type classification, 3) cost constraints, 4) provider health status, and 5) capability matching. Each decision point should have clear yes/no branches leading to different model selections. Include example scenarios at the leaf nodes (e.g., "Simple code task + prefer_local=true + Ollama healthy → llama3.1:8b"). Place this after the Module Summary to visualize the routing algorithm. Style: Clean flowchart with color-coded decision nodes and outcome nodes. */}
+<Mermaid
+  chart={`
+flowchart TD
+    Start[New Request] --> Local{Prefer Local?}
+    
+    Local -->|Yes| Health{Local Healthy?}
+    Local -->|No| Cloud[Check Cloud]
+    
+    Health -->|Yes| Task{Task Type?}
+    Health -->|No| Cloud
+    
+    Task -->|Coding| Code[Codellama]
+    Task -->|General| Gen[Llama 3]
+    
+    Cloud --> Cost{Budget OK?}
+    Cost -->|Yes| Model{Complex?}
+    Cost -->|No| Cheap[GPT-3.5/Haiku]
+    
+    Model -->|Yes| Smart[GPT-4/Opus]
+    Model -->|No| Standard[GPT-4o-mini]
+`}
+  caption="Routing Logic: The decision tree for Model Selection."
+/>
 
 ## Architecture
 
-{/* IMAGE_PLACEHOLDER: Create an enhanced architecture diagram showing the LLM Router Service as the central component. Include:
-1. Left side: Multiple agents (Research Agent, Code Agent, Analysis Agent) sending requests
-2. Center: Router with three main components - Smart Router (brain icon), Task Classifier (sorting icon), Health Monitor (heartbeat icon)
-3. Right side: Provider boxes with status indicators - Local LLMs (Ollama/LMStudio with green status), OpenAI (cloud icon), Anthropic (cloud icon)
-4. Visual indicators: Cost labels ($0 for local, $$$ for cloud), latency indicators (fast/slow), health status (green checkmarks/red X)
-5. Request flow arrows showing routing decisions based on task type
-6. Small dashboard panel showing real-time stats (requests/sec, cost/hour, success rate)
-
-Use a modern, clean design with color coding: green for local, blue for cloud, orange for fallback paths. Add subtle animations showing request flow. Place this before the Mermaid diagram as a more detailed visual. */}
+<Mermaid
+  chart={`
+graph LR
+    Agents[Agent Fleet] -->|HTTP| Router[Router Service]
+    
+    subgraph Service
+        Router --> Class[Classifier]
+        Router --> Health[Health Check]
+        Router --> Balancer[Load Balancer]
+    end
+    
+    Balancer --> Prov1[Provider 1]
+    Balancer --> Prov2[Provider 2]
+    Balancer --> Prov3[Provider 3]
+    
+    style Router fill:#f9f,stroke:#333
+`}
+  caption="High-Level Architecture: Integrated components."
+/>
 
 <Mermaid
   chart={`
@@ -297,26 +361,65 @@ else: score += 1.0 / (cost_per_1k_input * 100 + 1)
 if task_type in capabilities: score += 3.0
 score -= provider.priority * 0.5
 
-{/* INTERACTIVE_COMPONENT: Create a "Router Simulator" that allows learners to:
-1. Select task parameters (task_type, prefer_local, max_cost_per_1k, required_context)
-2. Set provider health status (toggle each provider on/off)
-3. See the scoring calculation in real-time for each model
-4. View which model gets selected and why
-5. Compare different scenarios side-by-side
-
-Display the scoring formula with live values plugged in, highlighting which factors contributed most to the final decision. Include a "Why this model?" explanation panel that breaks down the selection reasoning in plain English. This interactive tool will help learners deeply understand the routing algorithm. Place this after the Data Models section. */}
+<Mermaid
+  chart={`
+graph TD
+    Input[Input Parameters] --> Logic{Scoring Logic}
+    
+    subgraph "Scoring Factors"
+        Local[Prefer Local?]
+        Cost[Cost Constraint]
+        Task[Task Capability]
+        Priority[Provider Priority]
+    end
+    
+    Input --> Local
+    Input --> Cost
+    Input --> Task
+    
+    Local -->|Yes| Score1[+10.0 Score]
+    Cost -->|Free| Score2[+5.0 Score]
+    Task -->|Match| Score3[+3.0 Score]
+    Priority -->|High| Score4[-0.5 Penalty]
+    
+    Score1 --> Total[Total Score]
+    Score2 --> Total
+    Score3 --> Total
+    Score4 --> Total
+    
+    Total --> Select[Select Highest Scored Model]
+    
+    style Input fill:#e1f5fe,stroke:#01579b
+    style Total fill:#fff9c4,stroke:#fbc02d
+    style Select fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Router Simulator Logic: Visualizing how the router scores and selects models based on constraints."
+/>
 ```
 
 ### Error Handling Matrix
 
-{/* IMAGE_PLACEHOLDER: Create a visual error handling flowchart showing different error scenarios and their recovery paths:
-1. "Provider Timeout" → Automatic fallback → Try next provider → Success/Failure
-2. "Rate Limit Hit" → Queue request → Retry with backoff → Success
-3. "No Model Available" → Return 500 error → User notification
-4. "Health Check Failed" → Mark unhealthy → Exclude from routing → Auto-retry after cooldown
-5. "All Fallbacks Failed" → Log incident → Alert admin → Return error
-
-Use color coding: green for success paths, yellow for retry paths, red for failure paths. Include timing indicators (e.g., "5s timeout", "30s cooldown"). Place this before the error handling table to provide visual context. Style: Flowchart with decision diamonds and action rectangles. */}
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Request
+    Request --> Timeout: > 5s
+    Request --> RateLimit: 429
+    Request --> Success: 200 OK
+    
+    Timeout --> Fallback: Try Backup
+    RateLimit --> Queue: Wait & Retry
+    
+    Fallback --> Success
+    Fallback --> Failure: All Failed
+    
+    Queue --> Request: Backoff
+    
+    Success --> [*]
+    Failure --> Alert: Notify Admin
+`}
+  caption="Resilience Logic: Automated recovery from provider failures."
+/>
 
 | Error Code           | HTTP Status | Cause                                      | Response Body                               | Recovery Action                            |
 | -------------------- | ----------- | ------------------------------------------ | ------------------------------------------- | ------------------------------------------ |
@@ -780,13 +883,33 @@ def list_models():
 
 ## Usage Example
 
-{/* INTERACTIVE_COMPONENT: Create a "Cost Calculator" that shows:
-1. Input: Number of requests per day, average tokens per request
-2. Model selection: Choose between different routing strategies (always-local, always-cloud, smart-routing)
-3. Output: Estimated monthly cost breakdown by provider, total savings with smart routing
-4. Visualization: Bar chart comparing costs across strategies, pie chart showing token distribution by model
-
-Include real pricing data from the ModelConfig above. Show how smart routing with prefer_local=true can reduce costs by 80%+ for typical workloads. Add example scenarios like "100 requests/day, 500 tokens avg" with instant cost calculations. Place this before the usage code example. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Cost Calculator Logic"
+        Input[Input: Requests/Day + Avg Tokens]
+        Strategy{Routing Strategy}
+        
+        Input --> Strategy
+        
+        Strategy -->|Cloud Only| Cost1[$$$ High Cost]
+        Strategy -->|Local Only| Cost2[$ Low Cost]
+        Strategy -->|Smart Hybrid| Cost3[$$ Optimized Cost]
+        
+        Cost1 --> Viz[Visualization]
+        Cost2 --> Viz
+        Cost3 --> Viz
+        
+        Viz --> Breakdown[Monthly Breakdown<br/>Bar Chart]
+        Viz --> Savings[Savings Analysis<br/>Pie Chart]
+    end
+    
+    style Input fill:#e1f5fe,stroke:#01579b
+    style Cost3 fill:#c8e6c9,stroke:#2e7d32
+    style Cost1 fill:#ffcdd2,stroke:#c62828
+`}
+  caption="Cost Calculator Flow: Estimating savings from different routing strategies."
+/>
 
 ```python
 # Agent using the LLM router
@@ -799,7 +922,7 @@ class SmartAgent:
     async def think(self, prompt: str, task_type: str = "reasoning") -> str:
         """
         Send a prompt to the LLM router with automatic model selection.
-        
+
         The router will:
         1. Classify the task based on task_type
         2. Check provider health status
@@ -823,49 +946,99 @@ class SmartAgent:
 # Example usage scenarios
 async def main():
     agent = SmartAgent()
-    
+
     # Simple code task → likely routes to local Ollama
     code = await agent.think("Write a Python function to reverse a string", task_type="code")
-    
+
     # Complex reasoning → might route to GPT-4 or Claude
     analysis = await agent.think(
         "Analyze the trade-offs between microservices and monolithic architecture",
         task_type="reasoning"
     )
-    
+
     # Fast query → routes to fastest available model
     quick = await agent.think("What is 2+2?", task_type="fast")
 ```
 
-{/* IMAGE_PLACEHOLDER: Create a sequence diagram showing the complete request flow through the LLM Router. Show: 1) Agent sends request, 2) Router checks health status, 3) Router calculates scores for each model, 4) Router selects best model, 5) Router invokes provider, 6) Provider returns response, 7) Router tracks usage stats, 8) Router returns to agent. Include a parallel flow showing what happens during a failure: primary provider fails → router marks unhealthy → router selects fallback → retry succeeds. Use different colors for success path (green) and failure/fallback path (orange). Place this after the usage example. Style: UML sequence diagram with clear timing indicators and annotations. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Agent
+    participant Router
+    participant Health
+    participant Provider
+    participant Fallback
+    
+    Agent->>Router: Chat Request
+    Router->>Health: Check Status
+    Health-->>Router: Healthy
+    
+    Router->>Router: Select Model (Score)
+    
+    Router->>Provider: Invoke API
+    alt Success
+        Provider-->>Router: Response
+        Router->>Router: Track Usage
+        Router-->>Agent: Result
+    else Failure
+        Provider--xRouter: Timeout/Error
+        Router->>Router: Mark Unhealthy
+        Router->>Fallback: Invoke Backup
+        Fallback-->>Router: Response
+        Router-->>Agent: Result (via Fallback)
+    end
+`}
+  caption="Request Lifecycle: From agent to provider and back."
+/>
 
 ---
 
 <Exercise title="LLM Router Lab">
-  **Hands-on Challenges:**
-  
-  1. **Rate Limiting**: Add per-provider rate limiting to prevent hitting API quotas. Track requests per minute and queue excess requests.
-  
-  2. **Request Queuing**: Implement a queue system for local models to handle concurrent requests gracefully (local models typically handle one request at a time).
-  
-  3. **A/B Testing**: Add support for routing a percentage of traffic to different models for comparison. Track quality metrics to determine which model performs best for each task type.
-  
-  4. **Semantic Caching**: Implement embedding-based caching that returns cached responses for semantically similar queries (e.g., "What is Python?" and "Explain Python" should hit the same cache).
-  
-  5. **Cost Budgets**: Add daily/monthly budget limits per provider with automatic throttling when approaching limits.
-  
-  **Challenge Project**: Build a "Model Performance Dashboard" that visualizes routing decisions, costs, latency distributions, and success rates across all providers over time.
+  **Hands-on Challenges:** 1. **Rate Limiting**: Add per-provider rate limiting
+  to prevent hitting API quotas. Track requests per minute and queue excess
+  requests. 2. **Request Queuing**: Implement a queue system for local models to
+  handle concurrent requests gracefully (local models typically handle one
+  request at a time). 3. **A/B Testing**: Add support for routing a percentage
+  of traffic to different models for comparison. Track quality metrics to
+  determine which model performs best for each task type. 4. **Semantic
+  Caching**: Implement embedding-based caching that returns cached responses for
+  semantically similar queries (e.g., "What is Python?" and "Explain Python"
+  should hit the same cache). 5. **Cost Budgets**: Add daily/monthly budget
+  limits per provider with automatic throttling when approaching limits.
+  **Challenge Project**: Build a "Model Performance Dashboard" that visualizes
+  routing decisions, costs, latency distributions, and success rates across all
+  providers over time.
 </Exercise>
 
-{/* INTERACTIVE_COMPONENT: Create a "Model Comparator" tool that allows learners to:
-1. Enter a prompt
-2. Send it to multiple models simultaneously
-3. Compare responses side-by-side
-4. See latency, cost, and token usage for each
-5. Rate response quality
-6. View aggregated statistics showing which models excel at which task types
-
-This helps learners understand the practical differences between models and why routing matters. Include example prompts for different task types (code, reasoning, creative, fast). Place this after the Exercise section. */}
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Model Comparator"
+        Prompt[User Prompt] --> Broadcaster
+        
+        Broadcaster -->|Request| OpenAI[OpenAI]
+        Broadcaster -->|Request| Anthropic[Anthropic]
+        Broadcaster -->|Request| Ollama[Ollama]
+        
+        OpenAI -->|Response| Comparison
+        Anthropic -->|Response| Comparison
+        Ollama -->|Response| Comparison
+        
+        subgraph "Comparison View"
+            Comparison[Side-by-Side View]
+            Comparison --> Metrics[Metrics:<br/>Latency | Cost | Tokens]
+            Comparison --> Quality[Quality Rating]
+        end
+        
+        Metrics --> Stats[Aggregated Stats]
+    end
+    
+    style Prompt fill:#e1bee7,stroke:#4a148c
+    style Broadcaster fill:#fff9c4,stroke:#fbc02d
+    style Metrics fill:#bbdefb,stroke:#0d47a1
+`}
+  caption="Model Comparator: Evaluate performance, cost, and quality across providers."
+/>
 
 ---
 
@@ -881,12 +1054,21 @@ This helps learners understand the practical differences between models and why 
 
 5. **Smart Routing**: Different tasks need different models. Code generation might work fine on a local 8B model, while complex reasoning benefits from GPT-4 or Claude. The router makes this optimization automatic.
 
-{/* IMAGE_PLACEHOLDER: Create an infographic showing "LLM Router Impact Metrics" with three columns:
-1. "Without Router" - showing scattered API calls, vendor lock-in icon, single point of failure, no cost visibility
-2. "With Router" - showing centralized routing, multiple provider options, automatic fallbacks, cost dashboard
-3. "Real Impact" - showing statistics like "80% cost reduction", "99.9% uptime", "5ms routing overhead", "Zero vendor lock-in"
-
-Use icons, charts, and visual comparisons to make the benefits concrete. Include a small case study callout: "Example: 1000 requests/day, 70% routed to local models = $450/month savings". Place this after the Key Takeaways section. Style: Professional infographic with data visualization elements. */}
+<Mermaid
+  chart={`
+graph LR
+    NoRouter[Without Router] -->|Hardcoded| Locked[Vendor Lock-in]
+    NoRouter -->|Blind| Costs[Unknown Costs]
+    
+    Router[With Router] -->|Abstracted| Freedom[Zero Lock-in]
+    Router -->|Optimized| Savings[80% Savings]
+    Router -->|Resilient| Uptime[99.9% Uptime]
+    
+    style Savings fill:#c8e6c9,stroke:#2e7d32
+    style Uptime fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Impact Metrics: The ROI of intelligent routing."
+/>
 
 ---
 

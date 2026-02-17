@@ -86,7 +86,37 @@ Before MCP, connecting an LLM to external tools was a nightmare. Every model pro
 
 **MCP solves this** by providing a universal protocol that works across all models and tools.
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing the "before and after" of MCP adoption. Left side: A tangled mess of different connectors (labeled OpenAI, Anthropic, Google, etc.) trying to connect to various tools (database, API, files) with incompatible interfaces. Right side: Clean, organized connections where all AI models connect through a single MCP standard to all tools. Use a visual metaphor similar to the chaos of pre-USB era (parallel ports, serial ports, PS/2) vs the simplicity of USB-C. Color scheme: chaotic reds/oranges on left, organized blues/greens on right. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Before MCP: The Integration Nightmare"
+        L1[OpenAI] -->|Adapter A| D1[Database]
+        L1 -->|Adapter B| A1[API]
+        L2[Anthropic] -->|Adapter C| D1
+        L2 -->|Adapter D| F1[Files]
+        L3[Google] -->|Adapter E| A1
+        style L1 fill:#ffcdd2
+        style L2 fill:#ffcdd2
+        style L3 fill:#ffcdd2
+    end
+    
+    subgraph "After MCP: Universal Standard"
+        C1[OpenAI] -- MCP --> Hub((MCP Hub))
+        C2[Anthropic] -- MCP --> Hub
+        C3[Google] -- MCP --> Hub
+        
+        Hub -- MCP --> DB[Database]
+        Hub -- MCP --> API[API]
+        Hub -- MCP --> Files[Files]
+        
+        style C1 fill:#c8e6c9
+        style C2 fill:#c8e6c9
+        style C3 fill:#c8e6c9
+        style Hub fill:#b2dfdb,stroke:#00695c,stroke-width:2px
+    end
+`}
+  caption="From Chaos to Order: The 'USB-C' Effect of MCP."
+/>
 
 > **Key Insight**: MCP is to AI tools what USB-C is to devices—write once, connect everywhere.
 
@@ -95,8 +125,6 @@ Before MCP, connecting an LLM to external tools was a nightmare. Every model pro
 ---
 
 ## 11.1 What is MCP?
-
-{/* IMAGE_PLACEHOLDER: Create an architectural diagram showing MCP as the central hub. Center: Large MCP logo/icon. Top half: Various AI clients (Claude Desktop, ChatGPT, Gemini, Cursor IDE, custom agents) with arrows pointing down to MCP. Bottom half: Various tools/services (filesystem, database, GitHub, Slack, cloud services) with arrows pointing up to MCP. Use a hub-and-spoke design to emphasize MCP as the universal connector. Include subtle circuit board patterns in the background to suggest technical infrastructure. Color palette: Professional blues and purples with accent colors for different services. */}
 
 ### The MCP Timeline
 
@@ -158,7 +186,32 @@ graph LR
 
 ### Protocol Flow
 
-{/* IMAGE_PLACEHOLDER: Create a sequence diagram showing the MCP protocol flow as a conversation between Client and Server. Show 7 steps as speech bubbles or message boxes: 1) Client initiates connection (handshake icon), 2) Client asks "What tools do you have?" (question mark icon), 3) Server responds with list of tools (document/list icon), 4) LLM decides "I need to query the database" (thinking bubble), 5) Client calls tools/call with arguments (function call icon), 6) Server executes and returns result (checkmark/success icon), 7) Client uses result in LLM context (integration icon). Use a clean, modern style with icons and connecting arrows. Color code: Client messages in blue, Server messages in green, LLM thinking in purple. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    
+    Note over Client: Handshake
+    Client->>Server: Connect
+    Client->>Server: Initialize (capabilities)
+    Server-->>Client: Initialize Result
+    
+    Note over Client: Discovery
+    Client->>Server: List Tools
+    Server-->>Client: [ToolA, ToolB...]
+    
+    Note over Client: Execution
+    Client->>Server: Call Tool (ToolA, args)
+    Server-->>Client: Tool Result
+    
+    Client->>Client: Process with LLM
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: MCP Protocol Interaction Flow</p>
 
 ```
 1. Client connects to Server
@@ -190,8 +243,6 @@ graph LR
 </Callout>
 
 ### Choosing the Right Transport
-
-{/* IMAGE_PLACEHOLDER: Create an interactive decision tree visualization for choosing MCP transport. Start with a central question node "Where does your server run?" branching to two paths: "Local Machine" (left) leading to "stdio" with benefits listed (simple setup, no network config, perfect for development), and "Cloud/Remote" (right) leading to "Streamable HTTP" with benefits (OAuth security, horizontal scaling, team access). Use different colors for each path (green for local, blue for cloud). Add small icons: computer for local, cloud for remote, lock for security, arrows for scaling. Make it visually clear which path to choose based on deployment scenario. */}
 
 <Mermaid
   chart={`
@@ -238,7 +289,43 @@ In September 2025, the official **MCP Registry** launched as the authoritative s
 - **Sub-registries**: Platforms like Smithery and Glama build on top
 - **5,000+ servers**: Community-contributed integrations
 
-{/* IMAGE_PLACEHOLDER: Create an illustration of the MCP Registry ecosystem. Center: MCP Registry logo/icon as the main hub. Around it, show three layers: 1) Inner circle: Official servers (filesystem, postgres, github, slack) with verified badges, 2) Middle circle: Platform registries (Smithery.ai, Glama.ai, MCP.so) as secondary hubs, 3) Outer circle: Community servers radiating outward showing the 5,000+ ecosystem. Use a solar system or network graph metaphor. Color code: gold/yellow for official, blue for platforms, purple for community. Include search/discovery icons to emphasize the registry's role in server discovery. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    Hub((MCP Registry))
+    
+    subgraph Official [First-Party]
+        FS[Filesystem]
+        PG[PostgreSQL]
+        GH[GitHub]
+        Slack[Slack]
+    end
+    
+    subgraph Platforms [Directories]
+        S[Smithery.ai]
+        G[Glama.ai]
+        M[MCP.so]
+    end
+    
+    subgraph Community [Ecosystem]
+        C1[5000+ Servers]
+        C2[Community Tools]
+    end
+    
+    Hub --> Official
+    Hub --> Platforms
+    Platforms --> Community
+    
+    style Hub fill:#ffd700,stroke:#f57f17
+    style Official fill:#fff9c4,stroke:#fbc02d
+    style Platforms fill:#e1f5fe,stroke:#0277bd
+    style Community fill:#f3e5f5,stroke:#7b1fa2
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: The Expanding MCP Registry Ecosystem</p>
 
 ```bash
 # Browse the registry
@@ -468,7 +555,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 const server = new Server(
   { name: "my-server", version: "1.0.0" },
-  { capabilities: { tools: {}, resources: {} } }
+  { capabilities: { tools: {}, resources: {} } },
 );
 
 // Define tools
@@ -612,8 +699,6 @@ gcloud run deploy mcp-server \
 
 ### Remote Server Architecture
 
-{/* IMAGE_PLACEHOLDER: Create a comprehensive cloud architecture diagram for remote MCP servers. Top layer: Three client types (Claude Desktop, Cursor IDE, Custom Agent) with user icons. Middle layer: Cloud infrastructure showing Load Balancer (with traffic distribution arrows), OAuth 2.1 Provider (with lock/key icon), and three MCP Server Instances (showing horizontal scaling with +/- icons). Bottom layer: Backend services (Database with cylinder icon, External APIs with connection icon, Cloud Storage with folder icon). Show data flow with arrows, include security shields at OAuth layer, and add monitoring/logging icons. Use enterprise-grade color scheme: blues for infrastructure, greens for secure connections, oranges for data flow. Add subtle cloud background pattern. */}
-
 <Mermaid
   chart={`
 graph TB
@@ -721,7 +806,29 @@ async def create_remote_agent():
 
 Security is critical for MCP deployments. The protocol has faced scrutiny, with researchers discovering vulnerabilities in production servers. Here's how to build secure MCP servers.
 
-{/* IMAGE_PLACEHOLDER: Create a security threat landscape visualization showing common MCP vulnerabilities. Design as a shield or fortress diagram with attack vectors coming from different directions. Center: Secure MCP Server (fortress/shield icon). Around it, show 5 threat vectors as arrows pointing inward: 1) Tool Poisoning (malicious code icon), 2) Prompt Injection (hidden text icon), 3) NeighborJacking (network exposure icon), 4) Credential Exposure (key/password icon), 5) Excessive Permissions (unlocked padlock icon). For each threat, show the mitigation as a defensive layer (validation, sanitization, localhost binding, secret manager, least privilege). Use red for threats, green for mitigations, blue for the secure core. Add a "Defense in Depth" label to emphasize layered security. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    Core[Secure MCP Server]
+    
+    T1[Tool Poisoning] -->|Defend: Validation| Core
+    T2[Prompt Injection] -->|Defend: Sanitization| Core
+    T3[NeighborJacking] -->|Defend: Localhost Binding| Core
+    T4[Credential Leak] -->|Defend: Secret Manager| Core
+    T5[Excessive Perms] -->|Defend: Least Privilege| Core
+    
+    style Core fill:#c8e6c9,stroke:#2e7d32
+    style T1 fill:#ffcdd2,stroke:#c62828
+    style T2 fill:#ffcdd2,stroke:#c62828
+    style T3 fill:#ffcdd2,stroke:#c62828
+    style T4 fill:#ffcdd2,stroke:#c62828
+    style T5 fill:#ffcdd2,stroke:#c62828
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Security Threats and Mitigations</p>
 
 ### The MCP Threat Landscape
 
@@ -839,7 +946,28 @@ def secure_api_call(endpoint: str) -> dict:
 
 The **Elicitation** feature (MCP 2025-06-18) enables multi-turn, human-in-the-loop interactions where tools can request additional information from users.
 
-{/* IMAGE_PLACEHOLDER: Create an engaging illustration of the elicitation flow showing human-in-the-loop interaction. Design as a circular conversation flow between three participants: User (person icon), AI Client (robot/AI icon), and MCP Server (server icon). Show the conversation as speech bubbles in a clockwise flow: 1) User: "Book a flight to NYC", 2) Client forwards to Server, 3) Server asks back: "What date?", 4) Client asks User, 5) User responds: "Next Friday", 6) Client sends to Server, 7) Server asks: "Morning or evening?", 8) Client asks User, 9) User: "Morning", 10) Server confirms booking. Use different colors for each participant (blue for user, purple for client, green for server). Add small icons in bubbles (plane, calendar, clock) to make it more visual and engaging. Show this as a progressive disclosure pattern. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User as 👤 User
+    participant Client as 🤖 AI Client
+    participant Server as 🔌 MCP Server
+    
+    User->>Client: "Book flight to NYC"
+    Client->>Server: Call book_flight(destination="NYC")
+    Server-->>Client: Request: What date?
+    Client-->>User: "When do you want to fly?"
+    User-->>Client: "Next Friday"
+    Client->>Server: Reply: date="Next Friday"
+    Server-->>Client: Request: Morning or Evening?
+    Client-->>User: "Morning or evening?"
+    User-->>Client: "Morning"
+    Client->>Server: Reply: time="Morning"
+    Server-->>Client: Success: Flight AA123 Booked!
+    Client-->>User: "Booked flight AA123!"
+`}
+  caption="Elicitation Flow: Interactive, human-in-the-loop tool execution."
+/>
 
 ### How Elicitation Works
 
@@ -1027,8 +1155,6 @@ async def traced_tool(query: str) -> dict:
 
 For production deployments, MCP Gateways provide centralized management:
 
-{/* IMAGE_PLACEHOLDER: Create a detailed MCP Gateway architecture diagram showing the gateway as a central control plane. Left side: Multiple agents (Agent 1, 2, 3) trying to access servers. Center: Large MCP Gateway box containing layers (top to bottom): Authentication layer (with OAuth/API key icons), Rate Limiting layer (with throttle/meter icon), Logging & Audit layer (with document/log icon), Routing layer (with traffic direction icon), Response Cache layer (with cache/storage icon). Right side: Multiple MCP Servers (Database, API, File servers). Show data flow with arrows passing through each gateway layer. Use traffic light colors: red for blocked requests, yellow for rate-limited, green for approved. Add metrics/dashboard icons to show observability. Include a "Single Point of Control" label emphasizing centralized governance. */}
-
 <Mermaid
   chart={`
 graph TB
@@ -1088,8 +1214,6 @@ graph TB
 
 MCP isn't the only protocol shaping agent interoperability. Understanding the broader ecosystem helps you make informed architectural decisions.
 
-{/* IMAGE_PLACEHOLDER: Create a comprehensive protocol landscape comparison showing MCP vs A2A side by side. Split the image vertically. Left side "MCP: Agent ↔ Tools": Show one agent (center) connecting to multiple tools below (database, API, files, cloud services) in a hub-and-spoke pattern with vertical arrows. Label as "Vertical Integration". Right side "A2A: Agent ↔ Agent": Show multiple agents (Research, Writing, Review, Publishing) connected horizontally in a chain or mesh network with bidirectional arrows between them. Label as "Horizontal Integration". Use different visual styles: MCP side uses client-server iconography (one-to-many), A2A side uses peer-to-peer iconography (many-to-many). Color code: MCP in blues, A2A in greens. Add a center divider with "Complementary Standards" text. Include small icons showing use cases for each (MCP: data access, A2A: collaboration). */}
-
 ### Agent-to-Agent (A2A) Protocol
 
 In April 2025, Google introduced the **Agent2Agent (A2A) Protocol** with backing from over 50 tech companies including Salesforce, Atlassian, and PayPal. A2A is designed for agent-to-agent communication rather than agent-to-tool communication.
@@ -1124,7 +1248,28 @@ graph LR
 
 ### When to Use Which
 
-{/* IMAGE_PLACEHOLDER: Create a unified architecture diagram showing how MCP and A2A work together in a complete agent system. Design as a layered architecture: Top layer shows "Your Agent System" header. Middle layer shows two agents (Agent A and Agent B) connected horizontally with A2A protocol (bidirectional arrows, labeled "Task Delegation & Collaboration"). Bottom layer shows both agents connecting vertically downward via MCP to different tools (Agent A connects to Database and API, Agent B connects to Files and Cloud Storage). Use a box/container design to show the complete system boundary. Color code: A2A connections in green (horizontal), MCP connections in blue (vertical), agents in purple, tools in gray. Add labels: "Horizontal Integration (A2A)" for agent-to-agent, "Vertical Integration (MCP)" for agent-to-tool. Include a legend showing when to use each protocol with icons: MCP for data access/tool execution, A2A for agent collaboration/task delegation. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Your Agent System"
+        AgentA[Agent A] <-->|A2A| AgentB[Agent B]
+        
+        AgentA -->|MCP| DB[(Database)]
+        AgentA -->|MCP| API[API]
+        
+        AgentB -->|MCP| Files[Files]
+        AgentB -->|MCP| Cloud[Cloud Storage]
+    end
+    
+    style AgentA fill:#e1bee7,stroke:#8e24aa
+    style AgentB fill:#e1bee7,stroke:#8e24aa
+    style DB fill:#cfd8dc
+    style API fill:#cfd8dc
+    style Files fill:#cfd8dc
+    style Cloud fill:#cfd8dc
+`}
+  caption="Unified Architecture: MCP for tools, A2A for collaboration."
+/>
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -1158,7 +1303,19 @@ graph LR
   agent ecosystems.
 </Callout>
 
-<ProtocolComparisonTool />
+<Mermaid
+  chart={`
+grid
+    title Protocol Comparison
+    columns 2
+    "Aspect" : "Purpose"
+    "MCP" : "Vertical (Agent ↔ Tool)"
+    "A2A" : "Horizontal (Agent ↔ Agent)"
+    "Architecture" : "Client-Server"
+    "Status" : "Stable Standard"
+`}
+  caption="Side-by-side: MCP vs Agent-to-Agent Protocol."
+/>
 
 ### Other Emerging Protocols
 
@@ -1176,7 +1333,25 @@ In December 2025, the Linux Foundation announced the **Agentic AI Foundation**, 
 - **goose** (Block): Open-source AI agent framework
 - **AGENTS.md** (OpenAI): Agent documentation standard
 
-{/* IMAGE_PLACEHOLDER: Create a professional foundation/consortium illustration for the Agentic AI Foundation. Center: Linux Foundation logo with "Agentic AI Foundation" text. Around it in a circular arrangement, show three key projects with their logos/icons: MCP (Anthropic), goose (Block), AGENTS.md (OpenAI). Outer ring: Founding member company logos arranged in a circle (Anthropic, OpenAI, Block, Google, Microsoft, AWS, Bloomberg, Cloudflare). Use connecting lines from members to the foundation center to show collaboration. Add a timeline arrow at the bottom showing "December 2025 - Foundation Launch". Use professional colors: Linux Foundation blue, with accent colors for each project. Include "Open Standards for Agentic AI" tagline. Style should be corporate/professional suitable for enterprise presentations. */}
+<Mermaid
+  chart={`
+graph TD
+    LF[Linux Foundation]
+    AAIF[Agentic AI Foundation]
+    LF --> AAIF
+    
+    AAIF --> MCP[MCP]
+    AAIF --> Goose[Goose Framework]
+    AAIF --> AMD[AGENTS.md]
+    
+    Anthropic -.-> MCP
+    Block -.-> Goose
+    OpenAI -.-> AMD
+    
+    style AAIF fill:#b2ebf2,stroke:#006064,stroke-width:3px
+`}
+  caption="Agentic AI Foundation: Open Governance for the Future."
+/>
 
 Founding members include Anthropic, OpenAI, Block, Google, Microsoft, AWS, Bloomberg, and Cloudflare. This signals industry convergence on open standards for agentic AI.
 

@@ -33,7 +33,26 @@ day: 16
 
 Before diving into setup, let's understand why local inference matters for agent development:
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing a split-screen comparison: Left side shows a developer's laptop with data flowing to cloud servers (with icons for OpenAI, Anthropic) with dollar signs and network latency indicators. Right side shows the same laptop with a local model running (Ollama logo), with checkmarks for privacy, speed, and "no cost" indicators. Use a modern, clean design with blue/purple gradient for cloud and green/teal for local. Place this above the ComparisonTable component. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Cloud"
+        API[Cloud API] --> Server[Remote Server]
+        Server -->|Data| Log[Logs & Training]
+        API -->|Cost| Bill[High Monthly Bill]
+    end
+    
+    subgraph "Local"
+        Local[Local Model] --> Device[Your Device]
+        Device -->|Data| Private[Data Stays Private]
+        Local -->|Cost| Free[Free (after hardware)]
+    end
+    
+    style Cloud fill:#ffcdd2,stroke:#c62828
+    style Local fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Local vs. Cloud: Trade-offs in privacy, cost, and control."
+/>
 
 <ComparisonTable
   items={[
@@ -84,7 +103,26 @@ Before diving into setup, let's understand why local inference matters for agent
 
 ## 4.1 Installing Ollama
 
-{/* IMAGE_PLACEHOLDER: Create a friendly mascot-style illustration of the Ollama llama logo with gears and tools around it, representing the "setup" phase. Show the llama character holding a wrench with floating icons for macOS, Linux, and Windows around it. Use warm, inviting colors (orange, yellow, teal). Place this at the start of the installation section to make it more engaging. */}
+<Mermaid
+  chart={`
+graph TD
+    User[User] --> CLI[Ollama CLI]
+    User --> API[Ollama API]
+    
+    subgraph "Ollama Runtime"
+        CLI --> Core[Core Engine]
+        API --> Core
+        
+        Core --> GGUF[GGUF Model Loader]
+        Core --> Quant[Quantization]
+        Core --> Infer[Inference Engine]
+    end
+    
+    Infer --> GPU[GPU / Metal]
+    Infer --> CPU[CPU Fallback]
+`}
+  caption="Ollama Architecture: A unified runtime for loading and serving models."
+/>
 
 **Ollama** is the simplest way to run open-source LLMs locally. It handles model downloads, quantization, and provides an OpenAI-compatible API out of the box.
 
@@ -121,7 +159,23 @@ ollama --version
 
 ## 4.2 Pulling Your First Model
 
-{/* IMAGE_PLACEHOLDER: Create an infographic showing model sizes as building blocks or containers of different sizes. Show three stacks: Small (3-8B models) as a small box with "8GB RAM" label, Medium (13B) as a medium box with "16GB RAM", and Large (70B) as a large box with "40GB+ RAM". Add a special "MoE" section showing how Mixture-of-Experts models work with only a subset of parameters active (visualize with highlighted sections). Use a clean, technical style with size comparisons. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "RAM Requirements"
+        L8B[8B Model] --"Requires"--> R8GB[8GB RAM]
+        L13B[13B Model] --"Requires"--> R16GB[16GB RAM]
+        L70B[70B Model] --"Requires"--> R40GB[40GB+ RAM]
+        MoE[MoE (Mixture of Experts)] --"Active Params"--> R24GB[24GB+ RAM]
+    end
+    
+    style R8GB fill:#e1f5fe
+    style R16GB fill:#fff9c4
+    style R40GB fill:#ffcdd2
+    style R24GB fill:#e1bee7
+`}
+  caption="Model Sizes & RAM: Understanding the hardware requirements for different model classes."
+/>
 
 Ollama uses a Docker-like pull system for models. Let's start with **Llama 3.3**, Meta's widely used open-weight model that offers excellent performance for agent development:
 
@@ -176,7 +230,29 @@ ollama pull llama3.2
 
 ## 4.3 Running Models Interactively
 
-{/* IMAGE_PLACEHOLDER: Create a terminal/CLI mockup screenshot showing the Ollama interactive interface with a sample conversation. Style it like a modern terminal with syntax highlighting. Show the prompt ">>>" and a sample Q&A about privacy. Use a dark theme with green/cyan text on dark background for that authentic terminal feel. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Terminal
+    participant Ollama
+    
+    User->>Terminal: ollama run llama3.3
+    Terminal->>Ollama: Load Model...
+    Ollama-->>Terminal: Ready usually in seconds
+    
+    loop Chat Session
+        User->>Terminal: "Why is privacy important?"
+        Terminal->>Ollama: Inference Request
+        Ollama-->>Terminal: Streaming Response...
+        Terminal-->>User: "Privacy ensures..."
+    end
+    
+    User->>Terminal: /bye
+    Terminal->>Ollama: Unload (optional)
+`}
+  caption="Interactive Mode: Chatting with your local model directly in the terminal."
+/>
 
 Test your model with the interactive CLI:
 
@@ -206,7 +282,19 @@ models:
 
 ## 4.4 Using the OpenAI-Compatible API
 
-{/* IMAGE_PLACEHOLDER: Create a diagram showing code compatibility. Show a Python code snippet in the center with two arrows pointing to different endpoints: one to "OpenAI API" (cloud icon) and one to "Ollama localhost:11434" (local computer icon). Highlight that only the base_url changes. Use a side-by-side comparison style with minimal code changes highlighted in yellow/green. This illustrates the "zero code changes" benefit. */}
+<Mermaid
+  chart={`
+graph LR
+    App[Your App Code] -->|OpenAI SDK| Switch{Base URL}
+    
+    Switch -->|api.openai.com| Cloud[OpenAI Cloud]
+    Switch -->|localhost:11434| Local[Local Ollama]
+    
+    style Switch fill:#fff9c4,stroke:#fbc02d
+    style Local fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Zero Code Changes: Just swap the base_url to switch between OpenAI and Ollama."
+/>
 
 Here's the key insight: **Ollama exposes an OpenAI-compatible API**. This means you can use the standard OpenAI Python SDK with local models—just change the base URL.
 
@@ -255,7 +343,27 @@ print(response.choices[0].message.content)
 
 ## 4.5 Native Tool Calling with Ollama
 
-{/* IMAGE_PLACEHOLDER: Create a flow diagram showing the tool calling process: 1) User query enters the model, 2) Model analyzes and decides to call a tool (show decision diamond), 3) Tool function executes (show function icon with parameters), 4) Results return to model, 5) Model generates final response. Use arrows to show the flow and include icons for each step. Style it like a technical flowchart with rounded rectangles and clear directional arrows. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant App
+    participant Model
+    participant Function
+    
+    App->>Model: Query + Tool Definitions
+    Note right of Model: "What's the weather?"
+    
+    Model->>Model: Decide to call tool
+    Model-->>App: Tool Call: get_weather("Tokyo")
+    
+    App->>Function: Execute get_weather()
+    Function-->>App: Result: "Sunny, 25C"
+    
+    App->>Model: Tool Output
+    Model-->>App: Final Answer: "It's sunny in Tokyo."
+`}
+  caption="Local Tool Calling: Native function calling support in Ollama enables agentic workflows."
+/>
 
 As of Ollama v0.8+, local models support **native tool calling**—the same function calling interface used by OpenAI and Anthropic. This is critical for building agents:
 
@@ -386,7 +494,23 @@ print(result)
 
 ## 4.7 Ollama vs vLLM: Choosing the Right Tool
 
-{/* IMAGE_PLACEHOLDER: Create a decision tree diagram helping developers choose between Ollama and vLLM. Start with a root question "What's your use case?" branching to "Development/Learning" (leads to Ollama with laptop icon) and "Production/High Traffic" (leads to vLLM with server rack icon). Include key metrics like throughput numbers and user counts at each branch. Use a clean flowchart style with icons and color coding (blue for Ollama, orange for vLLM). */}
+<Mermaid
+  chart={`
+graph TD
+    Start{Need?}
+    
+    Start -->|Dev / Learning| Ollama[Ollama]
+    Start -->|Single User| Ollama
+    
+    Start -->|Production| vLLM[vLLM]
+    Start -->|High Throughput| vLLM
+    Start -->|Multi-User| vLLM
+    
+    style Ollama fill:#c8e6c9,stroke:#2e7d32
+    style vLLM fill:#bbdefb,stroke:#0d47a1
+`}
+  caption="Choosing the Right Runtime: Ollama for dev, vLLM for production."
+/>
 
 While Ollama excels at developer experience, **vLLM** is the go-to choice for production deployments requiring high throughput:
 
@@ -491,7 +615,25 @@ def get_llm_client():
 
 ## 4.9 GPU Acceleration
 
-{/* IMAGE_PLACEHOLDER: Create an infographic showing GPU vs CPU inference. Left side: CPU with layers slowly processing (show a progress bar at 30%), Right side: GPU with all layers processing in parallel (show a progress bar at 100%). Include visual representations of VRAM usage with a memory gauge. Add icons for NVIDIA and AMD GPUs. Use green for GPU (fast) and gray for CPU (slower). Include a speedometer showing relative performance difference. */}
+<Mermaid
+  chart={`
+graph TB
+    Model[Model Weights] --> Load{VRAM Available?}
+    
+    Load -->|Yes| GPU[GPU Memory]
+    Load -->|No| Split[Split Layers]
+    
+    Split --> GPU
+    Split --> CPU[CPU RAM]
+    
+    GPU --> Fast[Fast Inference 🚀]
+    CPU --> Slow[Slow Inference 🐢]
+    
+    style Fast fill:#c8e6c9
+    style Slow fill:#ffcdd2
+`}
+  caption="GPU Acceleration: Why GPUs are essential for fast local inference."
+/>
 
 For optimal performance, ensure Ollama is using your GPU:
 
@@ -525,13 +667,36 @@ export OLLAMA_NUM_GPU=35
 
 ## 4.10 Cost Optimization Strategies
 
-{/* IMAGE_PLACEHOLDER: Create an infographic showing cost savings strategies as a pyramid or layered diagram. Bottom layer (biggest impact): "Model Routing 63% savings" with routing icon, Middle layers: "Prompt Caching 90% savings" and "Token Optimization 20-50% savings", Top layer: "Semantic Caching 40-60% savings". Use dollar signs and percentage badges. Include a total savings calculation showing "60-80% total reduction". Use green gradient for savings visualization. */}
+<Mermaid
+  chart={`
+graph TB
+    L1[Token Optimization] --> L2[Prompt Caching]
+    L2 --> L3[Model Routing]
+    
+    style L1 fill:#e1f5fe
+    style L2 fill:#fff9c4
+    style L3 fill:#ffcc80
+`}
+  caption="Cost Optimization Pyramid: Layered strategies for 60-80% savings."
+/>
 
 Running models locally is just one way to reduce costs. Here are production-proven strategies that can cut LLM expenses by 60-80%:
 
 ### Model Routing (Cascading)
 
-{/* IMAGE_PLACEHOLDER: Create a flow diagram showing intelligent query routing. Show incoming queries at the top, then a "Router/Classifier" component that analyzes complexity, branching into three paths: Simple queries → Small model (3B, fast icon), Medium queries → Medium model (32B, balanced icon), Complex queries → Large model (70B, quality icon). Include example queries for each path and show cost per query decreasing left to right. Use traffic light colors (green for cheap, yellow for medium, red for expensive but necessary). */}
+<Mermaid
+  chart={`
+graph LR
+    Query[Query] --> Router{Complexity?}
+    
+    Router -->|Simple| Small[Small Model<br/>(Llama 3.2)]
+    Router -->|Coding| Code[Coding Model<br/>(Qwen)]
+    Router -->|Complex| Large[Large Model<br/>(Llama 3.3 70B)]
+    
+    style Router fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Intelligent Query Routing: Directing traffic to the right model."
+/>
 
 Route simple queries to cheaper/smaller models, complex ones to larger models:
 

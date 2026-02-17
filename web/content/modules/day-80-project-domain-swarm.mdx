@@ -37,8 +37,6 @@ day: 80
 
 Build **Domain Watchdog**: an autonomous multi-agent system that monitors expiring domains, evaluates their value, and executes purchases—all without human intervention.
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing a watchdog mascot with binoculars monitoring a stream of domain names flowing past. Some domains are highlighted with green checkmarks (approved), others with red X marks (rejected), and a few with yellow question marks (under review). The watchdog should be sitting at a control panel with multiple screens showing domain analytics, RDAP data, and valuation charts. Style: Modern, friendly, tech-focused with a dashboard aesthetic. Place this at the top of the Project Overview section to immediately convey the autonomous monitoring concept. */}
-
 <Callout type="info">
   **Why This Project?** Domain acquisition combines multiple agentic patterns:
   scheduled monitoring, event-driven triggers, multi-agent collaboration, and
@@ -60,15 +58,14 @@ Build **Domain Watchdog**: an autonomous multi-agent system that monitors expiri
 
 ![Domain Watchdog Swarm Dashboard](/images/domain_watchdog.png)
 
-{/* IMAGE_PLACEHOLDER: Create a detailed system architecture diagram showing the complete Domain Watchdog swarm. Display four agent boxes (Monitor, Evaluator, Purchaser, Notifier) with distinct colors and icons. Show the Scheduler triggering the Monitor, which emits events to the Evaluator, which conditionally triggers the Purchaser, which always triggers the Notifier. Include external services (RDAP API, Blacklist APIs, Domain Registrar) connected to their respective agents. Add a data store (Archive) receiving rejected and completed transactions. Show event flow with animated arrows (in the actual implementation) and label each connection with the event type or data passed. Include a legend explaining the symbols. Style: Professional system architecture diagram with clear component boundaries, data flow arrows, and external service integrations. Place this after the existing Mermaid diagram to provide a more detailed visual reference. */}
-
 <Callout type="concept">
-  **Swarm Architecture Analogy:** Think of this like a restaurant kitchen brigade.
-  The Monitor is the expediter (checking order status), the Evaluator is the head
-  chef (deciding if ingredients are good enough), the Purchaser is the buyer
-  (executing the purchase), and the Notifier is the server (communicating with
-  customers). Each has a specialized role, they communicate through a clear
-  protocol (events), and the system only works when all parts coordinate smoothly.
+  **Swarm Architecture Analogy:** Think of this like a restaurant kitchen
+  brigade. The Monitor is the expediter (checking order status), the Evaluator
+  is the head chef (deciding if ingredients are good enough), the Purchaser is
+  the buyer (executing the purchase), and the Notifier is the server
+  (communicating with customers). Each has a specialized role, they communicate
+  through a clear protocol (events), and the system only works when all parts
+  coordinate smoothly.
 </Callout>
 
 <Mermaid
@@ -151,14 +148,37 @@ graph TB
 
 The Monitor Agent tracks domain status using RDAP (Registration Data Access Protocol).
 
-{/* IMAGE_PLACEHOLDER: Create a diagram showing the RDAP query flow: Monitor Agent → RDAP Server → Response parsing → Status determination. Include visual representations of the different domain statuses (registered, pending_delete, redemption, available) as colored status badges. Show a timeline visualization of the domain lifecycle from registration through expiry to availability (typically 75 days). Style: Technical flowchart with timeline elements. Place this before the code block to help readers understand the domain lifecycle and RDAP protocol. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Agent as Monitor Agent
+    participant RDAP as RDAP Server
+    participant Parser as JSON Parser
+    
+    Agent->>RDAP: GET /domain/example.com
+    RDAP-->>Agent: JSON Response (Status, Events)
+    
+    Agent->>Parser: Parse Status Code
+    
+    alt Status = pendingDelete
+        Parser-->>Agent: Status: PENDING_DELETE
+    else Status = ok
+        Parser-->>Agent: Status: REGISTERED
+        Agent->>Parser: Parse Expiry Date
+        Parser-->>Agent: Calculate Days Until Available
+    end
+    
+    Note right of Agent: Typically ~75 days after expiry<br/>for domain to become available
+`}
+  caption="RDAP Query Flow: The standardized way to check domain lifecycle status."
+/>
 
 <Callout type="concept">
   **Understanding RDAP:** Think of RDAP as the "credit report" for domain names.
-  Just as a credit report shows the status and history of a person's credit, RDAP
-  provides standardized information about a domain's registration status, expiry
-  date, and registrar. It replaced the older WHOIS protocol with a modern,
-  JSON-based API that's easier to parse and more reliable.
+  Just as a credit report shows the status and history of a person's credit,
+  RDAP provides standardized information about a domain's registration status,
+  expiry date, and registrar. It replaced the older WHOIS protocol with a
+  modern, JSON-based API that's easier to parse and more reliable.
 </Callout>
 
 ```python
@@ -304,14 +324,39 @@ class MonitorAgent:
 
 The Evaluator Agent assesses domain value and risk before purchase.
 
-{/* IMAGE_PLACEHOLDER: Create an infographic showing the domain evaluation process as a scoring system. Display multiple evaluation criteria as gauges or progress bars: Brand Value (keyword quality, memorability), SEO Value (backlinks, domain age), Risk Score (blacklist status, suspicious patterns), Market Value (comparable sales, TLD premium). Show how these combine into a final confidence score and buy/pass decision. Include visual examples of "good" vs "bad" domains with their scores. Style: Dashboard/analytics visualization with color-coded metrics (green=good, yellow=caution, red=risk). Place this before the Evaluator Agent code to illustrate the multi-factor decision-making process. */}
+<Mermaid
+  chart={`
+flowchart LR
+    subgraph Inputs
+        SEO[SEO Value]
+        Brand[Brand Quality]
+        Risk[Risk Score]
+        Market[Market Comps]
+    end
+    
+    Inputs --> Aggregator{Aggregation Engine}
+    
+    Aggregator -->|Weighted Sum| Score[Confidence Score]
+    
+    Score --> Decision{Decision}
+    Decision -->|Score > 0.8| Buy[Approved]
+    Decision -->|Score < 0.5| Pass[Rejected]
+    Decision -->|Else| Review[Human Review]
+    
+    style Buy fill:#6f6,stroke:#333
+    style Pass fill:#f66,stroke:#333
+    style Review fill:#ff9,stroke:#333
+`}
+  caption="Valuation Logic: Multiple factors combine into a single confidence score."
+/>
 
 <Callout type="concept">
-  **Domain Valuation Analogy:** Evaluating a domain is like appraising real estate.
-  You consider location (TLD), neighborhood history (previous use, backlinks),
-  property condition (blacklist status), and comparable sales (similar domains).
-  Just as a house appraiser uses multiple data sources, our Evaluator Agent
-  combines LLM intelligence with API data to estimate value and risk.
+  **Domain Valuation Analogy:** Evaluating a domain is like appraising real
+  estate. You consider location (TLD), neighborhood history (previous use,
+  backlinks), property condition (blacklist status), and comparable sales
+  (similar domains). Just as a house appraiser uses multiple data sources, our
+  Evaluator Agent combines LLM intelligence with API data to estimate value and
+  risk.
 </Callout>
 
 ```python
@@ -449,14 +494,38 @@ Respond in JSON format:
 
 The Purchaser Agent executes domain acquisition via registrar API.
 
-{/* IMAGE_PLACEHOLDER: Create a sequence diagram showing the purchase flow: Purchaser Agent receives approved evaluation → validates price against max budget → calls registrar API with domain and payment info → registrar processes payment → returns transaction ID → Purchaser Agent logs result and returns success/failure. Include error handling branches for: evaluation not approved, price exceeds budget, API call fails, payment declined. Show retry logic with exponential backoff. Add timing annotations for each step. Style: UML sequence diagram with clear actor boundaries and message flows. Place this before the Purchaser Agent code to show the complete purchase transaction flow. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Agent as Purchaser Agent
+    participant Reg as Registrar API
+    participant Audit as Audit Log
+
+    Agent->>Agent: Check Max Price
+    alt Price OK
+        Agent->>Reg: POST /purchase {domain}
+
+        alt Success
+            Reg-->>Agent: 200 OK (txn_id)
+            Agent->>Audit: Log Success
+        else Failed
+            Reg-->>Agent: 402 Payment Required
+            Agent->>Audit: Log Failure
+        end
+    else Price too High
+        Agent->>Audit: Log Rejected (Price)
+    end
+
+`}
+caption="Purchase Flow: Critical financial safeguards executed before any API call."
+/>
 
 <Callout type="warning">
-  **Real Money, Real Consequences:** The Purchaser Agent handles actual financial
-  transactions. Always implement multiple safeguards: price validation, budget
-  checks, transaction logging, and idempotency (prevent duplicate purchases).
-  Think of it like a bank's ATM—it needs to be absolutely certain about every
-  transaction before executing it.
+  **Real Money, Real Consequences:** The Purchaser Agent handles actual
+  financial transactions. Always implement multiple safeguards: price
+  validation, budget checks, transaction logging, and idempotency (prevent
+  duplicate purchases). Think of it like a bank's ATM—it needs to be absolutely
+  certain about every transaction before executing it.
 </Callout>
 
 ```python
@@ -539,14 +608,30 @@ class PurchaserAgent:
 
 ## 80.4 Orchestration with LangGraph
 
-{/* IMAGE_PLACEHOLDER: Create an animated state machine diagram showing the LangGraph workflow execution. Display states as circles (monitoring, evaluating, purchasing, complete, error) with transitions as arrows. Highlight the current state in a different color as the workflow progresses. Show the state data structure updating at each step (watch_list → domain_info → evaluation → purchase_result). Include conditional routing logic with decision diamonds. Add a timeline at the bottom showing execution time for each step. Style: Interactive state machine with animated transitions and live state inspection. Place this before the LangGraph code to visualize the workflow execution model. */}
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Monitoring
+    
+    Monitoring --> Evaluating: Domain Available
+    Monitoring --> Monitoring: Domain Taken
+    
+    Evaluating --> Purchasing: Approved
+    Evaluating --> Complete: Rejected
+    
+    Purchasing --> Complete: Success/Fail
+    
+    Complete --> Monitoring: Reset / Next Cycle
+`}
+  caption="Autonomous Loop: The agent continuously cycles through states based on external triggers."
+/>
 
 <Callout type="concept">
-  **LangGraph for Agent Coordination:** LangGraph is like a GPS navigation system
-  for your agents. It defines the route (workflow), handles decision points
-  (conditional edges), maintains state (where you are and where you've been), and
-  can reroute if needed (error handling). Each node is a checkpoint where the
-  agent performs work and updates the shared state.
+  **LangGraph for Agent Coordination:** LangGraph is like a GPS navigation
+  system for your agents. It defines the route (workflow), handles decision
+  points (conditional edges), maintains state (where you are and where you've
+  been), and can reroute if needed (error handling). Each node is a checkpoint
+  where the agent performs work and updates the shared state.
 </Callout>
 
 ```python
@@ -736,7 +821,24 @@ if __name__ == "__main__":
 
 ## 80.6 Modern Orchestration Platforms (2024-2025)
 
-{/* IMAGE_PLACEHOLDER: Create a comparison visualization showing four orchestration approaches side-by-side: APScheduler (simple cron with in-memory state), Temporal.io (durable workflows with state persistence), Inngest (event-driven serverless functions), and Trigger.dev (background jobs with checkpoints). For each, show: architecture diagram, failure recovery mechanism, deployment model, and ideal use case. Use icons to represent key features: clock for scheduling, shield for durability, cloud for serverless, retry arrows for fault tolerance. Style: Modern comparison chart with clear visual hierarchy. Place this at the start of section 80.6 to help readers choose the right orchestration platform. */}
+<Mermaid
+  chart={`
+quadrantChart
+    title Orchestration Tools
+    x-axis Simple --> Complex
+    y-axis "Code-Based" --> "Infra-Heavy"
+    quadrant-1 "Enterprise (Temporal)"
+    quadrant-2 "Heavy Duty (Celery)"
+    quadrant-3 "Simple Scripts (APScheduler)"
+    quadrant-4 "Modern/DevEx (Trigger.dev)"
+    
+    "APScheduler": [0.2, 0.2]
+    "Temporal": [0.9, 0.9]
+    "Inngest": [0.7, 0.4]
+    "Trigger.dev": [0.6, 0.3]
+`}
+  caption="Choosing an Orchestrator: Balance complexity with durability requirements."
+/>
 
 <Callout type="info">
   **Beyond APScheduler:** While APScheduler works for simple cases, production
@@ -749,13 +851,12 @@ if __name__ == "__main__":
 
 ### Comparing Orchestration Approaches
 
-{/* IMAGE_PLACEHOLDER: Create an interactive comparison table that expands on hover/click. Show APScheduler, Temporal.io, Inngest, and Trigger.dev as columns with rows for: Durability (show persistence mechanism), Failure Recovery (show retry visualization), Deployment (show infrastructure), Best For (show use case icons), Language Support (show language logos), Cost (show $ symbols), and Learning Curve (show difficulty stars). Make each cell clickable to reveal more details. Add a "Help Me Choose" button that asks 3 questions and recommends the best platform. Style: Interactive comparison matrix with expandable details and recommendation wizard. Place this after the comparison table to make it more engaging. */}
-
 <Callout type="tip">
-  **Interactive Component Opportunity:** Build an **Orchestration Platform Selector**
-  that asks learners about their requirements (language preference, deployment
-  model, complexity needs) and recommends the best platform with reasoning. Include
-  code examples for each platform showing the same workflow implemented differently.
+  **Interactive Component Opportunity:** Build an **Orchestration Platform
+  Selector** that asks learners about their requirements (language preference,
+  deployment model, complexity needs) and recommends the best platform with
+  reasoning. Include code examples for each platform showing the same workflow
+  implemented differently.
 </Callout>
 
 | Feature              | APScheduler      | Temporal.io                  | Inngest                 | Trigger.dev       |
@@ -920,14 +1021,14 @@ export const domainWatchdog = inngest.createFunction(
     // Step 1: Check all domains (parallelized)
     const domainStatuses = await step.run("check-domains", async () => {
       const results = await Promise.all(
-        watchList.map((domain) => checkDomainRDAP(domain))
+        watchList.map((domain) => checkDomainRDAP(domain)),
       );
       return results;
     });
 
     // Step 2: Filter actionable domains
     const actionable = domainStatuses.filter(
-      (d) => d.status === "available" || d.status === "pending_delete"
+      (d) => d.status === "available" || d.status === "pending_delete",
     );
 
     if (actionable.length === 0) {
@@ -939,8 +1040,8 @@ export const domainWatchdog = inngest.createFunction(
       actionable.map((domain) =>
         step.run(`evaluate-${domain.name}`, async () => {
           return await evaluateDomain(domain);
-        })
-      )
+        }),
+      ),
     );
 
     // Step 4: Purchase approved domains
@@ -951,14 +1052,14 @@ export const domainWatchdog = inngest.createFunction(
           `purchase-${evaluation.domain}`,
           async () => {
             return await purchaseDomain(evaluation);
-          }
+          },
         );
         purchases.push(result);
 
         // Step 5: Send notification
         await step.run(`notify-${evaluation.domain}`, async () => {
           await sendSlackNotification(
-            `✅ Purchased ${evaluation.domain} for $${result.price}`
+            `✅ Purchased ${evaluation.domain} for $${result.price}`,
           );
         });
       }
@@ -969,7 +1070,7 @@ export const domainWatchdog = inngest.createFunction(
       actionable: actionable.length,
       purchased: purchases.length,
     };
-  }
+  },
 );
 
 // Event-triggered function for immediate domain checks
@@ -1009,7 +1110,7 @@ export const domainAlertHandler = inngest.createFunction(
         });
       }
     }
-  }
+  },
 );
 ```
 
@@ -1131,7 +1232,30 @@ export const purchaseDomainTask = task({
 
 ## 80.7 Domain Intelligence APIs (2024-2025)
 
-{/* IMAGE_PLACEHOLDER: Create a visual API integration map showing the Domain Watchdog at the center with connections to various external services: RDAP servers (for status), GoDaddy GoValue (for valuation), EstiBot (for appraisal), NameBio (for comparable sales), Wayback Machine (for history), Spamhaus/SURBL (for blacklists), and domain registrars (for purchase). Show data flowing in (queries) and out (responses) with labeled arrows. Include API rate limits and costs for each service. Add icons representing the type of data each service provides. Style: Hub-and-spoke diagram with the agent at center and external services around the perimeter, with clear data flow indicators. Place this at the start of section 80.7 to show the complete API ecosystem. */}
+<Mermaid
+  chart={`
+mindmap
+  root((Domain Watchdog))
+    Services
+      RDAP Checks
+        Verisign (COM/NET)
+        PIR (ORG)
+      Valuation
+        GoDaddy GoValue
+        EstiBot
+        NameBio
+      Registry
+        Namecheap API
+        GoDaddy API
+      Notifications
+        Slack Webhook
+        Email (SES)
+      Storage
+        DynamoDB
+        S3 (Logs)
+`}
+  caption="Integration Map: The agent connects to a diverse ecosystem of external APIs."
+/>
 
 <Callout type="info">
   **Modern Domain Intelligence:** The domain industry has evolved significantly.
@@ -1400,16 +1524,37 @@ class ExpiredDomainService:
 
 ## 80.8 Autonomous Decision Making
 
-{/* IMAGE_PLACEHOLDER: Create a decision tree visualization showing the autonomous decision-making flow. Start with a domain evaluation at the top, then branch based on: confidence level (high/medium/low), estimated value (under/over threshold), risk score (low/high), and budget availability (yes/no). Each path leads to one of three outcomes: Auto-Purchase (green), Request Human Review (yellow), or Auto-Reject (red). Include percentage thresholds on each branch (e.g., "Confidence > 85%", "Value < $500"). Add small icons representing safeguards: shield for risk checks, wallet for budget limits, person for human-in-the-loop. Style: Clean decision tree with color-coded outcomes and clear threshold labels. Place this at the start of section 80.8 to visualize the autonomous decision logic. */}
+<Mermaid
+  chart={`
+flowchart TD
+    Eval[Domain Evaluation] --> Conf{Confidence > 85%?}
+    
+    Conf -->|Yes| Budget{Budget OK?}
+    Budget -->|Yes| Buy[Auto-Purchase]
+    Budget -->|No| Reject[Auto-Reject]
+    
+    Conf -->|No| Risk{Risk > Medium?}
+    Risk -->|Yes| Review[Request Human Review]
+    Risk -->|No| Value{Value > $500?}
+    
+    Value -->|Yes| Review
+    Value -->|No| Reject
+    
+    style Buy fill:#6f6,stroke:#333
+    style Review fill:#ff9,stroke:#333
+    style Reject fill:#f66,stroke:#333
+`}
+  caption="Autonomous Decision Tree: Logic gates determine whether to act, ask, or ignore."
+/>
 
 <Callout type="concept">
-  **Autonomous Decision-Making Analogy:** Think of this like a self-driving car's
-  decision system. The car has multiple sensors (our evaluation criteria), safety
-  thresholds (confidence levels), and fail-safes (budget limits, human review).
-  It can handle routine situations autonomously (high confidence purchases) but
-  knows when to alert the driver (high-value domains requiring approval). The key
-  is building in multiple layers of safeguards so the system can operate
-  independently while staying within safe boundaries.
+  **Autonomous Decision-Making Analogy:** Think of this like a self-driving
+  car's decision system. The car has multiple sensors (our evaluation criteria),
+  safety thresholds (confidence levels), and fail-safes (budget limits, human
+  review). It can handle routine situations autonomously (high confidence
+  purchases) but knows when to alert the driver (high-value domains requiring
+  approval). The key is building in multiple layers of safeguards so the system
+  can operate independently while staying within safe boundaries.
 </Callout>
 
 ### Confidence Thresholds and Budget Management
@@ -1635,14 +1780,44 @@ class AutonomousDecisionEngine:
 
 ### Human-in-the-Loop for High-Value Decisions
 
-{/* IMAGE_PLACEHOLDER: Create a Slack notification mockup showing an approval request message. Display a card with domain details (name, estimated value, confidence score, risk factors), evaluation summary, and two prominent buttons: "Approve Purchase" (green) and "Reject" (red). Include a countdown timer showing "3h 45m remaining" for the approval window. Add a small "View Full Analysis" link. Show this as a realistic Slack message with proper formatting, user avatar, and timestamp. Style: Authentic Slack UI mockup with proper branding and interactive elements. Place this before the ApprovalWorkflow code to show what the human-in-the-loop experience looks like. */}
+```json
+{
+  "text": "🔔 Domain Purchase Approval Required",
+  "blocks": [
+    {
+      "type": "section",
+      "fields": [
+        { "type": "mrkdwn", "text": "*Domain:*\ncoolstartup.com" },
+        { "type": "mrkdwn", "text": "*Est. Value:*\n$1,200.00" },
+        { "type": "mrkdwn", "text": "*Confidence:*\n92%" },
+        { "type": "mrkdwn", "text": "*Reason:*\nHigh value > $500 threshold" }
+      ]
+    },
+    {
+      "type": "actions",
+      "elements": [
+        {
+          "type": "button",
+          "text": { "type": "plain_text", "text": "✅ Approve" },
+          "style": "primary"
+        },
+        {
+          "type": "button",
+          "text": { "type": "plain_text", "text": "❌ Reject" },
+          "style": "danger"
+        }
+      ]
+    }
+  ]
+}
+```
 
 <Callout type="tip">
-  **Interactive Component Opportunity:** Build a **Domain Approval Simulator** that
-  lets learners practice making approval decisions. Show them domain details,
-  evaluation metrics, and risk factors, then reveal whether their decision matched
-  the optimal choice. Track their accuracy over multiple scenarios to build
-  intuition for domain valuation.
+  **Interactive Component Opportunity:** Build a **Domain Approval Simulator**
+  that lets learners practice making approval decisions. Show them domain
+  details, evaluation metrics, and risk factors, then reveal whether their
+  decision matched the optimal choice. Track their accuracy over multiple
+  scenarios to build intuition for domain valuation.
 </Callout>
 
 ```python
@@ -1746,14 +1921,29 @@ class ApprovalWorkflow:
 
 ## 80.9 Production Deployment
 
-{/* IMAGE_PLACEHOLDER: Create an AWS architecture diagram showing the complete serverless deployment: EventBridge (clock icon) triggering Lambda function (agent icon), which queries DynamoDB (database icon) for watch list, calls external APIs (RDAP, valuation services), stores results back to DynamoDB, and sends notifications via SNS (bell icon) to Slack/Email. Include Secrets Manager (key icon) for API credentials and CloudWatch (chart icon) for monitoring. Show data flow with arrows and label each service with its purpose. Add cost estimates for each component. Style: Professional AWS architecture diagram with official AWS service icons. Place this at the start of section 80.9 to show the complete production infrastructure. */}
+<Mermaid
+  chart={`
+flowchart LR
+    Event[EventBridge Schedule] -->|Every 6 Hours| Lambda[AWS Lambda]
+    
+    Lambda -->|Read/Write| Dynamo[DynamoDB]
+    Lambda -->|Get Keys| Secrets[Secrets Manager]
+    Lambda -->|Publish| SNS[SNS Topic]
+    
+    SNS -->|Alert| Slack
+    SNS -->|Email| Admin
+    
+    Lambda -->|Logs| CloudWatch
+`}
+  caption="Serverless Architecture: Zero idle cost. Runs only when needed."
+/>
 
 <Callout type="tip">
   **Serverless Benefits for Agents:** Serverless deployment is ideal for
   autonomous agents because you only pay for actual execution time (not idle
   time), it scales automatically, and managed services handle infrastructure
-  concerns. For a domain monitoring agent that runs every 6 hours, you might
-  pay just $5-10/month instead of $50-100/month for a dedicated server.
+  concerns. For a domain monitoring agent that runs every 6 hours, you might pay
+  just $5-10/month instead of $50-100/month for a dedicated server.
 </Callout>
 
 ### Serverless Deployment on AWS Lambda
@@ -1871,7 +2061,18 @@ resource "aws_sns_topic" "alerts" {
 
 ### Cost Management
 
-{/* IMAGE_PLACEHOLDER: Create an interactive cost calculator visualization showing monthly operational costs broken down by service: Lambda compute (based on execution time), API calls (RDAP, valuation services), DynamoDB storage, CloudWatch logs, and Secrets Manager. Display sliders for variables: watch list size (10-1000 domains), check frequency (hourly to weekly), and valuation API usage (0-100%). Show real-time cost calculation with a total at the bottom and a "Within Budget" indicator (green checkmark or red warning). Include a cost optimization tips sidebar. Style: Interactive dashboard with sliders, bar charts, and real-time calculations. Place this before the CostManager code to help learners understand operational costs. */}
+<Mermaid
+  chart={`
+pie
+    title Monthly Cost Estimate (~$5.00 total)
+    "Lambda Compute" : 0.50
+    "DynamoDB Storage" : 1.50
+    "CloudWatch Logs" : 1.00
+    "Secrets Manager" : 0.40
+    "API Calls (Valuation)" : 1.60
+`}
+  caption="Cost Breakdown: Serverless prevents paying for idle servers."
+/>
 
 <Callout type="tip">
   **Interactive Component Opportunity:** Build a **Domain Swarm Cost Calculator**
@@ -1960,7 +2161,20 @@ class CostManager:
   ]}
 >
 
-{/* IMAGE_PLACEHOLDER: Create a "challenge roadmap" visualization showing the 6 extension objectives as connected milestones on a path. Each milestone should have an icon (database for valuation agent, gavel for auction bidding, clock for persistence, dashboard for visualization, cloud for deployment, person for human-in-the-loop). Show estimated time for each extension (e.g., "2-3 hours") and difficulty level (1-3 stars). Connect them with a winding path to show the suggested implementation order. Style: Gamified roadmap with colorful milestone markers. Place this inside the Exercise component to motivate learners with a clear progression path. */}
+<Mermaid
+  chart={`
+flowchart TD
+    Start((Start)) --> Val[Add Valuation Agent]
+    Val --> Auc[Add Auction Bidder]
+    Auc --> Dash[Build Dashboard]
+    Dash --> Cloud[Deploy to Cloud]
+    Cloud --> Human[Add HITL Approval]
+    Human --> End((Mastery))
+    
+    style End fill:#f96,stroke:#333
+`}
+  caption="Challenge Roadmap: Your path to extending the system."
+/>
 
 **Challenge:** Extend the Domain Watchdog with:
 
@@ -2049,7 +2263,26 @@ See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete 
 
 # 80.10 Step-by-Step Implementation Guide (Lowest Level Details)
 
-{/* IMAGE_PLACEHOLDER: Create a visual implementation roadmap showing three phases as connected sections: Phase 1 (Scaffolding) with folder structure and dependencies, Phase 2 (Core Logic) with code file previews, and Phase 3 (Verification) with terminal output examples. Use a progress bar showing "Start Here" to "Production Ready" with checkpoints. Include estimated time for each phase (30 min, 2 hours, 30 min). Add icons for each step: folder for structure, code for implementation, checkmark for verification. Style: Step-by-step tutorial visualization with clear progression and time estimates. Place this at the start of section 80.10 to give learners a clear implementation path. */}
+<Mermaid
+  chart={`
+gantt
+    title Implementation Timeline
+    dateFormat  HH:mm
+    axisFormat %H:%M
+    
+    section Phase 1: Scaffolding
+    Project Setup       :a1, 00:00, 30m
+    
+    section Phase 2: Core Logic
+    RDAP Monitor        :a2, after a1, 45m
+    Evaluator Agent     :a3, after a2, 45m
+    Purchaser Agent     :a4, after a3, 30m
+    
+    section Phase 3: Verify
+    Integration Tests   :a5, after a4, 30m
+`}
+  caption="Time Estimate: ~3 Hours from start to finish."
+/>
 
 <Callout type="tip">
   **Learning Path:** This implementation guide takes you from zero to a working

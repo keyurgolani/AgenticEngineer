@@ -57,7 +57,17 @@ day: 90
 
 ## The Road You've Traveled
 
-{/* IMAGE_PLACEHOLDER: Hero illustration showing a winding path/journey from "Day 1" to "Day 90" with milestone markers at key points (Week 4, Week 8, Week 12). The path should start with simple building blocks and evolve into complex interconnected systems, symbolizing the progression from foundations to advanced architectures. Style: Modern, gradient colors (purple to blue), with small icons representing key concepts (LLMs, agents, graphs, swarms). Place at the top of this section as a visual journey map. */}
+<Mermaid
+  chart={`
+timeline
+    title The Agentic Journey
+    Month 1 : **Foundations** : Prompt Engineering
+    Month 2 : **Multi-Agent** : Orchestration
+    Month 3 : **Production** : Deployment
+    Day 90  : **Mastery** : A New Beginning
+`}
+  caption="A 12-week ascent from concept to capability."
+/>
 
 Congratulations. You've completed a comprehensive journey from understanding what agents are to building production-grade systems. Let's synthesize what you've learned and chart your path forward.
 
@@ -69,7 +79,26 @@ Before we synthesize your learning, let's ground ourselves in where the industry
 
 ### Major Players
 
-{/* IMAGE_PLACEHOLDER: Infographic showing the major AI companies as interconnected nodes in an ecosystem. Each company (OpenAI, Anthropic, Google, Meta, Microsoft) should be represented as a circular node with their logo/icon, with lines connecting to their key contributions and agent offerings. Use a network/constellation visual metaphor. Style: Clean, professional, with company brand colors. Place above the table to provide visual context. */}
+<Mermaid
+  chart={`
+graph LR
+    OpenAI((OpenAI))
+    Anthropic((Anthropic))
+    Google((Google))
+    Meta((Meta))
+    Microsoft((Microsoft))
+    
+    OpenAI --> SDK[Agents SDK]
+    Anthropic --> MCP[Model Context Protocol]
+    Google --> Vertex[Vertex Agents]
+    Meta --> Llama[Llama Stack]
+    Microsoft --> AG2[AutoGen]
+    
+    style MCP fill:#ffab91
+    style AG2 fill:#ce93d8
+`}
+  caption="The 2025 AI Ecosystem: Key players and their agent offerings."
+/>
 
 The agentic AI landscape has consolidated around key players:
 
@@ -166,7 +195,20 @@ graph TB
 
 ## 90.3 Your Portfolio Projects
 
-{/* IMAGE_PLACEHOLDER: Portfolio showcase grid displaying 5 project cards in a visually appealing layout. Each card should show: 1) Deep Research Analyst (magnifying glass over documents icon), 2) Self-Healing K8s Operator (kubernetes logo with healing/medical cross), 3) Local Data Analyst (shield with database icon), 4) Legacy Code Refactorer (code transformation arrows), 5) Financial Forensics Swarm (detective/forensics badge with network nodes). Style: Modern card design with subtle shadows, gradient backgrounds, and icons. Place above the table as a visual portfolio summary. */}
+<Mermaid
+  chart={`
+grid
+    title Portfolio Projects
+    columns 2
+    "Deep Research Analyst" : "Research & Synthesis"
+    "K8s Operator" : "Self-Healing Infra"
+    "Local Data Analyst" : "Privacy Preserving"
+    "Legacy Refactorer" : "Code Transform"
+    "Financial Swarm" : "Fraud Detection"
+    "AgentOS Capstone" : "Full Platform"
+`}
+  caption="Your Proof of Work: Five production-grade systems."
+/>
 
 You've built five production-grade systems:
 
@@ -177,6 +219,8 @@ You've built five production-grade systems:
 | **Local Data Analyst**        | Privacy-preserving AI, sandboxing, schema-only prompting       | Healthcare, finance, legal            |
 | **Legacy Code Refactorer**    | Neuro-symbolic AI, AST manipulation, deterministic transforms  | Technical debt reduction              |
 | **Financial Forensics Swarm** | MCP integration, multi-source correlation                      | Fraud detection, compliance           |
+
+<CapstoneProjectGallery />
 
 ---
 
@@ -190,9 +234,13 @@ You've built five production-grade systems:
 ├─────────────────────────────────────────────────────────────┤
 │  Orchestration    │  LangGraph, Temporal.io, Inngest        │
 ├───────────────────┼─────────────────────────────────────────┤
+│  Durable Exec     │  Temporal.io, Inngest (Day 21)          │
+├───────────────────┼─────────────────────────────────────────┤
 │  Multi-Agent      │  AG2, CrewAI, OpenAI Agents SDK         │
 ├───────────────────┼─────────────────────────────────────────┤
-│  Protocol         │  MCP, A2A, AGENTS.md                    │
+│  Protocol         │  MCP, A2A Protocol (Day 38), AGENTS.md  │
+├───────────────────┼─────────────────────────────────────────┤
+│  Model Routing    │  ComplexityAssessor, SemanticCache (19) │
 ├───────────────────┼─────────────────────────────────────────┤
 │  Memory           │  ChromaDB, LanceDB, Foundry Memory      │
 ├───────────────────┼─────────────────────────────────────────┤
@@ -201,6 +249,8 @@ You've built five production-grade systems:
 │  Observability    │  Langfuse, Braintrust, Weave, Logfire   │
 ├───────────────────┼─────────────────────────────────────────┤
 │  Code Analysis    │  LibCST, AST, Tree-sitter               │
+├───────────────────┼─────────────────────────────────────────┤
+│  Neuro-Symbolic   │  HybridCodeTransformer, pyDatalog (67)  │
 ├───────────────────┼─────────────────────────────────────────┤
 │  Models           │  Claude 4, GPT-4.5, Llama 4, Gemini 2   │
 └───────────────────┴─────────────────────────────────────────┘
@@ -235,14 +285,17 @@ You've built five production-grade systems:
 
 ### 2024-2025 Emerging Patterns
 
-| Pattern                      | When to Use              | Key Implementation                            |
-| :--------------------------- | :----------------------- | :-------------------------------------------- |
-| **Tree-of-Thought**          | Complex reasoning        | Branching exploration with backtracking       |
-| **Multi-Agent Debate (MAD)** | Consensus building       | Agents argue positions, synthesize agreement  |
-| **HACN**                     | Large-scale coordination | Hierarchical Adaptive Consensus Network       |
-| **Model Routing**            | Cost optimization        | Route queries to appropriate model tier       |
-| **Semantic Caching**         | Latency reduction        | Cache similar queries, not just exact matches |
-| **Speculative Execution**    | Performance              | Pre-compute likely next steps                 |
+| Pattern                        | When to Use              | Key Implementation                            |
+| :----------------------------- | :----------------------- | :-------------------------------------------- |
+| **Tree-of-Thought**            | Complex reasoning        | Branching exploration with backtracking       |
+| **Multi-Agent Debate (MAD)**   | Consensus building       | Agents argue positions, synthesize agreement  |
+| **HACN**                       | Large-scale coordination | Hierarchical Adaptive Consensus Network       |
+| **Model Routing** (Day 19)     | Cost optimization        | ComplexityAssessor, ModelRouter, CostTracker  |
+| **Semantic Caching** (Day 19)  | Latency reduction        | Cache similar queries, not just exact matches |
+| **Durable Execution** (Day 21) | Long-running workflows   | CheckpointManager, Temporal.io, Inngest       |
+| **A2A Communication** (Day 38) | Agent collaboration      | AgentCard, AgentRegistry, A2AMessenger        |
+| **Neuro-Symbolic** (Day 67)    | Guaranteed correctness   | HybridCodeTransformer, VerifiedTransformer    |
+| **Speculative Execution**      | Performance              | Pre-compute likely next steps                 |
 
 <Callout type="tip">
   **Pattern Selection**: Start with ReAct for simple agents, graduate to
@@ -318,7 +371,26 @@ graph LR
 
 ## 90.7 Continuous Learning Roadmap
 
-{/* IMAGE_PLACEHOLDER: Interactive roadmap visualization showing three connected phases: "Immediate (30 days)" → "Medium-Term (3-6 months)" → "Long-Term (1+ year)". Each phase should be a distinct section with milestone markers and branching paths for different specializations (Computer Use, Code Agents, Research Agents, Data Agents). Style: Timeline/roadmap design with progress indicators, branch points, and destination markers. Use inspiring colors (green for growth, blue for learning). Place at the beginning of this section to provide visual learning path. */}
+<Mermaid
+  chart={`
+gantt
+    title Career Roadmap
+    dateFormat X
+    axisFormat %m
+    
+    section Immediate
+    Deploy Capstone        :active, m1, 0, 30
+    Open Source PR         :m2, after m1, 15
+    
+    section Medium-Term
+    Specialize in Vertical :m3, after m2, 90
+    Build Product          :m4, after m3, 60
+    
+    section Long-Term
+    Lead AI Initiative     :m5, after m4, 180
+`}
+  caption="Your trajectory: From learner to leader."
+/>
 
 ### Immediate Next Steps (Next 30 Days)
 
@@ -330,7 +402,21 @@ graph LR
 
 ### Medium-Term Goals (3-6 Months)
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: CareerPathExplorer - An interactive tool where learners can explore different specialization paths (Computer Use Agents, Code Agents, Research Agents, Data Agents). Each path should show: required skills, recommended projects, learning resources, typical roles, and salary ranges. Users can select a path to see a detailed roadmap with milestones and checkpoints. Include a "skills gap analysis" feature that compares their current skills (from completed course modules) with target specialization requirements. */}
+<Mermaid
+  chart={`
+graph TD
+    Start[Agentic Engineer] --> Path1[Architect]
+    Start --> Path2[Product Builder]
+    Start --> Path3[Researcher]
+    
+    Path1 --> Role1[Ent. Architect]
+    Path2 --> Role2[Founder/CTO]
+    Path3 --> Role3[Research Scientist]
+    
+    style Start fill:#b2dfdb,stroke:#00695c,stroke-width:2px
+`}
+  caption="Career Paths: Choosing your specialization."
+/>
 
 1. **Specialize in a vertical**:
    - **Computer Use Agents** - Browser automation, desktop control
@@ -353,11 +439,42 @@ graph LR
 
 ## 90.8 Resources for Continued Growth
 
-{/* IMAGE_PLACEHOLDER: Resource ecosystem map showing interconnected learning resources organized in concentric circles. Center: "You" (the learner), Inner circle: Communities (Discord, forums), Middle circle: Research sources (arXiv, Papers with Code), Outer circle: Conferences and events. Connect related resources with lines. Style: Network diagram with icons for each resource type, warm welcoming colors. Place at the top of this section to visualize the learning ecosystem. */}
+<Mermaid
+  chart={`
+mindmap
+  root((You))
+    Communities
+      Discord
+      GitHub
+      Reddit
+    Research
+      arXiv
+      DeepMind
+      OpenAI
+    Events
+      NeurIPS
+      AI Engineer Summit
+    Media
+      Latent Space
+      The Batch
+`}
+  caption="The Ecosystem: Where to find knowledge and network."
+/>
 
 ### Communities
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: CommunityConnector - A widget that displays live community stats (member counts, recent activity) for each listed community. Include quick-join buttons, community highlights, and a "recommended for you" section based on learner's interests. Could also show trending discussions or recent helpful threads from each community. */}
+<Mermaid
+  chart={`
+grid
+    title Community Hubs
+    columns 2
+    "AI Engineer" : "Discord 💬"
+    "LangChain" : "Discord 🦜"
+    "LocalLLaMA" : "Reddit r/ 🦙"
+    "AG2" : "GitHub 🐙"
+`}
+  caption="Connect with fellow builders."
+/>
 
 - [AI Engineer Discord](https://discord.gg/aiengineers) - The hub for AI engineers
 - [Latent Space Discord](https://discord.gg/latentspace) - Deep technical discussions
@@ -399,7 +516,16 @@ graph LR
 
 > "The best way to predict the future is to invent it." — Alan Kay
 
-{/* IMAGE_PLACEHOLDER: Inspirational illustration showing a developer/engineer standing at the edge of a new frontier, looking out at a landscape filled with AI agents working together (represented as glowing nodes and connections). The scene should convey possibility, innovation, and the future of work. Style: Cinematic, inspiring, with a blend of human and AI elements. Use dawn/sunrise lighting to symbolize new beginnings. Place at the top of this section. */}
+<Mermaid
+  chart={`
+graph TD
+    Dev[Developer] -->|Evolution| Architect[Agent Architect]
+    Architect -->|Evolution| Gov[Governor of Swarms]
+    
+    style Gov fill:#ffd54f,stroke:#ff6f00,stroke-width:2px
+`}
+  caption="The Future: Becoming a Governor of AI Systems."
+/>
 
 You are now equipped to invent the future of software. The agents you build will:
 
@@ -419,9 +545,33 @@ The transition from 2024 to 2026 is defined by the maturation of the engineering
 
 ### The Four Pillars, Revisited
 
-{/* IMAGE_PLACEHOLDER: Four pillars visualization showing classical Greek/Roman columns, each labeled with one pillar (Reliability, Interoperability, Efficiency, Correctness). Each pillar should have visual elements representing its key concepts - Reliability: checkpoint symbols, Interoperability: connection nodes, Efficiency: optimization arrows, Correctness: validation checkmarks. The pillars support a roof labeled "Production-Grade Agentic Systems". Style: Architectural, solid, trustworthy. Place above the pillar descriptions. */}
+<Mermaid
+  chart={`
+graph TB
+    Roof[Production Agents]
+    P1[Reliability]
+    P2[Interoperability]
+    P3[Efficiency]
+    P4[Correctness]
+    Base[Agentic Engineering]
+    
+    Base --> P1
+    Base --> P2
+    Base --> P3
+    Base --> P4
+    
+    P1 --> Roof
+    P2 --> Roof
+    P3 --> Roof
+    P4 --> Roof
+    
+    style Roof fill:#e1bee7
+    style Base fill:#cfd8dc
+`}
+  caption="The Four Pillars: Creating a solid foundation."
+/>
 
-1. **Reliability** - Your agents will fail. Design for recovery with checkpointing, durable execution, and human-in-the-loop patterns. Temporal.io and Inngest have emerged as key infrastructure for long-running agent workflows.
+1. **Reliability** - Your agents will fail. Design for recovery with checkpointing, durable execution, and human-in-the-loop patterns. Temporal.io and Inngest (Day 21) have emerged as key infrastructure for long-running agent workflows.
 
 <Callout type="info">
   **Real-world analogy**: Think of reliability like building a bridge. You don't
@@ -430,7 +580,7 @@ The transition from 2024 to 2026 is defined by the maturation of the engineering
   limits, and unexpected inputs gracefully.
 </Callout>
 
-2. **Interoperability** - MCP has become the standard for tool integration, adopted across all major IDEs and frameworks. The A2A protocol is emerging for agent-to-agent communication. Bet on standards—they compound.
+2. **Interoperability** - MCP has become the standard for tool integration, adopted across all major IDEs and frameworks. The A2A protocol (Day 38) is emerging for agent-to-agent communication with AgentCard, AgentRegistry, and A2AMessenger. Bet on standards—they compound.
 
 <Callout type="info">
   **Real-world analogy**: Standards are like electrical outlets. Imagine if
@@ -439,7 +589,7 @@ The transition from 2024 to 2026 is defined by the maturation of the engineering
   who built them.
 </Callout>
 
-3. **Efficiency** - Context engineering is the new prompt engineering. It's not just what you say, but what information your agent has access to. Semantic caching, model routing, and context isolation are essential techniques.
+3. **Efficiency** - Context engineering is the new prompt engineering. It's not just what you say, but what information your agent has access to. Semantic caching, model routing (Day 19), and context isolation are essential techniques. ComplexityAssessor and CostTracker help optimize costs while maintaining quality.
 
 <Callout type="info">
   **Real-world analogy**: Context engineering is like being a great executive
@@ -448,7 +598,7 @@ The transition from 2024 to 2026 is defined by the maturation of the engineering
   overwhelms; too little leaves gaps.
 </Callout>
 
-4. **Correctness** - Neuro-symbolic approaches are gaining traction. Ground probabilistic systems in deterministic structures. Red teaming and adversarial testing are now standard practice for production agents.
+4. **Correctness** - Neuro-symbolic approaches (Day 67) are gaining traction. Ground probabilistic systems in deterministic structures using HybridCodeTransformer, VerifiedTransformer, and logic programming with pyDatalog. Red teaming and adversarial testing are now standard practice for production agents.
 
 <Callout type="info">
   **Real-world analogy**: Neuro-symbolic AI is like having a creative artist
@@ -461,7 +611,24 @@ The transition from 2024 to 2026 is defined by the maturation of the engineering
 
 ## 90.10 Success Stories & Real-World Impact
 
-{/* IMAGE_PLACEHOLDER: Success stories showcase featuring 3-4 example scenarios of agents in production. Show visual representations of: 1) A research agent helping a startup analyze market data (charts/graphs), 2) A code agent helping a team refactor legacy systems (code transformation), 3) A customer service agent handling inquiries (chat interface), 4) A data analyst agent generating insights (dashboard). Style: Modern, professional, showing before/after or workflow improvements. Place at the top of this section. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph Impact
+        Health[Healthcare]
+        Fin[Finance]
+        IT[IT Ops]
+        Code[Dev]
+    end
+    
+    Code -->|Refactor| Legacy[Legacy Systems]
+    Fin -->|Detect| Fraud[Fraud]
+    IT -->|Heal| Infra[Infrastructure]
+    
+    style Impact fill:#b3e5fc
+`}
+  caption="Real-world Impact: Agents transforming industries."
+/>
 
 ### Where Agentic Engineers Are Making Impact
 
@@ -505,7 +672,22 @@ Based on your 90-day journey, here are career paths where your skills are in hig
 
 ## 🎓 Certificate of Completion
 
-{/* IMAGE_PLACEHOLDER: Digital certificate design with elegant border, course logo at top, "Certificate of Completion" as heading, "Agentic Systems Engineering" as course name, space for learner name, "90-Day Comprehensive Program" subtitle, completion date field, and signature line. Include decorative elements like a ribbon/seal. Style: Professional, prestigious, printable quality with gold/blue accents. Place prominently at the beginning of this section. */}
+<Mermaid
+  chart={`
+graph TD
+    Cert[Certificate of Completion]
+    Name[Your Name]
+    Course[Agentic Systems Engineering]
+    Date[2025]
+    
+    Cert --- Course
+    Course --- Name
+    Name --- Date
+    
+    style Cert fill:#fff9c4,stroke:#fbc02d,stroke-width:4px
+`}
+  caption="Verified: You are now an Agentic Systems Engineer."
+/>
 
 You have completed the **Agentic Systems Engineering** course.
 
@@ -522,6 +704,9 @@ You have completed the **Agentic Systems Engineering** course.
 - ✅ Production deployment and observability
 - ✅ Agent evaluation and benchmarking
 - ✅ Red teaming and adversarial testing
+- ✅ Durable execution with Temporal.io and Inngest
+- ✅ Agent-to-Agent (A2A) communication protocols
+- ✅ Neuro-symbolic AI for guaranteed correctness
 
 **Projects Completed:**
 
@@ -599,7 +784,36 @@ _— The Agentic Systems Engineering Team_
 
 ## Hands-On Practice
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: CapstoneProjectGallery - An interactive gallery showcasing all 5 capstone projects with: project cards that flip to show details, live demo links (if deployed), GitHub repo links, tech stack badges, difficulty ratings, and estimated completion times. Include a "Deploy Your Own" button for each project with deployment guides for Vercel, Railway, and AWS. Add a progress tracker showing which projects the learner has completed. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Capstone Gallery"
+        User[Learner] --> Select{Choose Project}
+        
+        Select --> P1[Deep Research Analyst]
+        Select --> P2[Self-Healing Operator]
+        Select --> P3[Local Data Analyst]
+        Select --> P4[Autonomous Refactorer]
+        Select --> P5[Forensics Swarm]
+        
+        P1 --> Info1[Details & Demo<br/>Stack: React/LangGraph]
+        P2 --> Info2[Details & Demo<br/>Stack: Go/K8s/Temporal]
+        P3 --> Info3[Details & Demo<br/>Stack: Python/DuckDB]
+        P4 --> Info4[Details & Demo<br/>Stack: TS/AST]
+        P5 --> Info5[Details & Demo<br/>Stack: MCP/FastAPI]
+        
+        Info1 --> Deploy[Deploy Button]
+        Info2 --> Deploy
+        Info3 --> Deploy
+        Info4 --> Deploy
+        Info5 --> Deploy
+    end
+    
+    style Select fill:#e1bee7,stroke:#4a148c
+    style Deploy fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Capstone Gallery: Showcasing the 5 major projects of the curriculum."
+/>
 
 <Callout type="tip">
   **Builds Toward Capstone:** You've now completed the 90-day curriculum. The
@@ -632,7 +846,30 @@ Before moving forward, take time to reflect on your journey:
   sentence.
 </Callout>
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: JourneyTimeline - An interactive timeline showing the learner's progress through all 90 days. Display completed modules, time spent, projects built, and key milestones achieved. Include statistics like: total learning hours, lines of code written, concepts mastered, and community contributions. Add a "Share Your Journey" button to generate a shareable achievement card for social media. */}
+<Mermaid
+  chart={`
+gantt
+    title The 90-Day Agentic Engineer Journey
+    dateFormat X
+    axisFormat Day %x
+    
+    section Foundation
+    Agent Types :done, a1, 0, 10
+    Frameworks  :done, a2, 10, 20
+    
+    section Advanced
+    Orchestration :done, a3, 20, 30
+    Security :done, a4, 30, 40
+    Observability :done, a5, 40, 50
+    
+    section Projects
+    K8s Operator :done, p1, 50, 60
+    Research Agent :done, p2, 60, 70
+    Forensics Swarm :done, p3, 70, 80
+    LLM Router :active, p4, 80, 90
+`}
+  caption="Journey Timeline: Milestones achieved across the 3-month curriculum."
+/>
 
 ### Next Steps
 

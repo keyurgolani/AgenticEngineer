@@ -28,18 +28,28 @@ day: 83
 />
 
 <Callout type="info">
-  **Series Context:** This is mini-project 2 of 5 in the 90-day curriculum. You're building the memory
-  layer that will give your agents persistent context across conversations and
-  sessions—a critical component for production-grade agentic systems.
+  **Series Context:** This is mini-project 2 of 5 in the 90-day curriculum.
+  You're building the memory layer that will give your agents persistent context
+  across conversations and sessions—a critical component for production-grade
+  agentic systems.
 </Callout>
 
-{/* IMAGE_PLACEHOLDER: Create a conceptual illustration showing three interconnected memory systems as brain-like structures: 
-- Left: "Short-Term Memory" (Redis) shown as a fast-access cache with glowing connections, labeled with "Session Context" and "4-hour TTL"
-- Center: "Long-Term Memory" (PostgreSQL) depicted as a structured database with vector embeddings radiating outward, labeled "Facts & Preferences"
-- Right: "Episodic Memory" shown as a timeline of experience nodes, labeled "Past Interactions"
-- Arrows showing data flow from STM → Consolidation Process → LTM
-- Color scheme: Redis in red/orange (fast), PostgreSQL in green (persistent), Episodic in blue (temporal)
-- Place this illustration prominently after the callout to establish the mental model early */}
+<Mermaid
+  chart={`
+graph TD
+    STM[Short-Term Memory<br/>(Redis)]
+    LTM[Long-Term Memory<br/>(PostgreSQL)]
+    Episodic[Episodic Memory<br/>(Event Store)]
+    
+    STM -->|Consolidation| LTM
+    STM -->|History| Episodic
+    
+    style STM fill:#f66,stroke:#333
+    style LTM fill:#6f6,stroke:#333
+    style Episodic fill:#66f,stroke:#333
+`}
+  caption="The Three-Tier Memory Architecture: Modeled after human cognition."
+/>
 
 <KeyTerms
   terms={[
@@ -99,19 +109,6 @@ We also implemented a consolidation background job to process finished sessions 
 
 ## Architecture
 
-{/* IMAGE_PLACEHOLDER: Create a comprehensive system architecture diagram showing:
-- Central "Memory Service" hub with FastAPI server
-- Three distinct storage systems branching out: Redis (STM), PostgreSQL with pgvector (LTM), and Event Store (Episodic)
-- Multiple agent instances connecting to the service via HTTP/REST
-- Background consolidation worker with scheduled job indicator
-- Data flow arrows showing: agents → API → storage systems
-- Consolidation flow: STM → Consolidator → LTM + Episodic
-- Include technology logos (Redis, PostgreSQL, FastAPI)
-- Show latency targets on each connection (< 10ms for Redis, < 200ms for PostgreSQL)
-- Use a modern cloud architecture style with clean lines and professional icons
-- Color code by memory type: red for STM, green for LTM, blue for Episodic
-- Place this before the Mermaid diagram as a high-level overview */}
-
 <Mermaid
   chart={`
 graph TB
@@ -149,18 +146,31 @@ graph TB
 
 Think of this like human memory: **short-term memory** is your working consciousness (what you're thinking about right now), **long-term memory** is your knowledge base (facts you've learned), and **episodic memory** is your autobiography (experiences you remember).
 
-{/* IMAGE_PLACEHOLDER: Create an infographic comparing human memory to agent memory systems:
-- Top row: Human brain with three highlighted regions (working memory, semantic memory, episodic memory)
-- Bottom row: Corresponding technical implementations (Redis, PostgreSQL+Vectors, Event Store)
-- Visual connections showing the parallels between biological and artificial memory
-- Include icons: brain neurons → Redis cache, library/books → database tables, photo album → event timeline
-- Use a warm, educational color palette to make the analogy clear and approachable
-- Place this before the comparison table to provide context */}
+<Mermaid
+  chart={`
+graph TD
+    human[Human Memory]
+    silicon[Agent Memory]
+    
+    human --> working[Working Memory]
+    human --> semantic[Semantic Memory]
+    human --> auto[Autobiographical]
+    
+    silicon --> stm[Redis (Cache)]
+    silicon --> ltm[Postgres (Vectors)]
+    silicon --> epi[Event Log (SQL)]
+    
+    working -.-> stm
+    semantic -.-> ltm
+    auto -.-> epi
+`}
+  caption="Biomimetic Design: mapping biological memory functions to technical implementations."
+/>
 
-| Type           | Purpose                        | Storage              | Retention             | Human Analogy |
-| -------------- | ------------------------------ | -------------------- | --------------------- | ------------- |
-| **Short-Term** | Current conversation context   | Redis                | Session-based (hours) | Working memory—what you're actively thinking about |
-| **Long-Term**  | Facts, preferences, knowledge  | PostgreSQL + Vectors | Permanent             | Semantic memory—facts you've learned over time |
+| Type           | Purpose                        | Storage              | Retention             | Human Analogy                                           |
+| -------------- | ------------------------------ | -------------------- | --------------------- | ------------------------------------------------------- |
+| **Short-Term** | Current conversation context   | Redis                | Session-based (hours) | Working memory—what you're actively thinking about      |
+| **Long-Term**  | Facts, preferences, knowledge  | PostgreSQL + Vectors | Permanent             | Semantic memory—facts you've learned over time          |
 | **Episodic**   | Past interactions, experiences | Event store          | Permanent             | Autobiographical memory—specific experiences you recall |
 
 ---
@@ -182,23 +192,33 @@ Think of this like human memory: **short-term memory** is your working conscious
 
 ### Non-Functional Requirements (NFR)
 
-| ID     | Requirement          | Target                                                                                     | Measurement                  |
-| ------ | -------------------- | ------------------------------------------------------------------------------------------ | ---------------------------- |
-| NFR-01 | STM Latency          | Message storage and retrieval shall complete in < 10ms (p95)                               | Redis operation timing       |
-| NFR-02 | LTM Recall Latency   | Semantic search shall complete in < 200ms for up to 10,000 memories per user               | Query timing with embeddings |
-| NFR-03 | Embedding Generation | Embedding generation shall complete in < 100ms per text chunk                              | sentence-transformers timing |
-| NFR-04 | Data Durability      | Long-term memories shall survive service restarts with zero data loss                      | PostgreSQL persistence       |
+| ID     | Requirement          | Target                                                                       | Measurement                  |
+| ------ | -------------------- | ---------------------------------------------------------------------------- | ---------------------------- |
+| NFR-01 | STM Latency          | Message storage and retrieval shall complete in < 10ms (p95)                 | Redis operation timing       |
+| NFR-02 | LTM Recall Latency   | Semantic search shall complete in < 200ms for up to 10,000 memories per user | Query timing with embeddings |
+| NFR-03 | Embedding Generation | Embedding generation shall complete in < 100ms per text chunk                | sentence-transformers timing |
+| NFR-04 | Data Durability      | Long-term memories shall survive service restarts with zero data loss        | PostgreSQL persistence       |
 
-{/* IMAGE_PLACEHOLDER: Create an interactive visualization concept for "How Semantic Search Works":
-- Show a user query "What does the user like for breakfast?" being converted to a vector embedding (visualized as a point in 3D space)
-- Display several memory embeddings as other points in the same space
-- Highlight the closest memories with connecting lines showing cosine similarity scores
-- Animate the search process: query → embedding → similarity calculation → ranked results
-- Include a small code snippet overlay showing the actual similarity calculation
-- Use a dark theme with glowing vector points and similarity scores
-- This would be perfect as an interactive component where users can input different queries and see the semantic matching in action
-- Place this in the NFR section to illustrate the performance requirements */}
-| NFR-05 | Session Isolation    | Memory operations shall be isolated per user_id and session_id with no cross-contamination | Integration tests            |
+<Mermaid
+  chart={`
+graph LR
+    UserQuery["User Query"] -->|Embed| VecQ[Vector Q]
+    
+    subgraph VectorSpace
+        VecQ -.->|Distance| Mem1[Memory A]
+        VecQ -.->|Distance| Mem2[Memory B]
+        VecQ -.->|Distance| Mem3[Memory C]
+    end
+    
+    Mem2 -->|Closest Match| Result
+    
+    style VecQ fill:#f9f,stroke:#333
+    style Mem2 fill:#6f6,stroke:#333
+`}
+  caption="Semantic Search: Finding relevant memories by meaning (vector proximity) rather than keywords."
+/>
+| NFR-05 | Session Isolation | Memory operations shall be isolated per user_id
+and session_id with no cross-contamination | Integration tests |
 
 ### API Contract
 
@@ -345,17 +365,33 @@ Think of this like human memory: **short-term memory** is your working conscious
 
 ### Data Models
 
-{/* IMAGE_PLACEHOLDER: Create an entity-relationship diagram showing the three main tables:
-- LongTermMemory table with all fields clearly labeled
-- EpisodicMemory table with temporal relationships highlighted
-- MemoryConsolidation table showing the processing pipeline
-- Visual connections showing foreign key relationships
-- Color-code by memory type (facts=green, preferences=blue, episodes=purple)
-- Include sample data in each table to make it concrete
-- Add visual indicators for indexed fields (lightning bolt icon)
-- Show the Redis key structure as a separate "virtual table" with TTL indicators
-- Use a clean, modern database diagram style with icons for data types
-- Place this before the ASCII table diagrams to provide visual context */}
+<Mermaid
+  chart={`
+erDiagram
+    LongTermMemory {
+        int id PK
+        string user_id
+        string content
+        vector embedding
+        string type
+    }
+    EpisodicMemory {
+        int id PK
+        string session_id
+        string summary
+        string outcome
+    }
+    MemoryConsolidation {
+        int id PK
+        string status
+        timestamp completed_at
+    }
+    
+    LongTermMemory ||--o{ MemoryConsolidation : created_by
+    EpisodicMemory ||--o{ MemoryConsolidation : summarizes
+`}
+  caption="Entity Relationship Diagram: Structure for persistent memory storage."
+/>
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -632,14 +668,20 @@ def get_db():
 
 ### Phase 3: Embedding Service (20 minutes)
 
-{/* IMAGE_PLACEHOLDER: Create a visual explanation of the sentence-transformers embedding process:
-- Left side: Input text "User prefers morning coffee with oat milk"
-- Center: Neural network visualization showing the all-MiniLM-L6-v2 model processing the text
-- Right side: Output 384-dimensional vector (show first 10 dimensions with values, then "..." for remaining)
-- Below: Two example embeddings being compared with cosine similarity formula and result
-- Include a small comparison showing similar texts have high similarity (0.85+) and unrelated texts have low similarity (< 0.3)
-- Use a technical but accessible style with annotations
-- Place this at the start of Phase 3 to explain what embeddings are before diving into code */}
+<Mermaid
+  chart={`
+flowchart LR
+    Text["User prefers filtered coffee"] --> Model[Sentence Transformers<br/>all-MiniLM-L6-v2]
+    Model --> Vector["[0.12, -0.45, 0.88, ...]<br/>(384 dimensions)"]
+    
+    Vector --> Sim{Similarity?}
+    Vector2["Memory: User likes espresso"] --> Sim
+    
+    Sim -->|0.75| Match[High Match]
+    Sim -->|0.12| Mismatch[No Match]
+`}
+  caption="Embedding Generation: Converting text into mathematical vectors for comparison."
+/>
 
 ```python
 # services/embeddings.py
@@ -1272,18 +1314,26 @@ class EpisodicMemoryService:
 
 ### Phase 7: Memory Consolidation (25 minutes)
 
-{/* IMAGE_PLACEHOLDER: Create a visual representation of the memory consolidation process:
-- Top: Raw conversation messages flowing in (show 5-6 example messages)
-- Middle: LLM processing step with "GPT-4o-mini" analyzing the conversation
-- Three output streams branching out:
-  1. Facts extracted (e.g., "User is a software engineer in Seattle")
-  2. Preferences extracted (e.g., "Prefers concise explanations")
-  3. Episode summary (e.g., "Discussed memory architecture patterns")
-- Bottom: These being stored in LTM and Episodic Memory databases
-- Show the consolidation happening "during sleep" (background job) with a moon icon
-- Use a flow diagram style with clear visual separation between stages
-- Include example data at each stage to make it concrete
-- Place this at the start of Phase 7 to explain the consolidation concept */}
+<Mermaid
+  chart={`
+flowchart TD
+    Raw[Raw Conversation] --> LLM[LLM Extractor]
+    
+    LLM --> Facts[Fact Extraction]
+    LLM --> Prefs[Preference Extraction]
+    LLM --> Sum[Episode Summary]
+    
+    Facts -->|Store| LTM[(Long-Term Memory)]
+    Prefs -->|Store| LTM
+    Sum -->|Store| Episodic[(Episodic Memory)]
+    
+    style Raw fill:#fff,stroke:#333
+    style LLM fill:#f9f,stroke:#333
+    style LTM fill:#6f6,stroke:#333
+    style Episodic fill:#66f,stroke:#333
+`}
+  caption="Memory Consolidation: Distilling gold from the conversation stream."
+/>
 
 ```python
 # services/consolidator.py
@@ -1692,19 +1742,32 @@ if __name__ == "__main__":
 
 ## Usage Example
 
-{/* IMAGE_PLACEHOLDER: Create a sequence diagram showing a complete memory-aware conversation flow:
-1. User sends message → Agent stores in STM
-2. Agent queries LTM for relevant memories (show semantic search)
-3. Agent queries Episodic for similar past interactions
-4. Agent generates response using context
-5. Agent stores response in STM
-6. Session ends → Consolidation process extracts facts → Stores in LTM
-7. Episode created in Episodic Memory
-Use swimlanes for User, Agent, STM (Redis), LTM (PostgreSQL), and Consolidator
-Include timing annotations (e.g., "< 10ms", "< 200ms")
-Show data payloads at each step
-Use a modern, clean style with icons for each component
-Place this before the code example to show the big picture */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Agent
+    participant STM as STM (Redis)
+    participant LTM as LTM (Postgres)
+    participant Epi as Episodic
+    
+    User->>Agent: "Who did I meet yesterday?"
+    Agent->>STM: Store Message
+    
+    par Recall
+        Agent->>LTM: Query (Semantic)
+        Agent->>Epi: Query (History)
+    end
+    
+    LTM-->>Agent: Facts (John, Seattle)
+    Epi-->>Agent: Episode (Meeting, 24h ago)
+    
+    Agent->>Agent: Build Context
+    Agent->>User: "You met John..."
+    Agent->>STM: Store Response
+`}
+  caption="Data Flow: Synchronization between agent and memory subsystems."
+/>
 
 ```python
 # Example: Agent using memory service
@@ -1769,16 +1832,10 @@ class MemoryAwareAgent:
   4. **Memory Reflection**: Implement a background job where the agent periodically reviews its memories, identifies contradictions, and updates outdated information
   5. **Challenge**: Build a memory visualization dashboard that shows the agent's memory graph—facts connected by semantic similarity, with episodic memories as timeline markers
 
-{/* IMAGE_PLACEHOLDER: Create a mockup of a "Memory Visualization Dashboard" showing:
-- Left panel: Timeline of episodic memories with outcome indicators (success/failure)
-- Center: 3D graph visualization of long-term memories as nodes, connected by similarity edges
-- Right panel: Recent short-term memory (conversation history)
-- Top: Stats showing memory counts, consolidation status, and health metrics
-- Interactive elements: hover states, zoom controls, filter options
-- Use a dark theme with colorful memory nodes
-- This serves as inspiration for the challenge exercise
-- Place this within or after the Exercise component */}
-</Exercise>
+<Callout type="tip">
+**Visualization Tip:** A graph view of memory nodes (nodes=memories, edges=similarity) is a powerful debugging tool. Use libraries like `react-force-graph` to visualize the agent's brain state.
+</Callout>
+  </Exercise>
 
 ---
 
@@ -1790,17 +1847,29 @@ class MemoryAwareAgent:
 4. **Memory architecture patterns** from this project apply to any stateful agent system, whether you're building chatbots, autonomous agents, or multi-agent systems
 5. **Performance matters**: Redis for < 10ms STM access, optimized vector search for < 200ms LTM recall—these targets ensure memory doesn't become a bottleneck
 
-{/* IMAGE_PLACEHOLDER: Create a "Memory Service in Production" architecture diagram showing:
-- Multiple agent instances connecting to the centralized memory service
-- Load balancer distributing requests
-- Redis cluster for high-availability STM
-- PostgreSQL with read replicas for LTM scaling
-- Background consolidation workers processing sessions
-- Monitoring and metrics collection
-- Include performance metrics callouts (latency, throughput)
-- Show data flow with arrows and timing annotations
-- Use a professional cloud architecture diagram style
-- Place this in the Key Takeaways section to show production considerations */}
+<Mermaid
+  chart={`
+flowchart LR
+    LB[Load Balancer] --> A1[Agent 1]
+    LB --> A2[Agent 2]
+    
+    A1 --> Redis[(Redis Cluster)]
+    A2 --> Redis
+    
+    A1 --> PG[(Postgres Read/Write)]
+    A2 --> PG
+    
+    PG -.-> Replica[(Postgres Replica)]
+    
+    Worker[Consolidation Worker] --> Redis
+    Worker --> PG
+    
+    style Redis fill:#f66,stroke:#333
+    style PG fill:#6f6,stroke:#333
+    style Replica fill:#cfc,stroke:#333
+`}
+  caption="Production Architecture: High-availability setup for memory services."
+/>
 
 ---
 

@@ -1,0 +1,2979 @@
+---
+title: "Mini Project: Agentic Learning OS"
+description: "Build a local-first learning system that transforms PDFs/notes into flashcards, connects ideas in a knowledge graph, and uses AI to discover hidden patterns with spaced repetition."
+week: 12
+day: 83
+---
+
+<ReadingTime minutes={90} />
+
+<SkillLevel level="advanced" description="Knowledge management systems" />
+
+<Prerequisites
+  items={[
+    "Understanding of graph databases (Neo4j basics)",
+    "Familiarity with vector embeddings and semantic search",
+    "Experience with PDF parsing libraries",
+    "Knowledge of spaced repetition concepts",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Extract highlights and annotations from PDFs programmatically",
+    "Generate flashcards automatically using LLM-powered extraction",
+    "Build a knowledge graph connecting concepts across documents",
+    "Implement SM-2 and FSRS spaced repetition algorithms",
+    "Discover hidden patterns using semantic clustering",
+    "Create an interactive canvas-based knowledge visualization",
+  ]}
+/>
+
+<Callout type="info">
+  **Inspiration:** This project is inspired by BrainLoom and similar knowledge
+  management tools. You'll build a personal learning OS that transforms passive
+  reading into active recall—the most effective learning technique known to
+  cognitive science.
+</Callout>
+
+<Mermaid
+  chart={`
+graph TD
+    PDF[📄 PDFs & Notes] -->|Extract| Highlights[✨ Highlights]
+    Highlights -->|Generate| Cards[🃏 Flashcards]
+    Highlights -->|Connect| Graph[🕸️ Knowledge Graph]
+    
+    Cards -->|Review| SR[⏰ Spaced Repetition]
+    Graph -->|Analyze| Patterns[🔍 Pattern Discovery]
+    
+    SR -->|Optimize| Learning[🧠 Long-Term Memory]
+    Patterns -->|Reveal| Insights[💡 Hidden Connections]
+    
+    style PDF fill:#e3f2fd,stroke:#1565c0
+    style Cards fill:#fff9c4,stroke:#fbc02d
+    style Graph fill:#e8f5e9,stroke:#2e7d32
+    style SR fill:#fce4ec,stroke:#c2185b
+`}
+  caption="The Learning OS Pipeline: From raw documents to optimized long-term retention."
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Spaced Repetition",
+      definition:
+        "Learning technique that spaces review sessions at increasing intervals, optimizing long-term retention based on forgetting curves",
+    },
+    {
+      term: "SM-2 Algorithm",
+      definition:
+        "SuperMemo 2 algorithm that calculates optimal review intervals based on ease factor and repetition count",
+    },
+    {
+      term: "FSRS Algorithm",
+      definition:
+        "Free Spaced Repetition Scheduler—a modern, open-source algorithm using memory models for more accurate scheduling",
+    },
+    {
+      term: "Knowledge Graph",
+      definition:
+        "Network of interconnected concepts where nodes represent ideas and edges represent relationships between them",
+    },
+    {
+      term: "Semantic Clustering",
+      definition:
+        "Grouping related concepts by meaning similarity using vector embeddings, revealing hidden thematic connections",
+    },
+    {
+      term: "Active Recall",
+      definition:
+        "Learning strategy that strengthens memory by actively retrieving information rather than passively reviewing",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build a local-first learning system that transforms your PDFs, notes, and highlights into an intelligent flashcard system with knowledge graph visualization and AI-powered pattern discovery.
+
+**Why This Matters**: Most people read passively and forget 90% within a week. This system applies cognitive science principles—active recall, spaced repetition, and interleaving—to transform reading into lasting knowledge.
+
+**Real-World Analogy**: Think of this as building your own "second brain" that not only stores information but actively helps you learn it. Like a personal tutor who knows exactly when you're about to forget something and quizzes you at the perfect moment.
+
+**Skills Showcased**:
+
+- PDF parsing and highlight extraction
+- LLM-powered content generation
+- Graph database operations (Neo4j)
+- Vector embeddings for semantic search
+- Spaced repetition algorithm implementation
+- Canvas-based UI visualization
+
+## Module Summary
+
+In this project, you'll build a complete learning operating system:
+
+1. **PDF Highlight Extraction**: Parse PDFs to extract highlighted text and annotations
+2. **Automatic Flashcard Generation**: Use LLMs to transform highlights into question-answer pairs
+3. **Knowledge Graph Construction**: Connect concepts across documents using Neo4j
+4. **Spaced Repetition Engine**: Implement SM-2 and FSRS algorithms for optimal review scheduling
+5. **Pattern Discovery**: Use semantic clustering to reveal hidden connections between ideas
+6. **Visual Knowledge Map**: Build an interactive canvas showing your knowledge network
+
+---
+
+## Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Input Layer"
+        PDF[PDF Parser]
+        Notes[Markdown Notes]
+        Web[Web Clipper]
+    end
+    
+    subgraph "Processing Layer"
+        Extract[Highlight Extractor]
+        Gen[Flashcard Generator<br/>LLM]
+        Embed[Embedding Service]
+    end
+    
+    subgraph "Storage Layer"
+        SQLite[(SQLite<br/>Flashcards & Progress)]
+        Neo4j[(Neo4j<br/>Knowledge Graph)]
+        Chroma[(ChromaDB<br/>Semantic Search)]
+    end
+    
+    subgraph "Learning Layer"
+        SR[Spaced Repetition<br/>SM-2 / FSRS]
+        Cluster[Pattern Discovery<br/>Clustering]
+    end
+    
+    subgraph "UI Layer"
+        Review[Review Interface]
+        Canvas[Knowledge Canvas]
+        Stats[Learning Analytics]
+    end
+    
+    PDF --> Extract
+    Notes --> Extract
+    Web --> Extract
+    
+    Extract --> Gen
+    Extract --> Embed
+    
+    Gen --> SQLite
+    Embed --> Chroma
+    Extract --> Neo4j
+    
+    SQLite --> SR
+    Chroma --> Cluster
+    Neo4j --> Canvas
+    
+    SR --> Review
+    Cluster --> Canvas
+    SQLite --> Stats
+    
+    style Neo4j fill:#e8f5e9,stroke:#2e7d32
+    style Chroma fill:#e3f2fd,stroke:#1565c0
+    style SQLite fill:#fff9c4,stroke:#fbc02d
+    style SR fill:#fce4ec,stroke:#c2185b
+`}
+  caption="System Architecture: Local-first design with three specialized data stores."
+/>
+
+**Architecture Rationale**:
+
+| Component                 | Technology            | Why This Choice                                                                  |
+| ------------------------- | --------------------- | -------------------------------------------------------------------------------- |
+| **Flashcards & Progress** | SQLite                | Local-first, zero config, perfect for structured card data and review history    |
+| **Knowledge Graph**       | Neo4j                 | Native graph queries for traversing concept relationships, Cypher query language |
+| **Semantic Search**       | ChromaDB              | Lightweight vector store, perfect for local embedding search                     |
+| **Embeddings**            | sentence-transformers | Local inference, no API costs, fast enough for real-time                         |
+
+---
+
+## Detailed Requirements Specification
+
+### Functional Requirements (FR)
+
+| ID    | Requirement              | Description                                                                        | Priority |
+| ----- | ------------------------ | ---------------------------------------------------------------------------------- | -------- |
+| FR-01 | PDF Highlight Extraction | Extract highlighted text, annotations, and page references from PDF files          | P0       |
+| FR-02 | Flashcard Generation     | Generate question-answer pairs from highlights using LLM with configurable prompts | P0       |
+| FR-03 | Knowledge Graph Storage  | Store concepts as nodes and relationships as edges in Neo4j                        | P0       |
+| FR-04 | SM-2 Algorithm           | Implement SuperMemo 2 spaced repetition with ease factor adjustment                | P0       |
+| FR-05 | FSRS Algorithm           | Implement Free Spaced Repetition Scheduler as alternative algorithm                | P1       |
+| FR-06 | Semantic Clustering      | Group related concepts using embedding similarity                                  | P1       |
+| FR-07 | Review Session           | Present due cards with quality rating (1-5) and update schedule                    | P0       |
+| FR-08 | Knowledge Visualization  | Interactive canvas showing concept graph with zoom/pan                             | P1       |
+| FR-09 | Import from Obsidian     | Parse Obsidian markdown files with wikilinks                                       | P2       |
+| FR-10 | Learning Analytics       | Track retention rate, review streaks, and mastery progress                         | P2       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement          | Target                                           | Measurement           |
+| ------ | -------------------- | ------------------------------------------------ | --------------------- |
+| NFR-01 | PDF Parse Time       | < 5 seconds for 100-page PDF                     | End-to-end timing     |
+| NFR-02 | Card Generation      | < 3 seconds per highlight                        | LLM response time     |
+| NFR-03 | Graph Query          | < 100ms for neighborhood traversal               | Neo4j query timing    |
+| NFR-04 | Embedding Generation | < 50ms per text chunk                            | Local model inference |
+| NFR-05 | Local-First          | All data stored locally, no cloud dependency     | Architecture review   |
+| NFR-06 | Offline Capable      | Full functionality without internet (except LLM) | Manual testing        |
+
+### Data Models
+
+<Mermaid
+  chart={`
+erDiagram
+    Document ||--o{ Highlight : contains
+    Highlight ||--o{ Flashcard : generates
+    Flashcard ||--o{ Review : has
+    Concept ||--o{ Highlight : extracted_from
+    Concept }o--o{ Concept : relates_to
+    
+    Document {
+        int id PK
+        string title
+        string path
+        datetime imported_at
+    }
+    
+    Highlight {
+        int id PK
+        int document_id FK
+        string content
+        int page_number
+        vector embedding
+    }
+    
+    Flashcard {
+        int id PK
+        int highlight_id FK
+        string question
+        string answer
+        float ease_factor
+        int interval_days
+        datetime next_review
+    }
+    
+    Review {
+        int id PK
+        int flashcard_id FK
+        int quality
+        datetime reviewed_at
+    }
+    
+    Concept {
+        string id PK
+        string name
+        string description
+        vector embedding
+    }
+`}
+  caption="Entity Relationship Diagram: Core data structures for the Learning OS."
+/>
+
+```
+SQLite Schema:
+┌─────────────────────────────────────────────────────────────┐
+│                      documents                               │
+├─────────────────────────────────────────────────────────────┤
+│ id: INTEGER PRIMARY KEY                                      │
+│ title: TEXT NOT NULL                                        │
+│ file_path: TEXT UNIQUE                                      │
+│ file_hash: TEXT (for change detection)                      │
+│ imported_at: DATETIME DEFAULT CURRENT_TIMESTAMP             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                      highlights                              │
+├─────────────────────────────────────────────────────────────┤
+│ id: INTEGER PRIMARY KEY                                      │
+│ document_id: INTEGER REFERENCES documents(id)               │
+│ content: TEXT NOT NULL                                      │
+│ page_number: INTEGER                                        │
+│ position_data: JSON (coordinates for PDF)                   │
+│ created_at: DATETIME DEFAULT CURRENT_TIMESTAMP              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                      flashcards                              │
+├─────────────────────────────────────────────────────────────┤
+│ id: INTEGER PRIMARY KEY                                      │
+│ highlight_id: INTEGER REFERENCES highlights(id)             │
+│ question: TEXT NOT NULL                                     │
+│ answer: TEXT NOT NULL                                       │
+│ card_type: TEXT DEFAULT 'basic'                             │
+│   → 'basic' | 'cloze' | 'reversed'                          │
+│ ease_factor: REAL DEFAULT 2.5                               │
+│ interval_days: INTEGER DEFAULT 0                            │
+│ repetitions: INTEGER DEFAULT 0                              │
+│ next_review: DATETIME                                       │
+│ created_at: DATETIME DEFAULT CURRENT_TIMESTAMP              │
+│ suspended: BOOLEAN DEFAULT FALSE                            │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                      reviews                                 │
+├─────────────────────────────────────────────────────────────┤
+│ id: INTEGER PRIMARY KEY                                      │
+│ flashcard_id: INTEGER REFERENCES flashcards(id)             │
+│ quality: INTEGER CHECK(quality BETWEEN 1 AND 5)             │
+│ response_time_ms: INTEGER                                   │
+│ reviewed_at: DATETIME DEFAULT CURRENT_TIMESTAMP             │
+└─────────────────────────────────────────────────────────────┘
+
+Neo4j Schema (Knowledge Graph):
+─────────────────────────────────────────────────────────────
+(:Concept {
+    id: STRING,
+    name: STRING,
+    description: STRING,
+    source_document: STRING,
+    embedding: LIST<FLOAT>
+})
+
+(:Document {
+    id: STRING,
+    title: STRING,
+    path: STRING
+})
+
+Relationships:
+(:Concept)-[:RELATES_TO {strength: FLOAT, type: STRING}]->(:Concept)
+(:Concept)-[:EXTRACTED_FROM {page: INT}]->(:Document)
+(:Concept)-[:PREREQUISITE_OF]->(:Concept)
+(:Concept)-[:EXAMPLE_OF]->(:Concept)
+```
+
+---
+
+## Step-by-Step Implementation
+
+### Phase 1: Project Setup (15 minutes)
+
+```bash
+mkdir learning-os
+cd learning-os
+python -m venv venv
+source venv/bin/activate
+
+# Core dependencies
+pip install fastapi uvicorn sqlalchemy pydantic python-dotenv
+
+# PDF processing
+pip install pymupdf  # PyMuPDF for PDF parsing
+
+# AI/ML
+pip install sentence-transformers chromadb langchain-openai
+
+# Graph database
+pip install neo4j
+
+# UI (optional)
+pip install streamlit
+```
+
+#### Project Structure
+
+```
+learning-os/
+├── .env
+├── main.py
+├── models/
+│   ├── __init__.py
+│   ├── database.py
+│   └── schemas.py
+├── services/
+│   ├── __init__.py
+│   ├── pdf_parser.py
+│   ├── flashcard_generator.py
+│   ├── knowledge_graph.py
+│   ├── spaced_repetition.py
+│   ├── embeddings.py
+│   └── pattern_discovery.py
+├── routers/
+│   ├── __init__.py
+│   ├── documents.py
+│   ├── flashcards.py
+│   └── review.py
+└── ui/
+    └── app.py
+```
+
+---
+
+### Phase 2: Database Models (20 minutes)
+
+```python
+# models/database.py
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Float, Boolean, JSON, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+from datetime import datetime
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./learning.db")
+
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+
+class Document(Base):
+    """Imported documents (PDFs, notes)."""
+    __tablename__ = "documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False)
+    file_path = Column(String(1000), unique=True)
+    file_hash = Column(String(64))  # SHA-256 for change detection
+    doc_type = Column(String(50))  # pdf, markdown, web
+    imported_at = Column(DateTime, default=datetime.utcnow)
+
+    highlights = relationship("Highlight", back_populates="document")
+
+
+class Highlight(Base):
+    """Extracted highlights from documents."""
+    __tablename__ = "highlights"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
+    content = Column(Text, nullable=False)
+    page_number = Column(Integer)
+    position_data = Column(JSON)  # PDF coordinates
+    color = Column(String(20))  # Highlight color
+    note = Column(Text)  # User annotation
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    document = relationship("Document", back_populates="highlights")
+    flashcards = relationship("Flashcard", back_populates="highlight")
+
+
+class Flashcard(Base):
+    """Generated flashcards for spaced repetition."""
+    __tablename__ = "flashcards"
+
+    id = Column(Integer, primary_key=True, index=True)
+    highlight_id = Column(Integer, ForeignKey("highlights.id"))
+
+    # Card content
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    card_type = Column(String(20), default="basic")  # basic, cloze, reversed
+    tags = Column(JSON, default=list)
+
+    # SM-2 parameters
+    ease_factor = Column(Float, default=2.5)
+    interval_days = Column(Integer, default=0)
+    repetitions = Column(Integer, default=0)
+
+    # FSRS parameters (alternative algorithm)
+    stability = Column(Float, default=0.0)
+    difficulty = Column(Float, default=0.0)
+
+    # Scheduling
+    next_review = Column(DateTime)
+    last_review = Column(DateTime)
+
+    # Status
+    suspended = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    highlight = relationship("Highlight", back_populates="flashcards")
+    reviews = relationship("Review", back_populates="flashcard")
+
+
+class Review(Base):
+    """Review history for analytics."""
+    __tablename__ = "reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    flashcard_id = Column(Integer, ForeignKey("flashcards.id"), nullable=False)
+    quality = Column(Integer)  # 1-5 rating
+    response_time_ms = Column(Integer)
+    reviewed_at = Column(DateTime, default=datetime.utcnow)
+
+    flashcard = relationship("Flashcard", back_populates="reviews")
+
+
+Base.metadata.create_all(bind=engine)
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+---
+
+### Phase 3: PDF Highlight Extraction (25 minutes)
+
+<Mermaid
+  chart={`
+flowchart LR
+    PDF[📄 PDF File] --> Parse[PyMuPDF Parser]
+    Parse --> Annot[Annotations]
+    Parse --> Text[Text Blocks]
+    
+    Annot --> Filter{Highlight?}
+    Filter -->|Yes| Extract[Extract Content]
+    Filter -->|No| Skip[Skip]
+    
+    Extract --> Clean[Clean & Normalize]
+    Clean --> Store[Store Highlight]
+    
+    style PDF fill:#e3f2fd,stroke:#1565c0
+    style Store fill:#e8f5e9,stroke:#2e7d32
+`}
+  caption="PDF Parsing Pipeline: From raw PDF to structured highlights."
+/>
+
+```python
+# services/pdf_parser.py
+import fitz  # PyMuPDF
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+import hashlib
+from pathlib import Path
+
+
+@dataclass
+class ExtractedHighlight:
+    """Represents an extracted highlight from a PDF."""
+    content: str
+    page_number: int
+    color: Optional[str] = None
+    note: Optional[str] = None
+    position: Optional[Dict] = None
+
+
+class PDFParser:
+    """Extract highlights and annotations from PDF files."""
+
+    # Map annotation color values to names
+    COLOR_MAP = {
+        (1.0, 1.0, 0.0): "yellow",
+        (0.0, 1.0, 0.0): "green",
+        (1.0, 0.0, 0.0): "red",
+        (0.0, 0.0, 1.0): "blue",
+        (1.0, 0.5, 0.0): "orange",
+        (1.0, 0.0, 1.0): "pink",
+    }
+
+    def __init__(self, file_path: str):
+        self.file_path = Path(file_path)
+        self.doc = fitz.open(file_path)
+
+    def get_file_hash(self) -> str:
+        """Generate SHA-256 hash for change detection."""
+        with open(self.file_path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+
+    def get_title(self) -> str:
+        """Extract document title from metadata or filename."""
+        metadata = self.doc.metadata
+        if metadata.get("title"):
+            return metadata["title"]
+        return self.file_path.stem
+
+    def extract_highlights(self) -> List[ExtractedHighlight]:
+        """Extract all highlights from the PDF."""
+        highlights = []
+
+        for page_num, page in enumerate(self.doc, start=1):
+            # Get all annotations on this page
+            for annot in page.annots() or []:
+                # Filter for highlight annotations
+                if annot.type[0] == 8:  # Highlight annotation type
+                    highlight = self._process_highlight(page, annot, page_num)
+                    if highlight:
+                        highlights.append(highlight)
+
+        return highlights
+
+    def _process_highlight(
+        self,
+        page: fitz.Page,
+        annot: fitz.Annot,
+        page_num: int
+    ) -> Optional[ExtractedHighlight]:
+        """Process a single highlight annotation."""
+
+        # Get the highlighted text
+        quad_points = annot.vertices
+        if not quad_points:
+            return None
+
+        # Extract text from the highlight region
+        text_parts = []
+
+        # Process quad points (4 points per highlighted region)
+        for i in range(0, len(quad_points), 4):
+            quad = quad_points[i:i+4]
+            if len(quad) == 4:
+                # Create rectangle from quad points
+                rect = fitz.Quad(quad).rect
+                text = page.get_text("text", clip=rect).strip()
+                if text:
+                    text_parts.append(text)
+
+        content = " ".join(text_parts)
+
+        if not content:
+            return None
+
+        # Get highlight color
+        color = None
+        if annot.colors and annot.colors.get("stroke"):
+            stroke = tuple(round(c, 1) for c in annot.colors["stroke"])
+            color = self.COLOR_MAP.get(stroke, "unknown")
+
+        # Get any associated note/comment
+        note = annot.info.get("content", "")
+
+        # Get position data for UI rendering
+        position = {
+            "rect": list(annot.rect),
+            "vertices": [list(v) for v in quad_points] if quad_points else None
+        }
+
+        return ExtractedHighlight(
+            content=self._clean_text(content),
+            page_number=page_num,
+            color=color,
+            note=note if note else None,
+            position=position
+        )
+
+    def _clean_text(self, text: str) -> str:
+        """Clean and normalize extracted text."""
+        # Remove excessive whitespace
+        text = " ".join(text.split())
+        # Remove hyphenation from line breaks
+        text = text.replace("- ", "")
+        return text.strip()
+
+    def extract_all_text(self) -> str:
+        """Extract all text from PDF (for context)."""
+        text_parts = []
+        for page in self.doc:
+            text_parts.append(page.get_text())
+        return "\n\n".join(text_parts)
+
+    def close(self):
+        """Close the PDF document."""
+        self.doc.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+
+# Usage example
+def import_pdf(file_path: str, db_session) -> Dict:
+    """Import a PDF and extract all highlights."""
+    from models.database import Document, Highlight
+
+    with PDFParser(file_path) as parser:
+        # Check if already imported
+        file_hash = parser.get_file_hash()
+        existing = db_session.query(Document).filter(
+            Document.file_hash == file_hash
+        ).first()
+
+        if existing:
+            return {"status": "already_imported", "document_id": existing.id}
+
+        # Create document record
+        doc = Document(
+            title=parser.get_title(),
+            file_path=str(file_path),
+            file_hash=file_hash,
+            doc_type="pdf"
+        )
+        db_session.add(doc)
+        db_session.flush()
+
+        # Extract and store highlights
+        highlights = parser.extract_highlights()
+        for h in highlights:
+            highlight = Highlight(
+                document_id=doc.id,
+                content=h.content,
+                page_number=h.page_number,
+                color=h.color,
+                note=h.note,
+                position_data=h.position
+            )
+            db_session.add(highlight)
+
+        db_session.commit()
+
+        return {
+            "status": "imported",
+            "document_id": doc.id,
+            "highlights_count": len(highlights)
+        }
+```
+
+---
+
+### Phase 4: Automatic Flashcard Generation (30 minutes)
+
+<Mermaid
+  chart={`
+flowchart TD
+    Highlight[📝 Highlight Text] --> Context[+ Document Context]
+    Context --> LLM[🤖 LLM Generator]
+    
+    LLM --> QA[Q&A Pair]
+    LLM --> Cloze[Cloze Deletion]
+    LLM --> Concepts[Key Concepts]
+    
+    QA --> Card1[Basic Card]
+    Cloze --> Card2[Cloze Card]
+    Concepts --> Graph[Knowledge Graph]
+    
+    style LLM fill:#f3e5f5,stroke:#7b1fa2
+    style Card1 fill:#fff9c4,stroke:#fbc02d
+    style Card2 fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Flashcard Generation: LLM transforms highlights into learning materials."
+/>
+
+````python
+# services/flashcard_generator.py
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+import json
+
+
+@dataclass
+class GeneratedCard:
+    """A generated flashcard."""
+    question: str
+    answer: str
+    card_type: str  # basic, cloze, reversed
+    concepts: List[str]  # Extracted key concepts
+
+
+class FlashcardGenerator:
+    """Generate flashcards from highlights using LLM."""
+
+    def __init__(self, model: str = "gpt-4o-mini"):
+        self.llm = ChatOpenAI(model=model, temperature=0.3)
+
+        self.generation_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are an expert at creating effective flashcards for learning.
+Given a highlighted passage from a document, generate flashcards that:
+1. Test understanding, not just memorization
+2. Are atomic (one concept per card)
+3. Use clear, unambiguous questions
+4. Have concise but complete answers
+
+Output JSON with this structure:
+{{
+    "cards": [
+        {{
+            "question": "...",
+            "answer": "...",
+            "card_type": "basic|cloze|reversed",
+            "concepts": ["concept1", "concept2"]
+        }}
+    ]
+}}
+
+Card types:
+- basic: Standard Q&A
+- cloze: Fill-in-the-blank (use {{{{c1::text}}}} syntax)
+- reversed: Can be studied in both directions"""),
+            ("human", """Document: {document_title}
+Page: {page_number}
+
+Highlighted text:
+{highlight_content}
+
+Additional context (surrounding text):
+{context}
+
+Generate 1-3 high-quality flashcards from this highlight.""")
+        ])
+
+    async def generate_cards(
+        self,
+        highlight_content: str,
+        document_title: str,
+        page_number: int,
+        context: str = ""
+    ) -> List[GeneratedCard]:
+        """Generate flashcards from a highlight."""
+
+        prompt = self.generation_prompt.format_messages(
+            document_title=document_title,
+            page_number=page_number,
+            highlight_content=highlight_content,
+            context=context[:500] if context else "Not available"
+        )
+
+        response = await self.llm.ainvoke(prompt)
+
+        try:
+            # Parse JSON response
+            content = response.content
+            # Handle markdown code blocks
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+
+            data = json.loads(content)
+
+            cards = []
+            for card_data in data.get("cards", []):
+                cards.append(GeneratedCard(
+                    question=card_data["question"],
+                    answer=card_data["answer"],
+                    card_type=card_data.get("card_type", "basic"),
+                    concepts=card_data.get("concepts", [])
+                ))
+
+            return cards
+
+        except json.JSONDecodeError:
+            # Fallback: create a simple card
+            return [GeneratedCard(
+                question=f"What is the key point from: '{highlight_content[:50]}...'?",
+                answer=highlight_content,
+                card_type="basic",
+                concepts=[]
+            )]
+
+    async def generate_cloze_card(self, text: str) -> GeneratedCard:
+        """Generate a cloze deletion card from text."""
+
+        prompt = f"""Convert this text into a cloze deletion flashcard.
+Identify the most important term or phrase and wrap it with {{{{c1::...}}}}.
+
+Text: {text}
+
+Return only the cloze text, nothing else."""
+
+        response = await self.llm.ainvoke(prompt)
+        cloze_text = response.content.strip()
+
+        # Extract the answer from cloze syntax
+        import re
+        match = re.search(r'\{\{c1::(.+?)\}\}', cloze_text)
+        answer = match.group(1) if match else text
+
+        return GeneratedCard(
+            question=cloze_text,
+            answer=answer,
+            card_type="cloze",
+            concepts=[]
+        )
+
+
+async def generate_cards_for_highlight(
+    highlight_id: int,
+    db_session
+) -> List[Dict]:
+    """Generate and store flashcards for a highlight."""
+    from models.database import Highlight, Flashcard, Document
+
+    highlight = db_session.query(Highlight).filter(
+        Highlight.id == highlight_id
+    ).first()
+
+    if not highlight:
+        raise ValueError(f"Highlight {highlight_id} not found")
+
+    document = highlight.document
+    generator = FlashcardGenerator()
+
+    # Generate cards
+    generated = await generator.generate_cards(
+        highlight_content=highlight.content,
+        document_title=document.title,
+        page_number=highlight.page_number or 0,
+        context=""  # Could fetch surrounding text
+    )
+
+    # Store cards
+    created_cards = []
+    for card in generated:
+        flashcard = Flashcard(
+            highlight_id=highlight.id,
+            question=card.question,
+            answer=card.answer,
+            card_type=card.card_type,
+            tags=card.concepts,
+            next_review=datetime.utcnow()  # Due immediately
+        )
+        db_session.add(flashcard)
+        created_cards.append({
+            "question": card.question,
+            "answer": card.answer,
+            "type": card.card_type
+        })
+
+    db_session.commit()
+    return created_cards
+````
+
+---
+
+### Phase 5: Knowledge Graph Construction (30 minutes)
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Document A"
+        H1[Highlight: Neural Networks]
+        H2[Highlight: Backpropagation]
+    end
+    
+    subgraph "Document B"
+        H3[Highlight: Gradient Descent]
+        H4[Highlight: Loss Functions]
+    end
+    
+    subgraph "Knowledge Graph"
+        C1((Neural Networks))
+        C2((Backpropagation))
+        C3((Gradient Descent))
+        C4((Loss Functions))
+        
+        C1 -->|uses| C2
+        C2 -->|requires| C3
+        C3 -->|optimizes| C4
+        C4 -->|trains| C1
+    end
+    
+    H1 -.-> C1
+    H2 -.-> C2
+    H3 -.-> C3
+    H4 -.-> C4
+    
+    style C1 fill:#e8f5e9,stroke:#2e7d32
+    style C2 fill:#e8f5e9,stroke:#2e7d32
+    style C3 fill:#e8f5e9,stroke:#2e7d32
+    style C4 fill:#e8f5e9,stroke:#2e7d32
+`}
+  caption="Knowledge Graph: Connecting concepts across documents reveals the bigger picture."
+/>
+
+```python
+# services/knowledge_graph.py
+from neo4j import GraphDatabase
+from typing import List, Dict, Optional, Tuple
+from dataclasses import dataclass
+import os
+
+
+@dataclass
+class Concept:
+    """A concept node in the knowledge graph."""
+    id: str
+    name: str
+    description: str
+    source_document: Optional[str] = None
+    embedding: Optional[List[float]] = None
+
+
+@dataclass
+class Relationship:
+    """A relationship between concepts."""
+    from_concept: str
+    to_concept: str
+    relation_type: str  # relates_to, prerequisite_of, example_of
+    strength: float = 1.0
+
+
+class KnowledgeGraph:
+    """Neo4j-based knowledge graph for concept relationships."""
+
+    def __init__(
+        self,
+        uri: str = None,
+        user: str = None,
+        password: str = None
+    ):
+        self.uri = uri or os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        self.user = user or os.getenv("NEO4J_USER", "neo4j")
+        self.password = password or os.getenv("NEO4J_PASSWORD", "password")
+
+        self.driver = GraphDatabase.driver(
+            self.uri,
+            auth=(self.user, self.password)
+        )
+
+    def close(self):
+        self.driver.close()
+
+    def create_concept(self, concept: Concept) -> bool:
+        """Create or update a concept node."""
+        query = """
+        MERGE (c:Concept {id: $id})
+        SET c.name = $name,
+            c.description = $description,
+            c.source_document = $source_document,
+            c.embedding = $embedding,
+            c.updated_at = datetime()
+        RETURN c
+        """
+
+        with self.driver.session() as session:
+            result = session.run(
+                query,
+                id=concept.id,
+                name=concept.name,
+                description=concept.description,
+                source_document=concept.source_document,
+                embedding=concept.embedding
+            )
+            return result.single() is not None
+
+    def create_relationship(self, rel: Relationship) -> bool:
+        """Create a relationship between concepts."""
+        # Dynamic relationship type
+        query = f"""
+        MATCH (a:Concept {{id: $from_id}})
+        MATCH (b:Concept {{id: $to_id}})
+        MERGE (a)-[r:{rel.relation_type.upper()}]->(b)
+        SET r.strength = $strength,
+            r.created_at = datetime()
+        RETURN r
+        """
+
+        with self.driver.session() as session:
+            result = session.run(
+                query,
+                from_id=rel.from_concept,
+                to_id=rel.to_concept,
+                strength=rel.strength
+            )
+            return result.single() is not None
+
+    def get_concept(self, concept_id: str) -> Optional[Dict]:
+        """Get a concept by ID."""
+        query = """
+        MATCH (c:Concept {id: $id})
+        RETURN c
+        """
+
+        with self.driver.session() as session:
+            result = session.run(query, id=concept_id)
+            record = result.single()
+            if record:
+                node = record["c"]
+                return dict(node)
+        return None
+
+    def get_related_concepts(
+        self,
+        concept_id: str,
+        depth: int = 2,
+        limit: int = 20
+    ) -> List[Dict]:
+        """Get concepts related to a given concept."""
+        query = """
+        MATCH (start:Concept {id: $id})
+        MATCH path = (start)-[*1..$depth]-(related:Concept)
+        WHERE related <> start
+        WITH DISTINCT related, length(path) as distance
+        RETURN related, distance
+        ORDER BY distance
+        LIMIT $limit
+        """
+
+        with self.driver.session() as session:
+            result = session.run(
+                query,
+                id=concept_id,
+                depth=depth,
+                limit=limit
+            )
+
+            concepts = []
+            for record in result:
+                node = record["related"]
+                concepts.append({
+                    **dict(node),
+                    "distance": record["distance"]
+                })
+            return concepts
+
+    def find_path(
+        self,
+        from_concept: str,
+        to_concept: str
+    ) -> Optional[List[Dict]]:
+        """Find the shortest path between two concepts."""
+        query = """
+        MATCH path = shortestPath(
+            (a:Concept {id: $from_id})-[*]-(b:Concept {id: $to_id})
+        )
+        RETURN [node in nodes(path) | node {.*}] as nodes,
+               [rel in relationships(path) | type(rel)] as relationships
+        """
+
+        with self.driver.session() as session:
+            result = session.run(
+                query,
+                from_id=from_concept,
+                to_id=to_concept
+            )
+            record = result.single()
+            if record:
+                return {
+                    "nodes": record["nodes"],
+                    "relationships": record["relationships"]
+                }
+        return None
+
+    def get_graph_for_document(self, document_id: str) -> Dict:
+        """Get all concepts and relationships for a document."""
+        query = """
+        MATCH (c:Concept {source_document: $doc_id})
+        OPTIONAL MATCH (c)-[r]-(related:Concept)
+        RETURN collect(DISTINCT c) as concepts,
+               collect(DISTINCT {
+                   from: startNode(r).id,
+                   to: endNode(r).id,
+                   type: type(r),
+                   strength: r.strength
+               }) as relationships
+        """
+
+        with self.driver.session() as session:
+            result = session.run(query, doc_id=document_id)
+            record = result.single()
+            if record:
+                return {
+                    "concepts": [dict(c) for c in record["concepts"]],
+                    "relationships": [r for r in record["relationships"] if r["from"]]
+                }
+        return {"concepts": [], "relationships": []}
+
+    def search_concepts(
+        self,
+        query_text: str,
+        limit: int = 10
+    ) -> List[Dict]:
+        """Full-text search for concepts."""
+        query = """
+        MATCH (c:Concept)
+        WHERE toLower(c.name) CONTAINS toLower($query)
+           OR toLower(c.description) CONTAINS toLower($query)
+        RETURN c
+        LIMIT $limit
+        """
+
+        with self.driver.session() as session:
+            result = session.run(query, query=query_text, limit=limit)
+            return [dict(record["c"]) for record in result]
+
+    def get_statistics(self) -> Dict:
+        """Get graph statistics."""
+        query = """
+        MATCH (c:Concept)
+        OPTIONAL MATCH ()-[r]->()
+        RETURN count(DISTINCT c) as concept_count,
+               count(DISTINCT r) as relationship_count
+        """
+
+        with self.driver.session() as session:
+            result = session.run(query)
+            record = result.single()
+            return {
+                "concepts": record["concept_count"],
+                "relationships": record["relationship_count"]
+            }
+```
+
+#### Concept Extraction from Highlights
+
+````python
+# services/concept_extractor.py
+from langchain_openai import ChatOpenAI
+from services.knowledge_graph import KnowledgeGraph, Concept, Relationship
+from services.embeddings import EmbeddingService
+from typing import List, Dict
+import json
+import re
+
+
+class ConceptExtractor:
+    """Extract concepts and relationships from highlights."""
+
+    def __init__(self):
+        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+        self.graph = KnowledgeGraph()
+        self.embeddings = EmbeddingService()
+
+    async def extract_from_highlight(
+        self,
+        highlight_content: str,
+        document_id: str,
+        existing_concepts: List[str] = None
+    ) -> Dict:
+        """Extract concepts and relationships from a highlight."""
+
+        existing = existing_concepts or []
+        existing_str = ", ".join(existing[:20]) if existing else "None yet"
+
+        prompt = f"""Analyze this text and extract key concepts and their relationships.
+
+Text: {highlight_content}
+
+Existing concepts in the knowledge graph: {existing_str}
+
+Return JSON:
+{{
+    "concepts": [
+        {{
+            "name": "Concept Name",
+            "description": "Brief description",
+            "is_new": true/false  // false if matches existing concept
+        }}
+    ],
+    "relationships": [
+        {{
+            "from": "Concept A",
+            "to": "Concept B",
+            "type": "relates_to|prerequisite_of|example_of|part_of",
+            "strength": 0.0-1.0
+        }}
+    ]
+}}
+
+Guidelines:
+- Extract 1-5 key concepts
+- Identify relationships between concepts
+- Link to existing concepts when relevant
+- Use clear, canonical concept names"""
+
+        response = await self.llm.ainvoke(prompt)
+
+        try:
+            content = response.content
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            return {"concepts": [], "relationships": []}
+
+        # Process and store concepts
+        created_concepts = []
+        for concept_data in data.get("concepts", []):
+            concept_id = self._normalize_id(concept_data["name"])
+
+            # Generate embedding for the concept
+            embedding = self.embeddings.embed(
+                f"{concept_data['name']}: {concept_data['description']}"
+            )[0].tolist()
+
+            concept = Concept(
+                id=concept_id,
+                name=concept_data["name"],
+                description=concept_data["description"],
+                source_document=document_id,
+                embedding=embedding
+            )
+
+            self.graph.create_concept(concept)
+            created_concepts.append(concept_data["name"])
+
+        # Process relationships
+        created_relationships = []
+        for rel_data in data.get("relationships", []):
+            rel = Relationship(
+                from_concept=self._normalize_id(rel_data["from"]),
+                to_concept=self._normalize_id(rel_data["to"]),
+                relation_type=rel_data.get("type", "relates_to"),
+                strength=rel_data.get("strength", 0.8)
+            )
+
+            self.graph.create_relationship(rel)
+            created_relationships.append(rel_data)
+
+        return {
+            "concepts": created_concepts,
+            "relationships": created_relationships
+        }
+
+    def _normalize_id(self, name: str) -> str:
+        """Normalize concept name to ID."""
+        # Lowercase, replace spaces with underscores, remove special chars
+        normalized = name.lower().strip()
+        normalized = re.sub(r'[^a-z0-9\s]', '', normalized)
+        normalized = re.sub(r'\s+', '_', normalized)
+        return normalized
+
+    def close(self):
+        self.graph.close()
+````
+
+---
+
+### Phase 6: Spaced Repetition Algorithms (35 minutes)
+
+This is the heart of the learning system. We'll implement both the classic SM-2 algorithm and the modern FSRS algorithm.
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "SM-2 Algorithm"
+        Q[Quality Rating 0-5] --> EF[Update Ease Factor]
+        EF --> Int[Calculate Interval]
+        Int --> Next[Next Review Date]
+    end
+    
+    subgraph "FSRS Algorithm"
+        R[Retrievability] --> S[Stability]
+        S --> D[Difficulty]
+        D --> Opt[Optimal Interval]
+    end
+    
+    subgraph "Forgetting Curve"
+        Time[Time Since Review] --> Prob[Recall Probability]
+        Prob -->|Below Threshold| Due[Card Due]
+    end
+    
+    style Q fill:#fff9c4,stroke:#fbc02d
+    style R fill:#e8f5e9,stroke:#2e7d32
+    style Due fill:#fce4ec,stroke:#c2185b
+`}
+  caption="Spaced Repetition: Two algorithms for optimal review scheduling."
+/>
+
+#### The Science Behind Spaced Repetition
+
+<Callout type="info">
+  **The Forgetting Curve**: Hermann Ebbinghaus discovered that memory decays
+  exponentially over time. Without review, you forget ~70% within 24 hours.
+  Spaced repetition exploits this by scheduling reviews just before you forget,
+  strengthening the memory trace each time.
+</Callout>
+
+```python
+# services/spaced_repetition.py
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Optional, Tuple
+from enum import IntEnum
+import math
+
+
+class Quality(IntEnum):
+    """Review quality ratings."""
+    BLACKOUT = 1      # Complete blackout, no recall
+    WRONG = 2         # Wrong answer, but recognized correct one
+    HARD = 3          # Correct with significant difficulty
+    GOOD = 4          # Correct with some hesitation
+    EASY = 5          # Perfect recall, effortless
+
+
+@dataclass
+class SM2State:
+    """State for SM-2 algorithm."""
+    ease_factor: float = 2.5      # Easiness factor (minimum 1.3)
+    interval_days: int = 0        # Current interval in days
+    repetitions: int = 0          # Number of successful reviews
+    next_review: Optional[datetime] = None
+
+
+@dataclass
+class FSRSState:
+    """State for FSRS algorithm."""
+    stability: float = 0.0        # Memory stability (days)
+    difficulty: float = 0.0       # Card difficulty (0-1)
+    last_review: Optional[datetime] = None
+    next_review: Optional[datetime] = None
+
+
+class SM2Algorithm:
+    """
+    SuperMemo 2 Algorithm Implementation.
+
+    The classic spaced repetition algorithm used by Anki and many others.
+    Based on the work of Piotr Wozniak.
+
+    Key formula:
+    - EF' = EF + (0.1 - (5-q) * (0.08 + (5-q) * 0.02))
+    - Interval: 1, 6, then previous * EF
+    """
+
+    MIN_EASE_FACTOR = 1.3
+
+    def review(
+        self,
+        state: SM2State,
+        quality: Quality
+    ) -> SM2State:
+        """
+        Process a review and return updated state.
+
+        Args:
+            state: Current card state
+            quality: Review quality (1-5)
+
+        Returns:
+            Updated SM2State with new interval and next review date
+        """
+        q = int(quality)
+
+        # Update ease factor
+        # EF' = EF + (0.1 - (5-q) * (0.08 + (5-q) * 0.02))
+        new_ef = state.ease_factor + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
+        new_ef = max(self.MIN_EASE_FACTOR, new_ef)
+
+        # Calculate new interval
+        if q < 3:
+            # Failed review - reset
+            new_interval = 1
+            new_reps = 0
+        else:
+            # Successful review
+            new_reps = state.repetitions + 1
+
+            if new_reps == 1:
+                new_interval = 1
+            elif new_reps == 2:
+                new_interval = 6
+            else:
+                new_interval = round(state.interval_days * new_ef)
+
+        # Calculate next review date
+        next_review = datetime.utcnow() + timedelta(days=new_interval)
+
+        return SM2State(
+            ease_factor=new_ef,
+            interval_days=new_interval,
+            repetitions=new_reps,
+            next_review=next_review
+        )
+
+    def get_intervals_preview(
+        self,
+        state: SM2State
+    ) -> dict:
+        """Preview intervals for each quality rating."""
+        previews = {}
+        for q in Quality:
+            new_state = self.review(
+                SM2State(
+                    ease_factor=state.ease_factor,
+                    interval_days=state.interval_days,
+                    repetitions=state.repetitions
+                ),
+                q
+            )
+            previews[q.name] = new_state.interval_days
+        return previews
+
+
+class FSRSAlgorithm:
+    """
+    Free Spaced Repetition Scheduler (FSRS) Implementation.
+
+    A modern, open-source algorithm based on the DSR (Difficulty-Stability-Retrievability)
+    memory model. More accurate than SM-2 for predicting forgetting.
+
+    Key concepts:
+    - Stability (S): How long until retrievability drops to 90%
+    - Difficulty (D): Inherent difficulty of the card (0-1)
+    - Retrievability (R): Probability of recall at any given time
+
+    Reference: https://github.com/open-spaced-repetition/fsrs4anki
+    """
+
+    # FSRS-4.5 default parameters (can be optimized per user)
+    W = [
+        0.4,    # w0: initial stability for Again
+        0.6,    # w1: initial stability for Hard
+        2.4,    # w2: initial stability for Good
+        5.8,    # w3: initial stability for Easy
+        4.93,   # w4: difficulty weight
+        0.94,   # w5: difficulty weight
+        0.86,   # w6: difficulty weight
+        0.01,   # w7: difficulty weight
+        1.49,   # w8: stability increase factor
+        0.14,   # w9: stability increase factor
+        0.94,   # w10: stability increase factor
+        2.18,   # w11: stability increase factor
+        0.05,   # w12: stability increase factor
+        0.34,   # w13: stability increase factor
+        1.26,   # w14: stability increase factor
+        0.29,   # w15: stability increase factor
+        2.61,   # w16: stability increase factor
+    ]
+
+    DECAY = -0.5
+    FACTOR = 19 / 81
+    REQUEST_RETENTION = 0.9  # Target 90% retention
+
+    def review(
+        self,
+        state: FSRSState,
+        quality: Quality
+    ) -> FSRSState:
+        """
+        Process a review using FSRS algorithm.
+
+        Args:
+            state: Current FSRS state
+            quality: Review quality (1-5, mapped to Again/Hard/Good/Easy)
+
+        Returns:
+            Updated FSRSState
+        """
+        now = datetime.utcnow()
+
+        # Map quality to FSRS rating (0-3)
+        rating = self._quality_to_rating(quality)
+
+        if state.stability == 0:
+            # New card - initialize
+            new_stability = self._initial_stability(rating)
+            new_difficulty = self._initial_difficulty(rating)
+        else:
+            # Review card
+            elapsed = (now - state.last_review).days if state.last_review else 0
+            retrievability = self._retrievability(state.stability, elapsed)
+
+            new_difficulty = self._next_difficulty(state.difficulty, rating)
+            new_stability = self._next_stability(
+                state.difficulty,
+                state.stability,
+                retrievability,
+                rating
+            )
+
+        # Calculate next review interval
+        interval = self._next_interval(new_stability)
+        next_review = now + timedelta(days=interval)
+
+        return FSRSState(
+            stability=new_stability,
+            difficulty=new_difficulty,
+            last_review=now,
+            next_review=next_review
+        )
+
+    def _quality_to_rating(self, quality: Quality) -> int:
+        """Map 1-5 quality to 0-3 FSRS rating."""
+        if quality <= 2:
+            return 0  # Again
+        elif quality == 3:
+            return 1  # Hard
+        elif quality == 4:
+            return 2  # Good
+        else:
+            return 3  # Easy
+
+    def _initial_stability(self, rating: int) -> float:
+        """Initial stability for new cards."""
+        return self.W[rating]
+
+    def _initial_difficulty(self, rating: int) -> float:
+        """Initial difficulty for new cards."""
+        return min(max(
+            self.W[4] - self.W[5] * (rating - 2),
+            1
+        ), 10) / 10  # Normalize to 0-1
+
+    def _retrievability(self, stability: float, elapsed_days: int) -> float:
+        """Calculate retrievability (probability of recall)."""
+        return (1 + self.FACTOR * elapsed_days / stability) ** self.DECAY
+
+    def _next_difficulty(self, d: float, rating: int) -> float:
+        """Calculate next difficulty."""
+        delta = -(self.W[6] * (rating - 2))
+        new_d = d + delta * (1 - d) if delta > 0 else d + delta * d
+
+        # Mean reversion
+        new_d = self.W[7] * self._initial_difficulty(2) + (1 - self.W[7]) * new_d
+
+        return min(max(new_d, 0), 1)
+
+    def _next_stability(
+        self,
+        d: float,
+        s: float,
+        r: float,
+        rating: int
+    ) -> float:
+        """Calculate next stability."""
+        if rating == 0:  # Again (forgot)
+            return self.W[11] * (d ** -self.W[12]) * (
+                (s + 1) ** self.W[13] - 1
+            ) * math.exp((1 - r) * self.W[14])
+        else:
+            # Successful recall
+            hard_penalty = self.W[15] if rating == 1 else 1
+            easy_bonus = self.W[16] if rating == 3 else 1
+
+            return s * (
+                1 + math.exp(self.W[8]) *
+                (11 - d) *
+                (s ** -self.W[9]) *
+                (math.exp((1 - r) * self.W[10]) - 1) *
+                hard_penalty *
+                easy_bonus
+            )
+
+    def _next_interval(self, stability: float) -> int:
+        """Calculate next interval from stability."""
+        interval = stability / self.FACTOR * (
+            self.REQUEST_RETENTION ** (1 / self.DECAY) - 1
+        )
+        return max(1, round(interval))
+
+    def get_retrievability(self, state: FSRSState) -> float:
+        """Get current retrievability for a card."""
+        if not state.last_review or state.stability == 0:
+            return 0.0
+
+        elapsed = (datetime.utcnow() - state.last_review).days
+        return self._retrievability(state.stability, elapsed)
+```
+
+#### Review Session Manager
+
+```python
+# services/review_session.py
+from sqlalchemy.orm import Session
+from models.database import Flashcard, Review
+from services.spaced_repetition import SM2Algorithm, FSRSAlgorithm, SM2State, FSRSState, Quality
+from datetime import datetime
+from typing import List, Dict, Optional
+
+
+class ReviewSession:
+    """Manages a review session with due cards."""
+
+    def __init__(
+        self,
+        db: Session,
+        algorithm: str = "sm2"  # "sm2" or "fsrs"
+    ):
+        self.db = db
+        self.algorithm = algorithm
+        self.sm2 = SM2Algorithm()
+        self.fsrs = FSRSAlgorithm()
+
+    def get_due_cards(self, limit: int = 20) -> List[Flashcard]:
+        """Get cards due for review."""
+        now = datetime.utcnow()
+
+        return self.db.query(Flashcard).filter(
+            Flashcard.suspended == False,
+            (Flashcard.next_review <= now) | (Flashcard.next_review == None)
+        ).order_by(
+            Flashcard.next_review.asc()
+        ).limit(limit).all()
+
+    def get_new_cards(self, limit: int = 10) -> List[Flashcard]:
+        """Get new cards (never reviewed)."""
+        return self.db.query(Flashcard).filter(
+            Flashcard.suspended == False,
+            Flashcard.repetitions == 0,
+            Flashcard.next_review == None
+        ).limit(limit).all()
+
+    def review_card(
+        self,
+        card_id: int,
+        quality: int,
+        response_time_ms: int = None
+    ) -> Dict:
+        """
+        Process a card review.
+
+        Args:
+            card_id: Flashcard ID
+            quality: Rating 1-5
+            response_time_ms: Time taken to respond
+
+        Returns:
+            Updated card state and next interval
+        """
+        card = self.db.query(Flashcard).filter(
+            Flashcard.id == card_id
+        ).first()
+
+        if not card:
+            raise ValueError(f"Card {card_id} not found")
+
+        q = Quality(quality)
+
+        if self.algorithm == "fsrs":
+            # Use FSRS algorithm
+            state = FSRSState(
+                stability=card.stability or 0,
+                difficulty=card.difficulty or 0,
+                last_review=card.last_review
+            )
+            new_state = self.fsrs.review(state, q)
+
+            card.stability = new_state.stability
+            card.difficulty = new_state.difficulty
+            card.next_review = new_state.next_review
+            card.last_review = datetime.utcnow()
+
+            interval = (new_state.next_review - datetime.utcnow()).days
+        else:
+            # Use SM-2 algorithm
+            state = SM2State(
+                ease_factor=card.ease_factor,
+                interval_days=card.interval_days,
+                repetitions=card.repetitions
+            )
+            new_state = self.sm2.review(state, q)
+
+            card.ease_factor = new_state.ease_factor
+            card.interval_days = new_state.interval_days
+            card.repetitions = new_state.repetitions
+            card.next_review = new_state.next_review
+            card.last_review = datetime.utcnow()
+
+            interval = new_state.interval_days
+
+        # Record review history
+        review = Review(
+            flashcard_id=card.id,
+            quality=quality,
+            response_time_ms=response_time_ms,
+            reviewed_at=datetime.utcnow()
+        )
+        self.db.add(review)
+        self.db.commit()
+
+        return {
+            "card_id": card.id,
+            "quality": quality,
+            "next_review": card.next_review.isoformat(),
+            "interval_days": interval,
+            "ease_factor": card.ease_factor if self.algorithm == "sm2" else None,
+            "stability": card.stability if self.algorithm == "fsrs" else None
+        }
+
+    def get_session_stats(self) -> Dict:
+        """Get statistics for the current session."""
+        now = datetime.utcnow()
+
+        due_count = self.db.query(Flashcard).filter(
+            Flashcard.suspended == False,
+            Flashcard.next_review <= now
+        ).count()
+
+        new_count = self.db.query(Flashcard).filter(
+            Flashcard.suspended == False,
+            Flashcard.repetitions == 0
+        ).count()
+
+        total_count = self.db.query(Flashcard).filter(
+            Flashcard.suspended == False
+        ).count()
+
+        # Reviews today
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        reviews_today = self.db.query(Review).filter(
+            Review.reviewed_at >= today_start
+        ).count()
+
+        return {
+            "due": due_count,
+            "new": new_count,
+            "total": total_count,
+            "reviewed_today": reviews_today
+        }
+
+    def preview_intervals(self, card_id: int) -> Dict:
+        """Preview what intervals each rating would give."""
+        card = self.db.query(Flashcard).filter(
+            Flashcard.id == card_id
+        ).first()
+
+        if not card:
+            return {}
+
+        if self.algorithm == "sm2":
+            state = SM2State(
+                ease_factor=card.ease_factor,
+                interval_days=card.interval_days,
+                repetitions=card.repetitions
+            )
+            return self.sm2.get_intervals_preview(state)
+        else:
+            # For FSRS, calculate for each rating
+            previews = {}
+            for q in Quality:
+                state = FSRSState(
+                    stability=card.stability or 0,
+                    difficulty=card.difficulty or 0,
+                    last_review=card.last_review
+                )
+                new_state = self.fsrs.review(state, q)
+                interval = (new_state.next_review - datetime.utcnow()).days
+                previews[q.name] = interval
+            return previews
+```
+
+---
+
+### Phase 7: AI-Powered Pattern Discovery (25 minutes)
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Embedding Space"
+        E1[📝 Highlight 1]
+        E2[📝 Highlight 2]
+        E3[📝 Highlight 3]
+        E4[📝 Highlight 4]
+        E5[📝 Highlight 5]
+        E6[📝 Highlight 6]
+    end
+    
+    subgraph "Clustering"
+        C1((Cluster A))
+        C2((Cluster B))
+    end
+    
+    E1 --> C1
+    E2 --> C1
+    E3 --> C1
+    E4 --> C2
+    E5 --> C2
+    E6 --> C2
+    
+    C1 --> Theme1[🏷️ Machine Learning]
+    C2 --> Theme2[🏷️ Data Structures]
+    
+    style C1 fill:#e8f5e9,stroke:#2e7d32
+    style C2 fill:#e3f2fd,stroke:#1565c0
+`}
+  caption="Semantic Clustering: Discovering hidden themes across your knowledge base."
+/>
+
+```python
+# services/pattern_discovery.py
+from sentence_transformers import SentenceTransformer
+import chromadb
+from chromadb.config import Settings
+import numpy as np
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.metrics.pairwise import cosine_similarity
+from typing import List, Dict, Tuple, Optional
+from collections import defaultdict
+import os
+
+
+class EmbeddingService:
+    """Generate and manage embeddings for semantic search."""
+
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+        self.model = SentenceTransformer(model_name)
+        self.dimension = self.model.get_sentence_embedding_dimension()
+
+    def embed(self, texts: List[str]) -> np.ndarray:
+        """Generate embeddings for texts."""
+        if isinstance(texts, str):
+            texts = [texts]
+        return self.model.encode(texts, convert_to_numpy=True)
+
+    def similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Calculate cosine similarity."""
+        return float(cosine_similarity([a], [b])[0][0])
+
+
+class PatternDiscovery:
+    """Discover patterns and themes in your knowledge base."""
+
+    def __init__(self, persist_directory: str = "./chroma_db"):
+        self.embeddings = EmbeddingService()
+
+        # Initialize ChromaDB for vector storage
+        self.chroma = chromadb.Client(Settings(
+            chroma_db_impl="duckdb+parquet",
+            persist_directory=persist_directory,
+            anonymized_telemetry=False
+        ))
+
+        self.collection = self.chroma.get_or_create_collection(
+            name="highlights",
+            metadata={"hnsw:space": "cosine"}
+        )
+
+    def add_highlight(
+        self,
+        highlight_id: str,
+        content: str,
+        metadata: Dict = None
+    ):
+        """Add a highlight to the vector store."""
+        embedding = self.embeddings.embed([content])[0]
+
+        self.collection.add(
+            ids=[highlight_id],
+            embeddings=[embedding.tolist()],
+            documents=[content],
+            metadatas=[metadata or {}]
+        )
+
+    def find_similar(
+        self,
+        query: str,
+        n_results: int = 5,
+        threshold: float = 0.5
+    ) -> List[Dict]:
+        """Find highlights similar to a query."""
+        results = self.collection.query(
+            query_texts=[query],
+            n_results=n_results
+        )
+
+        similar = []
+        for i, (doc, distance) in enumerate(zip(
+            results["documents"][0],
+            results["distances"][0]
+        )):
+            similarity = 1 - distance  # Convert distance to similarity
+            if similarity >= threshold:
+                similar.append({
+                    "id": results["ids"][0][i],
+                    "content": doc,
+                    "similarity": similarity,
+                    "metadata": results["metadatas"][0][i]
+                })
+
+        return similar
+
+    def discover_clusters(
+        self,
+        n_clusters: int = None,
+        min_cluster_size: int = 3
+    ) -> List[Dict]:
+        """
+        Discover thematic clusters in your highlights.
+
+        Uses DBSCAN if n_clusters is None (automatic),
+        otherwise uses KMeans.
+        """
+        # Get all embeddings
+        all_data = self.collection.get(include=["embeddings", "documents", "metadatas"])
+
+        if not all_data["ids"]:
+            return []
+
+        embeddings = np.array(all_data["embeddings"])
+        documents = all_data["documents"]
+        ids = all_data["ids"]
+
+        if n_clusters is None:
+            # Use DBSCAN for automatic clustering
+            clustering = DBSCAN(
+                eps=0.3,
+                min_samples=min_cluster_size,
+                metric="cosine"
+            )
+            labels = clustering.fit_predict(embeddings)
+        else:
+            # Use KMeans for fixed number of clusters
+            clustering = KMeans(
+                n_clusters=min(n_clusters, len(embeddings)),
+                random_state=42,
+                n_init=10
+            )
+            labels = clustering.fit_predict(embeddings)
+
+        # Group by cluster
+        clusters = defaultdict(list)
+        for i, label in enumerate(labels):
+            if label != -1:  # -1 is noise in DBSCAN
+                clusters[label].append({
+                    "id": ids[i],
+                    "content": documents[i],
+                    "embedding": embeddings[i]
+                })
+
+        # Generate cluster summaries
+        result = []
+        for label, items in clusters.items():
+            # Find centroid
+            cluster_embeddings = np.array([item["embedding"] for item in items])
+            centroid = cluster_embeddings.mean(axis=0)
+
+            # Find most representative item (closest to centroid)
+            distances = [
+                self.embeddings.similarity(centroid, item["embedding"])
+                for item in items
+            ]
+            representative_idx = np.argmax(distances)
+
+            result.append({
+                "cluster_id": int(label),
+                "size": len(items),
+                "representative": items[representative_idx]["content"],
+                "items": [{"id": item["id"], "content": item["content"]} for item in items]
+            })
+
+        return sorted(result, key=lambda x: x["size"], reverse=True)
+
+    def find_knowledge_gaps(
+        self,
+        target_concepts: List[str]
+    ) -> List[Dict]:
+        """
+        Identify gaps in your knowledge base.
+
+        Compares target concepts against what you've learned.
+        """
+        gaps = []
+
+        for concept in target_concepts:
+            similar = self.find_similar(concept, n_results=3, threshold=0.6)
+
+            if not similar:
+                gaps.append({
+                    "concept": concept,
+                    "coverage": 0.0,
+                    "status": "missing",
+                    "suggestion": f"No highlights found related to '{concept}'"
+                })
+            else:
+                max_similarity = max(s["similarity"] for s in similar)
+                if max_similarity < 0.7:
+                    gaps.append({
+                        "concept": concept,
+                        "coverage": max_similarity,
+                        "status": "partial",
+                        "related": [s["content"][:100] for s in similar],
+                        "suggestion": f"Consider deeper study of '{concept}'"
+                    })
+
+        return gaps
+
+    def suggest_connections(
+        self,
+        highlight_id: str,
+        n_suggestions: int = 5
+    ) -> List[Dict]:
+        """Suggest connections to other highlights."""
+        # Get the highlight
+        result = self.collection.get(
+            ids=[highlight_id],
+            include=["embeddings", "documents"]
+        )
+
+        if not result["ids"]:
+            return []
+
+        # Find similar but not identical
+        similar = self.collection.query(
+            query_embeddings=[result["embeddings"][0]],
+            n_results=n_suggestions + 1  # +1 to exclude self
+        )
+
+        suggestions = []
+        for i, (doc_id, doc, distance) in enumerate(zip(
+            similar["ids"][0],
+            similar["documents"][0],
+            similar["distances"][0]
+        )):
+            if doc_id != highlight_id:
+                suggestions.append({
+                    "id": doc_id,
+                    "content": doc,
+                    "similarity": 1 - distance,
+                    "connection_type": self._infer_connection_type(1 - distance)
+                })
+
+        return suggestions[:n_suggestions]
+
+    def _infer_connection_type(self, similarity: float) -> str:
+        """Infer the type of connection based on similarity."""
+        if similarity > 0.9:
+            return "duplicate_or_restatement"
+        elif similarity > 0.8:
+            return "strongly_related"
+        elif similarity > 0.6:
+            return "related"
+        else:
+            return "loosely_related"
+```
+
+---
+
+### Phase 8: Visual Knowledge Graph UI (25 minutes)
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Canvas UI"
+        Zoom[🔍 Zoom/Pan]
+        Select[👆 Select Node]
+        Drag[✋ Drag Nodes]
+        Filter[🏷️ Filter by Tag]
+    end
+    
+    subgraph "Visualization"
+        Nodes[Concept Nodes]
+        Edges[Relationship Edges]
+        Clusters[Cluster Highlights]
+    end
+    
+    subgraph "Interactions"
+        Click[Click → View Details]
+        Hover[Hover → Preview]
+        DblClick[Double-Click → Edit]
+    end
+    
+    Zoom --> Nodes
+    Select --> Click
+    Drag --> Nodes
+    Filter --> Clusters
+    
+    style Nodes fill:#e8f5e9,stroke:#2e7d32
+    style Edges fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Knowledge Canvas: Interactive visualization of your learning graph."
+/>
+
+```python
+# ui/app.py
+import streamlit as st
+from streamlit_agraph import agraph, Node, Edge, Config
+from services.knowledge_graph import KnowledgeGraph
+from services.review_session import ReviewSession
+from services.pattern_discovery import PatternDiscovery
+from models.database import get_db, Flashcard, Document
+import json
+
+
+def render_knowledge_graph():
+    """Render interactive knowledge graph visualization."""
+    st.header("🕸️ Knowledge Graph")
+
+    graph = KnowledgeGraph()
+
+    # Get graph data
+    stats = graph.get_statistics()
+    st.metric("Concepts", stats["concepts"])
+    st.metric("Connections", stats["relationships"])
+
+    # Search for concepts
+    search_query = st.text_input("Search concepts", "")
+
+    if search_query:
+        concepts = graph.search_concepts(search_query, limit=20)
+    else:
+        # Get all concepts (limited)
+        with graph.driver.session() as session:
+            result = session.run("""
+                MATCH (c:Concept)
+                OPTIONAL MATCH (c)-[r]-(other:Concept)
+                RETURN c, collect(DISTINCT {
+                    other: other,
+                    type: type(r),
+                    strength: r.strength
+                }) as relationships
+                LIMIT 50
+            """)
+
+            nodes = []
+            edges = []
+            seen_edges = set()
+
+            for record in result:
+                concept = dict(record["c"])
+                nodes.append(Node(
+                    id=concept["id"],
+                    label=concept["name"],
+                    size=25,
+                    color="#4CAF50"
+                ))
+
+                for rel in record["relationships"]:
+                    if rel["other"]:
+                        other = dict(rel["other"])
+                        edge_key = tuple(sorted([concept["id"], other["id"]]))
+
+                        if edge_key not in seen_edges:
+                            edges.append(Edge(
+                                source=concept["id"],
+                                target=other["id"],
+                                label=rel["type"],
+                                color="#999"
+                            ))
+                            seen_edges.add(edge_key)
+
+    # Configure graph visualization
+    config = Config(
+        width=800,
+        height=600,
+        directed=True,
+        physics=True,
+        hierarchical=False,
+        nodeHighlightBehavior=True,
+        highlightColor="#F7A7A6",
+        collapsible=True,
+        node={"labelProperty": "label"},
+        link={"labelProperty": "label", "renderLabel": True}
+    )
+
+    # Render graph
+    if nodes:
+        selected = agraph(nodes=nodes, edges=edges, config=config)
+
+        if selected:
+            st.subheader(f"Selected: {selected}")
+            concept = graph.get_concept(selected)
+            if concept:
+                st.write(f"**Description:** {concept.get('description', 'N/A')}")
+
+                related = graph.get_related_concepts(selected, depth=1)
+                if related:
+                    st.write("**Related concepts:**")
+                    for r in related:
+                        st.write(f"- {r['name']} (distance: {r['distance']})")
+    else:
+        st.info("No concepts in the knowledge graph yet. Import some documents!")
+
+    graph.close()
+
+
+def render_review_session():
+    """Render flashcard review interface."""
+    st.header("🃏 Review Session")
+
+    db = next(get_db())
+    session = ReviewSession(db, algorithm=st.session_state.get("algorithm", "sm2"))
+
+    # Algorithm selector
+    algorithm = st.radio(
+        "Algorithm",
+        ["sm2", "fsrs"],
+        horizontal=True,
+        key="algorithm"
+    )
+
+    # Session stats
+    stats = session.get_session_stats()
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Due", stats["due"])
+    col2.metric("New", stats["new"])
+    col3.metric("Total", stats["total"])
+    col4.metric("Today", stats["reviewed_today"])
+
+    # Get due cards
+    if "current_card" not in st.session_state:
+        cards = session.get_due_cards(limit=1)
+        if cards:
+            st.session_state.current_card = cards[0]
+        else:
+            st.session_state.current_card = None
+
+    card = st.session_state.current_card
+
+    if card:
+        # Show question
+        st.subheader("Question")
+        st.write(card.question)
+
+        # Show/hide answer
+        if st.button("Show Answer"):
+            st.session_state.show_answer = True
+
+        if st.session_state.get("show_answer", False):
+            st.subheader("Answer")
+            st.write(card.answer)
+
+            # Preview intervals
+            previews = session.preview_intervals(card.id)
+            st.write("**Next review if you rate:**")
+            cols = st.columns(5)
+            for i, (rating, interval) in enumerate(previews.items()):
+                cols[i].write(f"{rating}: {interval}d")
+
+            # Rating buttons
+            st.write("**Rate your recall:**")
+            col1, col2, col3, col4, col5 = st.columns(5)
+
+            ratings = [
+                (col1, 1, "🔴 Blackout"),
+                (col2, 2, "🟠 Wrong"),
+                (col3, 3, "🟡 Hard"),
+                (col4, 4, "🟢 Good"),
+                (col5, 5, "🔵 Easy")
+            ]
+
+            for col, rating, label in ratings:
+                if col.button(label, key=f"rate_{rating}"):
+                    result = session.review_card(card.id, rating)
+                    st.success(f"Next review in {result['interval_days']} days")
+
+                    # Get next card
+                    st.session_state.show_answer = False
+                    cards = session.get_due_cards(limit=1)
+                    st.session_state.current_card = cards[0] if cards else None
+                    st.rerun()
+    else:
+        st.success("🎉 All caught up! No cards due for review.")
+
+        # Show new cards option
+        new_cards = session.get_new_cards(limit=5)
+        if new_cards:
+            st.write(f"You have {len(new_cards)} new cards to learn.")
+            if st.button("Start Learning New Cards"):
+                st.session_state.current_card = new_cards[0]
+                st.rerun()
+
+
+def render_pattern_discovery():
+    """Render pattern discovery interface."""
+    st.header("🔍 Pattern Discovery")
+
+    discovery = PatternDiscovery()
+
+    # Discover clusters
+    st.subheader("Thematic Clusters")
+
+    n_clusters = st.slider("Number of clusters (0 = auto)", 0, 10, 0)
+
+    if st.button("Discover Clusters"):
+        clusters = discovery.discover_clusters(
+            n_clusters=n_clusters if n_clusters > 0 else None
+        )
+
+        for cluster in clusters:
+            with st.expander(f"Cluster {cluster['cluster_id']} ({cluster['size']} items)"):
+                st.write(f"**Representative:** {cluster['representative'][:200]}...")
+                st.write("**Items:**")
+                for item in cluster["items"][:5]:
+                    st.write(f"- {item['content'][:100]}...")
+
+    # Find similar
+    st.subheader("Find Similar")
+    query = st.text_input("Enter a concept or phrase")
+
+    if query:
+        similar = discovery.find_similar(query, n_results=5)
+        for item in similar:
+            st.write(f"**{item['similarity']:.2f}** - {item['content'][:200]}...")
+
+    # Knowledge gaps
+    st.subheader("Knowledge Gap Analysis")
+    target_concepts = st.text_area(
+        "Enter target concepts (one per line)",
+        placeholder="Machine Learning\nNeural Networks\nBackpropagation"
+    )
+
+    if target_concepts and st.button("Analyze Gaps"):
+        concepts = [c.strip() for c in target_concepts.split("\n") if c.strip()]
+        gaps = discovery.find_knowledge_gaps(concepts)
+
+        for gap in gaps:
+            status_emoji = "❌" if gap["status"] == "missing" else "⚠️"
+            st.write(f"{status_emoji} **{gap['concept']}** - {gap['suggestion']}")
+
+
+def main():
+    """Main Streamlit application."""
+    st.set_page_config(
+        page_title="Learning OS",
+        page_icon="🧠",
+        layout="wide"
+    )
+
+    st.title("🧠 Agentic Learning OS")
+
+    # Sidebar navigation
+    page = st.sidebar.selectbox(
+        "Navigate",
+        ["📚 Import", "🃏 Review", "🕸️ Knowledge Graph", "🔍 Patterns", "📊 Analytics"]
+    )
+
+    if page == "📚 Import":
+        render_import_page()
+    elif page == "🃏 Review":
+        render_review_session()
+    elif page == "🕸️ Knowledge Graph":
+        render_knowledge_graph()
+    elif page == "🔍 Patterns":
+        render_pattern_discovery()
+    elif page == "📊 Analytics":
+        render_analytics()
+
+
+def render_import_page():
+    """Render document import page."""
+    st.header("📚 Import Documents")
+
+    uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
+
+    if uploaded_file:
+        # Save temporarily
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(uploaded_file.read())
+            tmp_path = tmp.name
+
+        if st.button("Import"):
+            from services.pdf_parser import import_pdf
+            db = next(get_db())
+            result = import_pdf(tmp_path, db)
+
+            if result["status"] == "imported":
+                st.success(f"Imported {result['highlights_count']} highlights!")
+            else:
+                st.info("Document already imported.")
+
+
+def render_analytics():
+    """Render learning analytics."""
+    st.header("📊 Learning Analytics")
+
+    db = next(get_db())
+
+    # Basic stats
+    from models.database import Review, Flashcard
+    from datetime import datetime, timedelta
+
+    total_cards = db.query(Flashcard).count()
+    total_reviews = db.query(Review).count()
+
+    col1, col2 = st.columns(2)
+    col1.metric("Total Cards", total_cards)
+    col2.metric("Total Reviews", total_reviews)
+
+    # Review history chart
+    st.subheader("Review History (Last 30 Days)")
+
+    # Get daily review counts
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    reviews = db.query(Review).filter(
+        Review.reviewed_at >= thirty_days_ago
+    ).all()
+
+    # Group by date
+    from collections import Counter
+    daily_counts = Counter(r.reviewed_at.date() for r in reviews)
+
+    if daily_counts:
+        import pandas as pd
+        df = pd.DataFrame([
+            {"date": date, "reviews": count}
+            for date, count in sorted(daily_counts.items())
+        ])
+        st.bar_chart(df.set_index("date"))
+
+    # Retention rate
+    st.subheader("Retention Rate")
+
+    successful = db.query(Review).filter(Review.quality >= 3).count()
+    if total_reviews > 0:
+        retention = successful / total_reviews * 100
+        st.metric("Retention Rate", f"{retention:.1f}%")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+### Phase 9: API Routes (15 minutes)
+
+```python
+# routers/documents.py
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from sqlalchemy.orm import Session
+from models.database import get_db, Document, Highlight
+from services.pdf_parser import import_pdf
+from services.flashcard_generator import generate_cards_for_highlight
+from services.concept_extractor import ConceptExtractor
+import tempfile
+import os
+
+router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+@router.post("/import")
+async def import_document(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Import a PDF document and extract highlights."""
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(400, "Only PDF files are supported")
+
+    # Save uploaded file temporarily
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        result = import_pdf(tmp_path, db)
+        return result
+    finally:
+        os.unlink(tmp_path)
+
+
+@router.get("/{document_id}")
+def get_document(document_id: int, db: Session = Depends(get_db)):
+    """Get document details."""
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(404, "Document not found")
+
+    return {
+        "id": doc.id,
+        "title": doc.title,
+        "file_path": doc.file_path,
+        "imported_at": doc.imported_at.isoformat(),
+        "highlights_count": len(doc.highlights)
+    }
+
+
+@router.get("/{document_id}/highlights")
+def get_highlights(document_id: int, db: Session = Depends(get_db)):
+    """Get all highlights for a document."""
+    highlights = db.query(Highlight).filter(
+        Highlight.document_id == document_id
+    ).all()
+
+    return [
+        {
+            "id": h.id,
+            "content": h.content,
+            "page_number": h.page_number,
+            "color": h.color,
+            "note": h.note,
+            "flashcards_count": len(h.flashcards)
+        }
+        for h in highlights
+    ]
+
+
+@router.post("/{document_id}/process")
+async def process_document(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    """Generate flashcards and extract concepts for all highlights."""
+    highlights = db.query(Highlight).filter(
+        Highlight.document_id == document_id
+    ).all()
+
+    if not highlights:
+        raise HTTPException(404, "No highlights found")
+
+    extractor = ConceptExtractor()
+    results = {
+        "flashcards_created": 0,
+        "concepts_extracted": 0
+    }
+
+    try:
+        for highlight in highlights:
+            # Generate flashcards
+            cards = await generate_cards_for_highlight(highlight.id, db)
+            results["flashcards_created"] += len(cards)
+
+            # Extract concepts
+            concepts = await extractor.extract_from_highlight(
+                highlight.content,
+                str(document_id)
+            )
+            results["concepts_extracted"] += len(concepts.get("concepts", []))
+    finally:
+        extractor.close()
+
+    return results
+
+
+# routers/flashcards.py
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from models.database import get_db, Flashcard
+from services.review_session import ReviewSession
+from pydantic import BaseModel
+from typing import Optional
+
+router = APIRouter(prefix="/flashcards", tags=["flashcards"])
+
+
+class ReviewRequest(BaseModel):
+    quality: int  # 1-5
+    response_time_ms: Optional[int] = None
+
+
+@router.get("/due")
+def get_due_cards(
+    limit: int = 20,
+    algorithm: str = "sm2",
+    db: Session = Depends(get_db)
+):
+    """Get cards due for review."""
+    session = ReviewSession(db, algorithm=algorithm)
+    cards = session.get_due_cards(limit=limit)
+
+    return [
+        {
+            "id": c.id,
+            "question": c.question,
+            "answer": c.answer,
+            "card_type": c.card_type,
+            "ease_factor": c.ease_factor,
+            "interval_days": c.interval_days
+        }
+        for c in cards
+    ]
+
+
+@router.post("/{card_id}/review")
+def review_card(
+    card_id: int,
+    review: ReviewRequest,
+    algorithm: str = "sm2",
+    db: Session = Depends(get_db)
+):
+    """Submit a review for a card."""
+    if not 1 <= review.quality <= 5:
+        raise HTTPException(400, "Quality must be between 1 and 5")
+
+    session = ReviewSession(db, algorithm=algorithm)
+
+    try:
+        result = session.review_card(
+            card_id,
+            review.quality,
+            review.response_time_ms
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/{card_id}/preview")
+def preview_intervals(
+    card_id: int,
+    algorithm: str = "sm2",
+    db: Session = Depends(get_db)
+):
+    """Preview intervals for each rating."""
+    session = ReviewSession(db, algorithm=algorithm)
+    return session.preview_intervals(card_id)
+
+
+@router.get("/stats")
+def get_stats(
+    algorithm: str = "sm2",
+    db: Session = Depends(get_db)
+):
+    """Get review session statistics."""
+    session = ReviewSession(db, algorithm=algorithm)
+    return session.get_session_stats()
+```
+
+---
+
+### Phase 10: Main Application (10 minutes)
+
+```python
+# main.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routers import documents, flashcards
+from models.database import Base, engine
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(
+    title="Agentic Learning OS",
+    description="Local-first learning system with spaced repetition and knowledge graphs",
+    version="1.0.0"
+)
+
+# CORS for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(documents.router)
+app.include_router(flashcards.router)
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy", "service": "learning-os"}
+
+
+@app.get("/")
+def root():
+    return {
+        "name": "Agentic Learning OS",
+        "version": "1.0.0",
+        "endpoints": {
+            "docs": "/docs",
+            "import": "POST /documents/import",
+            "review": "GET /flashcards/due",
+            "stats": "GET /flashcards/stats"
+        }
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+```
+
+#### Docker Compose for Dependencies
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+
+services:
+  neo4j:
+    image: neo4j:5-community
+    ports:
+      - "7474:7474" # Browser
+      - "7687:7687" # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+
+  learning-os:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./data/learning.db
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=password
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - neo4j
+
+volumes:
+  neo4j_data:
+```
+
+---
+
+## Usage Example
+
+```python
+# Example: Complete workflow
+import asyncio
+from services.pdf_parser import import_pdf
+from services.flashcard_generator import generate_cards_for_highlight
+from services.concept_extractor import ConceptExtractor
+from services.review_session import ReviewSession
+from services.pattern_discovery import PatternDiscovery
+from models.database import SessionLocal, Highlight
+
+async def learning_workflow(pdf_path: str):
+    """Complete learning workflow from PDF to review."""
+    db = SessionLocal()
+
+    # Step 1: Import PDF
+    print("📄 Importing PDF...")
+    result = import_pdf(pdf_path, db)
+    print(f"   Extracted {result['highlights_count']} highlights")
+
+    # Step 2: Generate flashcards
+    print("🃏 Generating flashcards...")
+    highlights = db.query(Highlight).filter(
+        Highlight.document_id == result['document_id']
+    ).all()
+
+    total_cards = 0
+    for highlight in highlights:
+        cards = await generate_cards_for_highlight(highlight.id, db)
+        total_cards += len(cards)
+    print(f"   Created {total_cards} flashcards")
+
+    # Step 3: Build knowledge graph
+    print("🕸️ Building knowledge graph...")
+    extractor = ConceptExtractor()
+    for highlight in highlights:
+        await extractor.extract_from_highlight(
+            highlight.content,
+            str(result['document_id'])
+        )
+    extractor.close()
+    print("   Concepts extracted and connected")
+
+    # Step 4: Index for pattern discovery
+    print("🔍 Indexing for pattern discovery...")
+    discovery = PatternDiscovery()
+    for highlight in highlights:
+        discovery.add_highlight(
+            str(highlight.id),
+            highlight.content,
+            {"document_id": result['document_id']}
+        )
+    print("   Highlights indexed")
+
+    # Step 5: Start review session
+    print("\n🎓 Starting review session...")
+    session = ReviewSession(db, algorithm="fsrs")
+    stats = session.get_session_stats()
+    print(f"   {stats['due']} cards due, {stats['new']} new cards")
+
+    db.close()
+    return result
+
+# Run the workflow
+if __name__ == "__main__":
+    asyncio.run(learning_workflow("./my_textbook.pdf"))
+```
+
+---
+
+## Testing Requirements
+
+### Unit Test Coverage
+
+| Component            | Test Cases                                                      |
+| -------------------- | --------------------------------------------------------------- |
+| `PDFParser`          | Extract highlights, handle empty PDFs, parse colors, clean text |
+| `FlashcardGenerator` | Generate basic cards, cloze cards, handle LLM errors            |
+| `SM2Algorithm`       | All quality ratings, ease factor bounds, interval progression   |
+| `FSRSAlgorithm`      | Stability calculation, difficulty updates, interval accuracy    |
+| `KnowledgeGraph`     | Create concepts, create relationships, find paths, search       |
+| `PatternDiscovery`   | Add highlights, find similar, cluster discovery, gap analysis   |
+
+### Integration Test Scenarios
+
+| Scenario          | Steps                                               | Expected Outcome                   |
+| ----------------- | --------------------------------------------------- | ---------------------------------- |
+| Full Import Flow  | Upload PDF → Extract → Generate cards               | Cards created with correct content |
+| Review Session    | Get due → Review → Check schedule                   | Intervals match algorithm          |
+| Knowledge Graph   | Import 2 docs → Extract concepts → Find connections | Cross-document relationships found |
+| Pattern Discovery | Add 20 highlights → Cluster → Verify themes         | Meaningful clusters identified     |
+
+---
+
+<Exercise title="Learning OS Lab">
+  1. **Obsidian Integration**: Build an importer that parses Obsidian markdown files, extracts wikilinks as relationships, and imports them into the knowledge graph
+  
+  2. **Voice Review**: Add a voice-based review mode using speech-to-text for answers and text-to-speech for questions (great for commute learning)
+  
+  3. **Collaborative Learning**: Implement deck sharing where users can export/import flashcard decks with their spaced repetition state preserved
+  
+  4. **Mobile Companion**: Build a simple mobile-friendly web UI using responsive design that syncs with the main application
+  
+  5. **Challenge - Adaptive Difficulty**: Implement a system that automatically adjusts card difficulty based on response time patterns, not just correctness
+
+<Callout type="tip">
+**Pro Tip:** The FSRS algorithm can be personalized by optimizing its 17 parameters based on your review history. After 1000+ reviews, you can train a custom model that predicts YOUR forgetting curve more accurately than the defaults.
+</Callout>
+</Exercise>
+
+---
+
+## Key Takeaways
+
+1. **Spaced repetition is the most effective learning technique** known to cognitive science—implementing SM-2 or FSRS transforms passive reading into active, lasting knowledge
+
+2. **Knowledge graphs reveal hidden connections** between concepts across documents, helping you see the bigger picture and identify learning gaps
+
+3. **Local-first architecture** ensures your learning data stays private and works offline—critical for a personal knowledge system
+
+4. **Semantic clustering with embeddings** discovers themes you might miss, surfacing unexpected connections between ideas
+
+5. **The combination of flashcards + knowledge graph + pattern discovery** creates a learning system greater than the sum of its parts
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Input"
+        PDF[📄 PDFs]
+        Notes[📝 Notes]
+    end
+    
+    subgraph "Processing"
+        Extract[Extract]
+        Generate[Generate]
+        Connect[Connect]
+    end
+    
+    subgraph "Learning"
+        Review[🃏 Review]
+        Explore[🕸️ Explore]
+        Discover[🔍 Discover]
+    end
+    
+    subgraph "Outcome"
+        Retain[💪 Retention]
+        Understand[🧠 Understanding]
+        Insight[💡 Insights]
+    end
+    
+    PDF --> Extract
+    Notes --> Extract
+    Extract --> Generate
+    Extract --> Connect
+    
+    Generate --> Review
+    Connect --> Explore
+    Extract --> Discover
+    
+    Review --> Retain
+    Explore --> Understand
+    Discover --> Insight
+    
+    style Retain fill:#e8f5e9,stroke:#2e7d32
+    style Understand fill:#e3f2fd,stroke:#1565c0
+    style Insight fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="The Learning OS transforms raw documents into lasting knowledge through active recall, visual exploration, and AI-powered discovery."
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "PDF highlight extraction transforms passive reading into active learning material",
+    "SM-2 and FSRS algorithms optimize review timing based on forgetting curves",
+    "Knowledge graphs connect concepts across documents, revealing the bigger picture",
+    "Semantic clustering discovers hidden themes and identifies knowledge gaps",
+    "Local-first architecture keeps your learning data private and always accessible",
+  ]}
+/>
+
+**Next Steps**: Consider integrating this Learning OS with the Memory Service (Day 83) to give your agents access to your personal knowledge base, or connect it to the RAG Service (Day 84) for document-grounded conversations about what you've learned.

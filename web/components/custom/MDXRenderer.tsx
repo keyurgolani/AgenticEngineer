@@ -77,6 +77,7 @@ import { ACEPlaybookVisualizer } from "./interactive/ACEPlaybookVisualizer"
 import { LLMsTxtGenerator } from "./interactive/LLMsTxtGenerator"
 import { SkillDiscoveryDemo } from "./interactive/SkillDiscoveryDemo"
 import { ReasoningProcess } from "./animations/ReasoningProcess"
+import { CapstoneProjectGallery } from "./interactive/helpers/CapstoneProjectGallery"
 
 import { CodeBlock } from "./CodeBlock"
 
@@ -126,6 +127,17 @@ const components = {
   },
   pre: (props: React.HTMLAttributes<HTMLPreElement>) => <pre {...props} className="overflow-x-auto" />,
   hr: () => <Separator className="my-12" />,
+  // Images - ensure proper alignment within content area
+  img: (props: React.ImgHTMLAttributes<HTMLImageElement>) => (
+    <span className="block my-8">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img 
+        {...props} 
+        className="rounded-xl border border-white/5 bg-zinc-900/50 shadow-lg max-w-full h-auto mx-auto" 
+        alt={props.alt || ''} 
+      />
+    </span>
+  ),
   // Tables
   table: (props: React.TableHTMLAttributes<HTMLTableElement>) => (
         <div className="max-w-full overflow-y-auto my-6 rounded-md border border-border">
@@ -213,6 +225,7 @@ const components = {
       LLMsTxtGenerator,
       SkillDiscoveryDemo,
       ReasoningProcess,
+      CapstoneProjectGallery,
     }
     
 import { transformerRenderWhitespace } from "@shikijs/transformers"

@@ -1,0 +1,2287 @@
+---
+title: "Mini Project: Multi-Language Code Translator"
+description: "Build an agentic code translator that converts code between Python, TypeScript, Go, and Rust while preserving semantics, idioms, and test coverage."
+week: 13
+day: 91
+---
+
+<ReadingTime minutes={60} />
+
+<SkillLevel
+  level="advanced"
+  description="AST manipulation and code generation"
+/>
+
+<Prerequisites
+  items={[
+    "Strong understanding of at least 2 target languages (Python, TypeScript, Go, Rust)",
+    "Familiarity with Abstract Syntax Trees (AST) concepts",
+    "Experience with LLM-based code generation",
+    "Understanding of testing frameworks across languages",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Parse source code into language-agnostic AST representations",
+    "Perform semantic analysis and type inference across languages",
+    "Generate idiomatic code in target languages using LLM assistance",
+    "Validate translated code through AST verification",
+    "Translate and execute test suites across language boundaries",
+    "Build a side-by-side diff view for translation review",
+  ]}
+/>
+
+<Callout type="info">
+  **Project Context:** This advanced project combines AST manipulation, semantic
+  analysis, and LLM-powered code generation to create a production-grade code
+  translator. Duration: 12-16 hours. Ideal for developers building polyglot
+  systems or migrating codebases.
+</Callout>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Abstract Syntax Tree (AST)",
+      definition:
+        "A tree representation of source code structure that captures the syntactic hierarchy without language-specific formatting",
+    },
+    {
+      term: "Semantic Preservation",
+      definition:
+        "Ensuring translated code maintains the same behavior, side effects, and invariants as the original",
+    },
+    {
+      term: "Idiomatic Translation",
+      definition:
+        "Converting code to follow the conventions and best practices of the target language, not just literal syntax mapping",
+    },
+    {
+      term: "Type Inference",
+      definition:
+        "Automatically determining variable and expression types from context, critical for translating between dynamically and statically typed languages",
+    },
+    {
+      term: "Test Translation",
+      definition:
+        "Converting test cases from source to target language while preserving assertions and coverage",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build an intelligent agent that translates code between Python, TypeScript, Go, and Rust while preserving semantics, following target language idioms, and maintaining test coverage.
+
+**Why This Matters**: Modern software teams often work across multiple languages—Python for ML, TypeScript for web, Go for infrastructure, Rust for performance-critical systems. Manual translation is error-prone and time-consuming. An intelligent translator accelerates polyglot development and enables gradual migrations.
+
+<Mermaid
+  chart={`
+graph LR
+    Source[Source Code] --> Parser[AST Parser]
+    Parser --> Semantic[Semantic Analyzer]
+    Semantic --> LLM[LLM Translator]
+    LLM --> Validator[AST Validator]
+    Validator --> Target[Target Code]
+    
+    Tests[Source Tests] --> TestTrans[Test Translator]
+    TestTrans --> Runner[Test Runner]
+    Runner --> Verify[Verification]
+    
+    style LLM fill:#f9f,stroke:#333
+    style Semantic fill:#e1f5fe,stroke:#01579b
+    style Validator fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Translation Pipeline: From source AST to verified target code."
+/>
+
+**Real-World Analogy**: Think of code translation like professional document translation. A naive translator converts word-by-word (syntax mapping), but a skilled translator understands context, cultural idioms, and intent (semantic preservation). Our agent acts as a skilled translator—understanding what the code _means_, not just what it _says_.
+
+**Skills Showcased**:
+
+- Multi-language AST parsing and manipulation
+- Semantic analysis and type inference
+- LLM-assisted idiomatic code generation
+- Cross-language test translation
+- Verification and validation pipelines
+
+## Module Summary
+
+In this advanced project, we build a sophisticated code translation system:
+
+1. **AST Parsing Pipeline**: We parse source code into language-agnostic intermediate representations using specialized parsers (Python's `ast`/`libcst`, TypeScript's `ts-morph`, Go's `go/ast`, Rust's `syn`).
+
+2. **Semantic Analysis**: We extract type information, control flow, and dependencies to understand _what_ the code does, not just _how_ it's written.
+
+3. **LLM-Assisted Translation**: We use carefully engineered prompts to generate idiomatic target code, leveraging the LLM's knowledge of language conventions.
+
+4. **Validation Layer**: We verify translated code through AST parsing, type checking, and semantic equivalence testing.
+
+5. **Test Translation**: We convert test suites to ensure the translated code maintains the same behavior as the original.
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Parse
+    Parse --> Analyze: AST
+    Analyze --> Translate: Semantics
+    Translate --> Validate: Target Code
+    
+    Validate --> Fix{Valid?}
+    Fix -->|No| Translate: Feedback
+    Fix -->|Yes| TestTranslate
+    
+    TestTranslate --> Execute
+    Execute --> Verify{Pass?}
+    Verify -->|No| Debug
+    Debug --> Translate
+    Verify -->|Yes| [*]
+`}
+  caption="Translation State Machine: Iterative refinement until verification passes."
+/>
+
+---
+
+## Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Code Translator Service"
+        API[Translation API] --> Orchestrator[Translation Orchestrator]
+        
+        subgraph "Parsing Layer"
+            PyParser[Python Parser<br/>ast/libcst]
+            TSParser[TypeScript Parser<br/>ts-morph]
+            GoParser[Go Parser<br/>go/ast]
+            RsParser[Rust Parser<br/>syn]
+        end
+        
+        subgraph "Analysis Layer"
+            TypeInfer[Type Inferencer]
+            FlowAnalyzer[Control Flow Analyzer]
+            DepMapper[Dependency Mapper]
+        end
+        
+        subgraph "Translation Layer"
+            LLMGen[LLM Generator]
+            IdiomMapper[Idiom Mapper]
+            ASTValidator[AST Validator]
+        end
+        
+        subgraph "Verification Layer"
+            TestTrans[Test Translator]
+            TestRunner[Test Runner]
+            DiffView[Diff Generator]
+        end
+        
+        Orchestrator --> PyParser
+        Orchestrator --> TSParser
+        Orchestrator --> GoParser
+        Orchestrator --> RsParser
+        
+        PyParser --> TypeInfer
+        TSParser --> TypeInfer
+        GoParser --> TypeInfer
+        RsParser --> TypeInfer
+        
+        TypeInfer --> LLMGen
+        FlowAnalyzer --> LLMGen
+        DepMapper --> IdiomMapper
+        
+        LLMGen --> ASTValidator
+        IdiomMapper --> ASTValidator
+        ASTValidator --> TestTrans
+        TestTrans --> TestRunner
+        TestRunner --> DiffView
+    end
+    
+    style LLMGen fill:#f9f,stroke:#333
+    style ASTValidator fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="System Architecture: Multi-layer translation pipeline."
+/>
+
+---
+
+## Detailed Requirements Specification
+
+### Functional Requirements (FR)
+
+| ID    | Requirement            | Description                                                                                  | Priority |
+| ----- | ---------------------- | -------------------------------------------------------------------------------------------- | -------- |
+| FR-01 | Multi-Language Parsing | The system shall parse Python, TypeScript, Go, and Rust source code into AST representations | P0       |
+| FR-02 | Semantic Analysis      | The system shall extract type information, control flow, and dependencies from parsed AST    | P0       |
+| FR-03 | Idiomatic Translation  | The system shall generate target code following language-specific idioms and conventions     | P0       |
+| FR-04 | AST Validation         | The system shall validate translated code parses correctly in the target language            | P0       |
+| FR-05 | Test Translation       | The system shall translate test files alongside source code                                  | P1       |
+| FR-06 | Test Execution         | The system shall execute translated tests and report pass/fail status                        | P1       |
+| FR-07 | Diff View              | The system shall generate side-by-side diff views of source and translated code              | P2       |
+| FR-08 | Dependency Mapping     | The system shall map source language dependencies to target language equivalents             | P1       |
+| FR-09 | Iterative Refinement   | The system shall refine translations based on validation and test failures                   | P1       |
+| FR-10 | Batch Translation      | The system shall support translating entire directories/modules                              | P2       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement          | Target                                                     | Measurement        |
+| ------ | -------------------- | ---------------------------------------------------------- | ------------------ |
+| NFR-01 | Translation Accuracy | Translated code shall pass 95%+ of original test cases     | Test pass rate     |
+| NFR-02 | Single File Latency  | Single file translation shall complete in < 30 seconds     | End-to-end timing  |
+| NFR-03 | AST Parse Success    | 100% of valid source files shall parse successfully        | Parse success rate |
+| NFR-04 | Idiomatic Quality    | Generated code shall follow target language style guides   | Linter pass rate   |
+| NFR-05 | Type Safety          | Statically typed targets shall compile without type errors | Compiler output    |
+
+### API Contract
+
+#### POST /translate - Translate Code
+
+**Request Body:**
+
+```json
+{
+  "source_code": "string (required)",
+  "source_language": "string ('python' | 'typescript' | 'go' | 'rust')",
+  "target_language": "string ('python' | 'typescript' | 'go' | 'rust')",
+  "include_tests": "boolean (default: true)",
+  "test_code": "string | null (optional test file content)",
+  "options": {
+    "preserve_comments": "boolean (default: true)",
+    "strict_types": "boolean (default: true)",
+    "max_iterations": "integer (default: 3)"
+  }
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "translated_code": "string",
+  "translated_tests": "string | null",
+  "validation": {
+    "ast_valid": "boolean",
+    "type_check_passed": "boolean",
+    "tests_passed": "integer",
+    "tests_total": "integer"
+  },
+  "semantic_map": {
+    "functions": ["mapping of source to target function names"],
+    "types": ["mapping of source to target types"],
+    "dependencies": ["mapping of source to target dependencies"]
+  },
+  "iterations": "integer",
+  "warnings": ["string"]
+}
+```
+
+**Error Response (400/500):**
+
+```json
+{
+  "detail": "string",
+  "parse_errors": ["string"] | null,
+  "validation_errors": ["string"] | null
+}
+```
+
+### Data Models
+
+```
+Translation Request:
+┌─────────────────────────────────────────────────────────────┐
+│                   TranslationRequest                         │
+├─────────────────────────────────────────────────────────────┤
+│ source_code: STRING                                         │
+│ source_language: Language                                   │
+│ target_language: Language                                   │
+│ test_code: STRING | null                                    │
+│ options: TranslationOptions                                 │
+└─────────────────────────────────────────────────────────────┘
+
+Language Enum:
+─────────────────────────────────────────────────────────────
+'python' | 'typescript' | 'go' | 'rust'
+
+Semantic Representation:
+┌─────────────────────────────────────────────────────────────┐
+│                   SemanticUnit                               │
+├─────────────────────────────────────────────────────────────┤
+│ name: STRING                                                │
+│ kind: 'function' | 'class' | 'variable' | 'type'           │
+│ signature: TypeSignature                                    │
+│ body_ast: ASTNode                                           │
+│ dependencies: List[STRING]                                  │
+│ docstring: STRING | null                                    │
+└─────────────────────────────────────────────────────────────┘
+
+Type Signature:
+┌─────────────────────────────────────────────────────────────┐
+│                   TypeSignature                              │
+├─────────────────────────────────────────────────────────────┤
+│ params: List[{name: STRING, type: TypeExpr}]               │
+│ return_type: TypeExpr                                       │
+│ generic_params: List[STRING]                                │
+│ is_async: BOOLEAN                                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Error Handling Matrix
+
+| Error Code           | HTTP Status | Cause                                    | Response Body                                                 | Recovery Action         |
+| -------------------- | ----------- | ---------------------------------------- | ------------------------------------------------------------- | ----------------------- |
+| PARSE_ERROR          | 400         | Source code has syntax errors            | `{"detail": "Parse error", "parse_errors": [...]}`            | Fix source syntax       |
+| UNSUPPORTED_LANG     | 400         | Language not in supported set            | `{"detail": "Unsupported language: X"}`                       | Use supported language  |
+| TRANSLATION_FAILED   | 500         | LLM failed to generate valid translation | `{"detail": "Translation failed after N tries"}`              | Simplify source code    |
+| VALIDATION_FAILED    | 500         | Translated code doesn't parse            | `{"detail": "Validation failed", "validation_errors": [...]}` | Review translation      |
+| TYPE_CHECK_FAILED    | 200         | Type errors in translated code           | Included in response warnings                                 | Manual type annotation  |
+| TEST_EXECUTION_ERROR | 200         | Tests failed to execute                  | Included in validation results                                | Review test translation |
+
+---
+
+## Core Implementation
+
+### Step 1: AST Parsing for Source Language
+
+We start by parsing source code into a structured AST. For Python, we use `libcst` for its ability to preserve formatting and comments.
+
+<Mermaid
+  chart={`
+graph TD
+    Code[Source Code] --> Lexer[Lexer/Tokenizer]
+    Lexer --> Parser[Parser]
+    Parser --> AST[Abstract Syntax Tree]
+    
+    AST --> Functions[Function Nodes]
+    AST --> Classes[Class Nodes]
+    AST --> Imports[Import Nodes]
+    
+    style AST fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="AST Parsing: From raw text to structured tree."
+/>
+
+```python
+# parsers/python_parser.py
+import libcst as cst
+from dataclasses import dataclass
+from typing import List, Dict, Optional, Any
+
+@dataclass
+class TypeInfo:
+    """Represents inferred or annotated type information."""
+    name: str
+    generic_args: List['TypeInfo'] = None
+    is_optional: bool = False
+
+    def __post_init__(self):
+        self.generic_args = self.generic_args or []
+
+@dataclass
+class FunctionSignature:
+    """Extracted function signature with types."""
+    name: str
+    params: List[Dict[str, Any]]  # [{name, type, default}]
+    return_type: Optional[TypeInfo]
+    is_async: bool
+    decorators: List[str]
+    docstring: Optional[str]
+
+@dataclass
+class SemanticUnit:
+    """Language-agnostic representation of a code unit."""
+    name: str
+    kind: str  # 'function', 'class', 'variable'
+    signature: Optional[FunctionSignature]
+    body_source: str
+    dependencies: List[str]
+    docstring: Optional[str]
+
+class PythonASTParser:
+    """Parse Python source code into semantic units."""
+
+    def __init__(self):
+        self.imports: List[str] = []
+        self.units: List[SemanticUnit] = []
+
+    def parse(self, source_code: str) -> Dict[str, Any]:
+        """Parse Python source into structured representation."""
+        try:
+            tree = cst.parse_module(source_code)
+        except cst.ParserSyntaxError as e:
+            raise ValueError(f"Python parse error: {e}")
+
+        # Extract imports
+        self.imports = self._extract_imports(tree)
+
+        # Extract semantic units
+        self.units = self._extract_units(tree)
+
+        return {
+            "language": "python",
+            "imports": self.imports,
+            "units": [self._unit_to_dict(u) for u in self.units],
+            "raw_ast": tree
+        }
+
+    def _extract_imports(self, tree: cst.Module) -> List[str]:
+        """Extract all import statements."""
+        imports = []
+        for node in tree.body:
+            if isinstance(node, cst.SimpleStatementLine):
+                for stmt in node.body:
+                    if isinstance(stmt, cst.Import):
+                        for name in stmt.names:
+                            if isinstance(name, cst.ImportAlias):
+                                imports.append(name.name.value if hasattr(name.name, 'value') else str(name.name))
+                    elif isinstance(stmt, cst.ImportFrom):
+                        module = stmt.module.value if stmt.module else ""
+                        imports.append(module)
+        return imports
+
+    def _extract_units(self, tree: cst.Module) -> List[SemanticUnit]:
+        """Extract functions and classes as semantic units."""
+        units = []
+
+        for node in tree.body:
+            if isinstance(node, cst.FunctionDef):
+                units.append(self._parse_function(node))
+            elif isinstance(node, cst.ClassDef):
+                units.append(self._parse_class(node))
+
+        return units
+
+    def _parse_function(self, node: cst.FunctionDef) -> SemanticUnit:
+        """Parse a function definition into a semantic unit."""
+        # Extract parameters with types
+        params = []
+        for param in node.params.params:
+            param_info = {
+                "name": param.name.value,
+                "type": self._annotation_to_type(param.annotation) if param.annotation else None,
+                "default": param.default is not None
+            }
+            params.append(param_info)
+
+        # Extract return type
+        return_type = None
+        if node.returns:
+            return_type = self._annotation_to_type(node.returns)
+
+        # Check if async
+        is_async = isinstance(node, cst.FunctionDef) and node.asynchronous is not None
+
+        # Extract decorators
+        decorators = [self._decorator_name(d) for d in node.decorators]
+
+        # Extract docstring
+        docstring = self._extract_docstring(node.body)
+
+        signature = FunctionSignature(
+            name=node.name.value,
+            params=params,
+            return_type=return_type,
+            is_async=is_async,
+            decorators=decorators,
+            docstring=docstring
+        )
+
+        return SemanticUnit(
+            name=node.name.value,
+            kind="function",
+            signature=signature,
+            body_source=node.body,
+            dependencies=self._extract_dependencies(node),
+            docstring=docstring
+        )
+
+    def _parse_class(self, node: cst.ClassDef) -> SemanticUnit:
+        """Parse a class definition into a semantic unit."""
+        docstring = self._extract_docstring(node.body)
+
+        return SemanticUnit(
+            name=node.name.value,
+            kind="class",
+            signature=None,
+            body_source=node.body,
+            dependencies=self._extract_dependencies(node),
+            docstring=docstring
+        )
+
+    def _annotation_to_type(self, annotation: cst.Annotation) -> TypeInfo:
+        """Convert a type annotation to TypeInfo."""
+        ann = annotation.annotation
+
+        if isinstance(ann, cst.Name):
+            return TypeInfo(name=ann.value)
+        elif isinstance(ann, cst.Subscript):
+            base = ann.value.value if hasattr(ann.value, 'value') else str(ann.value)
+            # Handle Optional, List, Dict, etc.
+            return TypeInfo(
+                name=base,
+                is_optional=base == "Optional"
+            )
+
+        return TypeInfo(name="Any")
+
+    def _decorator_name(self, decorator: cst.Decorator) -> str:
+        """Extract decorator name."""
+        if isinstance(decorator.decorator, cst.Name):
+            return decorator.decorator.value
+        elif isinstance(decorator.decorator, cst.Call):
+            if isinstance(decorator.decorator.func, cst.Name):
+                return decorator.decorator.func.value
+        return "unknown"
+
+    def _extract_docstring(self, body) -> Optional[str]:
+        """Extract docstring from function/class body."""
+        if hasattr(body, 'body') and body.body:
+            first = body.body[0]
+            if isinstance(first, cst.SimpleStatementLine):
+                for stmt in first.body:
+                    if isinstance(stmt, cst.Expr) and isinstance(stmt.value, cst.SimpleString):
+                        return stmt.value.value.strip('"\'')
+        return None
+
+    def _extract_dependencies(self, node) -> List[str]:
+        """Extract function/module dependencies from a node."""
+        # Simplified: would use a visitor pattern for full implementation
+        return []
+
+    def _unit_to_dict(self, unit: SemanticUnit) -> Dict:
+        """Convert SemanticUnit to dictionary."""
+        return {
+            "name": unit.name,
+            "kind": unit.kind,
+            "signature": {
+                "name": unit.signature.name,
+                "params": unit.signature.params,
+                "return_type": unit.signature.return_type.__dict__ if unit.signature.return_type else None,
+                "is_async": unit.signature.is_async,
+                "decorators": unit.signature.decorators
+            } if unit.signature else None,
+            "docstring": unit.docstring,
+            "dependencies": unit.dependencies
+        }
+```
+
+**Key Implementation Details**:
+
+- **libcst over ast**: We use `libcst` because it preserves comments and formatting, enabling better translation quality
+- **TypeInfo Extraction**: We parse type annotations into a structured format that can be mapped to target language types
+- **Semantic Units**: Each function/class becomes a `SemanticUnit` with all metadata needed for translation
+- **Dependency Tracking**: We identify what each unit depends on for proper import mapping
+
+### Step 2: Semantic Analysis and Type Inference
+
+For dynamically typed languages like Python, we need to infer types from usage patterns. This is critical for generating correct statically-typed code.
+
+<Mermaid
+  chart={`
+graph LR
+    AST[AST] --> Visitor[Type Visitor]
+    Visitor --> Context[Type Context]
+    
+    Context --> Infer{Inference}
+    Infer --> Annotated[Annotated Types]
+    Infer --> Inferred[Inferred Types]
+    
+    Annotated --> Unified[Unified Type Map]
+    Inferred --> Unified
+    
+    style Unified fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Type Inference: Combining annotations with usage analysis."
+/>
+
+```python
+# analysis/type_inferencer.py
+from typing import Dict, List, Optional, Set, Any
+from dataclasses import dataclass, field
+
+@dataclass
+class InferredType:
+    """Result of type inference."""
+    explicit: Optional[str] = None  # From annotation
+    inferred: Optional[str] = None  # From usage
+    confidence: float = 0.0  # 0.0 to 1.0
+
+    @property
+    def best_type(self) -> str:
+        return self.explicit or self.inferred or "Any"
+
+@dataclass
+class TypeContext:
+    """Tracks type information during analysis."""
+    variables: Dict[str, InferredType] = field(default_factory=dict)
+    functions: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    classes: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
+class TypeInferencer:
+    """Infer types from Python code for translation to typed languages."""
+
+    # Python to target language type mappings
+    TYPE_MAPPINGS = {
+        "typescript": {
+            "str": "string",
+            "int": "number",
+            "float": "number",
+            "bool": "boolean",
+            "None": "null",
+            "List": "Array",
+            "Dict": "Record",
+            "Optional": "| null",
+            "Any": "any",
+            "Callable": "Function",
+        },
+        "go": {
+            "str": "string",
+            "int": "int",
+            "float": "float64",
+            "bool": "bool",
+            "None": "nil",
+            "List": "[]",
+            "Dict": "map",
+            "Optional": "*",
+            "Any": "interface{}",
+            "Callable": "func",
+        },
+        "rust": {
+            "str": "String",
+            "int": "i64",
+            "float": "f64",
+            "bool": "bool",
+            "None": "None",
+            "List": "Vec",
+            "Dict": "HashMap",
+            "Optional": "Option",
+            "Any": "Box<dyn Any>",
+            "Callable": "Fn",
+        }
+    }
+
+    def __init__(self):
+        self.context = TypeContext()
+
+    def analyze(self, parsed_ast: Dict) -> TypeContext:
+        """Analyze parsed AST and infer types."""
+        for unit in parsed_ast.get("units", []):
+            if unit["kind"] == "function":
+                self._analyze_function(unit)
+            elif unit["kind"] == "class":
+                self._analyze_class(unit)
+
+        return self.context
+
+    def _analyze_function(self, unit: Dict):
+        """Analyze a function and infer parameter/return types."""
+        sig = unit.get("signature", {})
+        if not sig:
+            return
+
+        func_types = {
+            "params": {},
+            "return_type": None,
+            "is_async": sig.get("is_async", False)
+        }
+
+        # Analyze parameters
+        for param in sig.get("params", []):
+            param_name = param["name"]
+            if param.get("type"):
+                func_types["params"][param_name] = InferredType(
+                    explicit=param["type"]["name"],
+                    confidence=1.0
+                )
+            else:
+                # Infer from default value or usage
+                inferred = self._infer_from_name(param_name)
+                func_types["params"][param_name] = InferredType(
+                    inferred=inferred,
+                    confidence=0.5
+                )
+
+        # Analyze return type
+        ret = sig.get("return_type")
+        if ret:
+            func_types["return_type"] = InferredType(
+                explicit=ret["name"],
+                confidence=1.0
+            )
+
+        self.context.functions[unit["name"]] = func_types
+
+    def _analyze_class(self, unit: Dict):
+        """Analyze a class and its methods."""
+        self.context.classes[unit["name"]] = {
+            "methods": {},
+            "attributes": {}
+        }
+
+    def _infer_from_name(self, name: str) -> str:
+        """Infer type from parameter naming conventions."""
+        name_lower = name.lower()
+
+        # Common naming patterns
+        if name_lower in ("id", "count", "index", "num", "size", "length"):
+            return "int"
+        if name_lower in ("name", "title", "description", "text", "message"):
+            return "str"
+        if name_lower.startswith("is_") or name_lower.startswith("has_"):
+            return "bool"
+        if name_lower.endswith("_list") or name_lower.endswith("s"):
+            return "List"
+        if name_lower.endswith("_dict") or name_lower.endswith("_map"):
+            return "Dict"
+
+        return "Any"
+
+    def map_type(self, python_type: str, target_lang: str) -> str:
+        """Map a Python type to target language type."""
+        mappings = self.TYPE_MAPPINGS.get(target_lang, {})
+        return mappings.get(python_type, python_type)
+
+    def generate_type_hints(self, target_lang: str) -> Dict[str, str]:
+        """Generate type hints for all analyzed functions."""
+        hints = {}
+
+        for func_name, func_info in self.context.functions.items():
+            param_types = []
+            for param_name, type_info in func_info["params"].items():
+                mapped = self.map_type(type_info.best_type, target_lang)
+                param_types.append(f"{param_name}: {mapped}")
+
+            ret_type = "void"
+            if func_info["return_type"]:
+                ret_type = self.map_type(
+                    func_info["return_type"].best_type,
+                    target_lang
+                )
+
+            hints[func_name] = {
+                "params": param_types,
+                "return": ret_type,
+                "is_async": func_info["is_async"]
+            }
+
+        return hints
+```
+
+**Type Inference Strategies**:
+
+- **Explicit Annotations**: Highest confidence—use Python type hints directly
+- **Naming Conventions**: Medium confidence—`is_valid` suggests boolean, `items` suggests list
+- **Usage Analysis**: Lower confidence—track how variables are used (method calls, operators)
+- **Default Values**: Infer from literal defaults (`= 0` → int, `= ""` → str)
+
+### Step 3: LLM-Based Idiomatic Code Generation
+
+The LLM handles the creative work of generating idiomatic target code. We provide rich context through carefully engineered prompts.
+
+<Mermaid
+  chart={`
+graph TD
+    Semantic[Semantic Info] --> Prompt[Prompt Builder]
+    Types[Type Hints] --> Prompt
+    Idioms[Idiom Guide] --> Prompt
+    
+    Prompt --> LLM[LLM]
+    LLM --> Code[Generated Code]
+    
+    Code --> Validate{Valid AST?}
+    Validate -->|No| Feedback[Error Feedback]
+    Feedback --> Prompt
+    Validate -->|Yes| Output[Final Code]
+    
+    style LLM fill:#f9f,stroke:#333
+`}
+  caption="LLM Translation Loop: Generate, validate, refine."
+/>
+
+````python
+# translation/llm_translator.py
+from typing import Dict, List, Optional
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+
+class LLMCodeTranslator:
+    """LLM-powered code translation with idiomatic generation."""
+
+    IDIOM_GUIDES = {
+        "typescript": """
+TypeScript Idioms:
+- Use `const` for immutable bindings, `let` for mutable
+- Prefer `interface` over `type` for object shapes
+- Use `async/await` over raw Promises
+- Use optional chaining (`?.`) and nullish coalescing (`??`)
+- Prefer `Array.map/filter/reduce` over loops
+- Use destructuring for function parameters
+- Export types alongside implementations
+""",
+        "go": """
+Go Idioms:
+- Use short variable declarations (`:=`) inside functions
+- Return errors as the last return value, check with `if err != nil`
+- Use `defer` for cleanup operations
+- Prefer composition over inheritance (embed structs)
+- Use channels for concurrency, not shared memory
+- Keep interfaces small (1-3 methods)
+- Use `context.Context` as first parameter for cancellation
+""",
+        "rust": """
+Rust Idioms:
+- Use `Result<T, E>` for fallible operations, `Option<T>` for optional values
+- Prefer `&str` over `String` for function parameters
+- Use `impl Trait` for return types when possible
+- Leverage pattern matching with `match` and `if let`
+- Use iterators and combinators over explicit loops
+- Derive common traits: `Debug`, `Clone`, `PartialEq`
+- Use `?` operator for error propagation
+"""
+    }
+
+    def __init__(self, model: str = "gpt-4o"):
+        self.llm = ChatOpenAI(model=model, temperature=0.2)
+
+    async def translate(
+        self,
+        source_code: str,
+        source_lang: str,
+        target_lang: str,
+        type_hints: Dict[str, Dict],
+        semantic_units: List[Dict],
+        previous_errors: List[str] = None
+    ) -> str:
+        """Translate code using LLM with semantic context."""
+
+        system_prompt = self._build_system_prompt(target_lang)
+        user_prompt = self._build_user_prompt(
+            source_code, source_lang, target_lang,
+            type_hints, semantic_units, previous_errors
+        )
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ]
+
+        response = await self.llm.ainvoke(messages)
+
+        # Extract code from response
+        return self._extract_code(response.content, target_lang)
+
+    def _build_system_prompt(self, target_lang: str) -> str:
+        """Build system prompt with idiom guide."""
+        idiom_guide = self.IDIOM_GUIDES.get(target_lang, "")
+
+        return f"""You are an expert code translator specializing in producing idiomatic {target_lang} code.
+
+Your translations must:
+1. Preserve exact semantics - same inputs must produce same outputs
+2. Follow {target_lang} conventions and best practices
+3. Use appropriate error handling patterns for {target_lang}
+4. Maintain type safety (use provided type hints)
+5. Preserve comments and documentation
+6. Map dependencies to {target_lang} equivalents
+
+{idiom_guide}
+
+Output ONLY the translated code, no explanations. Use proper formatting."""
+
+    def _build_user_prompt(
+        self,
+        source_code: str,
+        source_lang: str,
+        target_lang: str,
+        type_hints: Dict,
+        semantic_units: List[Dict],
+        previous_errors: List[str] = None
+    ) -> str:
+        """Build user prompt with full context."""
+
+        # Format type hints
+        type_context = "Type Information:\n"
+        for func_name, hints in type_hints.items():
+            params = ", ".join(hints["params"])
+            type_context += f"- {func_name}({params}) -> {hints['return']}"
+            if hints.get("is_async"):
+                type_context += " [async]"
+            type_context += "\n"
+
+        # Format semantic info
+        semantic_context = "Semantic Units:\n"
+        for unit in semantic_units:
+            semantic_context += f"- {unit['kind']}: {unit['name']}"
+            if unit.get("docstring"):
+                semantic_context += f" - {unit['docstring'][:50]}..."
+            semantic_context += "\n"
+
+        prompt = f"""Translate the following {source_lang} code to {target_lang}:
+
+```{source_lang}
+{source_code}
+````
+
+{type_context}
+
+{semantic_context}
+"""
+
+        if previous_errors:
+            prompt += f"""
+
+Previous translation attempt had these errors:
+{chr(10).join(f'- {e}' for e in previous_errors)}
+
+Fix these issues in your translation.
+"""
+
+        prompt += f"\nOutput the complete {target_lang} code:"
+
+        return prompt
+
+    def _extract_code(self, response: str, target_lang: str) -> str:
+        """Extract code block from LLM response."""
+        import re
+
+        # Try to find code block
+        pattern = rf"```(?:{target_lang})?\n(.*?)```"
+        match = re.search(pattern, response, re.DOTALL)
+
+        if match:
+            return match.group(1).strip()
+
+        # If no code block, assume entire response is code
+        return response.strip()
+
+```
+
+**Prompt Engineering Insights**:
+
+- **Idiom Guides**: Language-specific conventions ensure natural-looking output
+- **Type Context**: Providing inferred types prevents the LLM from guessing incorrectly
+- **Semantic Units**: Helps the LLM understand code structure and purpose
+- **Error Feedback**: Previous validation errors guide refinement iterations
+- **Low Temperature**: `0.2` ensures consistent, deterministic translations
+```
+
+### Step 4: Target Language AST Validation
+
+After translation, we validate the generated code by parsing it with the target language's parser. This catches syntax errors before test execution.
+
+```python
+# validation/ast_validator.py
+import subprocess
+import tempfile
+import os
+from typing import Dict, List, Tuple
+from dataclasses import dataclass
+
+@dataclass
+class ValidationResult:
+    """Result of AST validation."""
+    is_valid: bool
+    errors: List[str]
+    warnings: List[str]
+
+class ASTValidator:
+    """Validate translated code by parsing with target language tools."""
+
+    def validate(self, code: str, language: str) -> ValidationResult:
+        """Validate code for the target language."""
+        validators = {
+            "python": self._validate_python,
+            "typescript": self._validate_typescript,
+            "go": self._validate_go,
+            "rust": self._validate_rust,
+        }
+
+        validator = validators.get(language)
+        if not validator:
+            return ValidationResult(
+                is_valid=False,
+                errors=[f"No validator for language: {language}"],
+                warnings=[]
+            )
+
+        return validator(code)
+
+    def _validate_python(self, code: str) -> ValidationResult:
+        """Validate Python code using ast module."""
+        import ast
+
+        try:
+            ast.parse(code)
+            return ValidationResult(is_valid=True, errors=[], warnings=[])
+        except SyntaxError as e:
+            return ValidationResult(
+                is_valid=False,
+                errors=[f"Line {e.lineno}: {e.msg}"],
+                warnings=[]
+            )
+
+    def _validate_typescript(self, code: str) -> ValidationResult:
+        """Validate TypeScript using tsc --noEmit."""
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.ts', delete=False
+        ) as f:
+            f.write(code)
+            temp_path = f.name
+
+        try:
+            result = subprocess.run(
+                ["npx", "tsc", "--noEmit", "--strict", temp_path],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                return ValidationResult(is_valid=True, errors=[], warnings=[])
+
+            errors = self._parse_tsc_errors(result.stdout + result.stderr)
+            return ValidationResult(is_valid=False, errors=errors, warnings=[])
+
+        except FileNotFoundError:
+            return ValidationResult(
+                is_valid=False,
+                errors=["TypeScript compiler (tsc) not found"],
+                warnings=[]
+            )
+        finally:
+            os.unlink(temp_path)
+
+    def _validate_go(self, code: str) -> ValidationResult:
+        """Validate Go code using go build."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create go.mod
+            mod_path = os.path.join(tmpdir, "go.mod")
+            with open(mod_path, 'w') as f:
+                f.write("module temp\n\ngo 1.21\n")
+
+            # Write code
+            code_path = os.path.join(tmpdir, "main.go")
+            with open(code_path, 'w') as f:
+                f.write(code)
+
+            result = subprocess.run(
+                ["go", "build", "-o", "/dev/null", "."],
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                return ValidationResult(is_valid=True, errors=[], warnings=[])
+
+            errors = result.stderr.strip().split('\n')
+            return ValidationResult(is_valid=False, errors=errors, warnings=[])
+
+    def _validate_rust(self, code: str) -> ValidationResult:
+        """Validate Rust code using rustc --emit=metadata."""
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.rs', delete=False
+        ) as f:
+            f.write(code)
+            temp_path = f.name
+
+        try:
+            result = subprocess.run(
+                ["rustc", "--emit=metadata", "-o", "/dev/null", temp_path],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                return ValidationResult(is_valid=True, errors=[], warnings=[])
+
+            errors = self._parse_rustc_errors(result.stderr)
+            return ValidationResult(is_valid=False, errors=errors, warnings=[])
+
+        except FileNotFoundError:
+            return ValidationResult(
+                is_valid=False,
+                errors=["Rust compiler (rustc) not found"],
+                warnings=[]
+            )
+        finally:
+            os.unlink(temp_path)
+
+    def _parse_tsc_errors(self, output: str) -> List[str]:
+        """Parse TypeScript compiler errors."""
+        errors = []
+        for line in output.strip().split('\n'):
+            if line and 'error TS' in line:
+                errors.append(line.strip())
+        return errors or [output.strip()]
+
+    def _parse_rustc_errors(self, output: str) -> List[str]:
+        """Parse Rust compiler errors."""
+        errors = []
+        for line in output.strip().split('\n'):
+            if line.startswith('error'):
+                errors.append(line.strip())
+        return errors or [output.strip()]
+```
+
+<Callout type="tip">
+  **Validation Strategy**: We use each language's native compiler/parser for
+  validation. This catches not just syntax errors but also type errors in
+  statically typed languages. The validation errors are fed back to the LLM for
+  iterative refinement.
+</Callout>
+
+### Step 5: Test Translation and Execution
+
+Tests are the ultimate verification of semantic preservation. We translate test files and execute them against the translated code.
+
+<Mermaid
+  chart={`
+graph TD
+    SourceTests[Source Tests] --> TestParser[Test Parser]
+    TestParser --> Assertions[Extract Assertions]
+    
+    Assertions --> TestGen[Test Generator]
+    TargetCode[Translated Code] --> TestGen
+    
+    TestGen --> TargetTests[Target Tests]
+    TargetTests --> Runner[Test Runner]
+    
+    Runner --> Results{Pass?}
+    Results -->|Yes| Success[✓ Verified]
+    Results -->|No| Debug[Debug Info]
+    
+    style Success fill:#c8e6c9,stroke:#2e7d32
+    style Debug fill:#ffcdd2,stroke:#c62828
+`}
+  caption="Test Translation: From source assertions to target verification."
+/>
+
+````python
+# testing/test_translator.py
+import subprocess
+import tempfile
+import os
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+@dataclass
+class TestResult:
+    """Result of test execution."""
+    passed: int
+    failed: int
+    errors: List[str]
+    output: str
+
+class TestTranslator:
+    """Translate and execute tests across languages."""
+
+    # Test framework mappings
+    FRAMEWORK_MAP = {
+        ("python", "typescript"): ("pytest", "jest"),
+        ("python", "go"): ("pytest", "testing"),
+        ("python", "rust"): ("pytest", "cargo test"),
+        ("typescript", "python"): ("jest", "pytest"),
+        ("typescript", "go"): ("jest", "testing"),
+        ("typescript", "rust"): ("jest", "cargo test"),
+    }
+
+    # Assertion mappings
+    ASSERTION_MAP = {
+        "typescript": {
+            "assert": "expect",
+            "assertEqual": "expect().toBe",
+            "assertTrue": "expect().toBeTruthy",
+            "assertFalse": "expect().toBeFalsy",
+            "assertRaises": "expect().toThrow",
+            "assertIn": "expect().toContain",
+        },
+        "go": {
+            "assert": "if got != want { t.Errorf() }",
+            "assertEqual": "if got != want { t.Errorf() }",
+            "assertTrue": "if !got { t.Error() }",
+            "assertFalse": "if got { t.Error() }",
+        },
+        "rust": {
+            "assert": "assert!",
+            "assertEqual": "assert_eq!",
+            "assertTrue": "assert!",
+            "assertFalse": "assert!(!",
+            "assertRaises": "should_panic",
+        }
+    }
+
+    def __init__(self, llm_translator):
+        self.llm = llm_translator
+
+    async def translate_tests(
+        self,
+        test_code: str,
+        source_lang: str,
+        target_lang: str,
+        translated_code: str
+    ) -> str:
+        """Translate test file to target language."""
+
+        # Build test-specific prompt
+        prompt_context = f"""
+Translate these {source_lang} tests to {target_lang}.
+
+The code being tested has been translated to:
+```{target_lang}
+{translated_code[:2000]}  # Truncate for context
+````
+
+Test Framework Mapping:
+
+- Source: {self.FRAMEWORK_MAP.get((source_lang, target_lang), ('unknown', 'unknown'))[0]}
+- Target: {self.FRAMEWORK_MAP.get((source_lang, target_lang), ('unknown', 'unknown'))[1]}
+
+Assertion Mappings for {target_lang}:
+{self.\_format_assertion_map(target_lang)}
+
+Translate the following tests:
+
+```{source_lang}
+{test_code}
+```
+
+"""
+
+        # Use LLM for test translation
+        translated_tests = await self.llm.translate(
+            source_code=test_code,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            type_hints={},
+            semantic_units=[],
+            previous_errors=None
+        )
+
+        return translated_tests
+
+    def _format_assertion_map(self, target_lang: str) -> str:
+        """Format assertion mappings for prompt."""
+        mappings = self.ASSERTION_MAP.get(target_lang, {})
+        return "\n".join(f"- {k} -> {v}" for k, v in mappings.items())
+
+    def execute_tests(
+        self,
+        test_code: str,
+        implementation_code: str,
+        language: str
+    ) -> TestResult:
+        """Execute translated tests."""
+
+        executors = {
+            "python": self._execute_python_tests,
+            "typescript": self._execute_typescript_tests,
+            "go": self._execute_go_tests,
+            "rust": self._execute_rust_tests,
+        }
+
+        executor = executors.get(language)
+        if not executor:
+            return TestResult(
+                passed=0, failed=0,
+                errors=[f"No test executor for: {language}"],
+                output=""
+            )
+
+        return executor(test_code, implementation_code)
+
+    def _execute_python_tests(
+        self, test_code: str, impl_code: str
+    ) -> TestResult:
+        """Execute Python tests with pytest."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Write implementation
+            impl_path = os.path.join(tmpdir, "implementation.py")
+            with open(impl_path, 'w') as f:
+                f.write(impl_code)
+
+            # Write tests
+            test_path = os.path.join(tmpdir, "test_implementation.py")
+            with open(test_path, 'w') as f:
+                f.write(f"from implementation import *\n\n{test_code}")
+
+            result = subprocess.run(
+                ["python", "-m", "pytest", test_path, "-v"],
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+
+            return self._parse_pytest_output(result.stdout + result.stderr)
+
+    def _execute_typescript_tests(
+        self, test_code: str, impl_code: str
+    ) -> TestResult:
+        """Execute TypeScript tests with Jest."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Initialize package.json
+            pkg = {
+                "type": "module",
+                "scripts": {"test": "jest"},
+                "devDependencies": {
+                    "jest": "^29.0.0",
+                    "@types/jest": "^29.0.0",
+                    "ts-jest": "^29.0.0",
+                    "typescript": "^5.0.0"
+                }
+            }
+            with open(os.path.join(tmpdir, "package.json"), 'w') as f:
+                import json
+                json.dump(pkg, f)
+
+            # Write files
+            with open(os.path.join(tmpdir, "implementation.ts"), 'w') as f:
+                f.write(impl_code)
+
+            with open(os.path.join(tmpdir, "implementation.test.ts"), 'w') as f:
+                f.write(f"import * from './implementation';\n\n{test_code}")
+
+            # Install and run
+            subprocess.run(["npm", "install"], cwd=tmpdir, capture_output=True)
+            result = subprocess.run(
+                ["npx", "jest", "--passWithNoTests"],
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+
+            return self._parse_jest_output(result.stdout + result.stderr)
+
+    def _execute_go_tests(
+        self, test_code: str, impl_code: str
+    ) -> TestResult:
+        """Execute Go tests."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create go.mod
+            with open(os.path.join(tmpdir, "go.mod"), 'w') as f:
+                f.write("module temp\n\ngo 1.21\n")
+
+            # Write implementation
+            with open(os.path.join(tmpdir, "implementation.go"), 'w') as f:
+                f.write(impl_code)
+
+            # Write tests
+            with open(os.path.join(tmpdir, "implementation_test.go"), 'w') as f:
+                f.write(test_code)
+
+            result = subprocess.run(
+                ["go", "test", "-v", "."],
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+
+            return self._parse_go_test_output(result.stdout + result.stderr)
+
+    def _execute_rust_tests(
+        self, test_code: str, impl_code: str
+    ) -> TestResult:
+        """Execute Rust tests with cargo."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create Cargo.toml
+            cargo_toml = """
+
+[package]
+name = "temp"
+version = "0.1.0"
+edition = "2021"
+"""
+with open(os.path.join(tmpdir, "Cargo.toml"), 'w') as f:
+f.write(cargo_toml)
+
+            # Create src directory
+            src_dir = os.path.join(tmpdir, "src")
+            os.makedirs(src_dir)
+
+            # Write lib.rs with implementation and tests
+            with open(os.path.join(src_dir, "lib.rs"), 'w') as f:
+                f.write(impl_code)
+                f.write("\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n")
+                f.write(test_code)
+                f.write("\n}")
+
+            result = subprocess.run(
+                ["cargo", "test"],
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+
+            return self._parse_cargo_test_output(result.stdout + result.stderr)
+
+    def _parse_pytest_output(self, output: str) -> TestResult:
+        """Parse pytest output for results."""
+        import re
+
+        passed = len(re.findall(r'PASSED', output))
+        failed = len(re.findall(r'FAILED', output))
+        errors = re.findall(r'E\s+(.+)', output)
+
+        return TestResult(
+            passed=passed,
+            failed=failed,
+            errors=errors[:5],  # Limit errors
+            output=output
+        )
+
+    def _parse_jest_output(self, output: str) -> TestResult:
+        """Parse Jest output for results."""
+        import re
+
+        passed_match = re.search(r'(\d+) passed', output)
+        failed_match = re.search(r'(\d+) failed', output)
+
+        passed = int(passed_match.group(1)) if passed_match else 0
+        failed = int(failed_match.group(1)) if failed_match else 0
+
+        return TestResult(
+            passed=passed,
+            failed=failed,
+            errors=[],
+            output=output
+        )
+
+    def _parse_go_test_output(self, output: str) -> TestResult:
+        """Parse go test output."""
+        import re
+
+        passed = len(re.findall(r'--- PASS:', output))
+        failed = len(re.findall(r'--- FAIL:', output))
+
+        return TestResult(
+            passed=passed,
+            failed=failed,
+            errors=[],
+            output=output
+        )
+
+    def _parse_cargo_test_output(self, output: str) -> TestResult:
+        """Parse cargo test output."""
+        import re
+
+        result_match = re.search(r'(\d+) passed.*?(\d+) failed', output)
+        if result_match:
+            passed = int(result_match.group(1))
+            failed = int(result_match.group(2))
+        else:
+            passed = len(re.findall(r'test .+ \.\.\. ok', output))
+            failed = len(re.findall(r'test .+ \.\.\. FAILED', output))
+
+        return TestResult(
+            passed=passed,
+            failed=failed,
+            errors=[],
+            output=output
+        )
+
+```
+
+```
+
+### Step 6: Side-by-Side Diff View
+
+A visual diff helps developers review translations and understand the mapping between source and target code.
+
+```python
+# visualization/diff_generator.py
+from typing import Dict, List, Tuple
+from dataclasses import dataclass
+import difflib
+
+@dataclass
+class DiffBlock:
+    """A block of diff content."""
+    source_lines: List[str]
+    target_lines: List[str]
+    source_start: int
+    target_start: int
+    change_type: str  # 'equal', 'replace', 'insert', 'delete'
+
+class DiffGenerator:
+    """Generate side-by-side diff views for code translation."""
+
+    def generate_diff(
+        self,
+        source_code: str,
+        target_code: str,
+        source_lang: str,
+        target_lang: str
+    ) -> Dict:
+        """Generate a structured diff between source and target."""
+
+        source_lines = source_code.splitlines()
+        target_lines = target_code.splitlines()
+
+        # Use difflib for sequence matching
+        matcher = difflib.SequenceMatcher(
+            None, source_lines, target_lines
+        )
+
+        blocks = []
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            block = DiffBlock(
+                source_lines=source_lines[i1:i2],
+                target_lines=target_lines[j1:j2],
+                source_start=i1 + 1,
+                target_start=j1 + 1,
+                change_type=tag
+            )
+            blocks.append(block)
+
+        # Calculate statistics
+        stats = self._calculate_stats(blocks)
+
+        return {
+            "source_language": source_lang,
+            "target_language": target_lang,
+            "blocks": [self._block_to_dict(b) for b in blocks],
+            "statistics": stats,
+            "html": self._generate_html(blocks, source_lang, target_lang)
+        }
+
+    def _block_to_dict(self, block: DiffBlock) -> Dict:
+        """Convert DiffBlock to dictionary."""
+        return {
+            "source_lines": block.source_lines,
+            "target_lines": block.target_lines,
+            "source_start": block.source_start,
+            "target_start": block.target_start,
+            "change_type": block.change_type
+        }
+
+    def _calculate_stats(self, blocks: List[DiffBlock]) -> Dict:
+        """Calculate diff statistics."""
+        total_source = sum(len(b.source_lines) for b in blocks)
+        total_target = sum(len(b.target_lines) for b in blocks)
+        unchanged = sum(
+            len(b.source_lines) for b in blocks
+            if b.change_type == 'equal'
+        )
+
+        return {
+            "source_lines": total_source,
+            "target_lines": total_target,
+            "unchanged_lines": unchanged,
+            "similarity": unchanged / max(total_source, 1) * 100
+        }
+
+    def _generate_html(
+        self,
+        blocks: List[DiffBlock],
+        source_lang: str,
+        target_lang: str
+    ) -> str:
+        """Generate HTML diff view."""
+
+        html = f"""
+<div class="diff-container">
+  <div class="diff-header">
+    <span class="source-lang">{source_lang}</span>
+    <span class="target-lang">{target_lang}</span>
+  </div>
+  <div class="diff-content">
+"""
+
+        for block in blocks:
+            css_class = f"diff-{block.change_type}"
+
+            # Pad shorter side
+            max_lines = max(len(block.source_lines), len(block.target_lines))
+            source_padded = block.source_lines + [''] * (max_lines - len(block.source_lines))
+            target_padded = block.target_lines + [''] * (max_lines - len(block.target_lines))
+
+            for i, (src, tgt) in enumerate(zip(source_padded, target_padded)):
+                src_num = block.source_start + i if src else ''
+                tgt_num = block.target_start + i if tgt else ''
+
+                html += f"""
+    <div class="diff-row {css_class}">
+      <span class="line-num">{src_num}</span>
+      <pre class="source-code">{self._escape_html(src)}</pre>
+      <span class="line-num">{tgt_num}</span>
+      <pre class="target-code">{self._escape_html(tgt)}</pre>
+    </div>
+"""
+
+        html += """
+  </div>
+</div>
+"""
+        return html
+
+    def _escape_html(self, text: str) -> str:
+        """Escape HTML special characters."""
+        return (
+            text
+            .replace('&', '&amp;')
+            .replace('<', '&lt;')
+            .replace('>', '&gt;')
+            .replace('"', '&quot;')
+        )
+```
+
+---
+
+## Translation Orchestrator
+
+The orchestrator ties all components together, managing the iterative translation pipeline.
+
+```python
+# services/translator.py
+from typing import Dict, Optional
+from parsers.python_parser import PythonASTParser
+from analysis.type_inferencer import TypeInferencer
+from translation.llm_translator import LLMCodeTranslator
+from validation.ast_validator import ASTValidator
+from testing.test_translator import TestTranslator
+from visualization.diff_generator import DiffGenerator
+
+class CodeTranslator:
+    """Orchestrates the complete translation pipeline."""
+
+    def __init__(self):
+        self.parsers = {
+            "python": PythonASTParser(),
+            # Add other parsers as needed
+        }
+        self.type_inferencer = TypeInferencer()
+        self.llm_translator = LLMCodeTranslator()
+        self.validator = ASTValidator()
+        self.test_translator = TestTranslator(self.llm_translator)
+        self.diff_generator = DiffGenerator()
+
+    async def translate(
+        self,
+        source_code: str,
+        source_lang: str,
+        target_lang: str,
+        test_code: Optional[str] = None,
+        options: Optional[Dict] = None
+    ) -> Dict:
+        """Execute the complete translation pipeline."""
+
+        options = options or {}
+        max_iterations = options.get("max_iterations", 3)
+
+        # Step 1: Parse source code
+        parser = self.parsers.get(source_lang)
+        if not parser:
+            raise ValueError(f"No parser for language: {source_lang}")
+
+        parsed = parser.parse(source_code)
+
+        # Step 2: Semantic analysis and type inference
+        type_context = self.type_inferencer.analyze(parsed)
+        type_hints = self.type_inferencer.generate_type_hints(target_lang)
+
+        # Step 3-4: Iterative translation with validation
+        translated_code = None
+        validation_errors = []
+        iterations = 0
+
+        for iteration in range(max_iterations):
+            iterations = iteration + 1
+
+            # Generate translation
+            translated_code = await self.llm_translator.translate(
+                source_code=source_code,
+                source_lang=source_lang,
+                target_lang=target_lang,
+                type_hints=type_hints,
+                semantic_units=parsed["units"],
+                previous_errors=validation_errors if validation_errors else None
+            )
+
+            # Validate translation
+            validation = self.validator.validate(translated_code, target_lang)
+
+            if validation.is_valid:
+                break
+
+            validation_errors = validation.errors
+
+        # Step 5: Test translation and execution
+        test_results = None
+        translated_tests = None
+
+        if test_code:
+            translated_tests = await self.test_translator.translate_tests(
+                test_code=test_code,
+                source_lang=source_lang,
+                target_lang=target_lang,
+                translated_code=translated_code
+            )
+
+            test_results = self.test_translator.execute_tests(
+                test_code=translated_tests,
+                implementation_code=translated_code,
+                language=target_lang
+            )
+
+        # Step 6: Generate diff view
+        diff = self.diff_generator.generate_diff(
+            source_code=source_code,
+            target_code=translated_code,
+            source_lang=source_lang,
+            target_lang=target_lang
+        )
+
+        # Build semantic map
+        semantic_map = self._build_semantic_map(parsed, type_hints)
+
+        return {
+            "translated_code": translated_code,
+            "translated_tests": translated_tests,
+            "validation": {
+                "ast_valid": validation.is_valid,
+                "type_check_passed": len(validation.errors) == 0,
+                "tests_passed": test_results.passed if test_results else 0,
+                "tests_total": (test_results.passed + test_results.failed) if test_results else 0
+            },
+            "semantic_map": semantic_map,
+            "iterations": iterations,
+            "warnings": validation.warnings,
+            "diff": diff
+        }
+
+    def _build_semantic_map(self, parsed: Dict, type_hints: Dict) -> Dict:
+        """Build mapping of source to target elements."""
+        return {
+            "functions": {
+                unit["name"]: unit["name"]  # Could be renamed in translation
+                for unit in parsed["units"]
+                if unit["kind"] == "function"
+            },
+            "types": type_hints,
+            "dependencies": parsed.get("imports", [])
+        }
+```
+
+### API Endpoints
+
+```python
+# routers/translate.py
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+from typing import List, Dict, Optional
+from services.translator import CodeTranslator
+
+router = APIRouter(prefix="/translate", tags=["translation"])
+translator = CodeTranslator()
+
+class TranslationOptions(BaseModel):
+    preserve_comments: bool = True
+    strict_types: bool = True
+    max_iterations: int = Field(default=3, ge=1, le=5)
+
+class TranslationRequest(BaseModel):
+    source_code: str
+    source_language: str = Field(..., pattern="^(python|typescript|go|rust)$")
+    target_language: str = Field(..., pattern="^(python|typescript|go|rust)$")
+    include_tests: bool = True
+    test_code: Optional[str] = None
+    options: Optional[TranslationOptions] = None
+
+class ValidationResult(BaseModel):
+    ast_valid: bool
+    type_check_passed: bool
+    tests_passed: int
+    tests_total: int
+
+class SemanticMap(BaseModel):
+    functions: Dict[str, str]
+    types: Dict[str, Dict]
+    dependencies: List[str]
+
+class TranslationResponse(BaseModel):
+    translated_code: str
+    translated_tests: Optional[str]
+    validation: ValidationResult
+    semantic_map: SemanticMap
+    iterations: int
+    warnings: List[str]
+
+@router.post("/", response_model=TranslationResponse)
+async def translate_code(request: TranslationRequest):
+    """Translate code between languages."""
+
+    if request.source_language == request.target_language:
+        raise HTTPException(
+            status_code=400,
+            detail="Source and target languages must be different"
+        )
+
+    try:
+        result = await translator.translate(
+            source_code=request.source_code,
+            source_lang=request.source_language,
+            target_lang=request.target_language,
+            test_code=request.test_code if request.include_tests else None,
+            options=request.options.dict() if request.options else None
+        )
+
+        return TranslationResponse(**result)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
+
+@router.get("/languages")
+async def list_languages():
+    """List supported languages."""
+    return {
+        "languages": [
+            {"id": "python", "name": "Python", "extensions": [".py"]},
+            {"id": "typescript", "name": "TypeScript", "extensions": [".ts", ".tsx"]},
+            {"id": "go", "name": "Go", "extensions": [".go"]},
+            {"id": "rust", "name": "Rust", "extensions": [".rs"]},
+        ]
+    }
+
+@router.post("/validate")
+async def validate_code(code: str, language: str):
+    """Validate code syntax for a language."""
+    from validation.ast_validator import ASTValidator
+
+    validator = ASTValidator()
+    result = validator.validate(code, language)
+
+    return {
+        "valid": result.is_valid,
+        "errors": result.errors,
+        "warnings": result.warnings
+    }
+```
+
+---
+
+## Practical Example: Python to TypeScript
+
+Let's walk through a complete translation example:
+
+**Source (Python):**
+
+```python
+from typing import List, Optional
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    """Represents a user in the system."""
+    id: int
+    name: str
+    email: Optional[str] = None
+
+def find_users_by_name(users: List[User], query: str) -> List[User]:
+    """Find users whose name contains the query string."""
+    return [u for u in users if query.lower() in u.name.lower()]
+
+async def fetch_user(user_id: int) -> Optional[User]:
+    """Fetch a user by ID from the database."""
+    # Simulated async fetch
+    if user_id > 0:
+        return User(id=user_id, name=f"User {user_id}")
+    return None
+```
+
+**Translated (TypeScript):**
+
+```typescript
+interface User {
+  /** Represents a user in the system. */
+  id: number;
+  name: string;
+  email?: string | null;
+}
+
+function findUsersByName(users: User[], query: string): User[] {
+  /** Find users whose name contains the query string. */
+  return users.filter((u) =>
+    u.name.toLowerCase().includes(query.toLowerCase()),
+  );
+}
+
+async function fetchUser(userId: number): Promise<User | null> {
+  /** Fetch a user by ID from the database. */
+  // Simulated async fetch
+  if (userId > 0) {
+    return { id: userId, name: `User ${userId}` };
+  }
+  return null;
+}
+```
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph Python
+        PyClass[dataclass User]
+        PyFunc1[find_users_by_name]
+        PyFunc2[async fetch_user]
+    end
+    
+    subgraph TypeScript
+        TsInterface[interface User]
+        TsFunc1[findUsersByName]
+        TsFunc2[async fetchUser]
+    end
+    
+    PyClass -->|"@dataclass → interface"| TsInterface
+    PyFunc1 -->|"list comp → filter"| TsFunc1
+    PyFunc2 -->|"Optional → Promise<T|null>"| TsFunc2
+    
+    style PyClass fill:#fff9c4,stroke:#fbc02d
+    style TsInterface fill:#e1f5fe,stroke:#01579b
+`}
+  caption="Translation Mapping: Python constructs to TypeScript idioms."
+/>
+
+**Key Translation Decisions**:
+
+| Python Construct   | TypeScript Equivalent | Rationale                                                         |
+| ------------------ | --------------------- | ----------------------------------------------------------------- |
+| `@dataclass`       | `interface`           | TypeScript interfaces are the idiomatic way to define data shapes |
+| `Optional[str]`    | `string \| null`      | TypeScript uses union types for optionality                       |
+| `List[User]`       | `User[]`              | Array syntax is more idiomatic in TypeScript                      |
+| List comprehension | `.filter()`           | Functional array methods are preferred in TypeScript              |
+| `async def`        | `async function`      | Direct mapping with `Promise<T>` return type                      |
+| f-strings          | Template literals     | Both use `${}` interpolation syntax                               |
+
+---
+
+## Challenges and Extensions
+
+### Challenge 1: Add More Languages (Java, C#)
+
+Extend the translator to support Java and C#:
+
+```python
+# parsers/java_parser.py (conceptual)
+class JavaASTParser:
+    """Parse Java using tree-sitter or javalang."""
+
+    TYPE_MAPPINGS = {
+        "python": {
+            "String": "str",
+            "int": "int",
+            "Integer": "int",
+            "boolean": "bool",
+            "List<T>": "List[T]",
+            "Map<K,V>": "Dict[K, V]",
+            "Optional<T>": "Optional[T]",
+        }
+    }
+
+    def parse(self, source_code: str) -> Dict:
+        # Use tree-sitter-java or javalang
+        pass
+```
+
+### Challenge 2: Dependency Mapping
+
+Map source language dependencies to target equivalents:
+
+```python
+# analysis/dependency_mapper.py
+DEPENDENCY_MAP = {
+    ("python", "typescript"): {
+        "requests": "axios",
+        "json": "JSON (built-in)",
+        "datetime": "date-fns",
+        "re": "RegExp (built-in)",
+        "typing": "(built-in types)",
+        "dataclasses": "(interfaces)",
+        "pytest": "jest",
+        "unittest": "jest",
+    },
+    ("python", "go"): {
+        "requests": "net/http",
+        "json": "encoding/json",
+        "datetime": "time",
+        "re": "regexp",
+        "typing": "(built-in)",
+        "pytest": "testing",
+    },
+    ("python", "rust"): {
+        "requests": "reqwest",
+        "json": "serde_json",
+        "datetime": "chrono",
+        "re": "regex",
+        "typing": "(built-in)",
+        "pytest": "#[test]",
+    }
+}
+
+class DependencyMapper:
+    def map_imports(
+        self,
+        imports: List[str],
+        source_lang: str,
+        target_lang: str
+    ) -> Dict[str, str]:
+        """Map source imports to target equivalents."""
+        mapping = DEPENDENCY_MAP.get((source_lang, target_lang), {})
+        return {
+            imp: mapping.get(imp, f"// TODO: Find {target_lang} equivalent for {imp}")
+            for imp in imports
+        }
+```
+
+### Challenge 3: Documentation Translation
+
+Translate docstrings to target language documentation format:
+
+```python
+# translation/doc_translator.py
+class DocTranslator:
+    """Translate documentation between formats."""
+
+    DOC_FORMATS = {
+        "python": "google",      # Google-style docstrings
+        "typescript": "jsdoc",   # JSDoc comments
+        "go": "godoc",           # Go doc comments
+        "rust": "rustdoc",       # Rust doc comments
+    }
+
+    def translate_docstring(
+        self,
+        docstring: str,
+        source_lang: str,
+        target_lang: str
+    ) -> str:
+        """Convert docstring format."""
+        # Parse source format
+        parsed = self._parse_docstring(docstring, source_lang)
+
+        # Generate target format
+        return self._generate_docstring(parsed, target_lang)
+
+    def _generate_docstring(self, parsed: Dict, target_lang: str) -> str:
+        """Generate docstring in target format."""
+        if target_lang == "typescript":
+            lines = ["/**"]
+            lines.append(f" * {parsed['description']}")
+            for param in parsed.get("params", []):
+                lines.append(f" * @param {param['name']} {param['description']}")
+            if parsed.get("returns"):
+                lines.append(f" * @returns {parsed['returns']}")
+            lines.append(" */")
+            return "\n".join(lines)
+
+        elif target_lang == "rust":
+            lines = []
+            lines.append(f"/// {parsed['description']}")
+            for param in parsed.get("params", []):
+                lines.append(f"/// * `{param['name']}` - {param['description']}")
+            if parsed.get("returns"):
+                lines.append(f"/// Returns: {parsed['returns']}")
+            return "\n".join(lines)
+
+        return parsed['description']
+```
+
+### Challenge 4: VS Code Extension
+
+Build a VS Code extension for in-editor translation:
+
+```typescript
+// extension.ts (conceptual)
+import * as vscode from "vscode";
+
+export function activate(context: vscode.ExtensionContext) {
+  const translateCommand = vscode.commands.registerCommand(
+    "codeTranslator.translate",
+    async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+
+      const sourceCode = editor.document.getText();
+      const sourceLang = detectLanguage(editor.document.languageId);
+
+      const targetLang = await vscode.window.showQuickPick(
+        ["typescript", "go", "rust", "python"],
+        { placeHolder: "Select target language" },
+      );
+
+      if (!targetLang) return;
+
+      // Call translation API
+      const result = await translateCode(sourceCode, sourceLang, targetLang);
+
+      // Open translated code in new editor
+      const doc = await vscode.workspace.openTextDocument({
+        content: result.translated_code,
+        language: targetLang,
+      });
+
+      await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
+    },
+  );
+
+  context.subscriptions.push(translateCommand);
+}
+```
+
+---
+
+## Key Takeaways
+
+<Mermaid
+  chart={`
+mindmap
+  root((Code Translator))
+    AST Parsing
+      Language-specific parsers
+      Preserve structure
+    Semantic Analysis
+      Type inference
+      Dependency tracking
+    LLM Translation
+      Idiomatic output
+      Iterative refinement
+    Validation
+      AST verification
+      Type checking
+    Testing
+      Test translation
+      Execution verification
+`}
+  caption="Key Components: The pillars of code translation."
+/>
+
+1. **AST-First Approach**: Parsing source code into AST before translation enables accurate semantic understanding. Raw text-to-text translation loses structural information.
+   - **Why it matters**: ASTs capture the _meaning_ of code, not just its text. This enables type inference, dependency tracking, and validation.
+   - **Trade-off**: Requires language-specific parsers, but the accuracy gains are worth the complexity.
+
+2. **Type Inference is Critical**: For dynamically typed sources, inferring types enables correct translation to statically typed targets.
+   - **Strategies**: Combine explicit annotations, naming conventions, and usage analysis.
+   - **Confidence scoring**: Track how certain you are about each inferred type to guide LLM prompts.
+
+3. **Iterative Refinement**: Don't expect perfect translation on the first try. Feed validation errors back to the LLM for correction.
+   - **Typical iterations**: 1-3 for simple code, 3-5 for complex code with edge cases.
+   - **Diminishing returns**: If validation fails after 5 iterations, the code may need manual intervention.
+
+4. **Test Translation is Verification**: Translated tests that pass prove semantic preservation better than any static analysis.
+   - **Coverage matters**: High test coverage in the source means high confidence in the translation.
+   - **Framework mapping**: Each language has different testing idioms—map assertions correctly.
+
+5. **Idiomatic Output**: The goal isn't just _working_ code, but code that looks like a native speaker wrote it.
+   - **Idiom guides**: Provide language-specific conventions in the LLM prompt.
+   - **Review diff**: The side-by-side view helps developers verify idiomatic choices.
+
+---
+
+## Testing Requirements
+
+### Unit Test Coverage
+
+| Component           | Test Cases                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------- |
+| `PythonASTParser`   | Valid code parsing, syntax error handling, type annotation extraction, docstring extraction  |
+| `TypeInferencer`    | Explicit type mapping, name-based inference, confidence scoring, cross-language type mapping |
+| `LLMCodeTranslator` | Prompt construction, code extraction, error feedback handling                                |
+| `ASTValidator`      | Valid code acceptance, syntax error detection, type error detection per language             |
+| `TestTranslator`    | Test framework mapping, assertion translation, test execution per language                   |
+| `DiffGenerator`     | Block generation, statistics calculation, HTML output                                        |
+
+### Integration Test Scenarios
+
+| Scenario            | Steps                           | Expected Outcome                  |
+| ------------------- | ------------------------------- | --------------------------------- |
+| Python → TypeScript | Translate dataclass + functions | Valid TS with interfaces          |
+| Python → Go         | Translate async code            | Valid Go with goroutines/channels |
+| Python → Rust       | Translate with error handling   | Valid Rust with Result types      |
+| With Tests          | Translate code + pytest tests   | Jest/go test/cargo test pass      |
+| Iterative Fix       | Invalid first translation       | Corrected after feedback          |
+| Complex Types       | Generic types, unions           | Correct type mapping              |
+
+---
+
+## Project Structure
+
+```
+code-translator/
+├── parsers/
+│   ├── __init__.py
+│   ├── python_parser.py      # Python AST parsing with libcst
+│   ├── typescript_parser.py  # TypeScript parsing (ts-morph concepts)
+│   ├── go_parser.py          # Go parsing
+│   └── rust_parser.py        # Rust parsing
+├── analysis/
+│   ├── __init__.py
+│   ├── type_inferencer.py    # Type inference and mapping
+│   └── dependency_mapper.py  # Dependency mapping between languages
+├── translation/
+│   ├── __init__.py
+│   ├── llm_translator.py     # LLM-based code generation
+│   └── doc_translator.py     # Documentation format translation
+├── validation/
+│   ├── __init__.py
+│   └── ast_validator.py      # Target language validation
+├── testing/
+│   ├── __init__.py
+│   └── test_translator.py    # Test translation and execution
+├── visualization/
+│   ├── __init__.py
+│   └── diff_generator.py     # Side-by-side diff generation
+├── services/
+│   ├── __init__.py
+│   └── translator.py         # Main orchestrator
+├── routers/
+│   ├── __init__.py
+│   └── translate.py          # FastAPI endpoints
+├── main.py                   # FastAPI application
+├── requirements.txt
+└── tests/
+    ├── test_parsers.py
+    ├── test_inferencer.py
+    ├── test_translator.py
+    └── test_validation.py
+```
+
+---
+
+## Dependencies
+
+```txt
+# requirements.txt
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+langchain>=0.1.0
+langchain-openai>=0.0.5
+libcst>=1.0.0
+httpx>=0.24.0
+```
+
+**Language-Specific Tools** (install separately):
+
+- TypeScript: `npm install -g typescript`
+- Go: Install from https://go.dev/
+- Rust: Install from https://rustup.rs/
+
+---
+
+<ModuleSummary
+  points={[
+    "AST parsing provides structural understanding that raw text translation cannot achieve",
+    "Type inference bridges dynamically and statically typed languages through annotation analysis and naming conventions",
+    "LLM-assisted translation with idiom guides produces natural-looking target code",
+    "Iterative refinement with validation feedback corrects errors automatically",
+    "Test translation and execution provides the ultimate verification of semantic preservation",
+    "Side-by-side diff views enable developers to review and understand translation decisions",
+  ]}
+/>
+
+**Next Steps**: Consider extending this translator with additional languages (Java, C#), building a VS Code extension for in-editor translation, or integrating with CI/CD pipelines for automated codebase migration.

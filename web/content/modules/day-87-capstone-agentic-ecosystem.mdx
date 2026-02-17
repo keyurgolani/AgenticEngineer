@@ -67,7 +67,42 @@ day: 87
 
 **Objective**: Build "AgentOS"—a self-hosted agentic ecosystem with an intelligent orchestrator, specialized agent fleet, and unified API. Supports local LLMs (Ollama/LMStudio) and cloud providers, with full memory, RAG, and research capabilities.
 
-{/* IMAGE_PLACEHOLDER: Create a hero illustration showing the AgentOS ecosystem as a futuristic command center. Show a central orchestrator hub in the middle with glowing connections to 5 specialized agent pods (Research, Code, Analysis, Creative, Assistant) arranged in a circle. Each agent pod should have distinct visual characteristics: Research with magnifying glass/web icons, Code with terminal/brackets, Analysis with charts/graphs, Creative with palette/lightbulb, Assistant with helping hand. Include visual representations of supporting services (Memory as a brain, RAG as a library, LLM Router as a traffic controller) in the background. Use a dark tech aesthetic with blue/purple gradients and glowing connections. Place this at the top of the Project Overview section. */}
+<Mermaid
+  chart={`
+graph TB
+    subgraph "AgentOS Command Center"
+        Orchestrator((Smart Orchestrator))
+        
+        Research[Research Agent 🔍]
+        Code[Code Agent 💻]
+        Analysis[Analysis Agent 📊]
+        Creative[Creative Agent 🎨]
+        Assistant[General Assistant 🤖]
+        
+        Orchestrator --> Research
+        Orchestrator --> Code
+        Orchestrator --> Analysis
+        Orchestrator --> Creative
+        Orchestrator --> Assistant
+        
+        Memory[(Memory 🧠)]
+        RAG[(RAG Library 📚)]
+        Router{LLM Router 🚦}
+        
+        Research -.-> Memory
+        Code -.-> RAG
+        Analysis -.-> Router
+    end
+    
+    style Orchestrator fill:#6200ea,stroke:#333,stroke-width:4px,color:#fff
+    style Research fill:#bbdefb
+    style Code fill:#c8e6c9
+    style Analysis fill:#fff9c4
+    style Creative fill:#f8bbd0
+    style Assistant fill:#e1bee7
+`}
+  caption="AgentOS: A centralized hub managing specialized autonomous agents."
+/>
 
 **What You'll Build**:
 
@@ -90,7 +125,17 @@ In this final capstone, we architected and built "AgentOS," a comprehensive self
 
 This project represents the culmination of the entire 90-day course, demonstrating how to build, deploy, and manage a production-grade agentic ecosystem.
 
-{/* IMAGE_PLACEHOLDER: Create an infographic showing the journey from Day 1 to Day 87. Show a winding path with key milestones: Month 1 (Foundations - show building blocks), Month 2 (Multi-Agent Systems - show connected nodes), Month 3 (Advanced Architecture - show the complete AgentOS ecosystem). Use a mountain climbing metaphor where Day 87 is the summit with a flag labeled "AgentOS". Include small icons representing each mini-project (Days 82-86) as base camps before the final summit. Use an inspiring color gradient from blue (start) to gold (summit). Place this after the Module Summary. */}
+<Mermaid
+  chart={`
+timeline
+    title The Journey to AgentOS
+    Month 1 : Foundations & Basics : Prompt Engineering
+    Month 2 : Multi-Agent Systems : Connection Patterns
+    Month 3 : Advanced Architectures : Production Systems
+    Day 87  : **AgentOS Summit** 🚩 : Complete Ecosystem
+`}
+  caption="From basic prompts to a full-fledged operating system for agents."
+/>
 
 ---
 
@@ -100,7 +145,31 @@ This section provides detailed requirements, milestones, and evaluation criteria
 
 ### Milestone Breakdown
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a MilestoneTracker component that displays the 8 milestones as an interactive checklist. Each milestone should be expandable to show deliverables, time estimates, and dependencies. Include a progress bar at the top showing overall completion. Allow users to check off completed milestones and save progress to local storage. Add estimated completion dates based on user's start date. */}
+<Mermaid
+  chart={`
+gantt
+    title AgentOS Milestone Tracker
+    dateFormat X
+    axisFormat %d
+    
+    section Setup
+    M1 Project Structure    :active, m1, 0, 3
+    
+    section Core
+    M2 Service Integration  :m2, after m1, 6
+    M3 Smart Orchestrator   :m3, after m2, 5
+    M4 Specialized Agents   :m4, after m3, 8
+    
+    section Interface
+    M5 API Gateway          :m5, after m4, 4
+    M6 Web Dashboard        :m6, after m5, 6
+    
+    section Deploy
+    M7 Docker Deployment    :m7, after m6, 4
+    M8 CLI & Testing        :m8, after m7, 3
+`}
+  caption="Build Roadmap: 8 milestones to a production platform."
+/>
 
 | Milestone                          | Deliverable                                                                     | Time Estimate | Dependencies               |
 | :--------------------------------- | :------------------------------------------------------------------------------ | :------------ | :------------------------- |
@@ -115,7 +184,36 @@ This section provides detailed requirements, milestones, and evaluation criteria
 
 **Total Estimated Time:** 28-39 hours (approximately 1 week full-time)
 
-{/* IMAGE_PLACEHOLDER: Create a Gantt chart visualization showing the 8 milestones as horizontal bars with dependencies indicated by arrows. Use different colors for each phase: Setup (M1), Integration (M2-M4), User Interface (M5-M6), Deployment (M7-M8). Show the critical path highlighted in a brighter color. Include small icons for each milestone type (folder for M1, puzzle pieces for M2, brain for M3, robots for M4, gateway for M5, screen for M6, container for M7, terminal for M8). Place this after the milestone table. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph Monolith
+        Box1[App]
+        Box1 -- contains --> M1[Memory]
+        Box1 -- contains --> R1[RAG]
+        Box1 -- contains --> L1[LLM]
+        Crash((💥 Failure)) --> Box1
+    end
+    
+    subgraph Microservices
+        Svc1[Memory Service]
+        Svc2[RAG Service]
+        Svc3[LLM Service]
+        Orch[Orchestrator]
+        
+        Orch --> Svc1
+        Orch --> Svc2
+        Orch --> Svc3
+        
+        Failure((💥 Failure)) --> Svc2
+    end
+    
+    style Crash fill:#ffcdd2
+    style Failure fill:#ffcdd2
+    style Svc2 fill:#ffcdd2
+`}
+  caption="Monolith vs Microservices: Why we decouple capabilities."
+/>
 
 ### Definition of Done
 
@@ -151,7 +249,25 @@ Your AgentOS is complete when ALL of the following criteria are met:
 
 **Real-World Analogy:** Think of this like a restaurant kitchen. Instead of one chef doing everything (monolith), you have specialized stations—grill, sauté, pastry, salad. Each station (service) focuses on what it does best, and the expeditor (orchestrator) coordinates the orders. If the grill breaks down, the rest of the kitchen keeps running.
 
-{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison diagram. Left side: "Monolithic Architecture" showing a single large box with all components tightly packed inside, with a crack running through it labeled "Single point of failure". Right side: "Microservices Architecture" showing separate, loosely connected boxes for each service (Memory, RAG, LLM Router, etc.) with flexible connection lines between them. Use visual metaphors: monolith as a solid block, microservices as LEGO bricks. Place this in the ADR-001 section. */}
+<Mermaid
+  chart={`
+graph TD
+    User([User Request]) --> Decision{Prefer Local?}
+    Decision -->|Yes| Check{Local Capable?}
+    
+    Check -->|Yes| Local[🦙 Ollama Local]
+    Check -->|No| Cloud[☁️ Cloud Provider]
+    
+    Decision -->|No| Cloud
+    
+    Cloud --> OpenAI[OpenAI]
+    Cloud --> Anthropic[Anthropic]
+    
+    style Local fill:#c8e6c9
+    style Cloud fill:#bbdefb
+`}
+  caption="Hybrid Routing: Balancing privacy/cost with capability."
+/>
 
 **Consequences:**
 
@@ -171,7 +287,18 @@ Your AgentOS is complete when ALL of the following criteria are met:
 
 **Real-World Analogy:** This is like having a home gym with basic equipment for daily workouts (local LLMs), but maintaining a membership at a premium gym with specialized equipment for serious training sessions (cloud LLMs). You use what you have at home for most tasks, but when you need that Olympic-grade equipment, you go to the premium facility.
 
-{/* IMAGE_PLACEHOLDER: Create a decision flow diagram showing the LLM routing logic. Start with "User Request" at the top, then show a decision diamond "Prefer Local?" with Yes/No paths. Yes path goes to "Local LLM (Ollama)" with a sub-decision "Available & Capable?" that can fallback to cloud. No path goes directly to "Cloud LLM Selection" showing OpenAI and Anthropic options. Use icons: house for local, cloud for cloud providers, arrows showing fallback paths. Add cost indicators ($, $$, $$$) next to each option. Place this in ADR-002 section. */}
+<Mermaid
+  chart={`
+grid
+    title Request Classifier Demo
+    columns 2
+    "Input" : "Write a Python script to sort files"
+    "Keywords" : "Code detected (Confidence: 0.8)"
+    "LLM Verify" : "Skipped (High Confidence)"
+    "Route To" : "Code Agent 💻"
+`}
+  caption="Two-stage classification ensures speed and accuracy."
+/>
 
 **Consequences:**
 
@@ -191,7 +318,27 @@ Your AgentOS is complete when ALL of the following criteria are met:
 
 **Real-World Analogy:** This is like how email spam filters work. First, they check for obvious spam keywords (fast, cheap). If it's unclear, they use machine learning models to analyze the content more deeply (slower, more accurate). Most emails are caught by the fast filter, saving computational resources for the tricky cases.
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a RequestClassifierDemo component that lets users type in sample queries and see in real-time how the classifier works. Show both stages: keyword matching with highlighted keywords and confidence scores, then LLM classification if needed. Display which agent would be selected and why. Include example queries like "Research quantum computing" (research), "Fix my Python code" (code), "Analyze sales data" (analysis), etc. */}
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Principles"
+        SOC[Separation of Concerns]
+        LC[Loose Coupling]
+        LF[Local-First]
+        GD[Graceful Degradation]
+        Obs[Observability]
+        Sec[Security]
+    end
+    
+    AgentOS((AgentOS)) --> SOC
+    AgentOS --> LC
+    AgentOS --> LF
+    AgentOS --> GD
+    AgentOS --> Obs
+    AgentOS --> Sec
+`}
+  caption="The Six Pillars: Core principles guiding the architecture."
+/>
 
 **Consequences:**
 
@@ -779,9 +926,53 @@ fetch("http://localhost:8000/health")
 
 ## System Architecture
 
-{/* IMAGE_PLACEHOLDER: Create a comprehensive system architecture diagram showing all components of AgentOS. Use a layered approach: Top layer (User Interface) with Web Dashboard, REST API, and CLI. Middle layer (AgentOS Core) with API Gateway, Smart Orchestrator, and the 5 specialized agents arranged in a pentagon. Bottom layer (Supporting Services) with Prompt Library, Memory Service, RAG Service, LLM Router, and Research Service. Lowest layer (LLM Providers) showing Ollama, LM Studio, OpenAI, and Anthropic. Use different colors for each layer and show data flow with animated arrows. Add small icons representing each component's function. Make it visually similar to AWS architecture diagrams but with a modern, clean aesthetic. Place this before the Mermaid diagram. */}
+<Mermaid
+  chart={`
+graph TB
+    subgraph User_Interface
+        Dash[Web Dashboard]
+        CLI[CLI Tool]
+    end
+    
+    subgraph Core
+        Gateway[API Gateway]
+        Orch[Smart Orchestrator]
+        fiveAgents[Agent Fleet (x5)]
+    end
+    
+    subgraph Services
+        Mem[Memory]
+        RAG[RAG]
+        Prompt[Prompts]
+    end
+    
+    Dash --> Gateway
+    CLI --> Gateway
+    Gateway --> Orch
+    Orch --> fiveAgents
+    fiveAgents --> Services
+`}
+  caption="System Architecture: Layered design for scalability."
+/>
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Create an ArchitectureExplorer component that makes the Mermaid diagram interactive. When users hover over or click on a component, show a tooltip with: component description, responsibilities, API endpoints, dependencies, and links to relevant code sections. Add a "trace request" feature where users can click a sample request and watch it flow through the system with animated highlighting. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Gateway
+    participant Orchestrator
+    participant Agent
+    
+    User->>Gateway: POST /chat
+    Gateway->>Orchestrator: classify_request()
+    Orchestrator->>Orchestrator: Identify Agent
+    Orchestrator->>Agent: execute_task()
+    Agent-->>Orchestrator: Result
+    Orchestrator-->>Gateway: Response
+    Gateway-->>User: JSON Response
+`}
+  caption="Request Flow: Tracing a user query through the system."
+/>
 
 <Mermaid
   chart={`
@@ -2204,7 +2395,7 @@ async def settings_page(request: Request):
             sourcesDiv.innerHTML = data.sources
               .map(
                 (s) =>
-                  `<a href="${s.url}" target="_blank" class="block text-blue-400 hover:underline mb-1">${s.title}</a>`
+                  `<a href="${s.url}" target="_blank" class="block text-blue-400 hover:underline mb-1">${s.title}</a>`,
               )
               .join("");
           }
@@ -2371,7 +2562,20 @@ curl -X POST http://localhost:8000/chat \
 
 Congratulations! You've built a complete, self-hosted AI platform that includes:
 
-{/* IMAGE_PLACEHOLDER: Create a "component showcase" infographic displaying all 10 major components of AgentOS as cards arranged in a grid. Each card should have: an icon, component name, one-line purpose, and a small visual representation of what it does. Use a modern card design with subtle shadows and hover effects. Components: Smart Orchestrator (brain with routing paths), Agent Fleet (5 robot icons), Prompt Library (book/template icon), Memory Service (brain with storage), RAG Service (document search), LLM Router (traffic controller), Research Service (magnifying glass over web), API Gateway (fortress gate), Web Dashboard (computer screen), CLI Tool (terminal window). Use a cohesive color scheme and place this at the start of "What You've Built" section. */}
+<Mermaid
+  chart={`
+grid
+    title AgentOS Components
+    columns 2
+    "Smart Orchestrator" : "Routes requests 🧠"
+    "Agent Fleet" : "5 Specialized Agents 🤖"
+    "Prompt Library" : "Versioned Prompts 📚"
+    "Memory Service" : "Long-term Recall 💾"
+    "RAG Service" : "Document Search 🔎"
+    "LLM Router" : "Model Selection 🚦"
+`}
+  caption="The Building Blocks: 10 major components of your platform."
+/>
 
 | Component              | Purpose                                    |
 | ---------------------- | ------------------------------------------ |
@@ -2390,7 +2594,31 @@ Congratulations! You've built a complete, self-hosted AI platform that includes:
 
 ## Architecture Principles Applied
 
-{/* IMAGE_PLACEHOLDER: Create an illustrated guide showing the 6 architecture principles as a visual framework. Use a hexagonal layout with each principle as a hexagon containing: principle name, icon, and key benefit. Center hexagon shows "AgentOS" with connections to all 6 principles. Use visual metaphors: Separation of Concerns (puzzle pieces), Loose Coupling (flexible joints), Local-First (house with shield), Graceful Degradation (safety net), Observability (magnifying glass over gears), Security (lock and shield). Add subtle animations showing how each principle works. Place this at the start of the Architecture Principles section. */}
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Architecture Core"
+        Center((AgentOS))
+    end
+    
+    subgraph "Principles"
+        P1[Separation of Concerns]
+        P2[Loose Coupling]
+        P3[Local-First]
+        P4[Graceful Degradation]
+        P5[Observability]
+        P6[Security]
+    end
+    
+    Center --> P1
+    Center --> P2
+    Center --> P3
+    Center --> P4
+    Center --> P5
+    Center --> P6
+`}
+  caption="Design Philosophy: Six principles that define the architecture."
+/>
 
 1. **Separation of Concerns**: Each service has a single responsibility
    - _Like a well-organized toolbox where each tool has its designated spot and purpose_
@@ -2416,27 +2644,42 @@ Congratulations! You've built a complete, self-hosted AI platform that includes:
 
 Your AgentOS is a foundation. Consider extending it with:
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Create an ExtensionRoadmap component that displays these next steps as an interactive roadmap. Each extension should be a card showing: difficulty level (stars), estimated time, prerequisites, and potential impact. Allow users to mark extensions they're interested in and generate a personalized learning path. Include links to relevant resources and documentation for each extension. Add a community voting feature to see which extensions are most popular. */}
+<Mermaid
+  chart={`
+timeline
+    title Future Extensions
+    Phase 1 (2w) : Voice Interface : Continuous Automation
+    Phase 2 (3w) : Multi-tenancy : Marketplace
+    Phase 3 (4w) : Plugin System : Mobile Apps
+`}
+  caption="Roadmap: Where to take AgentOS next."
+/>
 
 - **Multi-tenancy**: Support multiple users/organizations
   - _Difficulty: ⭐⭐⭐ | Impact: High | Time: 2-3 weeks_
-  
 - **Plugin System**: Allow custom agents and tools
   - _Difficulty: ⭐⭐⭐⭐ | Impact: Very High | Time: 3-4 weeks_
-  
 - **Marketplace**: Share and discover prompts/agents
   - _Difficulty: ⭐⭐⭐ | Impact: High | Time: 2-3 weeks_
-  
 - **Mobile Apps**: iOS/Android clients
   - _Difficulty: ⭐⭐⭐ | Impact: Medium | Time: 4-6 weeks_
-  
 - **Voice Interface**: Conversational AI
   - _Difficulty: ⭐⭐ | Impact: Medium | Time: 1-2 weeks_
-  
 - **Workflow Automation**: Scheduled agent tasks
   - _Difficulty: ⭐⭐ | Impact: High | Time: 1-2 weeks_
 
-{/* IMAGE_PLACEHOLDER: Create a "future vision" illustration showing AgentOS evolving into a comprehensive platform. Show the current AgentOS in the center with branching paths leading to different extensions (multi-tenancy as multiple buildings, plugin system as modular blocks, marketplace as a bazaar, mobile apps as phones/tablets, voice interface as sound waves, workflow automation as a calendar/clock). Use a futuristic, aspirational style with glowing connections and a sense of growth and possibility. Place this at the end of the Next Steps section. */}
+<Mermaid
+  chart={`
+graph TD
+    AgentOS((AgentOS V1)) -->|Evolve| V2{AgentOS V2}
+    V2 --> Multi[Multi-Tenancy 🏢]
+    V2 --> Mobile[Mobile App 📱]
+    V2 --> Voice[Voice Interface 🗣️]
+    
+    style V2 fill:#d1c4e9
+`}
+  caption="Vision: Evolving into a ubiquitous AI platform."
+/>
 
 ---
 
@@ -2449,11 +2692,22 @@ You've completed the journey from understanding basic agent concepts to building
 - Build reliable, observable AI services
 - Deploy and scale agent infrastructure
 
-{/* IMAGE_PLACEHOLDER: Create a celebratory "achievement unlocked" illustration showing a developer (silhouette) standing on top of the AgentOS platform, arms raised in victory. Show the 90-day journey as a timeline below with key milestones marked. Include badges/achievements earned: "Foundation Master" (Month 1), "Multi-Agent Architect" (Month 2), "Production Engineer" (Month 3), and the final "Agentic Architect" badge glowing brightly. Use an inspiring color palette with gold accents and confetti elements. Add the text "90 Days. 12 Weeks. 1 Complete AI Platform." Place this at the very end of the module. */}
+<Mermaid
+  chart={`
+graph TB
+    Step1[Month 1: Foundation] --> Step2[Month 2: Multi-Agent]
+    Step2 --> Step3[Month 3: Production]
+    Step3 --> Finish((🏆 Agentic Architect))
+    
+    style Finish fill:#ffd700,stroke:#ff8f00,stroke-width:4px
+`}
+  caption="Achievement Unlocked: The 90-Day Journey Complete."
+/>
 
 **The future of AI is agentic, and you're now equipped to build it.**
 
 Throughout this 90-day journey, you've:
+
 - **Month 1 (Days 1-30)**: Mastered LLM fundamentals, prompt engineering, and single-agent systems
 - **Month 2 (Days 31-60)**: Built multi-agent orchestration with production-grade patterns
 - **Month 3 (Days 61-90)**: Created advanced architectures and deployed complete systems
@@ -2466,7 +2720,7 @@ You've completed 5 mini-projects, 4 specialized projects, and 3 major capstones.
 
 ---
 
-*Share your AgentOS implementation with the community using #AgenticEngineer and #AgentOS. We'd love to see what you build!* and you're ready to build it.
+_Share your AgentOS implementation with the community using #AgenticEngineer and #AgentOS. We'd love to see what you build!_ and you're ready to build it.
 
 <ModuleSummary
   points={[

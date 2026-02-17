@@ -1,0 +1,3038 @@
+---
+title: "Mini Project: Agent Skill Marketplace"
+description: "Build a marketplace for Agent Skills with SKILL.md validation, semantic search, version management, and a CLI tool for installation."
+week: 13
+day: 92
+---
+
+<ReadingTime minutes={75} />
+
+<SkillLevel
+  level="intermediate"
+  description="Full-stack marketplace development"
+/>
+
+<Prerequisites
+  items={[
+    "Completed Day 13 (Agent Skills Standard)",
+    "Familiarity with Next.js and Tailwind CSS",
+    "Understanding of PostgreSQL and search engines",
+    "Experience with CLI tool development",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Design and validate SKILL.md schemas for marketplace publishing",
+    "Build a skill package format with versioning and dependencies",
+    "Implement semantic search for skill discovery using Typesense",
+    "Create a publishing API with validation workflows",
+    "Build a CLI tool for skill installation and management",
+    "Implement progressive disclosure for efficient skill loading",
+  ]}
+/>
+
+<Callout type="info">
+  **Project Context:** This intermediate project builds a complete marketplace
+  for Agent Skills—think npm for AI agent capabilities. You'll create the
+  infrastructure that enables developers to publish, discover, and install
+  modular agent skills. Duration: 10-14 hours.
+</Callout>
+
+<KeyTerms
+  terms={[
+    {
+      term: "SKILL.md",
+      definition:
+        "The manifest file that defines a skill's metadata, instructions, and capabilities following the Agent Skills standard",
+    },
+    {
+      term: "Progressive Disclosure",
+      definition:
+        "Loading lightweight metadata first (~35 tokens), then full instructions on-demand to prevent context window bloat",
+    },
+    {
+      term: "Semantic Search",
+      definition:
+        "Search that understands meaning and intent, not just keyword matching—essential for discovering relevant skills",
+    },
+    {
+      term: "Skill Package",
+      definition:
+        "A compressed archive containing SKILL.md, scripts, references, and assets that can be published and installed",
+    },
+    {
+      term: "Version Semver",
+      definition:
+        "Semantic versioning (MAJOR.MINOR.PATCH) for tracking skill updates and managing dependencies",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build a complete marketplace platform where developers can publish, discover, and install Agent Skills—creating an ecosystem similar to npm but for AI agent capabilities.
+
+**Why This Matters**: As agents become more sophisticated, they need access to specialized skills. A centralized marketplace enables:
+
+- **Skill Reuse**: Don't reinvent the wheel—use community-built skills
+- **Quality Control**: Validated skills with reviews and ratings
+- **Version Management**: Safe updates with dependency tracking
+- **Discovery**: Find the right skill for any task via semantic search
+
+<Mermaid
+  chart={`
+graph LR
+    Dev[Developer] -->|Publish| API[Marketplace API]
+    API -->|Validate| Validator[SKILL.md Validator]
+    API -->|Store| S3[S3 Storage]
+    API -->|Index| Search[Typesense]
+    
+    Agent[Agent] -->|Discover| Search
+    Agent -->|Install| CLI[CLI Tool]
+    CLI -->|Download| S3
+    
+    style API fill:#e1f5fe,stroke:#01579b
+    style Search fill:#fff9c4,stroke:#fbc02d
+    style CLI fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Marketplace Architecture: Publish, discover, and install skills through a unified platform."
+/>
+
+**Skills Showcased**:
+
+- SKILL.md schema design and validation
+- Full-stack marketplace development (Next.js + Node.js)
+- Semantic search implementation with Typesense
+- CLI tool development with Commander.js
+- Package management and versioning
+
+---
+
+## Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Frontend (Next.js)"
+        UI[Marketplace UI]
+        Browse[Browse Skills]
+        Publish[Publish Flow]
+        Profile[Publisher Profile]
+    end
+    
+    subgraph "Backend (Node.js)"
+        API[REST API]
+        Auth[Auth Service]
+        Validator[SKILL.md Validator]
+        Packager[Package Builder]
+    end
+    
+    subgraph "Data Layer"
+        PG[(PostgreSQL)]
+        TS[Typesense]
+        S3[S3 Storage]
+        Redis[Redis Cache]
+    end
+    
+    subgraph "CLI Tool"
+        CLI[skill-cli]
+        Install[Install Command]
+        Search[Search Command]
+        Publish2[Publish Command]
+    end
+    
+    UI --> API
+    Browse --> TS
+    Publish --> Validator
+    Validator --> Packager
+    Packager --> S3
+    API --> PG
+    API --> TS
+    CLI --> API
+    CLI --> S3
+    
+    style API fill:#e1f5fe,stroke:#01579b
+    style TS fill:#fff9c4,stroke:#fbc02d
+    style Validator fill:#ffccbc,stroke:#bf360c
+`}
+  caption="Full marketplace architecture with frontend, backend, storage, and CLI components."
+/>
+
+---
+
+## Detailed Requirements Specification
+
+### Functional Requirements (FR)
+
+| ID    | Requirement            | Description                                                                                | Priority |
+| ----- | ---------------------- | ------------------------------------------------------------------------------------------ | -------- |
+| FR-01 | SKILL.md Validation    | The system shall validate SKILL.md files against the schema before publishing              | P0       |
+| FR-02 | Skill Package Creation | The system shall create compressed packages from skill directories                         | P0       |
+| FR-03 | Version Management     | The system shall enforce semantic versioning and track version history                     | P0       |
+| FR-04 | Semantic Search        | The system shall enable semantic search across skill names, descriptions, and capabilities | P0       |
+| FR-05 | Skill Installation     | The CLI shall download and install skills to the correct directory                         | P0       |
+| FR-06 | Dependency Resolution  | The system shall resolve and install skill dependencies automatically                      | P1       |
+| FR-07 | Publisher Profiles     | The system shall maintain publisher profiles with verification status                      | P1       |
+| FR-08 | Ratings and Reviews    | Users shall be able to rate and review published skills                                    | P2       |
+| FR-09 | Usage Analytics        | The system shall track skill downloads and usage statistics                                | P2       |
+| FR-10 | Progressive Disclosure | Skills shall support lightweight metadata loading before full activation                   | P0       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement      | Target                                              | Measurement          |
+| ------ | ---------------- | --------------------------------------------------- | -------------------- |
+| NFR-01 | Search Latency   | Skill search shall return results in < 100ms        | API response time    |
+| NFR-02 | Package Size     | Skill packages shall be compressed to < 1MB typical | Package size metrics |
+| NFR-03 | Install Speed    | CLI installation shall complete in < 5 seconds      | End-to-end timing    |
+| NFR-04 | Validation Speed | SKILL.md validation shall complete in < 500ms       | Validation timing    |
+| NFR-05 | Availability     | Marketplace shall maintain 99.9% uptime             | Health monitoring    |
+
+### API Contract
+
+#### POST /api/skills - Publish Skill
+
+**Request Body (multipart/form-data):**
+
+```json
+{
+  "package": "file (required, .tar.gz)",
+  "publisher_id": "string (required)",
+  "release_notes": "string (optional)"
+}
+```
+
+**Response (201 Created):**
+
+```json
+{
+  "id": "string (uuid)",
+  "name": "string",
+  "version": "string (semver)",
+  "description": "string",
+  "publisher": {
+    "id": "string",
+    "name": "string",
+    "verified": "boolean"
+  },
+  "downloads": 0,
+  "created_at": "ISO8601 datetime",
+  "package_url": "string (S3 presigned URL)"
+}
+```
+
+#### GET /api/skills/search - Search Skills
+
+**Query Parameters:**
+
+- `q` (required): Search query string
+- `category` (optional): Filter by category
+- `limit` (optional): Results per page (default: 20)
+- `offset` (optional): Pagination offset
+
+**Response (200 OK):**
+
+```json
+{
+  "results": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string",
+      "version": "string",
+      "downloads": "integer",
+      "rating": "number (0-5)",
+      "publisher": "string",
+      "categories": ["string"],
+      "highlight": "string (matched text)"
+    }
+  ],
+  "total": "integer",
+  "query_time_ms": "integer"
+}
+```
+
+#### GET /api/skills/:name - Get Skill Details
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "string",
+  "name": "string",
+  "description": "string",
+  "version": "string",
+  "versions": ["string (all available versions)"],
+  "publisher": {
+    "id": "string",
+    "name": "string",
+    "verified": "boolean"
+  },
+  "metadata": {
+    "argument_hint": "string | null",
+    "allowed_tools": ["string"],
+    "context": "string | null",
+    "agent": "string | null"
+  },
+  "dependencies": ["string"],
+  "downloads": "integer",
+  "rating": "number",
+  "reviews_count": "integer",
+  "created_at": "ISO8601 datetime",
+  "updated_at": "ISO8601 datetime",
+  "package_url": "string"
+}
+```
+
+### Data Models
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         Skill                                │
+├─────────────────────────────────────────────────────────────┤
+│ id: UUID PRIMARY KEY                                         │
+│ name: VARCHAR(100) UNIQUE NOT NULL                          │
+│ description: TEXT NOT NULL                                   │
+│ current_version: VARCHAR(20) NOT NULL                       │
+│ publisher_id: UUID FOREIGN KEY → Publisher.id               │
+│ categories: JSON (array of strings)                         │
+│ tags: JSON (array of strings)                               │
+│ downloads: INTEGER DEFAULT 0                                │
+│ rating_sum: INTEGER DEFAULT 0                               │
+│ rating_count: INTEGER DEFAULT 0                             │
+│ is_verified: BOOLEAN DEFAULT FALSE                          │
+│ created_at: TIMESTAMP                                       │
+│ updated_at: TIMESTAMP                                       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ 1:N
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      SkillVersion                            │
+├─────────────────────────────────────────────────────────────┤
+│ id: UUID PRIMARY KEY                                         │
+│ skill_id: UUID FOREIGN KEY → Skill.id                       │
+│ version: VARCHAR(20) NOT NULL                               │
+│ package_url: TEXT NOT NULL                                  │
+│ package_hash: VARCHAR(64) NOT NULL                          │
+│ skill_md_content: TEXT NOT NULL                             │
+│ metadata: JSON                                              │
+│ dependencies: JSON (array of {name, version})               │
+│ release_notes: TEXT                                         │
+│ created_at: TIMESTAMP                                       │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                       Publisher                              │
+├─────────────────────────────────────────────────────────────┤
+│ id: UUID PRIMARY KEY                                         │
+│ name: VARCHAR(100) UNIQUE NOT NULL                          │
+│ email: VARCHAR(255) UNIQUE NOT NULL                         │
+│ github_username: VARCHAR(100)                               │
+│ is_verified: BOOLEAN DEFAULT FALSE                          │
+│ api_key_hash: VARCHAR(64)                                   │
+│ created_at: TIMESTAMP                                       │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                        Review                                │
+├─────────────────────────────────────────────────────────────┤
+│ id: UUID PRIMARY KEY                                         │
+│ skill_id: UUID FOREIGN KEY → Skill.id                       │
+│ user_id: UUID NOT NULL                                      │
+│ rating: INTEGER CHECK (1-5)                                 │
+│ comment: TEXT                                               │
+│ created_at: TIMESTAMP                                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Error Handling Matrix
+
+| Error Code         | HTTP Status | Cause                         | Response Body                                     | Recovery Action          |
+| ------------------ | ----------- | ----------------------------- | ------------------------------------------------- | ------------------------ |
+| INVALID_SKILL_MD   | 400         | SKILL.md validation failed    | `{"detail": "Validation error", "errors": [...]}` | Fix SKILL.md syntax      |
+| DUPLICATE_VERSION  | 409         | Version already exists        | `{"detail": "Version X already published"}`       | Bump version number      |
+| SKILL_NOT_FOUND    | 404         | Skill name doesn't exist      | `{"detail": "Skill 'NAME' not found"}`            | Check skill name         |
+| UNAUTHORIZED       | 401         | Invalid or missing API key    | `{"detail": "Invalid API key"}`                   | Regenerate API key       |
+| PACKAGE_TOO_LARGE  | 413         | Package exceeds size limit    | `{"detail": "Package exceeds 10MB limit"}`        | Reduce package size      |
+| DEPENDENCY_MISSING | 400         | Required dependency not found | `{"detail": "Dependency 'X' not found"}`          | Publish dependency first |
+
+---
+
+## Step-by-Step Implementation
+
+<Mermaid
+  chart={`
+graph LR
+    S1[1. SKILL.md Schema] --> S2[2. Package Format]
+    S2 --> S3[3. Publishing API]
+    S3 --> S4[4. Semantic Search]
+    S4 --> S5[5. Version Management]
+    S5 --> S6[6. CLI Tool]
+    S6 --> S7[7. Progressive Disclosure]
+    
+    style S1 fill:#e8f5e9,stroke:#2e7d32
+    style S2 fill:#e8f5e9,stroke:#2e7d32
+    style S3 fill:#e3f2fd,stroke:#1565c0
+    style S4 fill:#fff3e0,stroke:#ef6c00
+    style S5 fill:#fce4ec,stroke:#c2185b
+    style S6 fill:#f3e5f5,stroke:#7b1fa2
+    style S7 fill:#e0f2f1,stroke:#00695c
+`}
+  caption="Seven-step implementation journey from schema to progressive disclosure."
+/>
+
+### Step 1: SKILL.md Schema and Validation
+
+The SKILL.md file is the heart of every skill. We need a robust validator that ensures all published skills meet the standard.
+
+```typescript
+// src/validators/skill-schema.ts
+import { z } from "zod";
+
+/**
+ * SKILL.md Frontmatter Schema
+ * Validates the YAML frontmatter in SKILL.md files
+ */
+export const SkillFrontmatterSchema = z.object({
+  // Required fields
+  name: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[a-z0-9-]+$/, "Name must be kebab-case"),
+  description: z.string().min(10).max(500),
+
+  // Optional metadata
+  "argument-hint": z.string().max(200).optional(),
+  "disable-model-invocation": z.boolean().optional(),
+  "user-invocable": z.boolean().optional(),
+
+  // Tool restrictions
+  "allowed-tools": z.array(z.string()).optional(),
+
+  // Model configuration
+  model: z.string().optional(),
+
+  // Subagent configuration
+  context: z.enum(["fork"]).optional(),
+  agent: z
+    .enum(["Explore", "Plan", "general-purpose"])
+    .or(z.string())
+    .optional(),
+
+  // Marketplace-specific fields
+  version: z
+    .string()
+    .regex(/^\d+\.\d+\.\d+$/, "Version must be semver (X.Y.Z)"),
+  author: z.string().min(1).max(100),
+  license: z.string().default("MIT"),
+  repository: z.string().url().optional(),
+  categories: z.array(z.string()).min(1).max(5),
+  dependencies: z
+    .array(
+      z.object({
+        name: z.string(),
+        version: z.string(),
+      }),
+    )
+    .optional(),
+});
+
+export type SkillFrontmatter = z.infer<typeof SkillFrontmatterSchema>;
+```
+
+```typescript
+// src/validators/skill-validator.ts
+import matter from "gray-matter";
+import { SkillFrontmatterSchema, type SkillFrontmatter } from "./skill-schema";
+
+export interface ValidationResult {
+  valid: boolean;
+  frontmatter?: SkillFrontmatter;
+  content?: string;
+  errors: ValidationError[];
+  warnings: ValidationWarning[];
+}
+
+export interface ValidationError {
+  field: string;
+  message: string;
+  line?: number;
+}
+
+export interface ValidationWarning {
+  field: string;
+  message: string;
+  suggestion?: string;
+}
+
+export class SkillValidator {
+  /**
+   * Validate a SKILL.md file content
+   */
+  validate(skillMdContent: string): ValidationResult {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
+
+    // Parse frontmatter
+    let parsed: matter.GrayMatterFile<string>;
+    try {
+      parsed = matter(skillMdContent);
+    } catch (e) {
+      return {
+        valid: false,
+        errors: [{ field: "frontmatter", message: "Invalid YAML frontmatter" }],
+        warnings: [],
+      };
+    }
+
+    // Validate frontmatter schema
+    const schemaResult = SkillFrontmatterSchema.safeParse(parsed.data);
+
+    if (!schemaResult.success) {
+      for (const issue of schemaResult.error.issues) {
+        errors.push({
+          field: issue.path.join("."),
+          message: issue.message,
+        });
+      }
+    }
+
+    // Validate content structure
+    const contentWarnings = this.validateContent(parsed.content);
+    warnings.push(...contentWarnings);
+
+    // Check for best practices
+    const practiceWarnings = this.checkBestPractices(
+      parsed.data as SkillFrontmatter,
+      parsed.content,
+    );
+    warnings.push(...practiceWarnings);
+
+    return {
+      valid: errors.length === 0,
+      frontmatter: schemaResult.success ? schemaResult.data : undefined,
+      content: parsed.content,
+      errors,
+      warnings,
+    };
+  }
+
+  private validateContent(content: string): ValidationWarning[] {
+    const warnings: ValidationWarning[] = [];
+
+    // Check for required sections
+    if (!content.includes("# ")) {
+      warnings.push({
+        field: "content",
+        message: "Missing main heading",
+        suggestion: "Add a # heading describing the skill",
+      });
+    }
+
+    // Check for process/instructions section
+    if (!content.toLowerCase().includes("## ")) {
+      warnings.push({
+        field: "content",
+        message: "No subsections found",
+        suggestion: "Add ## sections for Process, Output Format, etc.",
+      });
+    }
+
+    return warnings;
+  }
+
+  private checkBestPractices(
+    frontmatter: SkillFrontmatter,
+    content: string,
+  ): ValidationWarning[] {
+    const warnings: ValidationWarning[] = [];
+
+    // Check description quality
+    if (frontmatter?.description && frontmatter.description.length < 50) {
+      warnings.push({
+        field: "description",
+        message: "Description is short",
+        suggestion:
+          "Provide a more detailed description for better discoverability",
+      });
+    }
+
+    // Check for output format section
+    if (!content.toLowerCase().includes("output")) {
+      warnings.push({
+        field: "content",
+        message: "No output format specified",
+        suggestion: "Add an '## Output Format' section",
+      });
+    }
+
+    return warnings;
+  }
+}
+```
+
+### Step 2: Skill Package Format and Structure
+
+Skills are distributed as compressed packages. We need to define the package structure and build tooling.
+
+<Mermaid
+  chart={`
+graph TD
+    Dir[Skill Directory] --> Pack[Package Builder]
+    Pack --> Validate[Validate Structure]
+    Validate --> Compress[Create .tar.gz]
+    Compress --> Hash[Generate SHA256]
+    Hash --> Package[skill-name-1.0.0.tar.gz]
+    
+    subgraph "Package Contents"
+        SKILL[SKILL.md]
+        Scripts[scripts/]
+        Refs[references/]
+        Assets[assets/]
+        Meta[package.json]
+    end
+    
+    Package --> SKILL
+    Package --> Scripts
+    Package --> Refs
+    Package --> Assets
+    Package --> Meta
+    
+    style Pack fill:#e1f5fe,stroke:#01579b
+    style Package fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Package creation flow: validate, compress, and hash."
+/>
+
+```typescript
+// src/packager/skill-packager.ts
+import * as tar from "tar";
+import * as crypto from "crypto";
+import * as fs from "fs/promises";
+import * as path from "path";
+import { SkillValidator } from "../validators/skill-validator";
+
+export interface PackageResult {
+  success: boolean;
+  packagePath?: string;
+  hash?: string;
+  size?: number;
+  errors: string[];
+}
+
+export interface PackageManifest {
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  license: string;
+  files: string[];
+  hash: string;
+  created_at: string;
+}
+
+export class SkillPackager {
+  private validator = new SkillValidator();
+  private maxPackageSize = 10 * 1024 * 1024; // 10MB
+
+  /**
+   * Create a skill package from a directory
+   */
+  async createPackage(
+    skillDir: string,
+    outputDir: string,
+  ): Promise<PackageResult> {
+    const errors: string[] = [];
+
+    // Verify directory structure
+    const structureValid = await this.verifyStructure(skillDir);
+    if (!structureValid.valid) {
+      return { success: false, errors: structureValid.errors };
+    }
+
+    // Read and validate SKILL.md
+    const skillMdPath = path.join(skillDir, "SKILL.md");
+    const skillMdContent = await fs.readFile(skillMdPath, "utf-8");
+    const validation = this.validator.validate(skillMdContent);
+
+    if (!validation.valid) {
+      return {
+        success: false,
+        errors: validation.errors.map((e) => `${e.field}: ${e.message}`),
+      };
+    }
+
+    const { name, version } = validation.frontmatter!;
+    const packageName = `${name}-${version}.tar.gz`;
+    const packagePath = path.join(outputDir, packageName);
+
+    // Collect files to package
+    const files = await this.collectFiles(skillDir);
+
+    // Create package manifest
+    const manifest: PackageManifest = {
+      name,
+      version,
+      description: validation.frontmatter!.description,
+      author: validation.frontmatter!.author,
+      license: validation.frontmatter!.license,
+      files,
+      hash: "", // Will be set after packaging
+      created_at: new Date().toISOString(),
+    };
+
+    // Write manifest
+    const manifestPath = path.join(skillDir, "package.json");
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+    // Create tar.gz package
+    await tar.create(
+      {
+        gzip: true,
+        file: packagePath,
+        cwd: path.dirname(skillDir),
+      },
+      [path.basename(skillDir)],
+    );
+
+    // Calculate hash
+    const packageBuffer = await fs.readFile(packagePath);
+    const hash = crypto
+      .createHash("sha256")
+      .update(packageBuffer)
+      .digest("hex");
+
+    // Check size
+    const stats = await fs.stat(packagePath);
+    if (stats.size > this.maxPackageSize) {
+      await fs.unlink(packagePath);
+      return {
+        success: false,
+        errors: [
+          `Package size ${stats.size} exceeds limit of ${this.maxPackageSize}`,
+        ],
+      };
+    }
+
+    // Update manifest with hash
+    manifest.hash = hash;
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+    return {
+      success: true,
+      packagePath,
+      hash,
+      size: stats.size,
+      errors: [],
+    };
+  }
+
+  private async verifyStructure(
+    skillDir: string,
+  ): Promise<{ valid: boolean; errors: string[] }> {
+    const errors: string[] = [];
+    const requiredFiles = ["SKILL.md"];
+    const allowedDirs = ["scripts", "references", "assets"];
+
+    // Check required files
+    for (const file of requiredFiles) {
+      const filePath = path.join(skillDir, file);
+      try {
+        await fs.access(filePath);
+      } catch {
+        errors.push(`Missing required file: ${file}`);
+      }
+    }
+
+    // Check for unexpected files/directories
+    const entries = await fs.readdir(skillDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && !allowedDirs.includes(entry.name)) {
+        errors.push(`Unexpected directory: ${entry.name}`);
+      }
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  private async collectFiles(skillDir: string): Promise<string[]> {
+    const files: string[] = [];
+
+    async function walk(dir: string, base: string) {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        const relativePath = path.join(base, entry.name);
+
+        if (entry.isDirectory()) {
+          await walk(fullPath, relativePath);
+        } else {
+          files.push(relativePath);
+        }
+      }
+    }
+
+    await walk(skillDir, "");
+    return files;
+  }
+}
+```
+
+### Step 3: Publishing API and Workflow
+
+The publishing API handles skill uploads, validation, and storage.
+
+```typescript
+// src/api/routes/skills.ts
+import { Router } from "express";
+import multer from "multer";
+import { SkillService } from "../services/skill-service";
+import { authMiddleware } from "../middleware/auth";
+
+const router = Router();
+const upload = multer({
+  limits: { fileSize: 10 * 1024 * 1024 },
+  storage: multer.memoryStorage(),
+});
+const skillService = new SkillService();
+
+/**
+ * POST /api/skills - Publish a new skill or version
+ */
+router.post("/", authMiddleware, upload.single("package"), async (req, res) => {
+  try {
+    const { release_notes } = req.body;
+    const publisherId = req.user!.id;
+
+    if (!req.file) {
+      return res.status(400).json({ detail: "Package file required" });
+    }
+
+    const result = await skillService.publish({
+      packageBuffer: req.file.buffer,
+      publisherId,
+      releaseNotes: release_notes,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({
+        detail: "Validation failed",
+        errors: result.errors,
+      });
+    }
+
+    res.status(201).json(result.skill);
+  } catch (error) {
+    console.error("Publish error:", error);
+    res.status(500).json({ detail: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/skills/search - Search skills
+ */
+router.get("/search", async (req, res) => {
+  try {
+    const { q, category, limit = "20", offset = "0" } = req.query;
+
+    if (!q || typeof q !== "string") {
+      return res.status(400).json({ detail: "Query parameter 'q' required" });
+    }
+
+    const results = await skillService.search({
+      query: q,
+      category: category as string | undefined,
+      limit: parseInt(limit as string, 10),
+      offset: parseInt(offset as string, 10),
+    });
+
+    res.json(results);
+  } catch (error) {
+    console.error("Search error:", error);
+    res.status(500).json({ detail: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/skills/:name - Get skill details
+ */
+router.get("/:name", async (req, res) => {
+  try {
+    const { name } = req.params;
+    const { version } = req.query;
+
+    const skill = await skillService.getByName(
+      name,
+      version as string | undefined,
+    );
+
+    if (!skill) {
+      return res.status(404).json({ detail: `Skill '${name}' not found` });
+    }
+
+    res.json(skill);
+  } catch (error) {
+    console.error("Get skill error:", error);
+    res.status(500).json({ detail: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/skills/:name/download - Download skill package
+ */
+router.get("/:name/download", async (req, res) => {
+  try {
+    const { name } = req.params;
+    const { version } = req.query;
+
+    const downloadUrl = await skillService.getDownloadUrl(
+      name,
+      version as string | undefined,
+    );
+
+    if (!downloadUrl) {
+      return res.status(404).json({ detail: `Skill '${name}' not found` });
+    }
+
+    // Track download
+    await skillService.recordDownload(name);
+
+    res.json({ url: downloadUrl });
+  } catch (error) {
+    console.error("Download error:", error);
+    res.status(500).json({ detail: "Internal server error" });
+  }
+});
+
+export default router;
+```
+
+```typescript
+// src/services/skill-service.ts
+import { PrismaClient } from "@prisma/client";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import * as tar from "tar";
+import * as crypto from "crypto";
+import { Readable } from "stream";
+import { SkillValidator } from "../validators/skill-validator";
+import { SearchService } from "./search-service";
+
+const prisma = new PrismaClient();
+const s3 = new S3Client({ region: process.env.AWS_REGION });
+
+export interface PublishInput {
+  packageBuffer: Buffer;
+  publisherId: string;
+  releaseNotes?: string;
+}
+
+export interface PublishResult {
+  success: boolean;
+  skill?: any;
+  errors: string[];
+}
+
+export class SkillService {
+  private validator = new SkillValidator();
+  private searchService = new SearchService();
+
+  async publish(input: PublishInput): Promise<PublishResult> {
+    const { packageBuffer, publisherId, releaseNotes } = input;
+
+    // Extract and validate package
+    const extracted = await this.extractPackage(packageBuffer);
+    if (!extracted.skillMd) {
+      return { success: false, errors: ["SKILL.md not found in package"] };
+    }
+
+    const validation = this.validator.validate(extracted.skillMd);
+    if (!validation.valid) {
+      return {
+        success: false,
+        errors: validation.errors.map((e) => `${e.field}: ${e.message}`),
+      };
+    }
+
+    const { name, version, description, categories, dependencies } =
+      validation.frontmatter!;
+
+    // Check for duplicate version
+    const existing = await prisma.skillVersion.findFirst({
+      where: {
+        skill: { name },
+        version,
+      },
+    });
+
+    if (existing) {
+      return {
+        success: false,
+        errors: [`Version ${version} already published for ${name}`],
+      };
+    }
+
+    // Calculate package hash
+    const hash = crypto
+      .createHash("sha256")
+      .update(packageBuffer)
+      .digest("hex");
+
+    // Upload to S3
+    const s3Key = `skills/${name}/${version}/${name}-${version}.tar.gz`;
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET!,
+        Key: s3Key,
+        Body: packageBuffer,
+        ContentType: "application/gzip",
+      }),
+    );
+
+    // Create or update skill in database
+    const skill = await prisma.skill.upsert({
+      where: { name },
+      create: {
+        name,
+        description,
+        currentVersion: version,
+        publisherId,
+        categories,
+        tags: [],
+      },
+      update: {
+        description,
+        currentVersion: version,
+        updatedAt: new Date(),
+      },
+    });
+
+    // Create version record
+    await prisma.skillVersion.create({
+      data: {
+        skillId: skill.id,
+        version,
+        packageUrl: s3Key,
+        packageHash: hash,
+        skillMdContent: extracted.skillMd,
+        metadata: validation.frontmatter,
+        dependencies: dependencies || [],
+        releaseNotes,
+      },
+    });
+
+    // Index in search
+    await this.searchService.indexSkill({
+      id: skill.id,
+      name,
+      description,
+      version,
+      categories,
+      publisher: publisherId,
+    });
+
+    return {
+      success: true,
+      skill: {
+        id: skill.id,
+        name,
+        version,
+        description,
+        downloads: skill.downloads,
+        created_at: skill.createdAt,
+      },
+    };
+  }
+
+  private async extractPackage(
+    buffer: Buffer,
+  ): Promise<{ skillMd?: string; files: string[] }> {
+    const files: string[] = [];
+    let skillMd: string | undefined;
+
+    // Create readable stream from buffer
+    const stream = Readable.from(buffer);
+
+    await new Promise<void>((resolve, reject) => {
+      stream
+        .pipe(tar.t())
+        .on("entry", (entry) => {
+          files.push(entry.path);
+          if (entry.path.endsWith("SKILL.md")) {
+            let content = "";
+            entry.on("data", (chunk: Buffer) => {
+              content += chunk.toString();
+            });
+            entry.on("end", () => {
+              skillMd = content;
+            });
+          }
+        })
+        .on("end", resolve)
+        .on("error", reject);
+    });
+
+    return { skillMd, files };
+  }
+
+  async getDownloadUrl(name: string, version?: string): Promise<string | null> {
+    const skill = await prisma.skill.findUnique({
+      where: { name },
+      include: { versions: true },
+    });
+
+    if (!skill) return null;
+
+    const targetVersion = version || skill.currentVersion;
+    const versionRecord = skill.versions.find(
+      (v) => v.version === targetVersion,
+    );
+
+    if (!versionRecord) return null;
+
+    const command = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET!,
+      Key: versionRecord.packageUrl,
+    });
+
+    return getSignedUrl(s3, command, { expiresIn: 3600 });
+  }
+
+  async recordDownload(name: string): Promise<void> {
+    await prisma.skill.update({
+      where: { name },
+      data: { downloads: { increment: 1 } },
+    });
+  }
+}
+```
+
+### Step 4: Semantic Search Implementation
+
+Typesense provides fast, typo-tolerant semantic search for skill discovery.
+
+<Mermaid
+  chart={`
+graph LR
+    Query[Search Query] --> Typesense[Typesense]
+    Typesense --> Tokenize[Tokenize & Stem]
+    Tokenize --> Match[Fuzzy Match]
+    Match --> Rank[Relevance Ranking]
+    Rank --> Results[Ranked Results]
+    
+    subgraph "Index Fields"
+        Name[name: weight 5]
+        Desc[description: weight 3]
+        Cat[categories: weight 2]
+        Tags[tags: weight 1]
+    end
+    
+    Match --> Name
+    Match --> Desc
+    Match --> Cat
+    Match --> Tags
+    
+    style Typesense fill:#fff9c4,stroke:#fbc02d
+    style Results fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Semantic search with weighted field matching and fuzzy tolerance."
+/>
+
+```typescript
+// src/services/search-service.ts
+import Typesense from "typesense";
+
+const client = new Typesense.Client({
+  nodes: [
+    {
+      host: process.env.TYPESENSE_HOST || "localhost",
+      port: parseInt(process.env.TYPESENSE_PORT || "8108"),
+      protocol: "http",
+    },
+  ],
+  apiKey: process.env.TYPESENSE_API_KEY!,
+  connectionTimeoutSeconds: 2,
+});
+
+const COLLECTION_NAME = "skills";
+
+export interface SkillDocument {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  categories: string[];
+  tags?: string[];
+  publisher: string;
+  downloads?: number;
+  rating?: number;
+}
+
+export interface SearchResult {
+  results: Array<{
+    id: string;
+    name: string;
+    description: string;
+    version: string;
+    downloads: number;
+    rating: number;
+    publisher: string;
+    categories: string[];
+    highlight: string;
+  }>;
+  total: number;
+  query_time_ms: number;
+}
+
+export class SearchService {
+  /**
+   * Initialize the skills collection schema
+   */
+  async initializeCollection(): Promise<void> {
+    const schema = {
+      name: COLLECTION_NAME,
+      fields: [
+        { name: "name", type: "string" as const, facet: false },
+        { name: "description", type: "string" as const, facet: false },
+        { name: "version", type: "string" as const, facet: false },
+        { name: "categories", type: "string[]" as const, facet: true },
+        {
+          name: "tags",
+          type: "string[]" as const,
+          facet: true,
+          optional: true,
+        },
+        { name: "publisher", type: "string" as const, facet: true },
+        {
+          name: "downloads",
+          type: "int32" as const,
+          facet: false,
+          optional: true,
+        },
+        {
+          name: "rating",
+          type: "float" as const,
+          facet: false,
+          optional: true,
+        },
+      ],
+      default_sorting_field: "downloads",
+    };
+
+    try {
+      await client.collections(COLLECTION_NAME).retrieve();
+    } catch {
+      await client.collections().create(schema);
+    }
+  }
+
+  /**
+   * Index a skill for search
+   */
+  async indexSkill(skill: SkillDocument): Promise<void> {
+    await client
+      .collections(COLLECTION_NAME)
+      .documents()
+      .upsert({
+        ...skill,
+        downloads: skill.downloads || 0,
+        rating: skill.rating || 0,
+      });
+  }
+
+  /**
+   * Search for skills
+   */
+  async search(params: {
+    query: string;
+    category?: string;
+    limit: number;
+    offset: number;
+  }): Promise<SearchResult> {
+    const { query, category, limit, offset } = params;
+
+    const searchParams: any = {
+      q: query,
+      query_by: "name,description,categories,tags",
+      query_by_weights: "5,3,2,1",
+      sort_by: "_text_match:desc,downloads:desc",
+      per_page: limit,
+      page: Math.floor(offset / limit) + 1,
+      highlight_full_fields: "description",
+      typo_tokens_threshold: 2,
+    };
+
+    if (category) {
+      searchParams.filter_by = `categories:=${category}`;
+    }
+
+    const response = await client
+      .collections(COLLECTION_NAME)
+      .documents()
+      .search(searchParams);
+
+    return {
+      results:
+        response.hits?.map((hit: any) => ({
+          id: hit.document.id,
+          name: hit.document.name,
+          description: hit.document.description,
+          version: hit.document.version,
+          downloads: hit.document.downloads,
+          rating: hit.document.rating,
+          publisher: hit.document.publisher,
+          categories: hit.document.categories,
+          highlight: hit.highlights?.[0]?.snippet || "",
+        })) || [],
+      total: response.found || 0,
+      query_time_ms: response.search_time_ms || 0,
+    };
+  }
+
+  /**
+   * Remove a skill from the index
+   */
+  async removeSkill(id: string): Promise<void> {
+    await client.collections(COLLECTION_NAME).documents(id).delete();
+  }
+}
+```
+
+### Step 5: Version Management
+
+Proper version management ensures safe updates and dependency resolution.
+
+```typescript
+// src/services/version-service.ts
+import { PrismaClient } from "@prisma/client";
+import * as semver from "semver";
+
+const prisma = new PrismaClient();
+
+export interface VersionInfo {
+  version: string;
+  releaseNotes?: string;
+  createdAt: Date;
+  downloads: number;
+}
+
+export interface DependencyResolution {
+  resolved: Array<{ name: string; version: string }>;
+  missing: string[];
+  conflicts: Array<{ name: string; required: string; available: string[] }>;
+}
+
+export class VersionService {
+  /**
+   * Get all versions of a skill
+   */
+  async getVersions(skillName: string): Promise<VersionInfo[]> {
+    const skill = await prisma.skill.findUnique({
+      where: { name: skillName },
+      include: {
+        versions: {
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+
+    if (!skill) return [];
+
+    return skill.versions.map((v) => ({
+      version: v.version,
+      releaseNotes: v.releaseNotes || undefined,
+      createdAt: v.createdAt,
+      downloads: 0, // Would need per-version tracking
+    }));
+  }
+
+  /**
+   * Check if a version satisfies a semver range
+   */
+  satisfies(version: string, range: string): boolean {
+    return semver.satisfies(version, range);
+  }
+
+  /**
+   * Get the latest version matching a range
+   */
+  async getLatestMatching(
+    skillName: string,
+    range: string,
+  ): Promise<string | null> {
+    const versions = await this.getVersions(skillName);
+    const versionStrings = versions.map((v) => v.version);
+
+    return semver.maxSatisfying(versionStrings, range);
+  }
+
+  /**
+   * Resolve dependencies for a skill
+   */
+  async resolveDependencies(
+    skillName: string,
+    version: string,
+  ): Promise<DependencyResolution> {
+    const resolved: Array<{ name: string; version: string }> = [];
+    const missing: string[] = [];
+    const conflicts: Array<{
+      name: string;
+      required: string;
+      available: string[];
+    }> = [];
+
+    // Get skill version with dependencies
+    const skillVersion = await prisma.skillVersion.findFirst({
+      where: {
+        skill: { name: skillName },
+        version,
+      },
+    });
+
+    if (!skillVersion) {
+      return { resolved, missing: [skillName], conflicts };
+    }
+
+    const dependencies = skillVersion.dependencies as Array<{
+      name: string;
+      version: string;
+    }>;
+
+    // Resolve each dependency
+    for (const dep of dependencies) {
+      const depVersions = await this.getVersions(dep.name);
+
+      if (depVersions.length === 0) {
+        missing.push(dep.name);
+        continue;
+      }
+
+      const matchingVersion = await this.getLatestMatching(
+        dep.name,
+        dep.version,
+      );
+
+      if (matchingVersion) {
+        resolved.push({ name: dep.name, version: matchingVersion });
+      } else {
+        conflicts.push({
+          name: dep.name,
+          required: dep.version,
+          available: depVersions.map((v) => v.version),
+        });
+      }
+    }
+
+    return { resolved, missing, conflicts };
+  }
+
+  /**
+   * Validate version bump
+   */
+  validateVersionBump(
+    currentVersion: string,
+    newVersion: string,
+  ): { valid: boolean; error?: string } {
+    if (!semver.valid(newVersion)) {
+      return { valid: false, error: "Invalid semver format" };
+    }
+
+    if (!semver.gt(newVersion, currentVersion)) {
+      return {
+        valid: false,
+        error: `New version ${newVersion} must be greater than ${currentVersion}`,
+      };
+    }
+
+    return { valid: true };
+  }
+}
+```
+
+### Step 6: CLI Tool with Commander.js
+
+The CLI tool enables developers to search, install, and publish skills from the terminal.
+
+```typescript
+// cli/src/index.ts
+#!/usr/bin/env node
+import { Command } from "commander";
+import chalk from "chalk";
+import ora from "ora";
+import { SkillClient } from "./client";
+import { Installer } from "./installer";
+import { Publisher } from "./publisher";
+
+const program = new Command();
+const client = new SkillClient();
+const installer = new Installer(client);
+const publisher = new Publisher(client);
+
+program
+  .name("skill")
+  .description("Agent Skill Marketplace CLI")
+  .version("1.0.0");
+
+/**
+ * Search for skills
+ */
+program
+  .command("search <query>")
+  .description("Search for skills in the marketplace")
+  .option("-c, --category <category>", "Filter by category")
+  .option("-l, --limit <number>", "Number of results", "10")
+  .action(async (query, options) => {
+    const spinner = ora("Searching...").start();
+
+    try {
+      const results = await client.search(query, {
+        category: options.category,
+        limit: parseInt(options.limit),
+      });
+
+      spinner.stop();
+
+      if (results.results.length === 0) {
+        console.log(chalk.yellow("No skills found matching your query."));
+        return;
+      }
+
+      console.log(
+        chalk.bold(`\nFound ${results.total} skills (${results.query_time_ms}ms):\n`)
+      );
+
+      for (const skill of results.results) {
+        console.log(chalk.green.bold(`  ${skill.name}`) + chalk.gray(` v${skill.version}`));
+        console.log(chalk.white(`    ${skill.description}`));
+        console.log(
+          chalk.gray(`    ↓ ${skill.downloads} downloads | ★ ${skill.rating.toFixed(1)}`)
+        );
+        console.log();
+      }
+    } catch (error) {
+      spinner.fail("Search failed");
+      console.error(chalk.red((error as Error).message));
+      process.exit(1);
+    }
+  });
+
+/**
+ * Install a skill
+ */
+program
+  .command("install <name>")
+  .description("Install a skill from the marketplace")
+  .option("-v, --version <version>", "Specific version to install")
+  .option("-g, --global", "Install globally", false)
+  .option("--no-deps", "Skip dependency installation")
+  .action(async (name, options) => {
+    const spinner = ora(`Installing ${name}...`).start();
+
+    try {
+      const result = await installer.install(name, {
+        version: options.version,
+        global: options.global,
+        installDeps: options.deps !== false,
+      });
+
+      if (result.success) {
+        spinner.succeed(
+          chalk.green(`Installed ${name}@${result.version} to ${result.path}`)
+        );
+
+        if (result.dependencies.length > 0) {
+          console.log(chalk.gray(`  Also installed: ${result.dependencies.join(", ")}`));
+        }
+      } else {
+        spinner.fail(chalk.red(`Failed to install ${name}`));
+        console.error(chalk.red(result.error));
+        process.exit(1);
+      }
+    } catch (error) {
+      spinner.fail("Installation failed");
+      console.error(chalk.red((error as Error).message));
+      process.exit(1);
+    }
+  });
+
+/**
+ * Publish a skill
+ */
+program
+  .command("publish [directory]")
+  .description("Publish a skill to the marketplace")
+  .option("-n, --notes <notes>", "Release notes")
+  .option("--dry-run", "Validate without publishing")
+  .action(async (directory = ".", options) => {
+    const spinner = ora("Validating skill...").start();
+
+    try {
+      // Validate first
+      const validation = await publisher.validate(directory);
+
+      if (!validation.valid) {
+        spinner.fail("Validation failed");
+        console.log(chalk.red("\nErrors:"));
+        for (const error of validation.errors) {
+          console.log(chalk.red(`  • ${error.field}: ${error.message}`));
+        }
+        process.exit(1);
+      }
+
+      if (validation.warnings.length > 0) {
+        console.log(chalk.yellow("\nWarnings:"));
+        for (const warning of validation.warnings) {
+          console.log(chalk.yellow(`  • ${warning.field}: ${warning.message}`));
+        }
+      }
+
+      if (options.dryRun) {
+        spinner.succeed("Validation passed (dry run)");
+        return;
+      }
+
+      spinner.text = "Publishing...";
+
+      const result = await publisher.publish(directory, {
+        releaseNotes: options.notes,
+      });
+
+      spinner.succeed(
+        chalk.green(`Published ${result.name}@${result.version}`)
+      );
+      console.log(chalk.gray(`  View at: https://skills.example.com/${result.name}`));
+    } catch (error) {
+      spinner.fail("Publish failed");
+      console.error(chalk.red((error as Error).message));
+      process.exit(1);
+    }
+  });
+
+/**
+ * List installed skills
+ */
+program
+  .command("list")
+  .description("List installed skills")
+  .option("-g, --global", "List global skills")
+  .action(async (options) => {
+    try {
+      const skills = await installer.listInstalled(options.global);
+
+      if (skills.length === 0) {
+        console.log(chalk.yellow("No skills installed."));
+        return;
+      }
+
+      console.log(chalk.bold("\nInstalled skills:\n"));
+
+      for (const skill of skills) {
+        console.log(
+          chalk.green(`  ${skill.name}`) + chalk.gray(` v${skill.version}`)
+        );
+        console.log(chalk.gray(`    ${skill.path}`));
+      }
+    } catch (error) {
+      console.error(chalk.red((error as Error).message));
+      process.exit(1);
+    }
+  });
+
+/**
+ * Uninstall a skill
+ */
+program
+  .command("uninstall <name>")
+  .description("Uninstall a skill")
+  .option("-g, --global", "Uninstall global skill")
+  .action(async (name, options) => {
+    const spinner = ora(`Uninstalling ${name}...`).start();
+
+    try {
+      await installer.uninstall(name, options.global);
+      spinner.succeed(chalk.green(`Uninstalled ${name}`));
+    } catch (error) {
+      spinner.fail("Uninstall failed");
+      console.error(chalk.red((error as Error).message));
+      process.exit(1);
+    }
+  });
+
+program.parse();
+```
+
+```typescript
+// cli/src/installer.ts
+import * as fs from "fs/promises";
+import * as path from "path";
+import * as os from "os";
+import * as tar from "tar";
+import { SkillClient } from "./client";
+
+export interface InstallOptions {
+  version?: string;
+  global?: boolean;
+  installDeps?: boolean;
+}
+
+export interface InstallResult {
+  success: boolean;
+  version?: string;
+  path?: string;
+  dependencies: string[];
+  error?: string;
+}
+
+export interface InstalledSkill {
+  name: string;
+  version: string;
+  path: string;
+}
+
+export class Installer {
+  private client: SkillClient;
+
+  constructor(client: SkillClient) {
+    this.client = client;
+  }
+
+  /**
+   * Get the skills installation directory
+   */
+  private getSkillsDir(global: boolean): string {
+    if (global) {
+      return path.join(os.homedir(), ".gemini", "skills");
+    }
+    return path.join(process.cwd(), ".gemini", "skills");
+  }
+
+  /**
+   * Install a skill from the marketplace
+   */
+  async install(
+    name: string,
+    options: InstallOptions = {},
+  ): Promise<InstallResult> {
+    const { version, global = false, installDeps = true } = options;
+    const installedDeps: string[] = [];
+
+    try {
+      // Get skill info
+      const skill = await this.client.getSkill(name, version);
+      if (!skill) {
+        return {
+          success: false,
+          error: `Skill '${name}' not found`,
+          dependencies: [],
+        };
+      }
+
+      // Resolve dependencies first
+      if (installDeps && skill.dependencies?.length > 0) {
+        for (const dep of skill.dependencies) {
+          const depResult = await this.install(dep.name, {
+            version: dep.version,
+            global,
+            installDeps: true,
+          });
+
+          if (depResult.success) {
+            installedDeps.push(`${dep.name}@${depResult.version}`);
+          }
+        }
+      }
+
+      // Get download URL
+      const downloadUrl = await this.client.getDownloadUrl(name, skill.version);
+      if (!downloadUrl) {
+        return {
+          success: false,
+          error: "Failed to get download URL",
+          dependencies: [],
+        };
+      }
+
+      // Download package
+      const packageBuffer = await this.client.downloadPackage(downloadUrl);
+
+      // Extract to skills directory
+      const skillsDir = this.getSkillsDir(global);
+      const skillDir = path.join(skillsDir, name);
+
+      // Remove existing installation
+      await fs.rm(skillDir, { recursive: true, force: true });
+      await fs.mkdir(skillDir, { recursive: true });
+
+      // Extract package
+      await tar.extract({
+        file: packageBuffer,
+        cwd: skillsDir,
+        strip: 1, // Remove top-level directory from archive
+      });
+
+      return {
+        success: true,
+        version: skill.version,
+        path: skillDir,
+        dependencies: installedDeps,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: (error as Error).message,
+        dependencies: installedDeps,
+      };
+    }
+  }
+
+  /**
+   * List installed skills
+   */
+  async listInstalled(global: boolean = false): Promise<InstalledSkill[]> {
+    const skillsDir = this.getSkillsDir(global);
+    const skills: InstalledSkill[] = [];
+
+    try {
+      const entries = await fs.readdir(skillsDir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+
+        const skillMdPath = path.join(skillsDir, entry.name, "SKILL.md");
+        try {
+          const content = await fs.readFile(skillMdPath, "utf-8");
+          const versionMatch = content.match(
+            /version:\s*["']?(\d+\.\d+\.\d+)["']?/,
+          );
+
+          skills.push({
+            name: entry.name,
+            version: versionMatch?.[1] || "unknown",
+            path: path.join(skillsDir, entry.name),
+          });
+        } catch {
+          // Skip directories without valid SKILL.md
+        }
+      }
+    } catch {
+      // Skills directory doesn't exist
+    }
+
+    return skills;
+  }
+
+  /**
+   * Uninstall a skill
+   */
+  async uninstall(name: string, global: boolean = false): Promise<void> {
+    const skillsDir = this.getSkillsDir(global);
+    const skillDir = path.join(skillsDir, name);
+
+    try {
+      await fs.access(skillDir);
+      await fs.rm(skillDir, { recursive: true });
+    } catch {
+      throw new Error(`Skill '${name}' is not installed`);
+    }
+  }
+}
+```
+
+### Step 7: Progressive Disclosure Loader
+
+The progressive disclosure loader enables efficient skill loading—metadata first, full content on activation.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Agent
+    participant Loader
+    participant Cache
+    participant FS
+    
+    Agent->>Loader: getCatalog()
+    Loader->>Cache: Check cache
+    Cache-->>Loader: Miss
+    Loader->>FS: Scan skill directories
+    FS-->>Loader: SKILL.md files
+    Loader->>Loader: Extract frontmatter only
+    Loader->>Cache: Store metadata
+    Loader-->>Agent: Lightweight catalog (~35 tokens/skill)
+    
+    Note over Agent: User requests skill
+    
+    Agent->>Loader: activate("code-reviewer")
+    Loader->>Cache: Check full content
+    Cache-->>Loader: Miss
+    Loader->>FS: Read full SKILL.md
+    FS-->>Loader: Complete content
+    Loader->>Cache: Store full content
+    Loader-->>Agent: Full instructions (~2500 tokens)
+`}
+  caption="Progressive disclosure: lightweight discovery, full loading on-demand."
+/>
+
+````typescript
+// src/loader/progressive-loader.ts
+import * as fs from "fs/promises";
+import * as path from "path";
+import matter from "gray-matter";
+
+export interface SkillMetadata {
+  name: string;
+  description: string;
+  version: string;
+  categories: string[];
+  argumentHint?: string;
+  tokenEstimate: number;
+}
+
+export interface ActivatedSkill {
+  name: string;
+  instructions: string;
+  metadata: SkillMetadata;
+  resources: {
+    scripts: string[];
+    references: string[];
+    assets: string[];
+  };
+  fileTree: string;
+}
+
+export class ProgressiveSkillLoader {
+  private skillsDir: string;
+  private metadataCache: Map<string, SkillMetadata> = new Map();
+  private contentCache: Map<string, ActivatedSkill> = new Map();
+
+  constructor(skillsDir: string) {
+    this.skillsDir = skillsDir;
+  }
+
+  /**
+   * Get lightweight catalog of all available skills
+   * This is what goes into the agent's initial context
+   */
+  async getCatalog(): Promise<string> {
+    const skills = await this.discoverSkills();
+
+    let catalog = "## Available Skills\n\n";
+    catalog += "Use `activate_skill(name)` to load full instructions.\n\n";
+
+    for (const skill of skills) {
+      catalog += `- **${skill.name}**: ${skill.description}`;
+      if (skill.argumentHint) {
+        catalog += ` (hint: ${skill.argumentHint})`;
+      }
+      catalog += "\n";
+    }
+
+    // Add token estimate
+    const totalTokens = skills.reduce((sum, s) => sum + 35, 0); // ~35 tokens per entry
+    catalog += `\n_Catalog: ~${totalTokens} tokens | Full skills: 500-3000 tokens each_\n`;
+
+    return catalog;
+  }
+
+  /**
+   * Discover all skills and extract metadata only
+   */
+  async discoverSkills(): Promise<SkillMetadata[]> {
+    if (this.metadataCache.size > 0) {
+      return Array.from(this.metadataCache.values());
+    }
+
+    const skills: SkillMetadata[] = [];
+
+    try {
+      const entries = await fs.readdir(this.skillsDir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+
+        const skillMdPath = path.join(this.skillsDir, entry.name, "SKILL.md");
+
+        try {
+          const content = await fs.readFile(skillMdPath, "utf-8");
+          const { data } = matter(content);
+
+          const metadata: SkillMetadata = {
+            name: data.name || entry.name,
+            description: data.description || "No description",
+            version: data.version || "0.0.0",
+            categories: data.categories || [],
+            argumentHint: data["argument-hint"],
+            tokenEstimate: this.estimateTokens(content),
+          };
+
+          this.metadataCache.set(metadata.name, metadata);
+          skills.push(metadata);
+        } catch {
+          // Skip invalid skills
+        }
+      }
+    } catch {
+      // Skills directory doesn't exist
+    }
+
+    return skills;
+  }
+
+  /**
+   * Activate a skill - load full content
+   */
+  async activate(skillName: string): Promise<ActivatedSkill | null> {
+    // Check cache first
+    if (this.contentCache.has(skillName)) {
+      return this.contentCache.get(skillName)!;
+    }
+
+    const skillDir = path.join(this.skillsDir, skillName);
+    const skillMdPath = path.join(skillDir, "SKILL.md");
+
+    try {
+      const content = await fs.readFile(skillMdPath, "utf-8");
+      const { data, content: instructions } = matter(content);
+
+      // Collect resources
+      const resources = {
+        scripts: await this.listDir(path.join(skillDir, "scripts")),
+        references: await this.listDir(path.join(skillDir, "references")),
+        assets: await this.listDir(path.join(skillDir, "assets")),
+      };
+
+      // Build file tree
+      const fileTree = await this.buildFileTree(skillDir);
+
+      const activated: ActivatedSkill = {
+        name: skillName,
+        instructions,
+        metadata: {
+          name: data.name || skillName,
+          description: data.description || "",
+          version: data.version || "0.0.0",
+          categories: data.categories || [],
+          argumentHint: data["argument-hint"],
+          tokenEstimate: this.estimateTokens(content),
+        },
+        resources,
+        fileTree,
+      };
+
+      this.contentCache.set(skillName, activated);
+      return activated;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Format activated skill for injection into agent context
+   */
+  formatForContext(skill: ActivatedSkill): string {
+    let context = `## Activated Skill: ${skill.name}\n\n`;
+    context += skill.instructions;
+    context += "\n\n### Available Resources\n\n";
+    context += "```\n" + skill.fileTree + "```\n";
+
+    if (skill.resources.scripts.length > 0) {
+      context += "\n**Scripts:** " + skill.resources.scripts.join(", ");
+    }
+    if (skill.resources.references.length > 0) {
+      context += "\n**References:** " + skill.resources.references.join(", ");
+    }
+
+    return context;
+  }
+
+  private async listDir(dirPath: string): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(dirPath);
+      return entries;
+    } catch {
+      return [];
+    }
+  }
+
+  private async buildFileTree(dirPath: string, prefix = ""): Promise<string> {
+    let tree = "";
+
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      const sorted = entries.sort((a, b) => {
+        if (a.isDirectory() !== b.isDirectory()) {
+          return a.isDirectory() ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name);
+      });
+
+      for (let i = 0; i < sorted.length; i++) {
+        const entry = sorted[i];
+        const isLast = i === sorted.length - 1;
+        const connector = isLast ? "└── " : "├── ";
+
+        tree += prefix + connector + entry.name + "\n";
+
+        if (entry.isDirectory()) {
+          const newPrefix = prefix + (isLast ? "    " : "│   ");
+          tree += await this.buildFileTree(
+            path.join(dirPath, entry.name),
+            newPrefix,
+          );
+        }
+      }
+    } catch {
+      // Directory doesn't exist
+    }
+
+    return tree;
+  }
+
+  private estimateTokens(content: string): number {
+    // Rough estimate: ~4 characters per token
+    return Math.ceil(content.length / 4);
+  }
+}
+````
+
+```typescript
+// src/loader/skill-agent-integration.ts
+import { ProgressiveSkillLoader, ActivatedSkill } from "./progressive-loader";
+
+/**
+ * Example integration with an agent framework
+ */
+export class SkillEnabledAgent {
+  private loader: ProgressiveSkillLoader;
+  private activeSkills: Map<string, ActivatedSkill> = new Map();
+
+  constructor(skillsDir: string) {
+    this.loader = new ProgressiveSkillLoader(skillsDir);
+  }
+
+  /**
+   * Build initial system prompt with skill catalog
+   */
+  async buildSystemPrompt(basePrompt: string): Promise<string> {
+    const catalog = await this.loader.getCatalog();
+
+    return `${basePrompt}
+
+${catalog}
+
+To use a skill:
+1. Call activate_skill(skill_name) to load full instructions
+2. Follow the skill's process and output format
+3. Use run_skill_script(skill_name, script_name, args) if needed
+`;
+  }
+
+  /**
+   * Tool: Activate a skill
+   */
+  async activateSkill(skillName: string): Promise<string> {
+    const skill = await this.loader.activate(skillName);
+
+    if (!skill) {
+      return `Error: Skill '${skillName}' not found`;
+    }
+
+    this.activeSkills.set(skillName, skill);
+
+    // Return formatted instructions for context injection
+    return this.loader.formatForContext(skill);
+  }
+
+  /**
+   * Tool: Run a skill script
+   */
+  async runSkillScript(
+    skillName: string,
+    scriptName: string,
+    args: string[] = [],
+  ): Promise<string> {
+    const skill = this.activeSkills.get(skillName);
+
+    if (!skill) {
+      return `Error: Skill '${skillName}' not activated. Call activate_skill first.`;
+    }
+
+    if (!skill.resources.scripts.includes(scriptName)) {
+      return `Error: Script '${scriptName}' not found in skill '${skillName}'`;
+    }
+
+    // Execute script (simplified - would use child_process in real implementation)
+    const scriptPath = `${skillName}/scripts/${scriptName}`;
+    return `[Would execute: ${scriptPath} ${args.join(" ")}]`;
+  }
+
+  /**
+   * Tool: Read a skill reference
+   */
+  async readSkillReference(
+    skillName: string,
+    referenceName: string,
+  ): Promise<string> {
+    const skill = this.activeSkills.get(skillName);
+
+    if (!skill) {
+      return `Error: Skill '${skillName}' not activated`;
+    }
+
+    if (!skill.resources.references.includes(referenceName)) {
+      return `Error: Reference '${referenceName}' not found`;
+    }
+
+    // Read reference file (simplified)
+    return `[Would read: ${skillName}/references/${referenceName}]`;
+  }
+
+  /**
+   * Get context window usage stats
+   */
+  getContextStats(): { catalog: number; active: number; total: number } {
+    const catalogTokens = this.loader["metadataCache"].size * 35;
+    const activeTokens = Array.from(this.activeSkills.values()).reduce(
+      (sum, skill) => sum + skill.metadata.tokenEstimate,
+      0,
+    );
+
+    return {
+      catalog: catalogTokens,
+      active: activeTokens,
+      total: catalogTokens + activeTokens,
+    };
+  }
+}
+```
+
+---
+
+## Frontend: Next.js Marketplace UI
+
+The marketplace frontend provides a beautiful interface for browsing and discovering skills.
+
+```tsx
+// app/skills/page.tsx
+"use client";
+
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { SkillCard } from "@/components/skill-card";
+import { SearchBar } from "@/components/search-bar";
+import { CategoryFilter } from "@/components/category-filter";
+
+interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  downloads: number;
+  rating: number;
+  publisher: string;
+  categories: string[];
+}
+
+export default function SkillsPage() {
+  const searchParams = useSearchParams();
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+
+  const query = searchParams.get("q") || "";
+  const category = searchParams.get("category") || "";
+
+  useEffect(() => {
+    async function fetchSkills() {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      if (category) params.set("category", category);
+
+      const res = await fetch(`/api/skills/search?${params}`);
+      const data = await res.json();
+
+      setSkills(data.results);
+      setTotal(data.total);
+      setLoading(false);
+    }
+
+    fetchSkills();
+  }, [query, category]);
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-4xl font-bold mb-2">Agent Skill Marketplace</h1>
+      <p className="text-gray-600 mb-8">
+        Discover and install modular capabilities for your AI agents
+      </p>
+
+      <div className="flex gap-4 mb-8">
+        <SearchBar defaultValue={query} />
+        <CategoryFilter selected={category} />
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={i}
+              className="h-48 bg-gray-100 animate-pulse rounded-lg"
+            />
+          ))}
+        </div>
+      ) : (
+        <>
+          <p className="text-sm text-gray-500 mb-4">{total} skills found</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {skills.map((skill) => (
+              <SkillCard key={skill.id} skill={skill} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+```
+
+```tsx
+// components/skill-card.tsx
+import Link from "next/link";
+import { Download, Star } from "lucide-react";
+
+interface SkillCardProps {
+  skill: {
+    id: string;
+    name: string;
+    description: string;
+    version: string;
+    downloads: number;
+    rating: number;
+    publisher: string;
+    categories: string[];
+  };
+}
+
+export function SkillCard({ skill }: SkillCardProps) {
+  return (
+    <Link href={`/skills/${skill.name}`}>
+      <div className="border rounded-lg p-6 hover:shadow-lg transition-shadow bg-white">
+        <div className="flex justify-between items-start mb-3">
+          <h3 className="text-xl font-semibold text-gray-900">{skill.name}</h3>
+          <span className="text-sm text-gray-500">v{skill.version}</span>
+        </div>
+
+        <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+          {skill.description}
+        </p>
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          {skill.categories.map((cat) => (
+            <span
+              key={cat}
+              className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+            >
+              {cat}
+            </span>
+          ))}
+        </div>
+
+        <div className="flex justify-between items-center text-sm text-gray-500">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1">
+              <Download className="w-4 h-4" />
+              {skill.downloads.toLocaleString()}
+            </span>
+            <span className="flex items-center gap-1">
+              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+              {skill.rating.toFixed(1)}
+            </span>
+          </div>
+          <span className="text-gray-400">by {skill.publisher}</span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+```
+
+```tsx
+// app/skills/[name]/page.tsx
+import { notFound } from "next/navigation";
+import { Metadata } from "next";
+import { SkillDetail } from "@/components/skill-detail";
+import { InstallCommand } from "@/components/install-command";
+import { VersionHistory } from "@/components/version-history";
+import { ReviewSection } from "@/components/review-section";
+
+interface Props {
+  params: { name: string };
+}
+
+async function getSkill(name: string) {
+  const res = await fetch(`${process.env.API_URL}/api/skills/${name}`, {
+    next: { revalidate: 60 },
+  });
+
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const skill = await getSkill(params.name);
+
+  if (!skill) {
+    return { title: "Skill Not Found" };
+  }
+
+  return {
+    title: `${skill.name} - Agent Skill Marketplace`,
+    description: skill.description,
+  };
+}
+
+export default async function SkillPage({ params }: Props) {
+  const skill = await getSkill(params.name);
+
+  if (!skill) {
+    notFound();
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main content */}
+        <div className="lg:col-span-2">
+          <SkillDetail skill={skill} />
+
+          <div className="mt-8">
+            <h2 className="text-2xl font-bold mb-4">SKILL.md Preview</h2>
+            <div className="bg-gray-50 rounded-lg p-6 overflow-auto">
+              <pre className="text-sm whitespace-pre-wrap">
+                {skill.skillMdContent}
+              </pre>
+            </div>
+          </div>
+
+          <ReviewSection skillId={skill.id} />
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          <InstallCommand name={skill.name} version={skill.version} />
+
+          <div className="border rounded-lg p-6">
+            <h3 className="font-semibold mb-4">Metadata</h3>
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Version</dt>
+                <dd>{skill.version}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">License</dt>
+                <dd>{skill.metadata?.license || "MIT"}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Downloads</dt>
+                <dd>{skill.downloads.toLocaleString()}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Publisher</dt>
+                <dd>{skill.publisher.name}</dd>
+              </div>
+            </dl>
+          </div>
+
+          {skill.dependencies?.length > 0 && (
+            <div className="border rounded-lg p-6">
+              <h3 className="font-semibold mb-4">Dependencies</h3>
+              <ul className="space-y-2 text-sm">
+                {skill.dependencies.map((dep: any) => (
+                  <li key={dep.name}>
+                    <a
+                      href={`/skills/${dep.name}`}
+                      className="text-blue-600 hover:underline"
+                    >
+                      {dep.name}
+                    </a>
+                    <span className="text-gray-500 ml-2">{dep.version}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <VersionHistory skillId={skill.id} versions={skill.versions} />
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+```tsx
+// components/install-command.tsx
+"use client";
+
+import { useState } from "react";
+import { Copy, Check } from "lucide-react";
+
+interface Props {
+  name: string;
+  version: string;
+}
+
+export function InstallCommand({ name, version }: Props) {
+  const [copied, setCopied] = useState(false);
+  const command = `skill install ${name}`;
+
+  const copyToClipboard = async () => {
+    await navigator.clipboard.writeText(command);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="border rounded-lg p-6 bg-gray-900 text-white">
+      <h3 className="font-semibold mb-3 text-gray-300">Install</h3>
+      <div className="flex items-center justify-between bg-gray-800 rounded px-4 py-3">
+        <code className="text-green-400 text-sm">{command}</code>
+        <button
+          onClick={copyToClipboard}
+          className="text-gray-400 hover:text-white transition-colors"
+        >
+          {copied ? (
+            <Check className="w-5 h-5 text-green-400" />
+          ) : (
+            <Copy className="w-5 h-5" />
+          )}
+        </button>
+      </div>
+      <p className="text-xs text-gray-500 mt-2">
+        Or specify version:{" "}
+        <code>
+          skill install {name}@{version}
+        </code>
+      </p>
+    </div>
+  );
+}
+```
+
+---
+
+## Database Schema (Prisma)
+
+```prisma
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Skill {
+  id             String         @id @default(uuid())
+  name           String         @unique
+  description    String
+  currentVersion String         @map("current_version")
+  publisherId    String         @map("publisher_id")
+  categories     Json           @default("[]")
+  tags           Json           @default("[]")
+  downloads      Int            @default(0)
+  ratingSum      Int            @default(0) @map("rating_sum")
+  ratingCount    Int            @default(0) @map("rating_count")
+  isVerified     Boolean        @default(false) @map("is_verified")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  publisher Publisher       @relation(fields: [publisherId], references: [id])
+  versions  SkillVersion[]
+  reviews   Review[]
+
+  @@map("skills")
+}
+
+model SkillVersion {
+  id            String   @id @default(uuid())
+  skillId       String   @map("skill_id")
+  version       String
+  packageUrl    String   @map("package_url")
+  packageHash   String   @map("package_hash")
+  skillMdContent String  @map("skill_md_content")
+  metadata      Json     @default("{}")
+  dependencies  Json     @default("[]")
+  releaseNotes  String?  @map("release_notes")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, version])
+  @@map("skill_versions")
+}
+
+model Publisher {
+  id             String   @id @default(uuid())
+  name           String   @unique
+  email          String   @unique
+  githubUsername String?  @map("github_username")
+  isVerified     Boolean  @default(false) @map("is_verified")
+  apiKeyHash     String?  @map("api_key_hash")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  skills Skill[]
+
+  @@map("publishers")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  skillId   String   @map("skill_id")
+  userId    String   @map("user_id")
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, userId])
+  @@map("reviews")
+}
+```
+
+---
+
+## Testing
+
+### Unit Tests for SKILL.md Validator
+
+```typescript
+// tests/validator.test.ts
+import { describe, it, expect } from "vitest";
+import { SkillValidator } from "../src/validators/skill-validator";
+
+describe("SkillValidator", () => {
+  const validator = new SkillValidator();
+
+  describe("validate", () => {
+    it("should accept valid SKILL.md", () => {
+      const content = `---
+name: "code-reviewer"
+description: "Performs comprehensive code reviews following team standards"
+version: "1.0.0"
+author: "test-author"
+categories:
+  - code-quality
+---
+
+# Code Review Skill
+
+## Process
+
+1. Analyze code structure
+2. Check for issues
+`;
+
+      const result = validator.validate(content);
+
+      expect(result.valid).toBe(true);
+      expect(result.frontmatter?.name).toBe("code-reviewer");
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should reject invalid name format", () => {
+      const content = `---
+name: "Code Reviewer"
+description: "Test description for the skill"
+version: "1.0.0"
+author: "test"
+categories:
+  - test
+---
+
+# Test
+`;
+
+      const result = validator.validate(content);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.field === "name")).toBe(true);
+    });
+
+    it("should reject invalid semver", () => {
+      const content = `---
+name: "test-skill"
+description: "Test description"
+version: "1.0"
+author: "test"
+categories:
+  - test
+---
+
+# Test
+`;
+
+      const result = validator.validate(content);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.field === "version")).toBe(true);
+    });
+
+    it("should warn about missing output format", () => {
+      const content = `---
+name: "test-skill"
+description: "Test description for the skill"
+version: "1.0.0"
+author: "test"
+categories:
+  - test
+---
+
+# Test Skill
+
+## Process
+
+Do something.
+`;
+
+      const result = validator.validate(content);
+
+      expect(result.valid).toBe(true);
+      expect(result.warnings.some((w) => w.message.includes("output"))).toBe(
+        true,
+      );
+    });
+  });
+});
+```
+
+### Integration Tests for Search
+
+```typescript
+// tests/search.test.ts
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { SearchService } from "../src/services/search-service";
+
+describe("SearchService", () => {
+  const searchService = new SearchService();
+
+  beforeAll(async () => {
+    await searchService.initializeCollection();
+
+    // Index test skills
+    await searchService.indexSkill({
+      id: "1",
+      name: "code-reviewer",
+      description: "Performs comprehensive code reviews",
+      version: "1.0.0",
+      categories: ["code-quality", "security"],
+      publisher: "test-publisher",
+      downloads: 1000,
+      rating: 4.5,
+    });
+
+    await searchService.indexSkill({
+      id: "2",
+      name: "api-designer",
+      description: "Designs RESTful APIs following best practices",
+      version: "2.1.0",
+      categories: ["api", "design"],
+      publisher: "test-publisher",
+      downloads: 500,
+      rating: 4.2,
+    });
+  });
+
+  afterAll(async () => {
+    await searchService.removeSkill("1");
+    await searchService.removeSkill("2");
+  });
+
+  it("should find skills by name", async () => {
+    const results = await searchService.search({
+      query: "code-reviewer",
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(results.results).toHaveLength(1);
+    expect(results.results[0].name).toBe("code-reviewer");
+  });
+
+  it("should find skills by description keywords", async () => {
+    const results = await searchService.search({
+      query: "RESTful API",
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(results.results).toHaveLength(1);
+    expect(results.results[0].name).toBe("api-designer");
+  });
+
+  it("should filter by category", async () => {
+    const results = await searchService.search({
+      query: "*",
+      category: "security",
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(results.results).toHaveLength(1);
+    expect(results.results[0].categories).toContain("security");
+  });
+
+  it("should handle typos with fuzzy matching", async () => {
+    const results = await searchService.search({
+      query: "cod reviwer", // Typos
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(results.results.length).toBeGreaterThan(0);
+    expect(results.results[0].name).toBe("code-reviewer");
+  });
+});
+```
+
+---
+
+## Deployment
+
+### Docker Compose Setup
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+
+services:
+  api:
+    build: ./api
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/skills
+      - TYPESENSE_HOST=typesense
+      - TYPESENSE_PORT=8108
+      - TYPESENSE_API_KEY=${TYPESENSE_API_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+    depends_on:
+      - db
+      - typesense
+
+  web:
+    build: ./web
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://api:3001
+    depends_on:
+      - api
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=skills
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  typesense:
+    image: typesense/typesense:0.25.1
+    environment:
+      - TYPESENSE_API_KEY=${TYPESENSE_API_KEY}
+      - TYPESENSE_DATA_DIR=/data
+    volumes:
+      - typesense_data:/data
+    ports:
+      - "8108:8108"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  typesense_data:
+  redis_data:
+```
+
+---
+
+## Challenges and Extensions
+
+<Exercise
+  title="Challenge 1: Skill Ratings and Reviews"
+  difficulty="intermediate"
+  timeEstimate="2 hours"
+>
+
+Implement a full rating and review system:
+
+**Requirements**:
+
+1. Users can rate skills 1-5 stars
+2. Users can leave text reviews
+3. One review per user per skill
+4. Display average rating and review count
+5. Sort skills by rating
+
+**Acceptance Criteria**:
+
+- POST /api/skills/:name/reviews creates a review
+- GET /api/skills/:name/reviews returns paginated reviews
+- Skill cards show average rating
+- Search can sort by rating
+
+</Exercise>
+
+<Exercise
+  title="Challenge 2: Skill Dependencies"
+  difficulty="advanced"
+  timeEstimate="3 hours"
+>
+
+Implement full dependency resolution:
+
+**Requirements**:
+
+1. Skills can declare dependencies in SKILL.md
+2. CLI resolves and installs dependencies automatically
+3. Detect and report circular dependencies
+4. Handle version conflicts gracefully
+5. Support version ranges (^1.0.0, ~1.2.0, >=1.0.0)
+
+**Acceptance Criteria**:
+
+- `skill install X` installs X and all dependencies
+- Circular dependencies are detected and reported
+- Version conflicts show available options
+- Lock file tracks resolved versions
+
+</Exercise>
+
+<Exercise
+  title="Challenge 3: Usage Analytics Dashboard"
+  difficulty="intermediate"
+  timeEstimate="2 hours"
+>
+
+Build an analytics dashboard for publishers:
+
+**Requirements**:
+
+1. Track daily/weekly/monthly downloads
+2. Show geographic distribution
+3. Display version adoption rates
+4. Track search impressions vs installs
+5. Export data as CSV
+
+**Acceptance Criteria**:
+
+- Publisher dashboard shows download trends
+- Charts display version adoption over time
+- Geographic heatmap shows user distribution
+- Data can be exported for analysis
+
+</Exercise>
+
+<Exercise
+  title="Challenge 4: VS Code Extension"
+  difficulty="advanced"
+  timeEstimate="4 hours"
+>
+
+Build a VS Code extension for skill browsing:
+
+**Requirements**:
+
+1. Browse marketplace from VS Code sidebar
+2. Search skills with autocomplete
+3. One-click installation
+4. View SKILL.md preview
+5. Manage installed skills
+
+**Acceptance Criteria**:
+
+- Extension appears in VS Code sidebar
+- Search returns results as you type
+- Install button triggers CLI installation
+- SKILL.md renders in preview pane
+
+</Exercise>
+
+---
+
+## Key Takeaways
+
+<Callout type="success">
+
+**What You Built**:
+
+1. **SKILL.md Validator**: Schema-based validation ensuring all published skills meet the standard
+2. **Package System**: Compressed, versioned skill packages with integrity verification
+3. **Semantic Search**: Fast, typo-tolerant discovery using Typesense
+4. **Publishing API**: Complete workflow from upload to indexed, downloadable skill
+5. **CLI Tool**: Developer-friendly commands for search, install, publish, and management
+6. **Progressive Disclosure**: Efficient loading that prevents context window bloat
+
+</Callout>
+
+<Callout type="info">
+
+**Architecture Decisions**:
+
+- **Typesense over Elasticsearch**: Simpler setup, excellent typo tolerance, fast enough for this scale
+- **S3 for packages**: Reliable, scalable, cost-effective storage with presigned URLs
+- **PostgreSQL for metadata**: ACID compliance, JSON support, familiar tooling
+- **Commander.js for CLI**: Mature, well-documented, excellent developer experience
+
+</Callout>
+
+## Production Considerations
+
+Before deploying to production, consider:
+
+1. **Authentication**: Implement OAuth (GitHub) for publisher accounts
+2. **Rate Limiting**: Protect API endpoints from abuse
+3. **CDN**: Cache package downloads at edge locations
+4. **Monitoring**: Add observability with Prometheus/Grafana
+5. **Backup**: Regular PostgreSQL and Typesense backups
+6. **Security**: Scan uploaded packages for malicious content
+
+## Next Steps
+
+This marketplace integrates with the broader Agentic Ecosystem:
+
+- **Day 13**: Agent Skills Standard (foundation for SKILL.md)
+- **Day 82**: Prompt Library (skills can reference prompts)
+- **Day 87**: Capstone Ecosystem (skills as ecosystem components)
+
+<PageNavigation
+  prev={{
+    title: "Mini Project: Code Translator",
+    href: "/modules/day-91-mini-project-code-translator",
+  }}
+  next={{
+    title: "Future of Agentic AI",
+    href: "/modules/day-89-future",
+  }}
+/>

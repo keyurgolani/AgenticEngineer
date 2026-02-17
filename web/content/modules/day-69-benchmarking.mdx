@@ -1,458 +1,1043 @@
 ---
-title: "Day 69: Benchmarking with SWE-bench"
-description: "The Gold Standard for Coding Agents."
+title: "Day 69: Agent Evaluation & Benchmarking"
+description: "Measuring agent performance with industry benchmarks, custom evaluation pipelines, and continuous monitoring."
 week: 10
 day: 69
 ---
 
-<ReadingTime minutes={30} />
+<ReadingTime minutes={45} />
 
-<SkillLevel level="advanced" description="Data Science for Agents" />
+<SkillLevel level="advanced" description="Production Agent Evaluation" />
 
 <Prerequisites
   items={[
-    "Understanding of unit testing",
+    "Understanding of agent architectures (Days 01-03)",
     "Experience building agents (Weeks 1-3)",
-    "Familiarity with dataset management",
+    "Familiarity with testing concepts and metrics",
+    "Basic knowledge of Python and async programming",
   ]}
 />
 
 <LearningObjectives
   objectives={[
-    "Understand why vibe checks fail and rigorous benchmarks succeed",
-    "Navigate the 2025 benchmark landscape: SWE-bench, ARC-AGI-2, τ-bench, WebArena, OSWorld",
-    "Implement an LLM-as-a-Judge evaluation pipeline",
-    "Calculate Pass@k metrics for stochastic agents",
-    "Evaluate agent trajectories, not just final outputs",
-    "Set up production evaluation patterns: shadow mode, A/B testing, regression detection",
-    "Choose the right eval framework for your use case",
+    "Understand why rigorous evaluation is critical for production agents",
+    "Navigate the 2025 benchmark landscape: SWE-bench, τ-bench, WebArena, GAIA, AgentBench",
+    "Build custom evaluation pipelines with LangSmith and Braintrust",
+    "Implement Pass@k metrics for stochastic agent evaluation",
+    "Design A/B testing frameworks for comparing agent versions",
+    "Set up continuous evaluation and regression detection",
+    "Create automated evaluation harnesses for your specific use cases",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "SWE-bench",
+      definition:
+        "Industry-standard benchmark for evaluating coding agents on real GitHub issues",
+    },
+    {
+      term: "Pass@k",
+      definition:
+        "Metric measuring probability of at least one correct solution in k attempts",
+    },
+    {
+      term: "LLM-as-a-Judge",
+      definition: "Using a powerful LLM to evaluate outputs from another model",
+    },
+    {
+      term: "Trajectory Evaluation",
+      definition: "Assessing the entire reasoning path, not just final outputs",
+    },
+    {
+      term: "Shadow Mode",
+      definition:
+        "Running new agent versions alongside production without affecting users",
+    },
+    {
+      term: "Regression Testing",
+      definition:
+        "Detecting performance degradation when prompts or models change",
+    },
   ]}
 />
 
 ---
 
-## 69.1 The "Vibe Check" Problem
+## Introduction: Why Evaluation Matters
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing a developer confidently shipping code after testing with only 3 queries, followed by a flood of user complaints. Split-screen design: left side shows developer with 3 green checkmarks, right side shows multiple red X marks from production users. Style: modern, slightly humorous, tech-focused illustration with clean lines. */}
+Building an agent that works on your test cases is easy. Building one that works reliably in production is hard. The difference? **Rigorous evaluation.**
 
-You build an agent. It works on your test query. You ship it.
-A week later, users complain it's broken. What happened?
+<Callout type="warning">
+  **The Production Reality**: Most agent failures in production aren't
+  bugs—they're edge cases that weren't tested. Without systematic evaluation,
+  you're flying blind.
+</Callout>
+
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    subgraph VibeCheck [The Vibe Check Trap]
+        Try[Try 3 Queries] -->|3/3 Success| Confidence[False Confidence]
+        Confidence --> Ship[Ship to Prod]
+        Ship -->|Reality| Fail[User Complaints ❌]
+    end
+    
+    subgraph GoldStandard [Rigorous Evaluation]
+        Try2[Run 100+ Tests] -->|85/100 Success| Metric[85% Accuracy]
+        Metric -->|Known Risk| Ship2[Ship with Guardrails]
+        Ship2 --> Success[Stable System ✅]
+    end
+    
+    style VibeCheck fill:#ffcdd2,stroke:#c62828
+    style GoldStandard fill:#c8e6c9,stroke:#2e7d32
+    style Fail fill:#d32f2f,color:#fff
+    style Success fill:#388e3c,color:#fff
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: The "Vibe Check" vs. Rigorous Evaluation</p>
+</div>
 
 **The "Vibe Check" Trap:**
 
-1.  Developer tries 3 queries.
-2.  Agent gets 3/3 right.
-3.  "It works!" -> Ship it.
-4.  Reality: 3 samples is statistically insignificant.
+1. Developer tries 3 queries
+2. Agent gets 3/3 right
+3. "It works!" → Ship it
+4. Reality: 3 samples is statistically insignificant
 
-<Callout type="warning">
+<Callout type="info">
   **The Law of Large Numbers:** You need at least 50-100 examples to have *any*
   confidence in an LLM system's performance. Stochasticity means "it worked
   once" proves nothing.
 </Callout>
 
-{/* IMAGE_PLACEHOLDER: Create a graph showing confidence intervals vs sample size. X-axis: number of test samples (1, 3, 10, 50, 100, 500), Y-axis: confidence level (%). Show how confidence dramatically increases from 3 samples to 50-100 samples, with a clear "danger zone" highlighted for <50 samples. Include a horizontal line at 95% confidence threshold. Style: clean data visualization with color-coded zones (red for danger, yellow for caution, green for reliable). */}
-
 ---
 
-## 69.2 SWE-bench: The Gold Standard
+## 69.1 Benchmark Categories
 
-[SWE-bench](https://www.swebench.com/) has become the industry standard for evaluating coding agents.
+Agent evaluation spans multiple dimensions. Understanding these categories helps you choose the right benchmarks for your use case.
 
-<Callout type="info">
-  **SWE-bench Variants**: The benchmark now includes multiple variants: -
-  **SWE-bench Full**: 2,294 real GitHub issues from 12 Python repositories -
-  **SWE-bench Lite**: 300 curated, self-contained issues for faster evaluation -
-  **SWE-bench Verified**: Human-validated subset with confirmed solvability -
-  **SWE-bench Pro**: Extended benchmark for complex, real-world engineering
-  tasks
-</Callout>
+### Task Completion Benchmarks
 
-<Callout type="success">
-  **2025 Leaderboard Update**: Top agents now achieve **77%+** on SWE-bench
-  Verified: - **Gemini 3 Pro + Live-SWE-agent**: 77.4% (Nov 2025) - **Gemini 3
-  Flash**: 76.2% (Dec 2025) - **Claude 4.5 Sonnet/Opus**: ~72% with agentic
-  scaffolding - **OpenHands CodeAct 2.1**: 60.6% (open-source SOTA) -
-  **mini-SWE-agent**: 65% in just 100 lines of Python!
-</Callout>
+Measure whether agents can complete real-world tasks end-to-end:
 
-### Examples of Real Issues
-
-| Repo         | Issue                                    | Difficulty |
-| :----------- | :--------------------------------------- | :--------- |
-| **Flask**    | "jsonify() fails on datetime objects"    | Medium     |
-| **Django**   | "QuerySet.union() crashes with ordering" | Hard       |
-| **Requests** | "Proxy auth header missing in redirects" | Easy       |
-
-### How It Works
-
-{/* IMAGE_PLACEHOLDER: Create a flowchart diagram showing the SWE-bench evaluation process. Four connected boxes: 1) "Input" (GitHub issue + codebase snapshot), 2) "Agent Action" (agent explores, edits, submits patch), 3) "Verification" (apply patch + run tests), 4) "Score" (pass/fail with checkmarks). Use arrows to show flow, include icons for each step (document, robot, test tube, trophy). Style: clean technical diagram with modern iconography, color-coded stages. */}
-
-1.  **Input**: Issue description + Codebase snapshot (pre-fix).
-2.  **Agent Action**: Agent explores, edits, and submits a patch.
-3.  **Verification**: The harness applies the patch and runs **new tests** that came with the real PR.
-4.  **Score**: Pass only if it fixes the bug AND breaks nothing else.
-
-### Top Performing Agents (2025)
-
-{/* IMAGE_PLACEHOLDER: Create a leaderboard-style visualization showing top SWE-bench agents. Bar chart with agent names on Y-axis and accuracy percentage on X-axis. Bars should be color-coded by category (proprietary vs open-source). Include agent logos/icons if possible. Highlight the 77.4% achievement with a special marker. Style: modern dashboard aesthetic with gradient bars, clean typography, professional color scheme. */}
-
-| Agent              | Architecture                | SWE-bench Verified | Notes                        |
-| :----------------- | :-------------------------- | :----------------- | :--------------------------- |
-| **Live-SWE-agent** | Gemini 3 Pro + agentic loop | 77.4%              | Current SOTA                 |
-| **Devin**          | Proprietary multi-agent     | ~70%               | First "AI software engineer" |
-| **OpenHands**      | Open-source CodeAct         | 60.6%              | Best open-source option      |
-| **Aider**          | CLI-based pair programming  | ~55%               | Lightweight, fast iteration  |
-| **SWE-agent**      | ReAct + file editing        | ~50%               | Princeton research baseline  |
-
-<Callout type="info">
-  **SWE-bench Multimodal (2025)**: The newest variant includes issues with
-  images, diagrams, and screenshots—testing agents' ability to understand visual
-  context in bug reports and feature requests.
-</Callout>
-
----
-
-## 69.3 Beyond SWE-bench: The 2025 Benchmark Landscape
-
-SWE-bench revolutionized coding agent evaluation, but 2024-2025 brought a wave of new benchmarks testing different agent capabilities:
+| Benchmark     | Domain               | Tasks               | Metric            |
+| :------------ | :------------------- | :------------------ | :---------------- |
+| **SWE-bench** | Software Engineering | 2,294 GitHub issues | % resolved        |
+| **WebArena**  | Web Navigation       | 812 web tasks       | Task success rate |
+| **OSWorld**   | Desktop Automation   | 369 OS tasks        | Task completion   |
+| **GAIA**      | General Assistant    | 466 questions       | Accuracy          |
 
 ### Reasoning Benchmarks
 
-{/* IMAGE_PLACEHOLDER: Create a comparison matrix visualization showing reasoning benchmarks. Three columns for each benchmark (ARC-AGI-2, GPQA Diamond, SuperGPQA), with rows showing: benchmark icon, focus area, top AI score, human baseline score. Use progress bars or circular progress indicators to show scores. Include visual indicators where AI exceeds human performance. Style: infographic-style with icons, clean data visualization, color-coded performance levels. */}
+Test logical reasoning and problem-solving:
 
-| Benchmark        | Focus                     | Top Score (2025)            | Human Baseline        |
-| :--------------- | :------------------------ | :-------------------------- | :-------------------- |
-| **ARC-AGI-2**    | Abstract visual reasoning | 75% (GPT-5.2 + scaffolding) | 100% (experts)        |
-| **GPQA Diamond** | PhD-level science Q&A     | 92.4% (Aristotle-X1)        | 69.7% (experts)       |
-| **SuperGPQA**    | 285 graduate disciplines  | Varies by domain            | ~80% (domain experts) |
+| Benchmark        | Focus                  | Difficulty  | Human Baseline  |
+| :--------------- | :--------------------- | :---------- | :-------------- |
+| **ARC-AGI-2**    | Abstract reasoning     | Very Hard   | 100% (experts)  |
+| **GPQA Diamond** | PhD-level science      | Hard        | 69.7% (experts) |
+| **MATH**         | Mathematical reasoning | Medium-Hard | ~90% (experts)  |
+| **GSM8K**        | Grade school math      | Easy        | ~95%            |
 
-<Callout type="warning">
-  **ARC-AGI-2 Reality Check**: When ARC-AGI-2 launched, top models crashed from
-  75% (ARC-AGI-1) to just 4%. By late 2025, scaffolded systems reached 75%, but
-  the benchmark exposed how much "reasoning" is actually pattern matching.
-</Callout>
+### Tool Use Benchmarks
 
-### Agent Capability Benchmarks
+Evaluate how well agents use external tools:
 
-| Benchmark      | What It Tests                | Environment                             |
-| :------------- | :--------------------------- | :-------------------------------------- |
-| **WebArena**   | Web navigation & interaction | 812 tasks across mock websites          |
-| **OSWorld**    | Desktop computer use         | 369 tasks in Windows/Ubuntu VMs         |
-| **τ-bench**    | Tool-Agent-User interaction  | Retail & airline customer service       |
-| **AgentBench** | Multi-agent coordination     | Dynamic multi-agent environments        |
-| **GAIA**       | General assistant tasks      | Web search, PDF processing, calculation |
+| Benchmark     | Tools Tested    | Environment              |
+| :------------ | :-------------- | :----------------------- |
+| **τ-bench**   | APIs, databases | Retail/airline scenarios |
+| **ToolBench** | 16,000+ APIs    | REST API calls           |
+| **API-Bank**  | 73 APIs         | Multi-step API tasks     |
+
+### Safety Benchmarks
+
+Assess agent safety and alignment:
+
+| Benchmark       | Focus            | Metrics              |
+| :-------------- | :--------------- | :------------------- |
+| **TruthfulQA**  | Truthfulness     | % truthful responses |
+| **HarmBench**   | Harmful outputs  | Attack success rate  |
+| **MACHIAVELLI** | Ethical behavior | Harm/power scores    |
+
+---
+
+## 69.2 Key Benchmarks Deep Dive
+
+### SWE-bench: The Gold Standard for Coding Agents
+
+[SWE-bench](https://www.swebench.com/) has become the industry standard for evaluating coding agents on real software engineering tasks.
+
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    Input[Input:\nIssue + Repo] --> Agent[Agent\n Explore & Edit]
+    Agent --> Patch[Submit Patch]
+    Patch --> Verify{Test Harness}
+    Verify -->|Pass Tests| Success[✅ Score: 1]
+    Verify -->|Fail Tests| Fail[❌ Score: 0]
+    
+    style Input fill:#e3f2fd,stroke:#2196f3
+    style Agent fill:#f3e5f5,stroke:#9c27b0
+    style Verify fill:#fff9c4,stroke:#fbc02d
+    style Success fill:#c8e6c9,stroke:#2e7d32
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: SWE-bench Evaluation Flow</p>
+</div>
+
+**SWE-bench Variants:**
+
+- **SWE-bench Full**: 2,294 real GitHub issues from 12 Python repositories
+- **SWE-bench Lite**: 300 curated, self-contained issues for faster evaluation
+- **SWE-bench Verified**: Human-validated subset with confirmed solvability
+- **SWE-bench Multimodal**: Issues with images, diagrams, and screenshots
+
+**Running SWE-bench Evaluations:**
 
 ```python
-# Example: τ-bench evaluates multi-turn tool use
-# Agent must handle dynamic user requests + API calls + policy compliance
+# Install SWE-bench
+# pip install swe-bench
 
-task = {
-    "domain": "airline",
-    "user_goal": "Change my flight to tomorrow, same time",
-    "constraints": [
-        "Must verify identity first",
-        "Check change fee policy",
-        "Confirm seat availability"
-    ],
-    "success_criteria": "Flight changed AND user informed of fees"
+from swe_bench.harness.run_evaluation import run_evaluation
+from swe_bench.harness.utils import load_swebench_dataset
+
+# Load the dataset
+dataset = load_swebench_dataset("princeton-nlp/SWE-bench_Lite")
+
+# Your agent's predictions (instance_id -> patch)
+predictions = {
+    "django__django-11099": "diff --git a/...",
+    "requests__requests-4356": "diff --git a/...",
+    # ... more predictions
 }
+
+# Run evaluation
+results = run_evaluation(
+    predictions=predictions,
+    dataset=dataset,
+    run_id="my-agent-v1",
+    timeout=300,  # 5 minutes per instance
+)
+
+# Analyze results
+resolved = sum(1 for r in results if r["resolved"])
+total = len(results)
+print(f"Resolved: {resolved}/{total} ({resolved/total:.1%})")
 ```
 
-<Callout type="tip">
-  **Choosing the Right Benchmark**: - **Coding agents** → SWE-bench Verified -
-  **Web agents** → WebArena or WebVoyager - **Desktop automation** → OSWorld -
-  **Customer service** → τ-bench - **Scientific reasoning** → GPQA Diamond -
-  **General reasoning** → ARC-AGI-2
-</Callout>
+**2025 Leaderboard Highlights:**
 
----
+| Agent                             | Architecture         | SWE-bench Verified |
+| :-------------------------------- | :------------------- | :----------------- |
+| **Gemini 3 Pro + Live-SWE-agent** | Agentic loop         | 77.4%              |
+| **Claude 4.5 Sonnet**             | Agentic scaffolding  | ~72%               |
+| **OpenHands CodeAct 2.1**         | Open-source          | 60.6%              |
+| **Aider**                         | CLI pair programming | ~55%               |
 
-## 69.4 Types of Evals
+### τ-bench: Tool Use Evaluation
 
-<Mermaid
-  chart={`
-graph TD
-    subgraph "Deterministic"
-        Code[Unit Tests]
-        Regex[Regex Match]
-        JSON[JSON Schema]
-    end
-
-    subgraph "Probabilistic"
-        Judge[LLM-as-a-Judge]
-        Semantic[Embedding Similarity]
-        Human[Human Review]
-    end
-
-    subgraph "Agentic (2025)"
-        Trajectory[Trajectory Eval]
-        ToolUse[Tool Use Accuracy]
-        MultiTurn[Multi-Turn Coherence]
-    end
-
-    Agent --> Output
-    Output --> Code
-    Output --> Judge
-    Agent --> Trajectory
-
-    style Code fill:#bfb,stroke:#333
-    style Judge fill:#f9f,stroke:#333
-    style Trajectory fill:#bbf,stroke:#333
-
-`}
-/>
-
-### 1. Deterministic Evals (Code/Math)
-
-- **Binary**: Pass/Fail.
-- **Tools**: `pytest`, `grep`, `jsonschema`.
-- **Cost**: Cheap & Fast.
-- **Use Case**: Coding agents, Structured Output.
-
-### 2. LLM-as-a-Judge (Chat/Creative)
-
-- **Scale**: 1-5 or boolean.
-- **Tools**: GPT-4 evaluating Llama-3 output.
-- **Cost**: Expensive & Slow.
-- **Use Case**: Chatbots, Summarization.
-
-### 3. Agentic Evaluation (2025)
-
-Beyond just evaluating outputs, modern agent evaluation examines the entire trajectory:
-
-- **Trajectory Evaluation**: Was the reasoning path efficient? Did the agent explore appropriately?
-- **Tool Use Accuracy**: Did the agent call the right tools with correct parameters?
-- **Multi-Turn Coherence**: Does the agent maintain context across conversation turns?
-- **Cost-Adjusted Performance**: What's the accuracy per dollar spent?
+[τ-bench](https://github.com/sierra-research/tau-bench) evaluates agents on realistic tool-use scenarios in retail and airline customer service domains.
 
 ```python
-# Trajectory evaluation example
-def evaluate_trajectory(trajectory: list[AgentStep]) -> TrajectoryScore:
-    return TrajectoryScore(
-        efficiency=len(trajectory) / optimal_steps,
-        tool_accuracy=correct_tool_calls / total_tool_calls,
-        reasoning_quality=judge_reasoning_chain(trajectory),
-        cost_per_success=total_cost / (1 if success else 0.001),
-        latency_p95=calculate_p95_latency(trajectory)
-    )
+# τ-bench evaluation example
+from tau_bench import TauBenchEvaluator
+from tau_bench.envs import RetailEnv, AirlineEnv
+
+# Initialize environment
+env = RetailEnv()
+
+# Define your agent
+async def my_agent(observation: str, tools: list) -> str:
+    """Your agent implementation."""
+    # Agent logic here
+    return action
+
+# Run evaluation
+evaluator = TauBenchEvaluator(
+    env=env,
+    agent=my_agent,
+    max_steps=20,
+)
+
+results = await evaluator.evaluate(
+    num_episodes=100,
+    parallel=True,
+)
+
+print(f"Success Rate: {results.success_rate:.1%}")
+print(f"Avg Steps: {results.avg_steps:.1f}")
+print(f"Tool Accuracy: {results.tool_accuracy:.1%}")
+```
+
+### WebArena: Web Navigation
+
+[WebArena](https://webarena.dev/) tests agents on complex web navigation tasks across realistic mock websites.
+
+```python
+# WebArena task example
+task = {
+    "task_id": "shopping_123",
+    "intent": "Find the cheapest laptop with at least 16GB RAM",
+    "start_url": "http://shop.webarena.dev",
+    "eval_criteria": {
+        "must_visit": ["search_results", "product_page"],
+        "final_answer_contains": ["price", "model_name"],
+    }
+}
+
+# Agent must navigate, search, filter, and extract information
+```
+
+### GAIA: General AI Assistants
+
+[GAIA](https://huggingface.co/datasets/gaia-benchmark/GAIA) tests general assistant capabilities with questions requiring web search, file processing, and multi-step reasoning.
+
+```python
+# GAIA question example
+question = {
+    "id": "gaia_001",
+    "question": "What was the mass of the heaviest pumpkin grown in 2023?",
+    "level": 1,  # 1=easy, 2=medium, 3=hard
+    "tools_required": ["web_search"],
+    "answer": "2749 pounds",
+}
+
+# Agent must search the web, find reliable sources, extract the answer
+```
+
+### AgentBench: Multi-Domain Evaluation
+
+[AgentBench](https://github.com/THUDM/AgentBench) provides a comprehensive suite across 8 environments:
+
+- **Operating System** (bash commands)
+- **Database** (SQL queries)
+- **Knowledge Graph** (SPARQL)
+- **Digital Card Game**
+- **Lateral Thinking Puzzles**
+- **House-Holding** (ALFWorld)
+- **Web Shopping** (WebShop)
+- **Web Browsing** (Mind2Web)
+
+### HumanEval & MBPP: Code Generation
+
+For pure code generation (not full software engineering), these benchmarks remain relevant:
+
+```python
+# HumanEval example
+problem = {
+    "task_id": "HumanEval/0",
+    "prompt": '''def has_close_elements(numbers: List[float], threshold: float) -> bool:
+    """ Check if in given list of numbers, are any two numbers closer to each other than
+    given threshold.
+    >>> has_close_elements([1.0, 2.0, 3.0], 0.5)
+    False
+    >>> has_close_elements([1.0, 2.8, 3.0, 4.0, 5.0, 2.0], 0.3)
+    True
+    """''',
+    "canonical_solution": "...",
+    "test": "...",
+}
+
+# Evaluate with Pass@k
+from human_eval.evaluation import evaluate_functional_correctness
+
+results = evaluate_functional_correctness(
+    sample_file="predictions.jsonl",
+    k=[1, 10, 100],
+    n_workers=4,
+)
+print(f"Pass@1: {results['pass@1']:.1%}")
+print(f"Pass@10: {results['pass@10']:.1%}")
 ```
 
 ---
 
-## 69.5 Implementing Pass@k
+## 69.3 Building Custom Evaluation Pipelines
 
-{/* IMAGE_PLACEHOLDER: Create an interactive visualization showing Pass@k concept. Show 10 agent runs as circles, with some colored green (correct) and some red (incorrect). Demonstrate how Pass@1, Pass@5, and Pass@10 are calculated from the same set of runs. Include a formula visualization and example calculation. Style: educational diagram with clear visual distinction between success/failure, animated or interactive feel, modern color scheme. */}
+While standard benchmarks are valuable, production agents need custom evaluations tailored to your specific use cases.
 
-Because agents are non-deterministic, a single run is noise. `Pass@k` measures: "If I run the agent `k` times, what's the probability at least one solution is correct?"
+### Using LangSmith for Agent Tracing & Evaluation
 
-**Formula:** `Pass@k = 1 - C(n-c, k) / C(n, k)`
+[LangSmith](https://smith.langchain.com) provides end-to-end observability and evaluation for LangChain applications.
 
-Where:
+```python
+import os
+from langsmith import Client
+from langsmith.evaluation import evaluate
+from langchain_openai import ChatOpenAI
 
-- `n`: total samples generated (e.g., 100)
-- `c`: number of correct samples
-- `k`: attempts allowed (e.g., 1, 5, 10)
+# Setup
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = "ls_..."
+os.environ["LANGCHAIN_PROJECT"] = "agent-evaluation"
 
-### Why It Matters
+client = Client()
 
-{/* IMAGE_PLACEHOLDER: Create a comparison chart showing Pass@1 vs Pass@10 for different agent quality levels. Two side-by-side scenarios: "Reliable Agent" (high Pass@1, high Pass@10) vs "Inconsistent Agent" (low Pass@1, high Pass@10). Use visual metaphors like target accuracy or consistency meters. Include a callout highlighting why Pass@1 matters for production. Style: clean comparison layout, use icons and visual metaphors, professional color coding. */}
+# Create a dataset for evaluation
+dataset_name = "customer-support-queries"
+dataset = client.create_dataset(dataset_name)
 
-- **Pass@1**: Measures reliability (first-try success rate).
-- **Pass@10**: Measures potential (best of 10 attempts).
+# Add examples to the dataset
+examples = [
+    {
+        "input": {"query": "How do I reset my password?"},
+        "output": {"answer": "Go to Settings > Security > Reset Password"}
+    },
+    {
+        "input": {"query": "What's your refund policy?"},
+        "output": {"answer": "Full refund within 30 days of purchase"}
+    },
+]
 
-<Callout type="tip">
-  **Practical Tip**: For production systems, optimize for Pass@1. High Pass@10
-  but low Pass@1 means your agent is inconsistent—users won't retry 10 times.
-</Callout>
+for example in examples:
+    client.create_example(
+        inputs=example["input"],
+        outputs=example["output"],
+        dataset_id=dataset.id,
+    )
 
----
+# Define your agent
+def my_agent(inputs: dict) -> dict:
+    """Your agent implementation."""
+    llm = ChatOpenAI(model="gpt-4o")
+    response = llm.invoke(inputs["query"])
+    return {"answer": response.content}
 
-## 69.6 Build Your Own Eval Harness
+# Define evaluators
+def correctness_evaluator(run, example) -> dict:
+    """Check if the answer is semantically correct."""
+    predicted = run.outputs.get("answer", "")
+    expected = example.outputs.get("answer", "")
 
-<BenchmarkCalculator />
+    # Use LLM-as-judge for semantic comparison
+    judge = ChatOpenAI(model="gpt-4o")
+    prompt = f"""Compare these two answers for semantic equivalence:
 
-Let's build a simple harness for evaluating a "SQL Agent".
+    Expected: {expected}
+    Predicted: {predicted}
+
+    Are they semantically equivalent? Answer YES or NO."""
+
+    result = judge.invoke(prompt)
+    is_correct = "YES" in result.content.upper()
+
+    return {"key": "correctness", "score": 1.0 if is_correct else 0.0}
+
+# Run evaluation
+results = evaluate(
+    my_agent,
+    data=dataset_name,
+    evaluators=[correctness_evaluator],
+    experiment_prefix="agent-v1",
+)
+
+print(f"Correctness: {results['correctness'].mean():.1%}")
+```
+
+### Using Braintrust for Enterprise Evaluation
+
+[Braintrust](https://braintrust.dev) provides comprehensive evaluation with CI/CD integration, used by companies like Notion and Stripe.
+
+```python
+from braintrust import Eval, init_logger
+import braintrust
+
+# Initialize logging
+logger = init_logger(project="my-agent")
+
+# Define your evaluation
+@braintrust.traced
+def run_agent(input_text: str) -> str:
+    """Your agent with automatic tracing."""
+    # Agent logic here
+    return response
+
+# Create evaluation with multiple scorers
+Eval(
+    "customer-support-agent",
+    data=lambda: [
+        {
+            "input": "How do I cancel my subscription?",
+            "expected": "Go to Account Settings > Subscription > Cancel",
+        },
+        {
+            "input": "Where can I find my invoices?",
+            "expected": "Navigate to Billing > Invoice History",
+        },
+    ],
+    task=lambda input: run_agent(input["input"]),
+    scores=[
+        # Built-in scorers
+        braintrust.Factuality,
+        braintrust.AnswerRelevancy,
+        # Custom scorer
+        lambda output, expected: {
+            "name": "keyword_match",
+            "score": 1.0 if any(
+                kw in output.lower()
+                for kw in expected.lower().split()
+            ) else 0.0,
+        },
+    ],
+)
+```
+
+### Building a Custom Evaluation Framework
+
+For full control, build your own evaluation harness:
 
 ```python
 import json
-import sqlite3
-from langchain_openai import ChatOpenAI
-from tqdm import tqdm
+import asyncio
+from dataclasses import dataclass, field
+from typing import Callable, Any
+from datetime import datetime
+import statistics
 
-# 1. The Dataset (Golden Set)
-dataset = [
-    {
-        "question": "How many users signed up in 2023?",
-        "sql_ground_truth": "SELECT count(*) FROM users WHERE year(created_at) = 2023",
-        "answer_ground_truth": 1543
-    },
-    {
-        "question": "What is the top selling product?",
-        "sql_ground_truth": "SELECT name FROM products ORDER BY sales DESC LIMIT 1",
-        "answer_ground_truth": "Widget X"
-    }
-    # ... add 50 more
-]
+@dataclass
+class EvalResult:
+    """Result of a single evaluation."""
+    input: dict
+    expected: Any
+    actual: Any
+    score: float
+    latency_ms: int
+    cost_usd: float
+    metadata: dict = field(default_factory=dict)
 
-# 2. The Agent
-def run_agent(question):
-    # ... your agent logic ...
-    return executed_sql_result
+@dataclass
+class EvalSummary:
+    """Summary of evaluation run."""
+    total: int
+    passed: int
+    failed: int
+    accuracy: float
+    avg_latency_ms: float
+    p95_latency_ms: float
+    total_cost_usd: float
+    timestamp: str
 
-# 3. The Evaluator
-def evaluate(dataset):
-    correct = 0
-    total = len(dataset)
+class EvaluationHarness:
+    """Custom evaluation framework for agents."""
 
-    results = []
+    def __init__(
+        self,
+        agent: Callable,
+        evaluator: Callable,
+        name: str = "evaluation",
+    ):
+        self.agent = agent
+        self.evaluator = evaluator
+        self.name = name
+        self.results: list[EvalResult] = []
 
-    for item in tqdm(dataset):
+    async def run_single(self, example: dict) -> EvalResult:
+        """Run evaluation on a single example."""
+        import time
+
+        start = time.perf_counter()
+
         try:
-            prediction = run_agent(item["question"])
+            # Run agent
+            actual = await self.agent(example["input"])
+            latency_ms = int((time.perf_counter() - start) * 1000)
 
-            # Exact match check
-            is_correct = (str(prediction) == str(item["answer_ground_truth"]))
+            # Evaluate result
+            score = await self.evaluator(
+                actual=actual,
+                expected=example.get("expected"),
+                input=example["input"],
+            )
 
-            if is_correct:
-                correct += 1
-
-            results.append({
-                "question": item["question"],
-                "prediction": prediction,
-                "ground_truth": item["answer_ground_truth"],
-                "correct": is_correct
-            })
+            return EvalResult(
+                input=example["input"],
+                expected=example.get("expected"),
+                actual=actual,
+                score=score,
+                latency_ms=latency_ms,
+                cost_usd=actual.get("cost", 0) if isinstance(actual, dict) else 0,
+            )
 
         except Exception as e:
-            results.append({"error": str(e), "correct": False})
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            return EvalResult(
+                input=example["input"],
+                expected=example.get("expected"),
+                actual={"error": str(e)},
+                score=0.0,
+                latency_ms=latency_ms,
+                cost_usd=0,
+                metadata={"error": str(e)},
+            )
 
-    accuracy = correct / total
-    print(f"Accuracy: {accuracy:.2%}")
-    return results
+    async def run(
+        self,
+        dataset: list[dict],
+        parallel: int = 5,
+    ) -> EvalSummary:
+        """Run evaluation on entire dataset."""
 
-# Run
-evaluate(dataset)
+        # Run evaluations with concurrency limit
+        semaphore = asyncio.Semaphore(parallel)
+
+        async def bounded_eval(example):
+            async with semaphore:
+                return await self.run_single(example)
+
+        tasks = [bounded_eval(ex) for ex in dataset]
+        self.results = await asyncio.gather(*tasks)
+
+        # Calculate summary statistics
+        scores = [r.score for r in self.results]
+        latencies = [r.latency_ms for r in self.results]
+
+        passed = sum(1 for s in scores if s >= 0.5)
+
+        return EvalSummary(
+            total=len(self.results),
+            passed=passed,
+            failed=len(self.results) - passed,
+            accuracy=statistics.mean(scores),
+            avg_latency_ms=statistics.mean(latencies),
+            p95_latency_ms=sorted(latencies)[int(len(latencies) * 0.95)],
+            total_cost_usd=sum(r.cost_usd for r in self.results),
+            timestamp=datetime.utcnow().isoformat(),
+        )
+
+    def save_results(self, path: str):
+        """Save results to JSON file."""
+        with open(path, "w") as f:
+            json.dump(
+                [
+                    {
+                        "input": r.input,
+                        "expected": r.expected,
+                        "actual": r.actual,
+                        "score": r.score,
+                        "latency_ms": r.latency_ms,
+                    }
+                    for r in self.results
+                ],
+                f,
+                indent=2,
+            )
 ```
 
 ---
 
-## 69.7 Lab Exercise: Benchmark Your Local Analyst
+## 69.4 Metrics That Matter
 
-**Objective**: Create a dataset of 20 questions for the Local Analyst (Day 15) and measure its accuracy.
+Not all metrics are created equal. Focus on what actually impacts your users and business.
 
-1.  **Generate Data**: Ask ChatGPT to generate 20 diverse CSV analysis questions (easy, medium, hard) for your `sales.csv`.
-2.  **Manually Solve**: Calculate the true answers (Ground Truth).
-3.  **Run Evals**:
-    - Run your agent against all 20 questions.
-    - Measure % Correct.
-    - Analyze failures: Did it fail on plotting? Or math?
-4.  **Improve**:
-    - Modify the System Prompt.
-    - Re-run Evals.
-    - Did metrics go up?
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid graph TD subgraph Primary [Primary Metrics] Success[Task
+      Success Rate] Quality[Output Quality] end subgraph Operational
+      [Operational Metrics] Latency[Latency P50/P95/P99] Cost[Cost per Request]
+      Tokens[Token Usage] end subgraph Safety [Safety Metrics] Harmful[Harmful
+      Output Rate] Hallucination[Hallucination Rate] Refusal[Appropriate Refusal
+      Rate] end style Primary fill:#c8e6c9,stroke:#2e7d32 style Operational
+      fill:#e3f2fd,stroke:#2196f3 style Safety fill:#ffcdd2,stroke:#c62828 ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">
+    Figure: Metrics Hierarchy for Agent Evaluation
+  </p>
+</div>
 
----
-
-## 📚 Key Takeaways
-
-1.  **Vibe checks are dangerous**: Always use datasets > 50 examples.
-2.  **SWE-bench is the gold standard**: Top agents now achieve 77%+ on Verified (2025).
-3.  **New benchmarks for new capabilities**: ARC-AGI-2 for reasoning, τ-bench for tool use, WebArena for web agents.
-4.  **Evaluate trajectories, not just outputs**: Tool use accuracy, reasoning paths, and cost matter.
-5.  **LLM-as-a-Judge**: Use expensive models (GPT-4) to grade cheaper models.
-6.  **Production evals are non-negotiable**: Shadow mode, A/B testing, and regression detection.
-7.  **Choose the right framework**: Inspect AI for safety, Promptfoo for speed, Braintrust for enterprise.
-
----
-
-## 🔗 Further Reading
-
-- [SWE-bench Paper](https://arxiv.org/abs/2310.06770)
-- [SWE-bench Leaderboard](https://www.swebench.com/)
-- [ARC Prize & ARC-AGI-2](https://arcprize.org/)
-- [Inspect AI Documentation](https://inspect.aisi.org.uk/)
-- [τ-bench Paper (ICLR 2025)](https://openreview.net/forum?id=roNSXZpUDN)
-- [WebArena Benchmark](https://webarena.dev/)
-- [OSWorld Benchmark](https://os-world.github.io/)
-- [GPQA Diamond Analysis](https://epoch.ai/gradient-updates/gpqa-diamond-whats-left)
-- [OpenHands (Open-source Agent)](https://github.com/All-Hands-AI/OpenHands)
-- [Ragas (RAG Assessment)](https://github.com/explodinggradients/ragas)
-
----
-
-## 69.8 Modern Eval Frameworks (2025)
-
-{/* IMAGE_PLACEHOLDER: Create a decision tree or framework comparison matrix. Show 7 frameworks (Braintrust, LangSmith, Promptfoo, Langfuse, Inspect AI, Ragas, HELM) with key attributes: deployment type (cloud/self-hosted), best use case, key features. Use icons for each framework and visual indicators for strengths. Style: professional comparison chart, clean layout, color-coded categories, easy to scan. */}
-
-Beyond building your own harness, several production-ready frameworks have emerged. The landscape has matured significantly in 2024-2025:
-
-| Framework                                     | Best For                     | Key Features (2025)                                                                            |
-| :-------------------------------------------- | :--------------------------- | :--------------------------------------------------------------------------------------------- |
-| **[Braintrust](https://braintrust.dev)**      | End-to-end AI observability  | Dataset management, CI/CD integration, production monitoring. Used by Notion, Stripe, Airtable |
-| **[LangSmith](https://smith.langchain.com)**  | LangChain ecosystem          | Datasets & Experiments, prompt versioning, human feedback loops, hub integration               |
-| **[Promptfoo](https://promptfoo.dev)**        | Local/CLI testing + Security | Fast iteration, model comparison, **red-teaming & adversarial testing**                        |
-| **[Langfuse](https://langfuse.com)**          | Open-source observability    | Self-hostable, cost tracking, prompt management, **Langfuse 3.0 with enhanced tracing**        |
-| **[Inspect AI](https://inspect.aisi.org.uk)** | Safety & research evals      | UK AI Safety Institute framework, **100+ pre-built evals**, reproducible benchmarks            |
-| **[Ragas](https://ragas.io)**                 | RAG-specific evals           | Faithfulness, relevancy, context precision, **component-level RAG metrics**                    |
-| **[HELM](https://crfm.stanford.edu/helm)**    | Holistic model evaluation    | Stanford's comprehensive benchmark suite, multi-dimensional assessment                         |
-
-<Callout type="success">
-  **New in 2025: Inspect AI** from the UK AI Safety Institute (now AI Security
-  Institute) provides an open-source Python framework with 100+ pre-built
-  evaluations. It's become the standard for safety-focused evaluation and
-  reproducible research benchmarks.
-</Callout>
-
-### Framework Selection by Use Case
+### Success Rate Metrics
 
 ```python
-# Decision tree for framework selection
-def choose_eval_framework(use_case: str) -> str:
-    frameworks = {
-        "rapid_prototyping": "Promptfoo",      # Fast CLI, local-first
-        "langchain_app": "LangSmith",          # Native integration
-        "enterprise_production": "Braintrust", # Full lifecycle
-        "self_hosted_required": "Langfuse",    # Open-source, data sovereignty
-        "rag_system": "Ragas",                 # Specialized RAG metrics
-        "safety_research": "Inspect AI",       # Reproducible, safety-focused
-        "red_teaming": "Promptfoo",            # Adversarial testing built-in
-    }
-    return frameworks.get(use_case, "Braintrust")
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class SuccessMetrics:
+    """Core success metrics for agent evaluation."""
+
+    # Task completion
+    task_success_rate: float      # % of tasks completed correctly
+    partial_success_rate: float   # % with partial completion
+
+    # Quality scores
+    accuracy: float               # Correctness of outputs
+    relevance: float              # How relevant to the query
+    completeness: float           # How complete the response
+
+    # Reliability
+    pass_at_1: float              # First-try success rate
+    pass_at_5: float              # Success in 5 attempts
+    consistency: float            # Same input → same output
+
+def calculate_pass_at_k(n: int, c: int, k: int) -> float:
+    """
+    Calculate Pass@k metric.
+
+    Args:
+        n: Total samples generated
+        c: Number of correct samples
+        k: Number of attempts allowed
+
+    Returns:
+        Probability of at least one correct in k attempts
+    """
+    if n - c < k:
+        return 1.0
+
+    # Pass@k = 1 - C(n-c, k) / C(n, k)
+    from math import comb
+    return 1.0 - comb(n - c, k) / comb(n, k)
+
+# Example usage
+n_samples = 100
+n_correct = 65
+
+print(f"Pass@1: {calculate_pass_at_k(n_samples, n_correct, 1):.1%}")   # 65%
+print(f"Pass@5: {calculate_pass_at_k(n_samples, n_correct, 5):.1%}")   # 99.5%
+print(f"Pass@10: {calculate_pass_at_k(n_samples, n_correct, 10):.1%}") # 99.99%
 ```
 
-<Callout type="tip">
-  **Framework Selection Guide (2025)**: - **Starting out?** Use Promptfoo for
-  fast local iteration - **LangChain user?** LangSmith integrates seamlessly
-  with Datasets & Experiments - **Enterprise needs?** Braintrust offers
-  comprehensive lifecycle management - **RAG system?** Ragas provides
-  specialized retrieval metrics - **Safety-critical?** Inspect AI for
-  reproducible safety evaluations - **Red-teaming?** Promptfoo now includes
-  adversarial testing capabilities - **Data sovereignty?** Langfuse 3.0 is fully
-  self-hostable
-</Callout>
+### Latency Metrics
+
+```python
+import numpy as np
+from typing import List
+
+def calculate_latency_metrics(latencies_ms: List[int]) -> dict:
+    """Calculate latency percentiles."""
+    arr = np.array(latencies_ms)
+
+    return {
+        "p50": np.percentile(arr, 50),
+        "p75": np.percentile(arr, 75),
+        "p90": np.percentile(arr, 90),
+        "p95": np.percentile(arr, 95),
+        "p99": np.percentile(arr, 99),
+        "mean": np.mean(arr),
+        "std": np.std(arr),
+    }
+
+# Target latencies by use case
+LATENCY_TARGETS = {
+    "chat": {"p95": 2000},      # 2s for conversational
+    "search": {"p95": 500},     # 500ms for search
+    "batch": {"p95": 30000},    # 30s for batch processing
+}
+```
+
+### Cost Metrics
+
+```python
+# Model pricing (per 1M tokens, as of 2025)
+MODEL_PRICING = {
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "claude-3-5-sonnet": {"input": 3.00, "output": 15.00},
+    "claude-3-5-haiku": {"input": 0.80, "output": 4.00},
+}
+
+def calculate_cost(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+) -> float:
+    """Calculate cost for a single request."""
+    pricing = MODEL_PRICING.get(model, {"input": 0, "output": 0})
+
+    input_cost = (input_tokens / 1_000_000) * pricing["input"]
+    output_cost = (output_tokens / 1_000_000) * pricing["output"]
+
+    return input_cost + output_cost
+
+def cost_adjusted_score(
+    accuracy: float,
+    cost_per_request: float,
+    baseline_cost: float = 0.01,
+) -> float:
+    """
+    Calculate cost-adjusted performance score.
+
+    Higher is better: good accuracy at low cost.
+    """
+    return accuracy / (cost_per_request / baseline_cost)
+```
+
+### Safety Scores
+
+```python
+from enum import Enum
+
+class SafetyCategory(Enum):
+    HARMFUL_CONTENT = "harmful_content"
+    HALLUCINATION = "hallucination"
+    PII_LEAK = "pii_leak"
+    PROMPT_INJECTION = "prompt_injection"
+
+def calculate_safety_score(
+    total_requests: int,
+    safety_violations: dict[SafetyCategory, int],
+) -> dict:
+    """Calculate safety metrics."""
+
+    total_violations = sum(safety_violations.values())
+
+    return {
+        "overall_safety_rate": 1 - (total_violations / total_requests),
+        "harmful_content_rate": safety_violations.get(
+            SafetyCategory.HARMFUL_CONTENT, 0
+        ) / total_requests,
+        "hallucination_rate": safety_violations.get(
+            SafetyCategory.HALLUCINATION, 0
+        ) / total_requests,
+        "pii_leak_rate": safety_violations.get(
+            SafetyCategory.PII_LEAK, 0
+        ) / total_requests,
+    }
+```
 
 ---
 
-## 69.9 Production Evaluation Patterns
+## 69.5 A/B Testing Agents
 
-Evaluation doesn't stop at development. Production agents need continuous monitoring and validation:
+Comparing agent versions in production requires careful experimental design.
 
-### Continuous Evaluation Pipeline
-
-<Mermaid
-  chart={`
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
 graph LR
-    subgraph "Development"
+    Request[User Request] --> Router{Traffic Router}
+    Router -->|50%| AgentA[Agent v1\nControl]
+    Router -->|50%| AgentB[Agent v2\nTreatment]
+    
+    AgentA --> Metrics[Metrics Collection]
+    AgentB --> Metrics
+    
+    Metrics --> Analysis[Statistical Analysis]
+    Analysis --> Decision{Significant?}
+    Decision -->|Yes| Deploy[Deploy Winner]
+    Decision -->|No| Continue[Continue Test]
+    
+    style AgentA fill:#e3f2fd,stroke:#2196f3
+    style AgentB fill:#f3e5f5,stroke:#9c27b0
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: A/B Testing Architecture for Agents</p>
+</div>
+
+### A/B Testing Framework
+
+```python
+import random
+import hashlib
+from dataclasses import dataclass
+from typing import Callable, Optional
+from datetime import datetime
+import asyncio
+
+@dataclass
+class Experiment:
+    """A/B test experiment configuration."""
+    name: str
+    control: Callable          # Agent v1
+    treatment: Callable        # Agent v2
+    traffic_split: float       # % to treatment (0.0-1.0)
+    start_time: datetime
+    end_time: Optional[datetime] = None
+
+class ABTestingFramework:
+    """Framework for A/B testing agent versions."""
+
+    def __init__(self):
+        self.experiments: dict[str, Experiment] = {}
+        self.results: dict[str, list] = {}
+
+    def create_experiment(
+        self,
+        name: str,
+        control: Callable,
+        treatment: Callable,
+        traffic_split: float = 0.5,
+    ) -> Experiment:
+        """Create a new A/B test experiment."""
+        experiment = Experiment(
+            name=name,
+            control=control,
+            treatment=treatment,
+            traffic_split=traffic_split,
+            start_time=datetime.utcnow(),
+        )
+        self.experiments[name] = experiment
+        self.results[name] = []
+        return experiment
+
+    def get_variant(
+        self,
+        experiment_name: str,
+        user_id: str,
+    ) -> str:
+        """
+        Deterministically assign user to variant.
+        Same user always gets same variant.
+        """
+        experiment = self.experiments[experiment_name]
+
+        # Hash user_id for deterministic assignment
+        hash_input = f"{experiment_name}:{user_id}"
+        hash_value = int(hashlib.md5(hash_input.encode()).hexdigest(), 16)
+
+        # Assign based on traffic split
+        if (hash_value % 100) / 100 < experiment.traffic_split:
+            return "treatment"
+        return "control"
+
+    async def run(
+        self,
+        experiment_name: str,
+        user_id: str,
+        input_data: dict,
+    ) -> dict:
+        """Run the appropriate agent variant."""
+        import time
+
+        experiment = self.experiments[experiment_name]
+        variant = self.get_variant(experiment_name, user_id)
+
+        agent = (
+            experiment.treatment if variant == "treatment"
+            else experiment.control
+        )
+
+        start = time.perf_counter()
+        result = await agent(input_data)
+        latency_ms = int((time.perf_counter() - start) * 1000)
+
+        # Record result
+        self.results[experiment_name].append({
+            "user_id": user_id,
+            "variant": variant,
+            "input": input_data,
+            "output": result,
+            "latency_ms": latency_ms,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+        return {
+            "variant": variant,
+            "result": result,
+            "latency_ms": latency_ms,
+        }
+
+    def analyze(self, experiment_name: str) -> dict:
+        """Analyze experiment results."""
+        from scipy import stats
+
+        results = self.results[experiment_name]
+
+        control = [r for r in results if r["variant"] == "control"]
+        treatment = [r for r in results if r["variant"] == "treatment"]
+
+        # Calculate metrics for each group
+        def calc_metrics(group):
+            latencies = [r["latency_ms"] for r in group]
+            # Assume success is stored in output
+            successes = sum(
+                1 for r in group
+                if r["output"].get("success", False)
+            )
+            return {
+                "n": len(group),
+                "success_rate": successes / len(group) if group else 0,
+                "avg_latency": sum(latencies) / len(latencies) if latencies else 0,
+            }
+
+        control_metrics = calc_metrics(control)
+        treatment_metrics = calc_metrics(treatment)
+
+        # Statistical significance test
+        control_successes = [
+            1 if r["output"].get("success") else 0
+            for r in control
+        ]
+        treatment_successes = [
+            1 if r["output"].get("success") else 0
+            for r in treatment
+        ]
+
+        if control_successes and treatment_successes:
+            t_stat, p_value = stats.ttest_ind(
+                control_successes,
+                treatment_successes
+            )
+        else:
+            t_stat, p_value = 0, 1
+
+        return {
+            "control": control_metrics,
+            "treatment": treatment_metrics,
+            "lift": (
+                (treatment_metrics["success_rate"] - control_metrics["success_rate"])
+                / control_metrics["success_rate"]
+                if control_metrics["success_rate"] > 0 else 0
+            ),
+            "p_value": p_value,
+            "significant": p_value < 0.05,
+        }
+
+# Usage example
+ab_framework = ABTestingFramework()
+
+# Create experiment
+ab_framework.create_experiment(
+    name="agent-v2-rollout",
+    control=agent_v1,
+    treatment=agent_v2,
+    traffic_split=0.1,  # 10% to new version
+)
+
+# Run for a user
+result = await ab_framework.run(
+    experiment_name="agent-v2-rollout",
+    user_id="user_123",
+    input_data={"query": "How do I reset my password?"},
+)
+
+# Analyze after collecting data
+analysis = ab_framework.analyze("agent-v2-rollout")
+print(f"Lift: {analysis['lift']:.1%}")
+print(f"Significant: {analysis['significant']}")
+```
+
+---
+
+## 69.6 Continuous Evaluation
+
+Production agents need ongoing monitoring, not just pre-deployment testing.
+
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    subgraph Development
         Dev[Local Evals] --> CI[CI/CD Evals]
     end
     
-    subgraph "Staging"
+    subgraph Staging
         CI --> Shadow[Shadow Mode]
         Shadow --> AB[A/B Testing]
     end
     
-    subgraph "Production"
+    subgraph Production
         AB --> Prod[Production Monitoring]
         Prod --> Regression[Regression Detection]
         Regression --> Alert[Alerts & Rollback]
@@ -460,117 +1045,766 @@ graph LR
     
     Alert --> Dev
     
-    style Shadow fill:#ff9,stroke:#333
-    style AB fill:#9f9,stroke:#333
-    style Regression fill:#f99,stroke:#333
-`}
-/>
+    style Shadow fill:#fff9c4,stroke:#fbc02d
+    style AB fill:#c8e6c9,stroke:#2e7d32
+    style Regression fill:#ffcdd2,stroke:#c62828
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Continuous Evaluation Pipeline</p>
+</div>
 
-### Key Production Patterns
+### Shadow Mode Evaluation
 
-{/* IMAGE_PLACEHOLDER: Create an illustrated guide showing the 4 production patterns. Four panels: 1) Shadow Mode (two parallel agents, one serving users), 2) A/B Testing (traffic split visualization), 3) Evaluation-Gated Deployments (quality gate with pass/fail), 4) Regression Testing (version comparison with metrics). Use consistent iconography and color scheme across all panels. Style: technical infographic, modern illustration style, clear visual hierarchy. */}
-
-**1. Shadow Mode Evaluation**
 Run new agent versions alongside production without affecting users:
 
 ```python
-async def shadow_evaluate(request: UserRequest):
-    # Production agent handles the request
-    prod_response = await production_agent.run(request)
+import asyncio
+from typing import Callable
+from datetime import datetime
 
-    # Shadow agent runs in parallel (no user impact)
-    shadow_response = await shadow_agent.run(request)
+class ShadowModeEvaluator:
+    """Run shadow evaluations in production."""
 
-    # Log comparison for offline analysis
-    await log_comparison(
-        request=request,
-        prod=prod_response,
-        shadow=shadow_response,
-        metrics=["latency", "cost", "quality_score"]
-    )
+    def __init__(
+        self,
+        production_agent: Callable,
+        shadow_agent: Callable,
+        comparison_fn: Callable,
+    ):
+        self.production = production_agent
+        self.shadow = shadow_agent
+        self.compare = comparison_fn
+        self.comparisons = []
 
-    return prod_response  # Only production response goes to user
+    async def evaluate(self, input_data: dict) -> dict:
+        """
+        Run both agents, return production result,
+        log comparison for analysis.
+        """
+        # Run both agents in parallel
+        prod_task = asyncio.create_task(self.production(input_data))
+        shadow_task = asyncio.create_task(self.shadow(input_data))
+
+        # Wait for production (user-facing)
+        prod_result = await prod_task
+
+        # Shadow can complete async (non-blocking)
+        try:
+            shadow_result = await asyncio.wait_for(
+                shadow_task,
+                timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            shadow_result = {"error": "timeout"}
+
+        # Log comparison
+        comparison = await self.compare(
+            input=input_data,
+            production=prod_result,
+            shadow=shadow_result,
+        )
+
+        self.comparisons.append({
+            "timestamp": datetime.utcnow().isoformat(),
+            "input": input_data,
+            "production": prod_result,
+            "shadow": shadow_result,
+            "comparison": comparison,
+        })
+
+        # Return only production result to user
+        return prod_result
+
+    def get_shadow_metrics(self) -> dict:
+        """Analyze shadow performance."""
+        if not self.comparisons:
+            return {}
+
+        shadow_better = sum(
+            1 for c in self.comparisons
+            if c["comparison"].get("shadow_better", False)
+        )
+
+        return {
+            "total_comparisons": len(self.comparisons),
+            "shadow_better_rate": shadow_better / len(self.comparisons),
+            "ready_for_promotion": shadow_better / len(self.comparisons) > 0.05,
+        }
 ```
 
-**2. A/B Testing for Agents**
-Split traffic to measure real-world performance differences:
+### Automated Regression Testing
 
 ```python
-@ab_test(experiment="agent_v2_rollout", traffic_split=0.1)
-async def handle_request(request: UserRequest, variant: str):
-    if variant == "control":
-        return await agent_v1.run(request)
-    else:
-        return await agent_v2.run(request)
-```
+import json
+from pathlib import Path
+from datetime import datetime
+from typing import Optional
 
-**3. Evaluation-Gated Deployments**
-Block deployments that fail quality thresholds:
+class RegressionDetector:
+    """Detect performance regressions in agent updates."""
 
-```yaml
-# .github/workflows/deploy.yml
-- name: Run Agent Evals
-  run: |
-    promptfoo eval --config eval.yaml
+    def __init__(
+        self,
+        baseline_path: str,
+        threshold: float = 0.02,  # 2% regression threshold
+    ):
+        self.baseline_path = Path(baseline_path)
+        self.threshold = threshold
+        self.baseline = self._load_baseline()
 
-- name: Check Quality Gate
-  run: |
-    # Fail if accuracy drops below threshold
-    if [ $(cat results.json | jq '.accuracy') -lt 0.85 ]; then
-      echo "Quality gate failed: accuracy below 85%"
-      exit 1
-    fi
-```
+    def _load_baseline(self) -> dict:
+        """Load baseline metrics."""
+        if self.baseline_path.exists():
+            with open(self.baseline_path) as f:
+                return json.load(f)
+        return {}
 
-**4. Regression Testing for Prompt Changes**
-Every prompt change should trigger evaluation:
+    def _save_baseline(self, metrics: dict):
+        """Save new baseline."""
+        with open(self.baseline_path, "w") as f:
+            json.dump(metrics, f, indent=2)
 
-```python
-# Track prompt versions and their performance
-class PromptRegistry:
-    def __init__(self):
-        self.versions = {}
-        self.baseline_metrics = {}
+    def check_regression(
+        self,
+        current_metrics: dict,
+        metric_name: str = "accuracy",
+    ) -> dict:
+        """
+        Check if current metrics show regression.
 
-    def register_prompt(self, name: str, version: str, prompt: str):
-        self.versions[f"{name}:{version}"] = prompt
+        Returns:
+            dict with regression status and details
+        """
+        if metric_name not in self.baseline:
+            return {
+                "status": "no_baseline",
+                "message": f"No baseline for {metric_name}",
+            }
 
-    async def evaluate_regression(self, name: str, new_version: str):
-        baseline = self.baseline_metrics[name]
-        new_metrics = await run_eval_suite(name, new_version)
+        baseline_value = self.baseline[metric_name]
+        current_value = current_metrics[metric_name]
 
-        regression = {
-            "accuracy_delta": new_metrics.accuracy - baseline.accuracy,
-            "latency_delta": new_metrics.p95_latency - baseline.p95_latency,
-            "cost_delta": new_metrics.cost_per_request - baseline.cost_per_request,
+        delta = current_value - baseline_value
+        delta_pct = delta / baseline_value if baseline_value > 0 else 0
+
+        is_regression = delta_pct < -self.threshold
+
+        return {
+            "status": "regression" if is_regression else "ok",
+            "metric": metric_name,
+            "baseline": baseline_value,
+            "current": current_value,
+            "delta": delta,
+            "delta_pct": delta_pct,
+            "threshold": self.threshold,
+            "message": (
+                f"REGRESSION: {metric_name} dropped {abs(delta_pct):.1%}"
+                if is_regression
+                else f"OK: {metric_name} within threshold"
+            ),
         }
 
-        if regression["accuracy_delta"] < -0.02:  # 2% accuracy drop
-            raise RegressionError(f"Accuracy regression: {regression}")
+    def update_baseline(
+        self,
+        metrics: dict,
+        require_improvement: bool = True,
+    ) -> bool:
+        """
+        Update baseline if metrics improved.
 
-        return regression
+        Returns:
+            True if baseline was updated
+        """
+        if not self.baseline or not require_improvement:
+            self._save_baseline(metrics)
+            return True
+
+        # Only update if all metrics improved or stayed same
+        for key, value in metrics.items():
+            if key in self.baseline and value < self.baseline[key]:
+                return False
+
+        self._save_baseline(metrics)
+        return True
+
+# CI/CD integration
+def ci_regression_check():
+    """Run in CI/CD pipeline."""
+    detector = RegressionDetector("baseline_metrics.json")
+
+    # Run evaluation suite
+    current_metrics = run_evaluation_suite()
+
+    # Check for regressions
+    checks = [
+        detector.check_regression(current_metrics, "accuracy"),
+        detector.check_regression(current_metrics, "latency_p95"),
+        detector.check_regression(current_metrics, "cost_per_request"),
+    ]
+
+    regressions = [c for c in checks if c["status"] == "regression"]
+
+    if regressions:
+        print("❌ REGRESSION DETECTED:")
+        for r in regressions:
+            print(f"  - {r['message']}")
+        exit(1)
+
+    print("✅ No regressions detected")
+
+    # Optionally update baseline
+    if current_metrics["accuracy"] > detector.baseline.get("accuracy", 0):
+        detector.update_baseline(current_metrics)
+        print("📈 Baseline updated with improved metrics")
 ```
 
-<Callout type="warning">
-  **The Cost of Skipping Production Evals**: Teams that skip continuous
-  evaluation often discover regressions from user complaints—days or weeks after
-  deployment. By then, the damage to user trust is done. Invest in automated
-  monitoring early.
+### Production Monitoring Dashboard
+
+```python
+from prometheus_client import Counter, Histogram, Gauge
+import time
+
+# Prometheus metrics
+AGENT_REQUESTS = Counter(
+    "agent_requests_total",
+    "Total agent requests",
+    ["agent_version", "status"]
+)
+
+AGENT_LATENCY = Histogram(
+    "agent_latency_seconds",
+    "Agent response latency",
+    ["agent_version"],
+    buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0]
+)
+
+AGENT_ACCURACY = Gauge(
+    "agent_accuracy_rolling",
+    "Rolling accuracy (last 1000 requests)",
+    ["agent_version"]
+)
+
+AGENT_COST = Counter(
+    "agent_cost_usd_total",
+    "Total cost in USD",
+    ["agent_version", "model"]
+)
+
+class ProductionMonitor:
+    """Monitor agent performance in production."""
+
+    def __init__(self, agent_version: str, window_size: int = 1000):
+        self.version = agent_version
+        self.window_size = window_size
+        self.recent_results = []
+
+    def record_request(
+        self,
+        success: bool,
+        latency_seconds: float,
+        cost_usd: float,
+        model: str,
+    ):
+        """Record a single request."""
+        status = "success" if success else "failure"
+
+        # Update Prometheus metrics
+        AGENT_REQUESTS.labels(
+            agent_version=self.version,
+            status=status
+        ).inc()
+
+        AGENT_LATENCY.labels(
+            agent_version=self.version
+        ).observe(latency_seconds)
+
+        AGENT_COST.labels(
+            agent_version=self.version,
+            model=model
+        ).inc(cost_usd)
+
+        # Update rolling accuracy
+        self.recent_results.append(success)
+        if len(self.recent_results) > self.window_size:
+            self.recent_results.pop(0)
+
+        accuracy = sum(self.recent_results) / len(self.recent_results)
+        AGENT_ACCURACY.labels(
+            agent_version=self.version
+        ).set(accuracy)
+
+    def get_current_metrics(self) -> dict:
+        """Get current performance metrics."""
+        if not self.recent_results:
+            return {}
+
+        return {
+            "accuracy": sum(self.recent_results) / len(self.recent_results),
+            "sample_size": len(self.recent_results),
+        }
+```
+
+### Alerting Rules
+
+```yaml
+# prometheus-alerts.yml
+groups:
+  - name: agent_alerts
+    rules:
+      # Accuracy drop
+      - alert: AgentAccuracyDrop
+        expr: |
+          agent_accuracy_rolling < 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent accuracy below 80%"
+          description: "Rolling accuracy is {{ $value | humanizePercentage }}"
+
+      # Latency spike
+      - alert: AgentHighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            rate(agent_latency_seconds_bucket[5m])
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent p95 latency above 10s"
+
+      # Cost spike
+      - alert: AgentCostSpike
+        expr: |
+          increase(agent_cost_usd_total[1h]) > 100
+        labels:
+          severity: critical
+        annotations:
+          summary: "Agent cost increased by $100+ in the last hour"
+
+      # Error rate
+      - alert: AgentHighErrorRate
+        expr: |
+          sum(rate(agent_requests_total{status="failure"}[5m])) 
+          / sum(rate(agent_requests_total[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Agent error rate above 10%"
+```
+
+---
+
+## 69.7 LLM-as-a-Judge Evaluation
+
+For subjective qualities like helpfulness and coherence, use a powerful LLM to evaluate outputs.
+
+```python
+from openai import OpenAI
+from typing import Optional
+import json
+
+class LLMJudge:
+    """Use GPT-4 to evaluate agent outputs."""
+
+    def __init__(self, model: str = "gpt-4o"):
+        self.client = OpenAI()
+        self.model = model
+
+    async def evaluate(
+        self,
+        query: str,
+        response: str,
+        reference: Optional[str] = None,
+        criteria: list[str] = None,
+    ) -> dict:
+        """
+        Evaluate a response using LLM-as-judge.
+
+        Args:
+            query: The original user query
+            response: The agent's response to evaluate
+            reference: Optional reference/expected answer
+            criteria: Evaluation criteria (default: helpfulness, accuracy, coherence)
+
+        Returns:
+            dict with scores and reasoning
+        """
+        criteria = criteria or ["helpfulness", "accuracy", "coherence"]
+
+        criteria_text = "\n".join([
+            f"- {c}: Score 1-5" for c in criteria
+        ])
+
+        reference_text = (
+            f"\n\nReference Answer:\n{reference}"
+            if reference else ""
+        )
+
+        prompt = f"""You are an expert evaluator. Evaluate the following response.
+
+User Query:
+{query}
+
+Agent Response:
+{response}{reference_text}
+
+Evaluate on these criteria:
+{criteria_text}
+
+Provide your evaluation as JSON:
+{{
+    "scores": {{
+        "criterion_name": score (1-5),
+        ...
+    }},
+    "reasoning": "Brief explanation of scores",
+    "overall_score": average_score (1-5)
+}}"""
+
+        result = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+
+        return json.loads(result.choices[0].message.content)
+
+    async def pairwise_comparison(
+        self,
+        query: str,
+        response_a: str,
+        response_b: str,
+    ) -> dict:
+        """
+        Compare two responses head-to-head.
+
+        Returns:
+            dict with winner and reasoning
+        """
+        prompt = f"""Compare these two responses to the same query.
+
+Query: {query}
+
+Response A:
+{response_a}
+
+Response B:
+{response_b}
+
+Which response is better? Consider:
+- Accuracy and correctness
+- Helpfulness and completeness
+- Clarity and coherence
+
+Respond with JSON:
+{{
+    "winner": "A" or "B" or "tie",
+    "reasoning": "Brief explanation",
+    "confidence": "high" or "medium" or "low"
+}}"""
+
+        result = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+
+        return json.loads(result.choices[0].message.content)
+
+# Usage
+judge = LLMJudge()
+
+# Single evaluation
+eval_result = await judge.evaluate(
+    query="What is the capital of France?",
+    response="The capital of France is Paris, a city known for the Eiffel Tower.",
+    reference="Paris",
+)
+print(f"Overall Score: {eval_result['overall_score']}/5")
+
+# Pairwise comparison for A/B testing
+comparison = await judge.pairwise_comparison(
+    query="Explain quantum computing",
+    response_a="Quantum computing uses qubits...",
+    response_b="Quantum computers leverage quantum mechanics...",
+)
+print(f"Winner: Response {comparison['winner']}")
+```
+
+---
+
+## 69.8 Exercise: Build a Custom Evaluation Harness
+
+**Objective**: Create a complete evaluation system for a customer support agent.
+
+### Step 1: Define Your Dataset
+
+```python
+# evaluation_dataset.py
+SUPPORT_DATASET = [
+    {
+        "id": "001",
+        "category": "password_reset",
+        "query": "I forgot my password and can't log in",
+        "expected_intent": "password_reset",
+        "expected_contains": ["reset", "email", "link"],
+        "difficulty": "easy",
+    },
+    {
+        "id": "002",
+        "category": "billing",
+        "query": "Why was I charged twice this month?",
+        "expected_intent": "billing_inquiry",
+        "expected_contains": ["review", "refund", "transaction"],
+        "difficulty": "medium",
+    },
+    {
+        "id": "003",
+        "category": "technical",
+        "query": "The app crashes when I try to upload files larger than 10MB",
+        "expected_intent": "bug_report",
+        "expected_contains": ["file size", "limit", "workaround"],
+        "difficulty": "hard",
+    },
+    # Add 47 more examples for statistical significance...
+]
+```
+
+### Step 2: Implement Evaluators
+
+```python
+# evaluators.py
+from typing import Callable
+import re
+
+def intent_accuracy(actual: dict, expected: dict, input: dict) -> float:
+    """Check if agent identified correct intent."""
+    actual_intent = actual.get("intent", "").lower()
+    expected_intent = expected.get("expected_intent", "").lower()
+    return 1.0 if actual_intent == expected_intent else 0.0
+
+def keyword_coverage(actual: dict, expected: dict, input: dict) -> float:
+    """Check if response contains expected keywords."""
+    response = actual.get("response", "").lower()
+    keywords = expected.get("expected_contains", [])
+
+    if not keywords:
+        return 1.0
+
+    found = sum(1 for kw in keywords if kw.lower() in response)
+    return found / len(keywords)
+
+def response_quality(actual: dict, expected: dict, input: dict) -> float:
+    """Check response quality heuristics."""
+    response = actual.get("response", "")
+
+    score = 1.0
+
+    # Penalize very short responses
+    if len(response) < 50:
+        score -= 0.3
+
+    # Penalize very long responses
+    if len(response) > 1000:
+        score -= 0.2
+
+    # Penalize responses without actionable steps
+    if not any(word in response.lower() for word in ["click", "go to", "select", "try"]):
+        score -= 0.2
+
+    return max(0.0, score)
+
+def create_composite_evaluator(
+    evaluators: list[tuple[str, Callable, float]]
+) -> Callable:
+    """Create weighted composite evaluator."""
+
+    async def composite(actual, expected, input) -> float:
+        total_weight = sum(w for _, _, w in evaluators)
+        weighted_sum = 0.0
+
+        for name, evaluator, weight in evaluators:
+            score = evaluator(actual, expected, input)
+            weighted_sum += score * weight
+
+        return weighted_sum / total_weight
+
+    return composite
+
+# Create composite evaluator
+support_evaluator = create_composite_evaluator([
+    ("intent", intent_accuracy, 0.4),
+    ("keywords", keyword_coverage, 0.3),
+    ("quality", response_quality, 0.3),
+])
+```
+
+### Step 3: Run Evaluation
+
+```python
+# run_evaluation.py
+import asyncio
+from evaluation_harness import EvaluationHarness
+from evaluators import support_evaluator
+from my_agent import support_agent
+
+async def main():
+    # Initialize harness
+    harness = EvaluationHarness(
+        agent=support_agent,
+        evaluator=support_evaluator,
+        name="support-agent-v1",
+    )
+
+    # Run evaluation
+    summary = await harness.run(
+        dataset=SUPPORT_DATASET,
+        parallel=5,
+    )
+
+    # Print results
+    print(f"\n{'='*50}")
+    print(f"Evaluation Summary: {harness.name}")
+    print(f"{'='*50}")
+    print(f"Total Examples: {summary.total}")
+    print(f"Passed: {summary.passed} ({summary.accuracy:.1%})")
+    print(f"Failed: {summary.failed}")
+    print(f"Avg Latency: {summary.avg_latency_ms:.0f}ms")
+    print(f"P95 Latency: {summary.p95_latency_ms:.0f}ms")
+    print(f"Total Cost: ${summary.total_cost_usd:.4f}")
+
+    # Save detailed results
+    harness.save_results("evaluation_results.json")
+
+    # Analyze failures
+    failures = [r for r in harness.results if r.score < 0.5]
+    if failures:
+        print(f"\n{'='*50}")
+        print(f"Failed Examples ({len(failures)}):")
+        print(f"{'='*50}")
+        for f in failures[:5]:  # Show first 5
+            print(f"\nInput: {f.input}")
+            print(f"Expected: {f.expected}")
+            print(f"Actual: {f.actual}")
+            print(f"Score: {f.score:.2f}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Step 4: Integrate with CI/CD
+
+```yaml
+# .github/workflows/agent-eval.yml
+name: Agent Evaluation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run evaluation
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python run_evaluation.py
+
+      - name: Check regression
+        run: |
+          python -c "
+          import json
+          with open('evaluation_results.json') as f:
+              results = json.load(f)
+
+          accuracy = sum(r['score'] for r in results) / len(results)
+
+          if accuracy < 0.85:
+              print(f'❌ Accuracy {accuracy:.1%} below threshold 85%')
+              exit(1)
+
+          print(f'✅ Accuracy {accuracy:.1%} meets threshold')
+          "
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-results
+          path: evaluation_results.json
+```
+
+---
+
+## 69.9 Modern Eval Frameworks
+
+Beyond building your own, several production-ready frameworks have emerged:
+
+| Framework                                     | Best For          | Key Features                                     |
+| :-------------------------------------------- | :---------------- | :----------------------------------------------- |
+| **[Braintrust](https://braintrust.dev)**      | Enterprise        | Dataset management, CI/CD, production monitoring |
+| **[LangSmith](https://smith.langchain.com)**  | LangChain users   | Native integration, prompt versioning, hub       |
+| **[Promptfoo](https://promptfoo.dev)**        | Local/CLI testing | Fast iteration, red-teaming, model comparison    |
+| **[Langfuse](https://langfuse.com)**          | Self-hosted       | Open-source, cost tracking, prompt management    |
+| **[Inspect AI](https://inspect.aisi.org.uk)** | Safety research   | 100+ pre-built evals, reproducible benchmarks    |
+| **[Ragas](https://ragas.io)**                 | RAG systems       | Faithfulness, relevancy, context precision       |
+
+<Callout type="tip">
+  **Framework Selection Guide:** - **Starting out?** Use Promptfoo for fast
+  local iteration - **LangChain user?** LangSmith integrates seamlessly -
+  **Enterprise needs?** Braintrust offers comprehensive lifecycle management -
+  **RAG system?** Ragas provides specialized retrieval metrics -
+  **Safety-critical?** Inspect AI for reproducible safety evaluations - **Data
+  sovereignty?** Langfuse is fully self-hostable
 </Callout>
 
 ---
 
+## 📚 Key Takeaways
+
 <ModuleSummary
   points={[
     "Vibe checks are dangerous—always use datasets with 50+ examples minimum",
-    "SWE-bench Verified is the gold standard; top agents achieve 77%+ in 2025",
-    "New benchmarks: ARC-AGI-2 (reasoning), τ-bench (tool use), WebArena (web agents), OSWorld (desktop)",
+    "SWE-bench Verified is the gold standard for coding agents; top agents achieve 77%+ in 2025",
+    "Different benchmarks test different capabilities: task completion, reasoning, tool use, safety",
     "Pass@k metrics account for agent non-determinism—optimize for Pass@1 in production",
-    "Evaluate trajectories, not just outputs: tool accuracy, reasoning paths, cost-per-success",
-    "Production patterns: shadow mode, A/B testing, evaluation-gated deployments",
-    "Modern frameworks: Inspect AI (safety), Promptfoo (speed), Braintrust (enterprise), Langfuse (self-hosted)",
+    "Build custom evaluation pipelines with LangSmith, Braintrust, or your own framework",
+    "A/B testing requires statistical rigor: deterministic assignment, sufficient sample size",
+    "Continuous evaluation catches regressions before users notice",
+    "LLM-as-a-Judge enables evaluation of subjective qualities like helpfulness",
   ]}
 />
+
+---
+
+## 🔗 Further Reading
+
+- [SWE-bench Paper](https://arxiv.org/abs/2310.06770)
+- [SWE-bench Leaderboard](https://www.swebench.com/)
+- [τ-bench Paper (ICLR 2025)](https://openreview.net/forum?id=roNSXZpUDN)
+- [WebArena Benchmark](https://webarena.dev/)
+- [GAIA Benchmark](https://huggingface.co/datasets/gaia-benchmark/GAIA)
+- [AgentBench](https://github.com/THUDM/AgentBench)
+- [Inspect AI Documentation](https://inspect.aisi.org.uk/)
+- [LangSmith Documentation](https://docs.smith.langchain.com/)
+- [Braintrust Documentation](https://www.braintrust.dev/docs)
 
 ---
 
@@ -589,15 +1823,10 @@ class PromptRegistry:
 
 ### Recommended Exercises
 
-- **EX-01**: First LLM Call (15 min) - Add basic metrics tracking
-- **EX-06**: ReAct Loop (30 min) - Measure iteration counts and success rates
-- **NEW**: Set up Promptfoo locally and run a simple eval suite
-- **NEW**: Implement trajectory evaluation for a multi-step agent
-
-### Related POCs
-
-- **POC-01**: LangGraph State Machine (1-2 hours) - Add evaluation checkpoints
-- **POC-06**: Request Classification (1-2 hours) - Measure classification accuracy
+1. **Beginner**: Set up Promptfoo locally and run a simple eval suite on 10 examples
+2. **Intermediate**: Implement Pass@k evaluation for a code generation agent
+3. **Advanced**: Build a complete A/B testing framework with statistical significance testing
+4. **Expert**: Create a continuous evaluation pipeline with regression detection and alerting
 
 ### Capstone Connection
 
@@ -609,4 +1838,4 @@ In the capstone, you'll implement:
 - A/B testing for orchestration strategies
 - Shadow mode evaluation for safe rollouts
 
-See the [Project Hierarchy](/modules/day-00-project-hierarchy) for the complete learning path.
+See the [Project Hierarchy](/modules/day-23-project-hierarchy) for the complete learning path.

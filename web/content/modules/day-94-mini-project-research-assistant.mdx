@@ -1,0 +1,3626 @@
+---
+title: "Mini Project: Personal Research Assistant"
+description: "Build a personal research assistant that monitors topics you care about, scrapes relevant sources, synthesizes findings, and delivers daily briefings via email or Slack."
+week: 14
+day: 94
+---
+
+<ReadingTime minutes={75} />
+
+<SkillLevel
+  level="intermediate"
+  description="RAG, web scraping, and automated briefings"
+/>
+
+<Prerequisites
+  items={[
+    "Solid Python programming skills with async/await patterns",
+    "Understanding of RAG concepts (Day 17-18)",
+    "Familiarity with web scraping basics",
+    "Experience with FastAPI or similar web frameworks",
+    "Basic understanding of vector databases",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Configure and monitor multiple research topics with RSS and web scraping",
+    "Implement automatic source credibility scoring algorithms",
+    "Build RAG-based multi-document summarization pipelines",
+    "Track and verify citations across synthesized content",
+    "Generate professional daily and weekly briefings",
+    "Deliver briefings via email (SMTP) and Slack webhooks",
+    "Schedule automated research tasks with APScheduler",
+  ]}
+/>
+
+<Callout type="info">
+  **Project Context:** This intermediate project builds a personal research
+  analyst that works 24/7. Duration: 10-14 hours. Ideal for professionals who
+  need to stay informed on multiple topics without spending hours reading.
+</Callout>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Topic Monitoring",
+      definition:
+        "Automated tracking of specific subjects through RSS feeds, web scraping, and search queries to capture new information as it appears",
+    },
+    {
+      term: "Source Credibility Scoring",
+      definition:
+        "Algorithmic assessment of information source reliability based on domain authority, publication history, and cross-reference verification",
+    },
+    {
+      term: "Multi-Document Summarization",
+      definition:
+        "Synthesizing information from multiple sources into a coherent summary while preserving key facts and eliminating redundancy",
+    },
+    {
+      term: "Citation Tracking",
+      definition:
+        "Maintaining links between synthesized facts and their original sources for verification and attribution",
+    },
+    {
+      term: "Briefing Generation",
+      definition:
+        "Creating structured, executive-style summaries of research findings optimized for quick consumption",
+    },
+    {
+      term: "RAG Pipeline",
+      definition:
+        "Retrieval-Augmented Generation system that retrieves relevant documents before generating responses",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build a personal research assistant that monitors topics you care about, automatically scrapes and evaluates sources, synthesizes findings using RAG, and delivers polished daily or weekly briefings via email or Slack.
+
+**Why This Matters**: Information overload is real. Professionals spend hours daily reading news, research papers, and industry updates. A personal research assistant acts like having a dedicated analyst on staff—monitoring your interests 24/7, filtering noise, and delivering only what matters in a digestible format.
+
+<Mermaid
+  chart={`
+graph LR
+    Topics[📋 Topics] --> Monitor[🔍 Monitor]
+    Monitor --> RSS[RSS Feeds]
+    Monitor --> Scraper[Web Scraper]
+    
+    RSS --> Score[⭐ Credibility Score]
+    Scraper --> Score
+    
+    Score --> RAG[🧠 RAG Pipeline]
+    RAG --> Synth[📝 Synthesize]
+    
+    Synth --> Brief[📊 Briefing]
+    Brief --> Email[📧 Email]
+    Brief --> Slack[💬 Slack]
+    
+    style RAG fill:#f9f,stroke:#333
+    style Score fill:#fff9c4,stroke:#fbc02d
+    style Brief fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Research Assistant Pipeline: From topic monitoring to delivered briefings."
+/>
+
+**Real-World Analogy**: Think of your research assistant as a tireless analyst who reads hundreds of articles overnight, scores each source for reliability, identifies the most important developments, and leaves a concise briefing on your desk every morning. Unlike human analysts who get tired or miss things, your assistant works consistently 24/7 with perfect recall.
+
+**Skills Showcased**:
+
+- RSS feed parsing and web scraping with rate limiting
+- Source credibility scoring algorithms
+- RAG-based document synthesis with ChromaDB
+- Citation tracking and verification
+- Scheduled task execution with APScheduler
+- Multi-channel delivery (Email/Slack)
+
+## Module Summary
+
+In this project, we build a comprehensive personal research assistant:
+
+1. **Topic Configuration**: We define research topics with keywords, RSS feeds, and target websites, allowing flexible monitoring of any subject area.
+
+2. **Content Acquisition**: We implement RSS parsing and respectful web scraping with rate limiting, gathering fresh content from configured sources.
+
+3. **Credibility Scoring**: We score each source based on domain authority, publication patterns, and cross-reference verification to filter out unreliable information.
+
+4. **RAG-Based Synthesis**: We use ChromaDB for vector storage and LangChain for retrieval-augmented generation, synthesizing multiple documents into coherent summaries.
+
+5. **Briefing Generation**: We create professional, executive-style briefings with proper citations, key takeaways, and actionable insights.
+
+6. **Automated Delivery**: We schedule daily/weekly briefings and deliver them via email (SMTP) or Slack webhooks.
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Configure
+    Configure --> Monitor
+    
+    Monitor --> Fetch
+    Fetch --> Score
+    Score --> Store
+    
+    Store --> Check{Schedule?}
+    Check -->|Not Yet| Monitor
+    Check -->|Time| Synthesize
+    
+    Synthesize --> Generate
+    Generate --> Deliver
+    Deliver --> [*]
+`}
+  caption="Research Assistant Lifecycle: Continuous monitoring with scheduled briefings."
+/>
+
+## Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Personal Research Assistant"
+        API[FastAPI Server] --> TopicMgr[Topic Manager]
+        
+        subgraph "Content Acquisition"
+            RSSParser[RSS Parser]
+            WebScraper[Web Scraper]
+            RateLimiter[Rate Limiter]
+        end
+        
+        subgraph "Analysis Layer"
+            CredScorer[Credibility Scorer]
+            Deduplicator[Deduplicator]
+            Embedder[Text Embedder]
+        end
+        
+        subgraph "RAG Pipeline"
+            ChromaDB[(ChromaDB)]
+            Retriever[Retriever]
+            Synthesizer[LLM Synthesizer]
+        end
+        
+        subgraph "Delivery Layer"
+            BriefGen[Briefing Generator]
+            EmailSender[Email Sender]
+            SlackSender[Slack Sender]
+        end
+        
+        subgraph "Scheduling"
+            Scheduler[APScheduler]
+            TaskRunner[Task Runner]
+        end
+        
+        TopicMgr --> RSSParser
+        TopicMgr --> WebScraper
+        RSSParser --> RateLimiter
+        WebScraper --> RateLimiter
+        
+        RateLimiter --> CredScorer
+        CredScorer --> Deduplicator
+        Deduplicator --> Embedder
+        Embedder --> ChromaDB
+        
+        Scheduler --> TaskRunner
+        TaskRunner --> Retriever
+        Retriever --> ChromaDB
+        Retriever --> Synthesizer
+        Synthesizer --> BriefGen
+        
+        BriefGen --> EmailSender
+        BriefGen --> SlackSender
+    end
+    
+    style Synthesizer fill:#f9f,stroke:#333
+    style CredScorer fill:#fff9c4,stroke:#fbc02d
+    style ChromaDB fill:#e3f2fd,stroke:#0277bd
+`}
+  caption="System Architecture: End-to-end research assistant pipeline."
+/>
+
+---
+
+## Detailed Requirements Specification
+
+### Functional Requirements (FR)
+
+| ID    | Requirement           | Description                                                                               | Priority |
+| ----- | --------------------- | ----------------------------------------------------------------------------------------- | -------- |
+| FR-01 | Topic Configuration   | The system shall support configuring multiple research topics with keywords and sources   | P0       |
+| FR-02 | RSS Monitoring        | The system shall parse and monitor RSS feeds for new content                              | P0       |
+| FR-03 | Web Scraping          | The system shall scrape configured websites with respectful rate limiting                 | P0       |
+| FR-04 | Credibility Scoring   | The system shall score sources based on domain authority and reliability metrics          | P0       |
+| FR-05 | Content Deduplication | The system shall detect and filter duplicate or near-duplicate content                    | P1       |
+| FR-06 | Vector Storage        | The system shall store content embeddings in ChromaDB for retrieval                       | P0       |
+| FR-07 | RAG Synthesis         | The system shall synthesize multi-document summaries using retrieval-augmented generation | P0       |
+| FR-08 | Citation Tracking     | The system shall maintain source attribution for all synthesized facts                    | P0       |
+| FR-09 | Briefing Generation   | The system shall generate daily and weekly briefings in professional format               | P0       |
+| FR-10 | Email Delivery        | The system shall deliver briefings via SMTP email                                         | P1       |
+| FR-11 | Slack Delivery        | The system shall deliver briefings via Slack webhooks                                     | P1       |
+| FR-12 | Scheduled Execution   | The system shall run monitoring and briefing tasks on configurable schedules              | P0       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement          | Target                                                              | Measurement       |
+| ------ | -------------------- | ------------------------------------------------------------------- | ----------------- |
+| NFR-01 | Scraping Rate Limit  | Web scraping shall respect robots.txt and maintain 2+ second delays | Request timing    |
+| NFR-02 | Content Freshness    | New content shall be indexed within 1 hour of publication           | Timestamp delta   |
+| NFR-03 | Synthesis Quality    | Briefings shall be coherent with 100% citation coverage             | Manual review     |
+| NFR-04 | Delivery Reliability | Email/Slack delivery shall succeed 99%+ of attempts                 | Delivery logs     |
+| NFR-05 | Storage Efficiency   | System shall handle 10,000+ documents per topic                     | ChromaDB metrics  |
+| NFR-06 | Briefing Latency     | Daily briefing generation shall complete in < 2 minutes             | End-to-end timing |
+
+### API Contract
+
+#### POST /topics - Create Research Topic
+
+**Request Body:**
+
+```json
+{
+  "name": "string (required)",
+  "description": "string",
+  "keywords": ["string"],
+  "rss_feeds": ["string (URL)"],
+  "websites": ["string (URL)"],
+  "schedule": {
+    "frequency": "daily | weekly",
+    "time": "HH:MM",
+    "timezone": "string (default: UTC)"
+  },
+  "delivery": {
+    "email": "string | null",
+    "slack_webhook": "string | null"
+  }
+}
+```
+
+**Response (201 Created):**
+
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "status": "active",
+  "created_at": "ISO8601 datetime"
+}
+```
+
+#### GET /topics - List All Topics
+
+**Response (200 OK):**
+
+```json
+{
+  "topics": [
+    {
+      "id": "uuid",
+      "name": "string",
+      "status": "active | paused",
+      "documents_count": "integer",
+      "last_updated": "ISO8601 datetime"
+    }
+  ]
+}
+```
+
+#### POST /topics/{topic_id}/briefing - Generate Briefing On-Demand
+
+**Response (200 OK):**
+
+```json
+{
+  "briefing_id": "uuid",
+  "topic": "string",
+  "generated_at": "ISO8601 datetime",
+  "summary": "string (executive summary)",
+  "sections": [
+    {
+      "title": "string",
+      "content": "string",
+      "citations": [{ "id": "integer", "title": "string", "url": "string" }]
+    }
+  ],
+  "key_takeaways": ["string"],
+  "sources_analyzed": "integer"
+}
+```
+
+#### GET /briefings/{briefing_id} - Get Briefing Details
+
+**Response (200 OK):**
+
+```json
+{
+  "briefing_id": "uuid",
+  "topic": "string",
+  "generated_at": "ISO8601 datetime",
+  "content": "string (full briefing markdown)",
+  "citations": [...],
+  "delivery_status": {
+    "email": "sent | failed | not_configured",
+    "slack": "sent | failed | not_configured"
+  }
+}
+```
+
+### Data Models
+
+```
+Research Topic:
+┌─────────────────────────────────────────────────────────────┐
+│                     ResearchTopic                            │
+├─────────────────────────────────────────────────────────────┤
+│ id: UUID                                                    │
+│ name: STRING                                                │
+│ description: STRING                                         │
+│ keywords: List[STRING]                                      │
+│ rss_feeds: List[STRING]                                     │
+│ websites: List[STRING]                                      │
+│ schedule: ScheduleConfig                                    │
+│ delivery: DeliveryConfig                                    │
+│ status: 'active' | 'paused'                                │
+│ created_at: DATETIME                                        │
+└─────────────────────────────────────────────────────────────┘
+
+Source Document:
+┌─────────────────────────────────────────────────────────────┐
+│                    SourceDocument                            │
+├─────────────────────────────────────────────────────────────┤
+│ id: UUID                                                    │
+│ topic_id: UUID                                              │
+│ url: STRING                                                 │
+│ title: STRING                                               │
+│ content: STRING                                             │
+│ published_at: DATETIME                                      │
+│ fetched_at: DATETIME                                        │
+│ credibility_score: FLOAT (0.0 - 1.0)                       │
+│ source_type: 'rss' | 'scraped'                             │
+│ domain: STRING                                              │
+│ embedding_id: STRING                                        │
+└─────────────────────────────────────────────────────────────┘
+
+Credibility Score:
+┌─────────────────────────────────────────────────────────────┐
+│                   CredibilityScore                           │
+├─────────────────────────────────────────────────────────────┤
+│ domain_authority: FLOAT (0.0 - 1.0)                        │
+│ publication_frequency: FLOAT                                │
+│ cross_reference_score: FLOAT                                │
+│ content_quality: FLOAT                                      │
+│ overall_score: FLOAT (weighted average)                    │
+└─────────────────────────────────────────────────────────────┘
+
+Briefing:
+┌─────────────────────────────────────────────────────────────┐
+│                      Briefing                                │
+├─────────────────────────────────────────────────────────────┤
+│ id: UUID                                                    │
+│ topic_id: UUID                                              │
+│ generated_at: DATETIME                                      │
+│ period_start: DATETIME                                      │
+│ period_end: DATETIME                                        │
+│ executive_summary: STRING                                   │
+│ sections: List[BriefingSection]                            │
+│ key_takeaways: List[STRING]                                │
+│ citations: List[Citation]                                   │
+│ sources_analyzed: INTEGER                                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Error Handling Matrix
+
+| Error Code       | HTTP Status | Cause                                | Response Body                                  | Recovery Action    |
+| ---------------- | ----------- | ------------------------------------ | ---------------------------------------------- | ------------------ |
+| TOPIC_NOT_FOUND  | 404         | Topic ID doesn't exist               | `{"detail": "Topic not found"}`                | Check topic ID     |
+| INVALID_RSS_URL  | 400         | RSS feed URL is malformed or invalid | `{"detail": "Invalid RSS URL: ..."}`           | Fix URL format     |
+| SCRAPE_BLOCKED   | 200         | Website blocked scraping             | Logged, continues with other sources           | Remove from config |
+| RATE_LIMITED     | 429         | Too many requests to external source | `{"detail": "Rate limited", "retry_after": N}` | Wait and retry     |
+| EMBEDDING_FAILED | 500         | Failed to generate embeddings        | `{"detail": "Embedding service unavailable"}`  | Check OpenAI API   |
+| SYNTHESIS_FAILED | 500         | LLM failed to synthesize             | `{"detail": "Synthesis failed"}`               | Retry with backoff |
+| EMAIL_FAILED     | 200         | SMTP delivery failed                 | Logged in delivery_status                      | Check SMTP config  |
+| SLACK_FAILED     | 200         | Slack webhook failed                 | Logged in delivery_status                      | Check webhook URL  |
+
+---
+
+## Core Implementation
+
+### Step 1: Project Setup and Configuration
+
+First, let's establish the project structure with proper configuration management.
+
+```python
+# config.py
+from pydantic_settings import BaseSettings
+from pydantic import Field
+from typing import Optional
+from functools import lru_cache
+
+class Settings(BaseSettings):
+    """Application configuration with environment variable support."""
+
+    # OpenAI Configuration
+    openai_api_key: str = Field(..., description="OpenAI API key for embeddings and synthesis")
+    openai_model: str = Field(default="gpt-4o-mini", description="Model for synthesis (cost-efficient)")
+    embedding_model: str = Field(default="text-embedding-3-small", description="Embedding model")
+
+    # ChromaDB Configuration
+    chroma_persist_dir: str = Field(default="./chroma_data", description="ChromaDB persistence directory")
+    chroma_collection_prefix: str = Field(default="research_", description="Collection name prefix")
+
+    # Scraping Configuration
+    scrape_delay_seconds: float = Field(default=2.0, description="Delay between scrape requests")
+    scrape_timeout_seconds: float = Field(default=30.0, description="Request timeout")
+    max_content_length: int = Field(default=50000, description="Max characters per document")
+    user_agent: str = Field(
+        default="ResearchAssistant/1.0 (Educational Project)",
+        description="User agent for requests"
+    )
+
+    # Email Configuration (SMTP)
+    smtp_host: Optional[str] = Field(default=None, description="SMTP server host")
+    smtp_port: int = Field(default=587, description="SMTP server port")
+    smtp_username: Optional[str] = Field(default=None, description="SMTP username")
+    smtp_password: Optional[str] = Field(default=None, description="SMTP password")
+    smtp_from_email: Optional[str] = Field(default=None, description="From email address")
+
+    # Slack Configuration
+    slack_webhook_url: Optional[str] = Field(default=None, description="Default Slack webhook URL")
+
+    # Scheduling
+    default_briefing_time: str = Field(default="08:00", description="Default briefing time (HH:MM)")
+    timezone: str = Field(default="UTC", description="Default timezone")
+
+    # RAG Configuration
+    retrieval_top_k: int = Field(default=10, description="Number of documents to retrieve")
+    synthesis_max_tokens: int = Field(default=2000, description="Max tokens for synthesis")
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    return Settings()
+```
+
+```python
+# models.py
+from pydantic import BaseModel, Field, HttpUrl
+from typing import Optional, List
+from enum import Enum
+from datetime import datetime
+import uuid
+
+class TopicStatus(str, Enum):
+    """Status of a research topic."""
+    ACTIVE = "active"
+    PAUSED = "paused"
+
+class SourceType(str, Enum):
+    """Type of content source."""
+    RSS = "rss"
+    SCRAPED = "scraped"
+
+class BriefingFrequency(str, Enum):
+    """Frequency of briefing generation."""
+    DAILY = "daily"
+    WEEKLY = "weekly"
+
+class ScheduleConfig(BaseModel):
+    """Configuration for briefing schedule."""
+    frequency: BriefingFrequency = BriefingFrequency.DAILY
+    time: str = "08:00"  # HH:MM format
+    timezone: str = "UTC"
+
+class DeliveryConfig(BaseModel):
+    """Configuration for briefing delivery."""
+    email: Optional[str] = None
+    slack_webhook: Optional[str] = None
+
+class ResearchTopic(BaseModel):
+    """A configured research topic to monitor."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: str = ""
+    keywords: List[str] = Field(default_factory=list)
+    rss_feeds: List[str] = Field(default_factory=list)
+    websites: List[str] = Field(default_factory=list)
+    schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
+    delivery: DeliveryConfig = Field(default_factory=DeliveryConfig)
+    status: TopicStatus = TopicStatus.ACTIVE
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class CredibilityScore(BaseModel):
+    """Credibility assessment for a source."""
+    domain_authority: float = Field(ge=0.0, le=1.0, default=0.5)
+    publication_frequency: float = Field(ge=0.0, le=1.0, default=0.5)
+    cross_reference_score: float = Field(ge=0.0, le=1.0, default=0.5)
+    content_quality: float = Field(ge=0.0, le=1.0, default=0.5)
+
+    @property
+    def overall_score(self) -> float:
+        """Calculate weighted overall credibility score."""
+        weights = {
+            "domain_authority": 0.35,
+            "publication_frequency": 0.15,
+            "cross_reference_score": 0.25,
+            "content_quality": 0.25
+        }
+        return (
+            self.domain_authority * weights["domain_authority"] +
+            self.publication_frequency * weights["publication_frequency"] +
+            self.cross_reference_score * weights["cross_reference_score"] +
+            self.content_quality * weights["content_quality"]
+        )
+
+class SourceDocument(BaseModel):
+    """A document fetched from a source."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    topic_id: str
+    url: str
+    title: str
+    content: str
+    published_at: Optional[datetime] = None
+    fetched_at: datetime = Field(default_factory=datetime.utcnow)
+    credibility: CredibilityScore = Field(default_factory=CredibilityScore)
+    source_type: SourceType
+    domain: str
+    embedding_id: Optional[str] = None
+
+class Citation(BaseModel):
+    """A citation reference in a briefing."""
+    id: int
+    title: str
+    url: str
+    domain: str
+    credibility_score: float
+
+class BriefingSection(BaseModel):
+    """A section within a briefing."""
+    title: str
+    content: str
+    citation_ids: List[int] = Field(default_factory=list)
+
+class Briefing(BaseModel):
+    """A generated research briefing."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    topic_id: str
+    topic_name: str
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    period_start: datetime
+    period_end: datetime
+    executive_summary: str
+    sections: List[BriefingSection] = Field(default_factory=list)
+    key_takeaways: List[str] = Field(default_factory=list)
+    citations: List[Citation] = Field(default_factory=list)
+    sources_analyzed: int = 0
+
+class DeliveryStatus(BaseModel):
+    """Status of briefing delivery."""
+    email: str = "not_configured"  # sent | failed | not_configured
+    slack: str = "not_configured"
+    email_error: Optional[str] = None
+    slack_error: Optional[str] = None
+```
+
+### Step 2: Content Acquisition - RSS Parser and Web Scraper
+
+We implement respectful content acquisition with rate limiting and robots.txt compliance.
+
+<Mermaid
+  chart={`
+graph TD
+    Source[Source URL] --> Check{Type?}
+    
+    Check -->|RSS| RSSParser[RSS Parser]
+    Check -->|Web| Robots[Check robots.txt]
+    
+    Robots -->|Allowed| Scraper[Web Scraper]
+    Robots -->|Blocked| Skip[Skip Source]
+    
+    RSSParser --> RateLimit[Rate Limiter]
+    Scraper --> RateLimit
+    
+    RateLimit --> Extract[Content Extractor]
+    Extract --> Clean[Text Cleaner]
+    Clean --> Document[Source Document]
+    
+    style RateLimit fill:#ffcdd2,stroke:#c62828
+    style Document fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Content Acquisition: Respectful scraping with rate limiting."
+/>
+
+```python
+# acquisition/rss_parser.py
+import feedparser
+import httpx
+from typing import List, Optional
+from datetime import datetime
+from urllib.parse import urlparse
+import logging
+
+from models import SourceDocument, SourceType
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+class RSSParser:
+    """Parse RSS feeds to extract articles."""
+
+    def __init__(self):
+        self.settings = get_settings()
+
+    async def parse_feed(self, feed_url: str, topic_id: str) -> List[SourceDocument]:
+        """
+        Parse an RSS feed and return source documents.
+
+        Args:
+            feed_url: URL of the RSS feed
+            topic_id: ID of the research topic
+
+        Returns:
+            List of SourceDocument objects
+        """
+        documents = []
+
+        try:
+            async with httpx.AsyncClient(timeout=self.settings.scrape_timeout_seconds) as client:
+                response = await client.get(
+                    feed_url,
+                    headers={"User-Agent": self.settings.user_agent}
+                )
+                response.raise_for_status()
+
+            feed = feedparser.parse(response.text)
+
+            for entry in feed.entries:
+                doc = self._entry_to_document(entry, feed_url, topic_id)
+                if doc:
+                    documents.append(doc)
+
+            logger.info(f"Parsed {len(documents)} entries from {feed_url}")
+
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error fetching RSS feed {feed_url}: {e}")
+        except Exception as e:
+            logger.error(f"Error parsing RSS feed {feed_url}: {e}")
+
+        return documents
+
+    def _entry_to_document(
+        self,
+        entry: feedparser.FeedParserDict,
+        feed_url: str,
+        topic_id: str
+    ) -> Optional[SourceDocument]:
+        """Convert a feed entry to a SourceDocument."""
+        try:
+            # Extract URL
+            url = entry.get("link", "")
+            if not url:
+                return None
+
+            # Extract title
+            title = entry.get("title", "Untitled")
+
+            # Extract content (prefer full content, fall back to summary)
+            content = ""
+            if "content" in entry and entry.content:
+                content = entry.content[0].get("value", "")
+            elif "summary" in entry:
+                content = entry.summary
+
+            # Clean HTML from content
+            content = self._clean_html(content)
+
+            if not content:
+                return None
+
+            # Extract publication date
+            published_at = None
+            if "published_parsed" in entry and entry.published_parsed:
+                published_at = datetime(*entry.published_parsed[:6])
+            elif "updated_parsed" in entry and entry.updated_parsed:
+                published_at = datetime(*entry.updated_parsed[:6])
+
+            # Extract domain
+            domain = urlparse(url).netloc
+
+            return SourceDocument(
+                topic_id=topic_id,
+                url=url,
+                title=title,
+                content=content[:self.settings.max_content_length],
+                published_at=published_at,
+                source_type=SourceType.RSS,
+                domain=domain
+            )
+
+        except Exception as e:
+            logger.warning(f"Error converting feed entry: {e}")
+            return None
+
+    def _clean_html(self, html_content: str) -> str:
+        """Remove HTML tags and clean text."""
+        from bs4 import BeautifulSoup
+
+        if not html_content:
+            return ""
+
+        soup = BeautifulSoup(html_content, "html.parser")
+
+        # Remove script and style elements
+        for element in soup(["script", "style", "nav", "footer", "header"]):
+            element.decompose()
+
+        # Get text and clean whitespace
+        text = soup.get_text(separator=" ")
+        lines = (line.strip() for line in text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        text = " ".join(chunk for chunk in chunks if chunk)
+
+        return text
+```
+
+```python
+# acquisition/web_scraper.py
+import httpx
+from bs4 import BeautifulSoup
+from typing import Optional, List
+from urllib.parse import urlparse, urljoin
+from urllib.robotparser import RobotFileParser
+import asyncio
+import logging
+from datetime import datetime
+
+from models import SourceDocument, SourceType
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+class RateLimiter:
+    """Simple rate limiter for respectful scraping."""
+
+    def __init__(self, delay_seconds: float = 2.0):
+        self.delay_seconds = delay_seconds
+        self._last_request: dict[str, float] = {}
+        self._lock = asyncio.Lock()
+
+    async def wait(self, domain: str) -> None:
+        """Wait if necessary to respect rate limits for a domain."""
+        async with self._lock:
+            now = asyncio.get_event_loop().time()
+            last = self._last_request.get(domain, 0)
+            wait_time = self.delay_seconds - (now - last)
+
+            if wait_time > 0:
+                await asyncio.sleep(wait_time)
+
+            self._last_request[domain] = asyncio.get_event_loop().time()
+
+class WebScraper:
+    """Respectful web scraper with robots.txt compliance."""
+
+    def __init__(self):
+        self.settings = get_settings()
+        self.rate_limiter = RateLimiter(self.settings.scrape_delay_seconds)
+        self._robots_cache: dict[str, RobotFileParser] = {}
+
+    async def scrape_url(self, url: str, topic_id: str) -> Optional[SourceDocument]:
+        """
+        Scrape a single URL and return a source document.
+
+        Args:
+            url: URL to scrape
+            topic_id: ID of the research topic
+
+        Returns:
+            SourceDocument if successful, None otherwise
+        """
+        domain = urlparse(url).netloc
+
+        # Check robots.txt
+        if not await self._can_fetch(url):
+            logger.info(f"Robots.txt disallows scraping: {url}")
+            return None
+
+        # Respect rate limits
+        await self.rate_limiter.wait(domain)
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.settings.scrape_timeout_seconds,
+                follow_redirects=True
+            ) as client:
+                response = await client.get(
+                    url,
+                    headers={
+                        "User-Agent": self.settings.user_agent,
+                        "Accept": "text/html,application/xhtml+xml",
+                        "Accept-Language": "en-US,en;q=0.9"
+                    }
+                )
+                response.raise_for_status()
+
+            # Parse HTML
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # Extract title
+            title = self._extract_title(soup)
+
+            # Extract main content
+            content = self._extract_content(soup)
+
+            if not content or len(content) < 100:
+                logger.warning(f"Insufficient content from {url}")
+                return None
+
+            # Try to extract publication date
+            published_at = self._extract_date(soup)
+
+            return SourceDocument(
+                topic_id=topic_id,
+                url=url,
+                title=title,
+                content=content[:self.settings.max_content_length],
+                published_at=published_at,
+                source_type=SourceType.SCRAPED,
+                domain=domain
+            )
+
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error scraping {url}: {e}")
+        except Exception as e:
+            logger.error(f"Error scraping {url}: {e}")
+
+        return None
+
+    async def _can_fetch(self, url: str) -> bool:
+        """Check if robots.txt allows fetching this URL."""
+        parsed = urlparse(url)
+        robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+
+        if robots_url not in self._robots_cache:
+            rp = RobotFileParser()
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    response = await client.get(robots_url)
+                    if response.status_code == 200:
+                        rp.parse(response.text.splitlines())
+                    else:
+                        # No robots.txt, assume allowed
+                        return True
+            except Exception:
+                # Can't fetch robots.txt, assume allowed
+                return True
+
+            self._robots_cache[robots_url] = rp
+
+        return self._robots_cache[robots_url].can_fetch(self.settings.user_agent, url)
+
+    def _extract_title(self, soup: BeautifulSoup) -> str:
+        """Extract page title."""
+        # Try og:title first
+        og_title = soup.find("meta", property="og:title")
+        if og_title and og_title.get("content"):
+            return og_title["content"]
+
+        # Try <title> tag
+        if soup.title and soup.title.string:
+            return soup.title.string.strip()
+
+        # Try h1
+        h1 = soup.find("h1")
+        if h1:
+            return h1.get_text(strip=True)
+
+        return "Untitled"
+
+    def _extract_content(self, soup: BeautifulSoup) -> str:
+        """Extract main content from page."""
+        # Remove unwanted elements
+        for element in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
+            element.decompose()
+
+        # Try to find main content area
+        main_content = None
+
+        # Look for article tag
+        article = soup.find("article")
+        if article:
+            main_content = article
+
+        # Look for main tag
+        if not main_content:
+            main = soup.find("main")
+            if main:
+                main_content = main
+
+        # Look for common content class names
+        if not main_content:
+            for class_name in ["content", "post-content", "article-content", "entry-content"]:
+                content_div = soup.find(class_=class_name)
+                if content_div:
+                    main_content = content_div
+                    break
+
+        # Fall back to body
+        if not main_content:
+            main_content = soup.body if soup.body else soup
+
+        # Extract text
+        text = main_content.get_text(separator=" ")
+
+        # Clean whitespace
+        lines = (line.strip() for line in text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        text = " ".join(chunk for chunk in chunks if chunk)
+
+        return text
+
+    def _extract_date(self, soup: BeautifulSoup) -> Optional[datetime]:
+        """Try to extract publication date from page."""
+        from dateutil import parser as date_parser
+
+        # Try meta tags
+        date_metas = [
+            ("meta", {"property": "article:published_time"}),
+            ("meta", {"name": "publication_date"}),
+            ("meta", {"name": "date"}),
+            ("time", {"datetime": True}),
+        ]
+
+        for tag, attrs in date_metas:
+            element = soup.find(tag, attrs)
+            if element:
+                date_str = element.get("content") or element.get("datetime")
+                if date_str:
+                    try:
+                        return date_parser.parse(date_str)
+                    except Exception:
+                        continue
+
+        return None
+```
+
+### Step 3: Source Credibility Scoring
+
+We implement a multi-factor credibility scoring system to filter unreliable sources.
+
+<Mermaid
+  chart={`
+graph LR
+    Source[Source] --> DA[Domain Authority]
+    Source --> PF[Publication Frequency]
+    Source --> CR[Cross-Reference]
+    Source --> CQ[Content Quality]
+    
+    DA -->|35%| Score[Overall Score]
+    PF -->|15%| Score
+    CR -->|25%| Score
+    CQ -->|25%| Score
+    
+    Score --> Filter{Score > 0.4?}
+    Filter -->|Yes| Include[Include]
+    Filter -->|No| Exclude[Exclude]
+    
+    style Score fill:#fff9c4,stroke:#fbc02d
+    style Include fill:#c8e6c9,stroke:#2e7d32
+    style Exclude fill:#ffcdd2,stroke:#c62828
+`}
+  caption="Credibility Scoring: Multi-factor source evaluation."
+/>
+
+```python
+# analysis/credibility_scorer.py
+from typing import Dict, List, Optional
+from urllib.parse import urlparse
+import re
+import logging
+
+from models import SourceDocument, CredibilityScore
+
+logger = logging.getLogger(__name__)
+
+# Known high-authority domains (simplified - in production, use a proper database)
+HIGH_AUTHORITY_DOMAINS = {
+    # News organizations
+    "reuters.com": 0.95,
+    "apnews.com": 0.95,
+    "bbc.com": 0.90,
+    "bbc.co.uk": 0.90,
+    "nytimes.com": 0.88,
+    "washingtonpost.com": 0.85,
+    "theguardian.com": 0.85,
+    "economist.com": 0.90,
+    # Academic/Research
+    "nature.com": 0.95,
+    "science.org": 0.95,
+    "arxiv.org": 0.85,
+    "pubmed.ncbi.nlm.nih.gov": 0.95,
+    "scholar.google.com": 0.80,
+    # Tech
+    "techcrunch.com": 0.75,
+    "wired.com": 0.78,
+    "arstechnica.com": 0.80,
+    "theverge.com": 0.72,
+    # Government/Official
+    "gov": 0.85,  # TLD match
+    "edu": 0.80,  # TLD match
+    "org": 0.65,  # TLD match (lower, varies widely)
+}
+
+# Known low-credibility patterns
+LOW_CREDIBILITY_PATTERNS = [
+    r"blog\..*\.com",  # Generic blog subdomains
+    r"medium\.com/@",  # Medium personal blogs (not publications)
+    r"wordpress\.com",
+    r"blogspot\.com",
+    r"tumblr\.com",
+]
+
+class CredibilityScorer:
+    """Score source credibility based on multiple factors."""
+
+    def __init__(self):
+        self._domain_cache: Dict[str, float] = {}
+
+    def score_document(
+        self,
+        document: SourceDocument,
+        all_documents: Optional[List[SourceDocument]] = None
+    ) -> CredibilityScore:
+        """
+        Calculate credibility score for a document.
+
+        Args:
+            document: The document to score
+            all_documents: Other documents for cross-reference scoring
+
+        Returns:
+            CredibilityScore with component scores
+        """
+        domain_authority = self._score_domain_authority(document.domain)
+        publication_frequency = self._score_publication_frequency(document)
+        cross_reference = self._score_cross_reference(document, all_documents or [])
+        content_quality = self._score_content_quality(document)
+
+        return CredibilityScore(
+            domain_authority=domain_authority,
+            publication_frequency=publication_frequency,
+            cross_reference_score=cross_reference,
+            content_quality=content_quality
+        )
+
+    def _score_domain_authority(self, domain: str) -> float:
+        """Score based on domain reputation."""
+        if domain in self._domain_cache:
+            return self._domain_cache[domain]
+
+        score = 0.5  # Default neutral score
+
+        # Check exact domain match
+        if domain in HIGH_AUTHORITY_DOMAINS:
+            score = HIGH_AUTHORITY_DOMAINS[domain]
+        else:
+            # Check TLD
+            tld = domain.split(".")[-1]
+            if tld in HIGH_AUTHORITY_DOMAINS:
+                score = HIGH_AUTHORITY_DOMAINS[tld]
+
+            # Check for low-credibility patterns
+            for pattern in LOW_CREDIBILITY_PATTERNS:
+                if re.search(pattern, domain):
+                    score = min(score, 0.35)
+                    break
+
+            # Boost for HTTPS (implied by modern scraping)
+            # Penalize very new or obscure domains (simplified heuristic)
+            if len(domain.split(".")) > 3:
+                score *= 0.9  # Subdomains slightly less trusted
+
+        self._domain_cache[domain] = score
+        return score
+
+    def _score_publication_frequency(self, document: SourceDocument) -> float:
+        """Score based on publication recency and patterns."""
+        from datetime import datetime, timedelta
+
+        if not document.published_at:
+            return 0.5  # Neutral if no date
+
+        age = datetime.utcnow() - document.published_at
+
+        # Recent content scores higher
+        if age < timedelta(hours=24):
+            return 0.95
+        elif age < timedelta(days=7):
+            return 0.85
+        elif age < timedelta(days=30):
+            return 0.70
+        elif age < timedelta(days=90):
+            return 0.55
+        else:
+            return 0.40
+
+    def _score_cross_reference(
+        self,
+        document: SourceDocument,
+        all_documents: List[SourceDocument]
+    ) -> float:
+        """Score based on how many other sources cover similar content."""
+        if not all_documents:
+            return 0.5
+
+        # Extract key terms from document
+        doc_terms = set(self._extract_key_terms(document.content))
+
+        if not doc_terms:
+            return 0.5
+
+        # Count documents with overlapping terms
+        overlap_count = 0
+        for other_doc in all_documents:
+            if other_doc.id == document.id:
+                continue
+
+            other_terms = set(self._extract_key_terms(other_doc.content))
+            overlap = len(doc_terms & other_terms) / len(doc_terms)
+
+            if overlap > 0.3:  # 30% term overlap threshold
+                overlap_count += 1
+
+        # More cross-references = higher credibility
+        if overlap_count >= 3:
+            return 0.90
+        elif overlap_count >= 2:
+            return 0.75
+        elif overlap_count >= 1:
+            return 0.60
+        else:
+            return 0.45  # Unique content, slightly lower
+
+    def _score_content_quality(self, document: SourceDocument) -> float:
+        """Score based on content quality indicators."""
+        content = document.content
+        score = 0.5
+
+        # Length check (too short or too long is suspicious)
+        length = len(content)
+        if 500 <= length <= 10000:
+            score += 0.15
+        elif length < 200:
+            score -= 0.20
+
+        # Check for quality indicators
+        quality_indicators = [
+            r"\b(according to|research shows|study finds|data indicates)\b",
+            r"\b(professor|researcher|expert|analyst)\b",
+            r"\b(university|institute|organization)\b",
+            r"\d{4}",  # Years (citations)
+            r"https?://",  # Links (references)
+        ]
+
+        for pattern in quality_indicators:
+            if re.search(pattern, content, re.IGNORECASE):
+                score += 0.05
+
+        # Check for low-quality indicators
+        low_quality_indicators = [
+            r"(click here|subscribe now|buy now|limited time)",
+            r"(!!+|\?\?+)",  # Excessive punctuation
+            r"(BREAKING|SHOCKING|YOU WON'T BELIEVE)",
+        ]
+
+        for pattern in low_quality_indicators:
+            if re.search(pattern, content, re.IGNORECASE):
+                score -= 0.15
+
+        return max(0.0, min(1.0, score))
+
+    def _extract_key_terms(self, content: str, max_terms: int = 50) -> List[str]:
+        """Extract key terms from content for comparison."""
+        # Simple term extraction (in production, use NLP)
+        words = re.findall(r'\b[a-zA-Z]{4,}\b', content.lower())
+
+        # Filter common words
+        stopwords = {
+            "that", "this", "with", "from", "have", "been", "were", "they",
+            "their", "which", "would", "could", "should", "about", "into",
+            "more", "some", "than", "when", "what", "there", "other"
+        }
+
+        terms = [w for w in words if w not in stopwords]
+
+        # Return most frequent terms
+        from collections import Counter
+        term_counts = Counter(terms)
+        return [term for term, _ in term_counts.most_common(max_terms)]
+```
+
+### Step 4: RAG Pipeline with ChromaDB
+
+We implement the core RAG pipeline for storing and retrieving documents.
+
+<Mermaid
+  chart={`
+graph TD
+    Doc[Document] --> Embed[Generate Embedding]
+    Embed --> Store[Store in ChromaDB]
+    
+    Query[Briefing Query] --> QEmbed[Query Embedding]
+    QEmbed --> Search[Similarity Search]
+    Search --> ChromaDB[(ChromaDB)]
+    ChromaDB --> Results[Top-K Results]
+    
+    Results --> Context[Build Context]
+    Context --> LLM[LLM Synthesis]
+    LLM --> Summary[Summary + Citations]
+    
+    style ChromaDB fill:#e3f2fd,stroke:#0277bd
+    style LLM fill:#f9f,stroke:#333
+`}
+  caption="RAG Pipeline: From document storage to synthesized summaries."
+/>
+
+```python
+# rag/vector_store.py
+import chromadb
+from chromadb.config import Settings as ChromaSettings
+from typing import List, Dict, Optional, Any
+from langchain_openai import OpenAIEmbeddings
+import logging
+
+from models import SourceDocument
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+class VectorStore:
+    """ChromaDB-based vector store for document retrieval."""
+
+    def __init__(self):
+        self.settings = get_settings()
+
+        # Initialize ChromaDB client with persistence
+        self.client = chromadb.PersistentClient(
+            path=self.settings.chroma_persist_dir,
+            settings=ChromaSettings(anonymized_telemetry=False)
+        )
+
+        # Initialize embeddings
+        self.embeddings = OpenAIEmbeddings(
+            model=self.settings.embedding_model,
+            openai_api_key=self.settings.openai_api_key
+        )
+
+    def _get_collection_name(self, topic_id: str) -> str:
+        """Get collection name for a topic."""
+        return f"{self.settings.chroma_collection_prefix}{topic_id}"
+
+    def _get_or_create_collection(self, topic_id: str) -> chromadb.Collection:
+        """Get or create a collection for a topic."""
+        return self.client.get_or_create_collection(
+            name=self._get_collection_name(topic_id),
+            metadata={"hnsw:space": "cosine"}
+        )
+
+    async def add_documents(
+        self,
+        documents: List[SourceDocument]
+    ) -> List[str]:
+        """
+        Add documents to the vector store.
+
+        Args:
+            documents: List of SourceDocument objects
+
+        Returns:
+            List of embedding IDs
+        """
+        if not documents:
+            return []
+
+        # Group by topic
+        by_topic: Dict[str, List[SourceDocument]] = {}
+        for doc in documents:
+            if doc.topic_id not in by_topic:
+                by_topic[doc.topic_id] = []
+            by_topic[doc.topic_id].append(doc)
+
+        embedding_ids = []
+
+        for topic_id, topic_docs in by_topic.items():
+            collection = self._get_or_create_collection(topic_id)
+
+            # Prepare data for ChromaDB
+            ids = [doc.id for doc in topic_docs]
+            texts = [f"{doc.title}\n\n{doc.content}" for doc in topic_docs]
+            metadatas = [
+                {
+                    "url": doc.url,
+                    "title": doc.title,
+                    "domain": doc.domain,
+                    "source_type": doc.source_type.value,
+                    "credibility_score": doc.credibility.overall_score,
+                    "published_at": doc.published_at.isoformat() if doc.published_at else "",
+                    "fetched_at": doc.fetched_at.isoformat()
+                }
+                for doc in topic_docs
+            ]
+
+            # Generate embeddings
+            try:
+                embeddings = self.embeddings.embed_documents(texts)
+
+                # Add to collection
+                collection.add(
+                    ids=ids,
+                    embeddings=embeddings,
+                    documents=texts,
+                    metadatas=metadatas
+                )
+
+                embedding_ids.extend(ids)
+                logger.info(f"Added {len(ids)} documents to topic {topic_id}")
+
+            except Exception as e:
+                logger.error(f"Error adding documents to vector store: {e}")
+                raise
+
+        return embedding_ids
+
+    async def search(
+        self,
+        topic_id: str,
+        query: str,
+        top_k: int = 10,
+        min_credibility: float = 0.4
+    ) -> List[Dict[str, Any]]:
+        """
+        Search for relevant documents.
+
+        Args:
+            topic_id: Topic to search within
+            query: Search query
+            top_k: Number of results to return
+            min_credibility: Minimum credibility score filter
+
+        Returns:
+            List of document results with metadata
+        """
+        collection = self._get_or_create_collection(topic_id)
+
+        # Generate query embedding
+        query_embedding = self.embeddings.embed_query(query)
+
+        # Search with credibility filter
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k * 2,  # Fetch extra for filtering
+            where={"credibility_score": {"$gte": min_credibility}},
+            include=["documents", "metadatas", "distances"]
+        )
+
+        # Format results
+        formatted = []
+        if results["ids"] and results["ids"][0]:
+            for i, doc_id in enumerate(results["ids"][0][:top_k]):
+                formatted.append({
+                    "id": doc_id,
+                    "content": results["documents"][0][i] if results["documents"] else "",
+                    "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
+                    "distance": results["distances"][0][i] if results["distances"] else 0
+                })
+
+        return formatted
+
+    async def get_recent_documents(
+        self,
+        topic_id: str,
+        hours: int = 24,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Get recently added documents for a topic."""
+        from datetime import datetime, timedelta
+
+        collection = self._get_or_create_collection(topic_id)
+        cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+
+        # Get all documents and filter by date
+        # Note: ChromaDB doesn't support date range queries well, so we fetch and filter
+        results = collection.get(
+            include=["documents", "metadatas"],
+            limit=limit * 2
+        )
+
+        recent = []
+        if results["ids"]:
+            for i, doc_id in enumerate(results["ids"]):
+                metadata = results["metadatas"][i] if results["metadatas"] else {}
+                fetched_at = metadata.get("fetched_at", "")
+
+                if fetched_at >= cutoff:
+                    recent.append({
+                        "id": doc_id,
+                        "content": results["documents"][i] if results["documents"] else "",
+                        "metadata": metadata
+                    })
+
+                if len(recent) >= limit:
+                    break
+
+        return recent
+
+    def delete_topic(self, topic_id: str) -> bool:
+        """Delete all documents for a topic."""
+        try:
+            self.client.delete_collection(self._get_collection_name(topic_id))
+            logger.info(f"Deleted collection for topic {topic_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting collection: {e}")
+            return False
+
+    def get_document_count(self, topic_id: str) -> int:
+        """Get the number of documents in a topic's collection."""
+        try:
+            collection = self._get_or_create_collection(topic_id)
+            return collection.count()
+        except Exception:
+            return 0
+```
+
+### Step 5: Multi-Document Synthesis with LLM
+
+We implement the synthesis engine that combines multiple sources into coherent summaries.
+
+```python
+# rag/synthesizer.py
+from typing import List, Dict, Any, Optional
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+import logging
+import re
+
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+SYNTHESIS_SYSTEM_PROMPT = """You are a professional research analyst creating executive briefings.
+
+Your task is to synthesize information from multiple sources into a coherent, well-structured summary.
+
+Guidelines:
+1. Focus on the most important and actionable information
+2. Identify key themes and trends across sources
+3. Note any contradictions or disagreements between sources
+4. Always cite sources using [1], [2], etc. format
+5. Be concise but comprehensive
+6. Highlight implications and potential impacts
+7. Use professional, objective language
+
+Output Format:
+- Start with a 2-3 sentence executive summary
+- Organize findings into logical sections
+- End with 3-5 key takeaways as bullet points
+- Every factual claim must have a citation"""
+
+class Synthesizer:
+    """LLM-powered multi-document synthesizer."""
+
+    def __init__(self):
+        self.settings = get_settings()
+        self.llm = ChatOpenAI(
+            model=self.settings.openai_model,
+            temperature=0.3,
+            max_tokens=self.settings.synthesis_max_tokens,
+            openai_api_key=self.settings.openai_api_key
+        )
+
+    async def synthesize(
+        self,
+        query: str,
+        documents: List[Dict[str, Any]],
+        topic_name: str
+    ) -> Dict[str, Any]:
+        """
+        Synthesize multiple documents into a coherent summary.
+
+        Args:
+            query: The synthesis query/focus
+            documents: Retrieved documents with metadata
+            topic_name: Name of the research topic
+
+        Returns:
+            Dictionary with synthesis results and citations
+        """
+        if not documents:
+            return {
+                "summary": "No relevant documents found for this period.",
+                "sections": [],
+                "key_takeaways": [],
+                "citations": []
+            }
+
+        # Build source context with numbered citations
+        source_context, citations = self._build_source_context(documents)
+
+        # Create synthesis prompt
+        prompt = f"""Topic: {topic_name}
+Focus: {query}
+
+Sources:
+{source_context}
+
+Please synthesize these sources into a comprehensive briefing following the guidelines."""
+
+        try:
+            response = await self.llm.ainvoke([
+                SystemMessage(content=SYNTHESIS_SYSTEM_PROMPT),
+                HumanMessage(content=prompt)
+            ])
+
+            content = response.content
+
+            # Parse the response into sections
+            sections = self._parse_sections(content)
+            key_takeaways = self._extract_takeaways(content)
+            executive_summary = self._extract_executive_summary(content)
+
+            # Validate citations used
+            used_citations = self._extract_used_citations(content, citations)
+
+            return {
+                "summary": executive_summary,
+                "full_content": content,
+                "sections": sections,
+                "key_takeaways": key_takeaways,
+                "citations": used_citations
+            }
+
+        except Exception as e:
+            logger.error(f"Synthesis failed: {e}")
+            raise
+
+    def _build_source_context(
+        self,
+        documents: List[Dict[str, Any]]
+    ) -> tuple[str, List[Dict[str, Any]]]:
+        """Build numbered source context for the LLM."""
+        context_parts = []
+        citations = []
+
+        for i, doc in enumerate(documents, 1):
+            metadata = doc.get("metadata", {})
+            content = doc.get("content", "")
+
+            # Truncate content if too long
+            if len(content) > 2000:
+                content = content[:2000] + "..."
+
+            context_parts.append(f"""[{i}] {metadata.get('title', 'Untitled')}
+Source: {metadata.get('domain', 'Unknown')}
+URL: {metadata.get('url', '')}
+Credibility: {metadata.get('credibility_score', 0.5):.2f}
+
+{content}
+---""")
+
+            citations.append({
+                "id": i,
+                "title": metadata.get("title", "Untitled"),
+                "url": metadata.get("url", ""),
+                "domain": metadata.get("domain", "Unknown"),
+                "credibility_score": metadata.get("credibility_score", 0.5)
+            })
+
+        return "\n\n".join(context_parts), citations
+
+    def _parse_sections(self, content: str) -> List[Dict[str, Any]]:
+        """Parse content into sections based on headers."""
+        sections = []
+
+        # Split by markdown headers
+        lines = content.split("\n")
+        current_section = None
+        current_content = []
+
+        for line in lines:
+            if line.startswith("## ") or line.startswith("### "):
+                # Save previous section
+                if current_section:
+                    sections.append({
+                        "title": current_section,
+                        "content": "\n".join(current_content).strip(),
+                        "citation_ids": self._find_citations_in_text("\n".join(current_content))
+                    })
+
+                current_section = line.lstrip("#").strip()
+                current_content = []
+            elif current_section:
+                current_content.append(line)
+
+        # Save last section
+        if current_section:
+            sections.append({
+                "title": current_section,
+                "content": "\n".join(current_content).strip(),
+                "citation_ids": self._find_citations_in_text("\n".join(current_content))
+            })
+
+        return sections
+
+    def _extract_takeaways(self, content: str) -> List[str]:
+        """Extract key takeaways from the content."""
+        takeaways = []
+
+        # Look for takeaways section
+        takeaway_patterns = [
+            r"(?:Key Takeaways|Takeaways|Key Points|Summary Points)[\s:]*\n((?:[-•*]\s*.+\n?)+)",
+            r"(?:^|\n)((?:[-•*]\s*.+\n?){3,})"  # Fallback: any bullet list with 3+ items
+        ]
+
+        for pattern in takeaway_patterns:
+            match = re.search(pattern, content, re.IGNORECASE | re.MULTILINE)
+            if match:
+                bullet_text = match.group(1)
+                items = re.findall(r"[-•*]\s*(.+)", bullet_text)
+                takeaways = [item.strip() for item in items[:5]]
+                break
+
+        return takeaways
+
+    def _extract_executive_summary(self, content: str) -> str:
+        """Extract the executive summary from content."""
+        # Take first paragraph or first 3 sentences
+        paragraphs = content.split("\n\n")
+
+        for para in paragraphs:
+            para = para.strip()
+            # Skip headers and short lines
+            if para and not para.startswith("#") and len(para) > 50:
+                # Limit to ~3 sentences
+                sentences = re.split(r'(?<=[.!?])\s+', para)
+                return " ".join(sentences[:3])
+
+        return content[:500] if content else ""
+
+    def _find_citations_in_text(self, text: str) -> List[int]:
+        """Find citation numbers used in text."""
+        citations = re.findall(r'\[(\d+)\]', text)
+        return list(set(int(c) for c in citations))
+
+    def _extract_used_citations(
+        self,
+        content: str,
+        all_citations: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Extract only the citations that were actually used."""
+        used_ids = set(self._find_citations_in_text(content))
+        return [c for c in all_citations if c["id"] in used_ids]
+```
+
+### Step 6: Briefing Generation
+
+We create professional briefings with proper formatting and structure.
+
+<Mermaid
+  chart={`
+graph TD
+    Retrieve[Retrieve Documents] --> Filter[Filter by Date]
+    Filter --> Synthesize[Synthesize Content]
+    
+    Synthesize --> Format[Format Briefing]
+    Format --> Header[Add Header]
+    Format --> Body[Structure Body]
+    Format --> Footer[Add Citations]
+    
+    Header --> Markdown[Markdown Output]
+    Body --> Markdown
+    Footer --> Markdown
+    
+    Markdown --> HTML[HTML Version]
+    Markdown --> Plain[Plain Text]
+    
+    style Synthesize fill:#f9f,stroke:#333
+    style Markdown fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Briefing Generation: From synthesis to formatted output."
+/>
+
+```python
+# briefing/generator.py
+from typing import Optional
+from datetime import datetime, timedelta
+import logging
+
+from models import Briefing, BriefingSection, Citation, ResearchTopic
+from rag.vector_store import VectorStore
+from rag.synthesizer import Synthesizer
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+class BriefingGenerator:
+    """Generate research briefings from stored documents."""
+
+    def __init__(self):
+        self.settings = get_settings()
+        self.vector_store = VectorStore()
+        self.synthesizer = Synthesizer()
+
+    async def generate_briefing(
+        self,
+        topic: ResearchTopic,
+        hours: int = 24
+    ) -> Briefing:
+        """
+        Generate a briefing for a topic.
+
+        Args:
+            topic: The research topic
+            hours: Number of hours to look back
+
+        Returns:
+            Generated Briefing object
+        """
+        period_end = datetime.utcnow()
+        period_start = period_end - timedelta(hours=hours)
+
+        # Retrieve relevant documents
+        query = f"Latest developments and news about {topic.name}: {', '.join(topic.keywords)}"
+
+        documents = await self.vector_store.search(
+            topic_id=topic.id,
+            query=query,
+            top_k=self.settings.retrieval_top_k,
+            min_credibility=0.4
+        )
+
+        # Filter to recent documents
+        recent_docs = [
+            doc for doc in documents
+            if self._is_recent(doc, hours)
+        ]
+
+        if not recent_docs:
+            # Fall back to all retrieved docs if no recent ones
+            recent_docs = documents[:self.settings.retrieval_top_k]
+
+        # Synthesize content
+        synthesis = await self.synthesizer.synthesize(
+            query=f"Summarize the latest developments in {topic.name}",
+            documents=recent_docs,
+            topic_name=topic.name
+        )
+
+        # Build briefing sections
+        sections = [
+            BriefingSection(
+                title=s["title"],
+                content=s["content"],
+                citation_ids=s.get("citation_ids", [])
+            )
+            for s in synthesis.get("sections", [])
+        ]
+
+        # Build citations
+        citations = [
+            Citation(
+                id=c["id"],
+                title=c["title"],
+                url=c["url"],
+                domain=c["domain"],
+                credibility_score=c["credibility_score"]
+            )
+            for c in synthesis.get("citations", [])
+        ]
+
+        return Briefing(
+            topic_id=topic.id,
+            topic_name=topic.name,
+            period_start=period_start,
+            period_end=period_end,
+            executive_summary=synthesis.get("summary", ""),
+            sections=sections,
+            key_takeaways=synthesis.get("key_takeaways", []),
+            citations=citations,
+            sources_analyzed=len(recent_docs)
+        )
+
+    def _is_recent(self, doc: dict, hours: int) -> bool:
+        """Check if a document is within the time window."""
+        metadata = doc.get("metadata", {})
+        fetched_at = metadata.get("fetched_at", "")
+
+        if not fetched_at:
+            return True  # Include if no date
+
+        try:
+            fetched = datetime.fromisoformat(fetched_at)
+            cutoff = datetime.utcnow() - timedelta(hours=hours)
+            return fetched >= cutoff
+        except Exception:
+            return True
+
+    def format_briefing_markdown(self, briefing: Briefing) -> str:
+        """Format briefing as Markdown."""
+        lines = []
+
+        # Header
+        lines.append(f"# Research Briefing: {briefing.topic_name}")
+        lines.append("")
+        lines.append(f"**Generated:** {briefing.generated_at.strftime('%Y-%m-%d %H:%M UTC')}")
+        lines.append(f"**Period:** {briefing.period_start.strftime('%Y-%m-%d')} to {briefing.period_end.strftime('%Y-%m-%d')}")
+        lines.append(f"**Sources Analyzed:** {briefing.sources_analyzed}")
+        lines.append("")
+
+        # Executive Summary
+        lines.append("## Executive Summary")
+        lines.append("")
+        lines.append(briefing.executive_summary)
+        lines.append("")
+
+        # Sections
+        for section in briefing.sections:
+            lines.append(f"## {section.title}")
+            lines.append("")
+            lines.append(section.content)
+            lines.append("")
+
+        # Key Takeaways
+        if briefing.key_takeaways:
+            lines.append("## Key Takeaways")
+            lines.append("")
+            for takeaway in briefing.key_takeaways:
+                lines.append(f"- {takeaway}")
+            lines.append("")
+
+        # Citations
+        if briefing.citations:
+            lines.append("## Sources")
+            lines.append("")
+            for citation in sorted(briefing.citations, key=lambda c: c.id):
+                credibility = "⭐" * int(citation.credibility_score * 5)
+                lines.append(f"[{citation.id}] [{citation.title}]({citation.url}) - {citation.domain} {credibility}")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    def format_briefing_html(self, briefing: Briefing) -> str:
+        """Format briefing as HTML for email."""
+        import html
+
+        def escape(text: str) -> str:
+            return html.escape(text)
+
+        parts = []
+
+        # Header
+        parts.append(f"""
+<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+    <h1 style="color: #1a1a1a; border-bottom: 2px solid #0066cc; padding-bottom: 10px;">
+        Research Briefing: {escape(briefing.topic_name)}
+    </h1>
+    <p style="color: #666; font-size: 14px;">
+        <strong>Generated:</strong> {briefing.generated_at.strftime('%Y-%m-%d %H:%M UTC')} |
+        <strong>Sources:</strong> {briefing.sources_analyzed}
+    </p>
+""")
+
+        # Executive Summary
+        parts.append(f"""
+    <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <h2 style="color: #333; margin-top: 0;">Executive Summary</h2>
+        <p style="color: #444; line-height: 1.6;">{escape(briefing.executive_summary)}</p>
+    </div>
+""")
+
+        # Sections
+        for section in briefing.sections:
+            content_html = escape(section.content).replace('\n', '<br>')
+            parts.append(f"""
+    <div style="margin: 20px 0;">
+        <h2 style="color: #333;">{escape(section.title)}</h2>
+        <p style="color: #444; line-height: 1.6;">{content_html}</p>
+    </div>
+""")
+
+        # Key Takeaways
+        if briefing.key_takeaways:
+            takeaways_html = "".join(
+                f"<li style='margin: 8px 0;'>{escape(t)}</li>"
+                for t in briefing.key_takeaways
+            )
+            parts.append(f"""
+    <div style="background: #e8f4f8; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <h2 style="color: #0066cc; margin-top: 0;">Key Takeaways</h2>
+        <ul style="color: #444; line-height: 1.6;">{takeaways_html}</ul>
+    </div>
+""")
+
+        # Citations
+        if briefing.citations:
+            citations_html = ""
+            for c in sorted(briefing.citations, key=lambda x: x.id):
+                stars = "★" * int(c.credibility_score * 5) + "☆" * (5 - int(c.credibility_score * 5))
+                citations_html += f"""
+                <li style="margin: 5px 0;">
+                    [{c.id}] <a href="{escape(c.url)}" style="color: #0066cc;">{escape(c.title)}</a>
+                    <span style="color: #999; font-size: 12px;">({escape(c.domain)}) {stars}</span>
+                </li>
+"""
+            parts.append(f"""
+    <div style="margin: 20px 0; border-top: 1px solid #ddd; padding-top: 15px;">
+        <h3 style="color: #666;">Sources</h3>
+        <ul style="font-size: 14px; color: #444;">{citations_html}</ul>
+    </div>
+""")
+
+        parts.append("</div>")
+
+        return "".join(parts)
+```
+
+### Step 7: Delivery - Email and Slack
+
+We implement multi-channel delivery for briefings.
+
+<Mermaid
+  chart={`
+graph LR
+    Briefing[Briefing] --> Check{Delivery Config}
+    
+    Check -->|Email| SMTP[SMTP Sender]
+    Check -->|Slack| Webhook[Slack Webhook]
+    Check -->|Both| Both[Both Channels]
+    
+    SMTP --> Status1[Delivery Status]
+    Webhook --> Status2[Delivery Status]
+    Both --> Status1
+    Both --> Status2
+    
+    style SMTP fill:#e3f2fd,stroke:#0277bd
+    style Webhook fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Multi-Channel Delivery: Email and Slack options."
+/>
+
+```python
+# delivery/email_sender.py
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from typing import Optional
+import logging
+
+from models import Briefing, DeliveryStatus
+from briefing.generator import BriefingGenerator
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+class EmailSender:
+    """Send briefings via SMTP email."""
+
+    def __init__(self):
+        self.settings = get_settings()
+        self.briefing_generator = BriefingGenerator()
+
+    async def send_briefing(
+        self,
+        briefing: Briefing,
+        to_email: str,
+        subject: Optional[str] = None
+    ) -> DeliveryStatus:
+        """
+        Send a briefing via email.
+
+        Args:
+            briefing: The briefing to send
+            to_email: Recipient email address
+            subject: Optional custom subject line
+
+        Returns:
+            DeliveryStatus with result
+        """
+        status = DeliveryStatus()
+
+        if not self.settings.smtp_host:
+            status.email = "not_configured"
+            return status
+
+        try:
+            # Create message
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject or f"Research Briefing: {briefing.topic_name}"
+            msg["From"] = self.settings.smtp_from_email
+            msg["To"] = to_email
+
+            # Plain text version
+            text_content = self.briefing_generator.format_briefing_markdown(briefing)
+            msg.attach(MIMEText(text_content, "plain"))
+
+            # HTML version
+            html_content = self.briefing_generator.format_briefing_html(briefing)
+            msg.attach(MIMEText(html_content, "html"))
+
+            # Send email
+            with smtplib.SMTP(self.settings.smtp_host, self.settings.smtp_port) as server:
+                server.starttls()
+                if self.settings.smtp_username and self.settings.smtp_password:
+                    server.login(self.settings.smtp_username, self.settings.smtp_password)
+                server.send_message(msg)
+
+            status.email = "sent"
+            logger.info(f"Email sent to {to_email} for briefing {briefing.id}")
+
+        except smtplib.SMTPException as e:
+            status.email = "failed"
+            status.email_error = str(e)
+            logger.error(f"SMTP error sending to {to_email}: {e}")
+        except Exception as e:
+            status.email = "failed"
+            status.email_error = str(e)
+            logger.error(f"Error sending email to {to_email}: {e}")
+
+        return status
+```
+
+```python
+# delivery/slack_sender.py
+import httpx
+from typing import Optional, List
+import logging
+
+from models import Briefing, DeliveryStatus
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+class SlackSender:
+    """Send briefings via Slack webhook."""
+
+    def __init__(self):
+        self.settings = get_settings()
+
+    async def send_briefing(
+        self,
+        briefing: Briefing,
+        webhook_url: Optional[str] = None
+    ) -> DeliveryStatus:
+        """
+        Send a briefing to Slack.
+
+        Args:
+            briefing: The briefing to send
+            webhook_url: Slack webhook URL (uses default if not provided)
+
+        Returns:
+            DeliveryStatus with result
+        """
+        status = DeliveryStatus()
+        url = webhook_url or self.settings.slack_webhook_url
+
+        if not url:
+            status.slack = "not_configured"
+            return status
+
+        try:
+            # Build Slack message blocks
+            blocks = self._build_slack_blocks(briefing)
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    url,
+                    json={"blocks": blocks},
+                    timeout=30.0
+                )
+
+                if response.status_code == 200:
+                    status.slack = "sent"
+                    logger.info(f"Slack message sent for briefing {briefing.id}")
+                else:
+                    status.slack = "failed"
+                    status.slack_error = f"HTTP {response.status_code}: {response.text}"
+                    logger.error(f"Slack webhook failed: {response.status_code}")
+
+        except httpx.HTTPError as e:
+            status.slack = "failed"
+            status.slack_error = str(e)
+            logger.error(f"HTTP error sending to Slack: {e}")
+        except Exception as e:
+            status.slack = "failed"
+            status.slack_error = str(e)
+            logger.error(f"Error sending to Slack: {e}")
+
+        return status
+
+    def _build_slack_blocks(self, briefing: Briefing) -> List[dict]:
+        """Build Slack Block Kit message."""
+        blocks = []
+
+        # Header
+        blocks.append({
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"📊 Research Briefing: {briefing.topic_name}",
+                "emoji": True
+            }
+        })
+
+        # Metadata
+        blocks.append({
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Generated:* {briefing.generated_at.strftime('%Y-%m-%d %H:%M UTC')} | *Sources:* {briefing.sources_analyzed}"
+                }
+            ]
+        })
+
+        blocks.append({"type": "divider"})
+
+        # Executive Summary
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Executive Summary*\n{briefing.executive_summary[:2000]}"
+            }
+        })
+
+        # Key Takeaways
+        if briefing.key_takeaways:
+            takeaways_text = "\n".join(f"• {t}" for t in briefing.key_takeaways[:5])
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Key Takeaways*\n{takeaways_text}"
+                }
+            })
+
+        blocks.append({"type": "divider"})
+
+        # Top Sources
+        if briefing.citations:
+            sources_text = "\n".join(
+                f"<{c.url}|{c.title[:50]}> ({c.domain})"
+                for c in briefing.citations[:5]
+            )
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Top Sources*\n{sources_text}"
+                }
+            })
+
+        return blocks
+```
+
+### Step 8: Scheduling with APScheduler
+
+We implement automated task scheduling for monitoring and briefing generation.
+
+```python
+# scheduling/scheduler.py
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from typing import Dict, Optional
+import logging
+from datetime import datetime
+
+from models import ResearchTopic, BriefingFrequency
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+class ResearchScheduler:
+    """Schedule research monitoring and briefing tasks."""
+
+    def __init__(self):
+        self.settings = get_settings()
+        self.scheduler = AsyncIOScheduler(timezone=self.settings.timezone)
+        self._topic_jobs: Dict[str, str] = {}  # topic_id -> job_id
+
+    def start(self):
+        """Start the scheduler."""
+        if not self.scheduler.running:
+            self.scheduler.start()
+            logger.info("Research scheduler started")
+
+    def shutdown(self):
+        """Shutdown the scheduler."""
+        if self.scheduler.running:
+            self.scheduler.shutdown()
+            logger.info("Research scheduler stopped")
+
+    def schedule_topic(self, topic: ResearchTopic) -> Optional[str]:
+        """
+        Schedule monitoring and briefing for a topic.
+
+        Args:
+            topic: The research topic to schedule
+
+        Returns:
+            Job ID if scheduled successfully
+        """
+        from scheduling.tasks import run_topic_monitoring, run_topic_briefing
+
+        # Remove existing job if any
+        self.unschedule_topic(topic.id)
+
+        # Parse schedule time
+        hour, minute = map(int, topic.schedule.time.split(":"))
+
+        # Create trigger based on frequency
+        if topic.schedule.frequency == BriefingFrequency.DAILY:
+            trigger = CronTrigger(hour=hour, minute=minute, timezone=topic.schedule.timezone)
+        else:  # Weekly
+            trigger = CronTrigger(
+                day_of_week="mon",
+                hour=hour,
+                minute=minute,
+                timezone=topic.schedule.timezone
+            )
+
+        # Schedule briefing job
+        job = self.scheduler.add_job(
+            run_topic_briefing,
+            trigger=trigger,
+            args=[topic.id],
+            id=f"briefing_{topic.id}",
+            name=f"Briefing: {topic.name}",
+            replace_existing=True
+        )
+
+        # Schedule monitoring job (every 2 hours)
+        self.scheduler.add_job(
+            run_topic_monitoring,
+            trigger=CronTrigger(hour="*/2", timezone=topic.schedule.timezone),
+            args=[topic.id],
+            id=f"monitor_{topic.id}",
+            name=f"Monitor: {topic.name}",
+            replace_existing=True
+        )
+
+        self._topic_jobs[topic.id] = job.id
+        logger.info(f"Scheduled topic {topic.name} for {topic.schedule.frequency.value} briefings at {topic.schedule.time}")
+
+        return job.id
+
+    def unschedule_topic(self, topic_id: str):
+        """Remove scheduled jobs for a topic."""
+        for prefix in ["briefing_", "monitor_"]:
+            job_id = f"{prefix}{topic_id}"
+            try:
+                self.scheduler.remove_job(job_id)
+            except Exception:
+                pass  # Job might not exist
+
+        if topic_id in self._topic_jobs:
+            del self._topic_jobs[topic_id]
+
+    def get_next_run(self, topic_id: str) -> Optional[datetime]:
+        """Get the next scheduled run time for a topic."""
+        job_id = f"briefing_{topic_id}"
+        job = self.scheduler.get_job(job_id)
+        return job.next_run_time if job else None
+
+    def list_jobs(self) -> list:
+        """List all scheduled jobs."""
+        return [
+            {
+                "id": job.id,
+                "name": job.name,
+                "next_run": job.next_run_time.isoformat() if job.next_run_time else None
+            }
+            for job in self.scheduler.get_jobs()
+        ]
+```
+
+```python
+# scheduling/tasks.py
+import asyncio
+import logging
+from typing import Optional
+
+from models import ResearchTopic
+from acquisition.rss_parser import RSSParser
+from acquisition.web_scraper import WebScraper
+from analysis.credibility_scorer import CredibilityScorer
+from rag.vector_store import VectorStore
+from briefing.generator import BriefingGenerator
+from delivery.email_sender import EmailSender
+from delivery.slack_sender import SlackSender
+
+logger = logging.getLogger(__name__)
+
+# In-memory topic storage (use database in production)
+_topics: dict[str, ResearchTopic] = {}
+
+def get_topic(topic_id: str) -> Optional[ResearchTopic]:
+    """Get a topic by ID."""
+    return _topics.get(topic_id)
+
+def save_topic(topic: ResearchTopic):
+    """Save a topic."""
+    _topics[topic.id] = topic
+
+async def run_topic_monitoring(topic_id: str):
+    """
+    Run content monitoring for a topic.
+
+    Fetches new content from RSS feeds and websites,
+    scores credibility, and stores in vector database.
+    """
+    topic = get_topic(topic_id)
+    if not topic:
+        logger.error(f"Topic not found: {topic_id}")
+        return
+
+    logger.info(f"Starting monitoring for topic: {topic.name}")
+
+    rss_parser = RSSParser()
+    web_scraper = WebScraper()
+    credibility_scorer = CredibilityScorer()
+    vector_store = VectorStore()
+
+    all_documents = []
+
+    # Fetch from RSS feeds
+    for feed_url in topic.rss_feeds:
+        try:
+            docs = await rss_parser.parse_feed(feed_url, topic.id)
+            all_documents.extend(docs)
+        except Exception as e:
+            logger.error(f"Error parsing RSS feed {feed_url}: {e}")
+
+    # Fetch from websites
+    for website_url in topic.websites:
+        try:
+            doc = await web_scraper.scrape_url(website_url, topic.id)
+            if doc:
+                all_documents.append(doc)
+        except Exception as e:
+            logger.error(f"Error scraping {website_url}: {e}")
+
+    if not all_documents:
+        logger.info(f"No new documents found for topic: {topic.name}")
+        return
+
+    # Score credibility
+    for doc in all_documents:
+        doc.credibility = credibility_scorer.score_document(doc, all_documents)
+
+    # Filter low-credibility documents
+    credible_docs = [
+        doc for doc in all_documents
+        if doc.credibility.overall_score >= 0.4
+    ]
+
+    logger.info(f"Filtered {len(all_documents)} -> {len(credible_docs)} credible documents")
+
+    # Store in vector database
+    if credible_docs:
+        await vector_store.add_documents(credible_docs)
+
+    logger.info(f"Monitoring complete for topic: {topic.name}")
+
+async def run_topic_briefing(topic_id: str):
+    """
+    Generate and deliver a briefing for a topic.
+    """
+    topic = get_topic(topic_id)
+    if not topic:
+        logger.error(f"Topic not found: {topic_id}")
+        return
+
+    logger.info(f"Generating briefing for topic: {topic.name}")
+
+    briefing_generator = BriefingGenerator()
+    email_sender = EmailSender()
+    slack_sender = SlackSender()
+
+    # Determine time window based on frequency
+    hours = 24 if topic.schedule.frequency == "daily" else 168  # 7 days
+
+    # Generate briefing
+    try:
+        briefing = await briefing_generator.generate_briefing(topic, hours=hours)
+    except Exception as e:
+        logger.error(f"Error generating briefing for {topic.name}: {e}")
+        return
+
+    # Deliver via configured channels
+    if topic.delivery.email:
+        await email_sender.send_briefing(briefing, topic.delivery.email)
+
+    if topic.delivery.slack_webhook:
+        await slack_sender.send_briefing(briefing, topic.delivery.slack_webhook)
+
+    logger.info(f"Briefing delivered for topic: {topic.name}")
+```
+
+### Step 9: FastAPI Application
+
+We bring everything together in a FastAPI application.
+
+```python
+# main.py
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from typing import List, Optional
+from pydantic import BaseModel
+import logging
+
+from models import (
+    ResearchTopic, Briefing, TopicStatus,
+    ScheduleConfig, DeliveryConfig, BriefingFrequency
+)
+from scheduling.scheduler import ResearchScheduler
+from scheduling.tasks import get_topic, save_topic, run_topic_monitoring, run_topic_briefing
+from briefing.generator import BriefingGenerator
+from rag.vector_store import VectorStore
+from config import get_settings
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Global scheduler instance
+scheduler = ResearchScheduler()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager."""
+    # Startup
+    scheduler.start()
+    logger.info("Research Assistant started")
+    yield
+    # Shutdown
+    scheduler.shutdown()
+    logger.info("Research Assistant stopped")
+
+app = FastAPI(
+    title="Personal Research Assistant",
+    description="Monitor topics, synthesize findings, and deliver briefings",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Request/Response Models
+class TopicCreate(BaseModel):
+    name: str
+    description: str = ""
+    keywords: List[str] = []
+    rss_feeds: List[str] = []
+    websites: List[str] = []
+    schedule: Optional[ScheduleConfig] = None
+    delivery: Optional[DeliveryConfig] = None
+
+class TopicResponse(BaseModel):
+    id: str
+    name: str
+    status: str
+    documents_count: int
+    last_updated: Optional[str] = None
+
+class TopicListResponse(BaseModel):
+    topics: List[TopicResponse]
+
+class BriefingResponse(BaseModel):
+    briefing_id: str
+    topic: str
+    generated_at: str
+    summary: str
+    sections: List[dict]
+    key_takeaways: List[str]
+    sources_analyzed: int
+    citations: List[dict]
+
+# In-memory briefing storage
+_briefings: dict[str, Briefing] = {}
+
+# API Endpoints
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy", "service": "research-assistant"}
+
+@app.post("/topics", response_model=TopicResponse, status_code=201)
+async def create_topic(topic_data: TopicCreate, background_tasks: BackgroundTasks):
+    """Create a new research topic."""
+    topic = ResearchTopic(
+        name=topic_data.name,
+        description=topic_data.description,
+        keywords=topic_data.keywords,
+        rss_feeds=topic_data.rss_feeds,
+        websites=topic_data.websites,
+        schedule=topic_data.schedule or ScheduleConfig(),
+        delivery=topic_data.delivery or DeliveryConfig()
+    )
+
+    save_topic(topic)
+
+    # Schedule monitoring and briefings
+    scheduler.schedule_topic(topic)
+
+    # Run initial monitoring in background
+    background_tasks.add_task(run_topic_monitoring, topic.id)
+
+    logger.info(f"Created topic: {topic.name} ({topic.id})")
+
+    return TopicResponse(
+        id=topic.id,
+        name=topic.name,
+        status=topic.status.value,
+        documents_count=0
+    )
+
+@app.get("/topics", response_model=TopicListResponse)
+async def list_topics():
+    """List all research topics."""
+    from scheduling.tasks import _topics
+
+    vector_store = VectorStore()
+    topics = []
+
+    for topic in _topics.values():
+        doc_count = vector_store.get_document_count(topic.id)
+        next_run = scheduler.get_next_run(topic.id)
+
+        topics.append(TopicResponse(
+            id=topic.id,
+            name=topic.name,
+            status=topic.status.value,
+            documents_count=doc_count,
+            last_updated=next_run.isoformat() if next_run else None
+        ))
+
+    return TopicListResponse(topics=topics)
+
+@app.get("/topics/{topic_id}")
+async def get_topic_details(topic_id: str):
+    """Get details for a specific topic."""
+    topic = get_topic(topic_id)
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    vector_store = VectorStore()
+    doc_count = vector_store.get_document_count(topic_id)
+    next_run = scheduler.get_next_run(topic_id)
+
+    return {
+        "id": topic.id,
+        "name": topic.name,
+        "description": topic.description,
+        "keywords": topic.keywords,
+        "rss_feeds": topic.rss_feeds,
+        "websites": topic.websites,
+        "schedule": topic.schedule.model_dump(),
+        "delivery": {
+            "email": topic.delivery.email,
+            "slack_webhook": "configured" if topic.delivery.slack_webhook else None
+        },
+        "status": topic.status.value,
+        "documents_count": doc_count,
+        "next_briefing": next_run.isoformat() if next_run else None
+    }
+
+@app.delete("/topics/{topic_id}")
+async def delete_topic(topic_id: str):
+    """Delete a research topic."""
+    from scheduling.tasks import _topics
+
+    topic = get_topic(topic_id)
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    # Unschedule jobs
+    scheduler.unschedule_topic(topic_id)
+
+    # Delete vector store collection
+    vector_store = VectorStore()
+    vector_store.delete_topic(topic_id)
+
+    # Remove from storage
+    del _topics[topic_id]
+
+    logger.info(f"Deleted topic: {topic.name} ({topic_id})")
+
+    return {"status": "deleted", "topic_id": topic_id}
+
+@app.post("/topics/{topic_id}/monitor")
+async def trigger_monitoring(topic_id: str, background_tasks: BackgroundTasks):
+    """Manually trigger monitoring for a topic."""
+    topic = get_topic(topic_id)
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    background_tasks.add_task(run_topic_monitoring, topic_id)
+
+    return {"status": "monitoring_started", "topic_id": topic_id}
+
+@app.post("/topics/{topic_id}/briefing", response_model=BriefingResponse)
+async def generate_briefing(topic_id: str, hours: int = 24):
+    """Generate a briefing on-demand."""
+    topic = get_topic(topic_id)
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    briefing_generator = BriefingGenerator()
+
+    try:
+        briefing = await briefing_generator.generate_briefing(topic, hours=hours)
+    except Exception as e:
+        logger.error(f"Briefing generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Briefing generation failed: {str(e)}")
+
+    # Store briefing
+    _briefings[briefing.id] = briefing
+
+    return BriefingResponse(
+        briefing_id=briefing.id,
+        topic=briefing.topic_name,
+        generated_at=briefing.generated_at.isoformat(),
+        summary=briefing.executive_summary,
+        sections=[s.model_dump() for s in briefing.sections],
+        key_takeaways=briefing.key_takeaways,
+        sources_analyzed=briefing.sources_analyzed,
+        citations=[c.model_dump() for c in briefing.citations]
+    )
+
+@app.get("/briefings/{briefing_id}")
+async def get_briefing(briefing_id: str, format: str = "json"):
+    """Get a generated briefing."""
+    briefing = _briefings.get(briefing_id)
+    if not briefing:
+        raise HTTPException(status_code=404, detail="Briefing not found")
+
+    if format == "markdown":
+        generator = BriefingGenerator()
+        return {"content": generator.format_briefing_markdown(briefing)}
+    elif format == "html":
+        generator = BriefingGenerator()
+        return {"content": generator.format_briefing_html(briefing)}
+    else:
+        return {
+            "briefing_id": briefing.id,
+            "topic": briefing.topic_name,
+            "generated_at": briefing.generated_at.isoformat(),
+            "period_start": briefing.period_start.isoformat(),
+            "period_end": briefing.period_end.isoformat(),
+            "executive_summary": briefing.executive_summary,
+            "sections": [s.model_dump() for s in briefing.sections],
+            "key_takeaways": briefing.key_takeaways,
+            "citations": [c.model_dump() for c in briefing.citations],
+            "sources_analyzed": briefing.sources_analyzed
+        }
+
+@app.get("/scheduler/jobs")
+async def list_scheduled_jobs():
+    """List all scheduled jobs."""
+    return {"jobs": scheduler.list_jobs()}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+---
+
+## Testing
+
+### Unit Tests
+
+```python
+# tests/test_credibility_scorer.py
+import pytest
+from analysis.credibility_scorer import CredibilityScorer
+from models import SourceDocument, SourceType
+from datetime import datetime, timedelta
+
+@pytest.fixture
+def scorer():
+    return CredibilityScorer()
+
+@pytest.fixture
+def sample_document():
+    return SourceDocument(
+        topic_id="test-topic",
+        url="https://reuters.com/article/test",
+        title="Test Article",
+        content="According to research, this study finds important results. " * 20,
+        published_at=datetime.utcnow() - timedelta(hours=12),
+        source_type=SourceType.RSS,
+        domain="reuters.com"
+    )
+
+class TestCredibilityScorer:
+    def test_high_authority_domain(self, scorer, sample_document):
+        """High-authority domains should score well."""
+        score = scorer.score_document(sample_document)
+        assert score.domain_authority >= 0.9
+        assert score.overall_score >= 0.7
+
+    def test_low_authority_domain(self, scorer, sample_document):
+        """Low-authority domains should score lower."""
+        sample_document.domain = "random-blog.blogspot.com"
+        sample_document.url = "https://random-blog.blogspot.com/post"
+        score = scorer.score_document(sample_document)
+        assert score.domain_authority <= 0.4
+
+    def test_recent_content_scores_higher(self, scorer, sample_document):
+        """Recent content should have higher publication frequency score."""
+        sample_document.published_at = datetime.utcnow() - timedelta(hours=6)
+        score = scorer.score_document(sample_document)
+        assert score.publication_frequency >= 0.9
+
+    def test_old_content_scores_lower(self, scorer, sample_document):
+        """Old content should have lower publication frequency score."""
+        sample_document.published_at = datetime.utcnow() - timedelta(days=120)
+        score = scorer.score_document(sample_document)
+        assert score.publication_frequency <= 0.5
+
+    def test_quality_indicators_boost_score(self, scorer, sample_document):
+        """Content with quality indicators should score higher."""
+        sample_document.content = """
+        According to research published by Harvard University, Professor Smith
+        found that the data indicates significant improvements. The study from 2024
+        references https://example.com/source for verification.
+        """ * 10
+        score = scorer.score_document(sample_document)
+        assert score.content_quality >= 0.6
+
+    def test_low_quality_indicators_reduce_score(self, scorer, sample_document):
+        """Content with low-quality indicators should score lower."""
+        sample_document.content = """
+        BREAKING!!! YOU WON'T BELIEVE what happened!! Click here to subscribe now!!
+        Limited time offer!!! SHOCKING news!!!
+        """
+        score = scorer.score_document(sample_document)
+        assert score.content_quality <= 0.4
+
+    def test_cross_reference_with_multiple_sources(self, scorer, sample_document):
+        """Documents with cross-references should score higher."""
+        other_docs = [
+            SourceDocument(
+                topic_id="test-topic",
+                url=f"https://example{i}.com/article",
+                title=f"Related Article {i}",
+                content="According to research, this study finds important results. " * 20,
+                source_type=SourceType.RSS,
+                domain=f"example{i}.com"
+            )
+            for i in range(3)
+        ]
+        score = scorer.score_document(sample_document, other_docs)
+        assert score.cross_reference_score >= 0.6
+
+    def test_overall_score_is_weighted_average(self, scorer, sample_document):
+        """Overall score should be a weighted average of components."""
+        score = scorer.score_document(sample_document)
+        expected = (
+            score.domain_authority * 0.35 +
+            score.publication_frequency * 0.15 +
+            score.cross_reference_score * 0.25 +
+            score.content_quality * 0.25
+        )
+        assert abs(score.overall_score - expected) < 0.01
+```
+
+```python
+# tests/test_rss_parser.py
+import pytest
+from unittest.mock import AsyncMock, patch, MagicMock
+from acquisition.rss_parser import RSSParser
+
+@pytest.fixture
+def parser():
+    return RSSParser()
+
+@pytest.fixture
+def sample_rss_response():
+    return """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0">
+        <channel>
+            <title>Test Feed</title>
+            <item>
+                <title>Test Article</title>
+                <link>https://example.com/article1</link>
+                <description>This is a test article with content.</description>
+                <pubDate>Mon, 01 Jan 2024 12:00:00 GMT</pubDate>
+            </item>
+            <item>
+                <title>Another Article</title>
+                <link>https://example.com/article2</link>
+                <description>Another test article.</description>
+                <pubDate>Mon, 01 Jan 2024 10:00:00 GMT</pubDate>
+            </item>
+        </channel>
+    </rss>"""
+
+class TestRSSParser:
+    @pytest.mark.asyncio
+    async def test_parse_valid_feed(self, parser, sample_rss_response):
+        """Should parse valid RSS feed and return documents."""
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.text = sample_rss_response
+            mock_response.raise_for_status = MagicMock()
+
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                return_value=mock_response
+            )
+
+            docs = await parser.parse_feed("https://example.com/feed.xml", "topic-1")
+
+            assert len(docs) == 2
+            assert docs[0].title == "Test Article"
+            assert docs[0].url == "https://example.com/article1"
+            assert docs[0].domain == "example.com"
+
+    @pytest.mark.asyncio
+    async def test_parse_feed_http_error(self, parser):
+        """Should handle HTTP errors gracefully."""
+        import httpx
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                side_effect=httpx.HTTPError("Connection failed")
+            )
+
+            docs = await parser.parse_feed("https://example.com/feed.xml", "topic-1")
+
+            assert len(docs) == 0
+
+    def test_clean_html(self, parser):
+        """Should remove HTML tags from content."""
+        html = "<p>Hello <strong>world</strong>!</p><script>alert('x')</script>"
+        cleaned = parser._clean_html(html)
+        assert "Hello" in cleaned
+        assert "world" in cleaned
+        assert "<" not in cleaned
+        assert "alert" not in cleaned
+```
+
+```python
+# tests/test_synthesizer.py
+import pytest
+from unittest.mock import AsyncMock, patch, MagicMock
+from rag.synthesizer import Synthesizer
+
+@pytest.fixture
+def synthesizer():
+    return Synthesizer()
+
+@pytest.fixture
+def sample_documents():
+    return [
+        {
+            "id": "doc-1",
+            "content": "AI advances continue with new breakthroughs in language models.",
+            "metadata": {
+                "title": "AI Breakthroughs 2024",
+                "url": "https://techsite.com/ai-news",
+                "domain": "techsite.com",
+                "credibility_score": 0.85
+            }
+        },
+        {
+            "id": "doc-2",
+            "content": "Machine learning applications expand into healthcare sector.",
+            "metadata": {
+                "title": "ML in Healthcare",
+                "url": "https://healthtech.com/ml-apps",
+                "domain": "healthtech.com",
+                "credibility_score": 0.78
+            }
+        }
+    ]
+
+class TestSynthesizer:
+    def test_build_source_context(self, synthesizer, sample_documents):
+        """Should build numbered source context."""
+        context, citations = synthesizer._build_source_context(sample_documents)
+
+        assert "[1]" in context
+        assert "[2]" in context
+        assert "AI Breakthroughs 2024" in context
+        assert len(citations) == 2
+        assert citations[0]["id"] == 1
+        assert citations[1]["id"] == 2
+
+    def test_find_citations_in_text(self, synthesizer):
+        """Should extract citation numbers from text."""
+        text = "According to [1], the results show [2] and [1] again."
+        citations = synthesizer._find_citations_in_text(text)
+
+        assert 1 in citations
+        assert 2 in citations
+        assert len(citations) == 2  # Deduplicated
+
+    def test_extract_takeaways(self, synthesizer):
+        """Should extract key takeaways from content."""
+        content = """
+        Some introduction text.
+
+        ## Key Takeaways
+        - First important point
+        - Second important point
+        - Third important point
+
+        More content here.
+        """
+        takeaways = synthesizer._extract_takeaways(content)
+
+        assert len(takeaways) == 3
+        assert "First important point" in takeaways[0]
+
+    def test_extract_executive_summary(self, synthesizer):
+        """Should extract executive summary from content."""
+        content = """This is the first sentence. This is the second sentence. This is the third sentence. This is the fourth sentence.
+
+        ## Section Header
+        More content here.
+        """
+        summary = synthesizer._extract_executive_summary(content)
+
+        assert "first sentence" in summary
+        assert "second sentence" in summary
+        assert "third sentence" in summary
+
+    @pytest.mark.asyncio
+    async def test_synthesize_empty_documents(self, synthesizer):
+        """Should handle empty document list."""
+        result = await synthesizer.synthesize(
+            query="Test query",
+            documents=[],
+            topic_name="Test Topic"
+        )
+
+        assert "No relevant documents" in result["summary"]
+        assert len(result["citations"]) == 0
+```
+
+```python
+# tests/test_api.py
+import pytest
+from fastapi.testclient import TestClient
+from main import app
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+class TestAPI:
+    def test_health_check(self, client):
+        """Health endpoint should return healthy status."""
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json()["status"] == "healthy"
+
+    def test_create_topic(self, client):
+        """Should create a new research topic."""
+        response = client.post("/topics", json={
+            "name": "AI Research",
+            "description": "Track AI developments",
+            "keywords": ["artificial intelligence", "machine learning"],
+            "rss_feeds": ["https://example.com/ai-feed.xml"]
+        })
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == "AI Research"
+        assert data["status"] == "active"
+        assert "id" in data
+
+    def test_list_topics(self, client):
+        """Should list all topics."""
+        # Create a topic first
+        client.post("/topics", json={"name": "Test Topic"})
+
+        response = client.get("/topics")
+        assert response.status_code == 200
+        assert "topics" in response.json()
+
+    def test_get_nonexistent_topic(self, client):
+        """Should return 404 for nonexistent topic."""
+        response = client.get("/topics/nonexistent-id")
+        assert response.status_code == 404
+
+    def test_delete_topic(self, client):
+        """Should delete a topic."""
+        # Create a topic
+        create_response = client.post("/topics", json={"name": "To Delete"})
+        topic_id = create_response.json()["id"]
+
+        # Delete it
+        response = client.delete(f"/topics/{topic_id}")
+        assert response.status_code == 200
+        assert response.json()["status"] == "deleted"
+
+        # Verify it's gone
+        get_response = client.get(f"/topics/{topic_id}")
+        assert get_response.status_code == 404
+
+    def test_trigger_monitoring(self, client):
+        """Should trigger monitoring for a topic."""
+        # Create a topic
+        create_response = client.post("/topics", json={"name": "Monitor Test"})
+        topic_id = create_response.json()["id"]
+
+        response = client.post(f"/topics/{topic_id}/monitor")
+        assert response.status_code == 200
+        assert response.json()["status"] == "monitoring_started"
+
+    def test_list_scheduled_jobs(self, client):
+        """Should list scheduled jobs."""
+        response = client.get("/scheduler/jobs")
+        assert response.status_code == 200
+        assert "jobs" in response.json()
+```
+
+### Running Tests
+
+```bash
+# Install test dependencies
+pip install pytest pytest-asyncio pytest-cov
+
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=. --cov-report=html
+
+# Run specific test file
+pytest tests/test_credibility_scorer.py -v
+```
+
+---
+
+## Deployment
+
+### Project Structure
+
+```
+research-assistant/
+├── main.py                    # FastAPI application
+├── config.py                  # Configuration management
+├── models.py                  # Pydantic models
+├── requirements.txt           # Dependencies
+├── .env.example              # Environment template
+│
+├── acquisition/
+│   ├── __init__.py
+│   ├── rss_parser.py         # RSS feed parsing
+│   └── web_scraper.py        # Web scraping with rate limiting
+│
+├── analysis/
+│   ├── __init__.py
+│   └── credibility_scorer.py # Source credibility scoring
+│
+├── rag/
+│   ├── __init__.py
+│   ├── vector_store.py       # ChromaDB integration
+│   └── synthesizer.py        # LLM-based synthesis
+│
+├── briefing/
+│   ├── __init__.py
+│   └── generator.py          # Briefing generation
+│
+├── delivery/
+│   ├── __init__.py
+│   ├── email_sender.py       # SMTP email delivery
+│   └── slack_sender.py       # Slack webhook delivery
+│
+├── scheduling/
+│   ├── __init__.py
+│   ├── scheduler.py          # APScheduler management
+│   └── tasks.py              # Scheduled task definitions
+│
+└── tests/
+    ├── __init__.py
+    ├── test_credibility_scorer.py
+    ├── test_rss_parser.py
+    ├── test_synthesizer.py
+    └── test_api.py
+```
+
+### Requirements
+
+```txt
+# requirements.txt
+fastapi>=0.109.0
+uvicorn>=0.27.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+httpx>=0.26.0
+feedparser>=6.0.10
+beautifulsoup4>=4.12.0
+python-dateutil>=2.8.2
+langchain>=0.1.0
+langchain-openai>=0.0.5
+chromadb>=0.4.22
+apscheduler>=3.10.4
+```
+
+### Environment Configuration
+
+```bash
+# .env.example
+
+# OpenAI Configuration
+OPENAI_API_KEY=sk-your-api-key-here
+
+# ChromaDB
+CHROMA_PERSIST_DIR=./chroma_data
+
+# Email (SMTP) - Optional
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM_EMAIL=your-email@gmail.com
+
+# Slack - Optional
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx/yyy/zzz
+
+# Scraping
+SCRAPE_DELAY_SECONDS=2.0
+USER_AGENT=ResearchAssistant/1.0 (Educational Project)
+
+# Scheduling
+DEFAULT_BRIEFING_TIME=08:00
+TIMEZONE=UTC
+```
+
+### Docker Deployment
+
+```dockerfile
+# Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Create data directory
+RUN mkdir -p /app/chroma_data
+
+# Expose port
+EXPOSE 8000
+
+# Run application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+
+services:
+  research-assistant:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+    volumes:
+      - chroma_data:/app/chroma_data
+    restart: unless-stopped
+
+volumes:
+  chroma_data:
+```
+
+### Running the Application
+
+```bash
+# Development
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# Production with Docker
+docker-compose up -d
+
+# View logs
+docker-compose logs -f research-assistant
+```
+
+---
+
+## Usage Examples
+
+### Creating a Research Topic
+
+```bash
+# Create a topic to monitor AI developments
+curl -X POST http://localhost:8000/topics \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "AI Industry News",
+    "description": "Track developments in artificial intelligence",
+    "keywords": ["artificial intelligence", "machine learning", "LLM", "GPT"],
+    "rss_feeds": [
+      "https://techcrunch.com/category/artificial-intelligence/feed/",
+      "https://www.wired.com/feed/tag/ai/latest/rss"
+    ],
+    "websites": [
+      "https://openai.com/blog",
+      "https://www.anthropic.com/news"
+    ],
+    "schedule": {
+      "frequency": "daily",
+      "time": "08:00",
+      "timezone": "America/New_York"
+    },
+    "delivery": {
+      "email": "your-email@example.com",
+      "slack_webhook": "https://hooks.slack.com/services/xxx/yyy/zzz"
+    }
+  }'
+```
+
+### Generating an On-Demand Briefing
+
+```bash
+# Generate a briefing for the last 24 hours
+curl -X POST "http://localhost:8000/topics/{topic_id}/briefing?hours=24"
+
+# Get briefing in markdown format
+curl "http://localhost:8000/briefings/{briefing_id}?format=markdown"
+```
+
+### Sample Briefing Output
+
+```markdown
+# Research Briefing: AI Industry News
+
+**Generated:** 2024-01-15 08:00 UTC
+**Period:** 2024-01-14 to 2024-01-15
+**Sources Analyzed:** 12
+
+## Executive Summary
+
+The AI industry saw significant developments over the past 24 hours, with major announcements from leading companies and new research publications. Key themes include advances in multimodal AI capabilities, growing enterprise adoption, and ongoing discussions about AI safety and regulation.
+
+## Major Developments
+
+OpenAI announced updates to their API pricing structure, reducing costs for GPT-4 Turbo by 25% [1]. This move is expected to accelerate enterprise adoption of advanced AI capabilities. Meanwhile, Anthropic released new research on constitutional AI methods [2], demonstrating improved safety properties in their Claude models.
+
+## Industry Trends
+
+Enterprise AI adoption continues to accelerate, with a new survey indicating 67% of Fortune 500 companies now have active AI initiatives [3]. Healthcare and financial services lead adoption rates, with manufacturing showing the fastest growth [4].
+
+## Key Takeaways
+
+- OpenAI's price reduction signals maturing AI infrastructure and increased competition
+- Safety research continues to advance alongside capability improvements
+- Enterprise adoption is accelerating across all major industries
+- Regulatory frameworks are beginning to take shape globally
+- Open-source alternatives are gaining traction in specific use cases
+
+## Sources
+
+[1] [OpenAI Announces API Price Cuts](https://openai.com/blog/pricing-update) - openai.com ★★★★★
+[2] [Constitutional AI Research](https://anthropic.com/research/constitutional-ai) - anthropic.com ★★★★★
+[3] [Enterprise AI Survey 2024](https://techcrunch.com/enterprise-ai-survey) - techcrunch.com ★★★★☆
+[4] [Manufacturing AI Adoption](https://wired.com/manufacturing-ai) - wired.com ★★★★☆
+```
+
+---
+
+## Extension Challenges
+
+<Callout type="tip">
+  These challenges extend the core project with advanced features. Each builds
+  on the foundation you've created.
+</Callout>
+
+### Challenge 1: Advanced Source Discovery
+
+Extend the system to automatically discover new sources based on your topics.
+
+```python
+# extensions/source_discovery.py
+from typing import List
+import httpx
+
+class SourceDiscovery:
+    """Automatically discover new sources for topics."""
+
+    async def discover_rss_feeds(self, keywords: List[str]) -> List[str]:
+        """
+        Discover RSS feeds related to keywords using search APIs.
+
+        Approach:
+        1. Search for "{keyword} RSS feed" or "{keyword} blog"
+        2. Scrape results for RSS feed links
+        3. Validate discovered feeds
+        4. Return unique, valid feeds
+        """
+        # Implementation hint: Use Google Custom Search API or
+        # scrape search results for RSS autodiscovery links
+        pass
+
+    async def find_rss_from_page(self, url: str) -> List[str]:
+        """
+        Find RSS feeds linked from a webpage.
+
+        Look for:
+        - <link rel="alternate" type="application/rss+xml">
+        - Common RSS paths: /feed, /rss, /atom.xml
+        """
+        pass
+```
+
+### Challenge 2: Sentiment and Trend Analysis
+
+Add sentiment tracking and trend detection to briefings.
+
+```python
+# extensions/trend_analyzer.py
+from typing import List, Dict
+from collections import Counter
+from datetime import datetime, timedelta
+
+class TrendAnalyzer:
+    """Analyze trends and sentiment across documents."""
+
+    def detect_emerging_topics(
+        self,
+        documents: List[Dict],
+        window_days: int = 7
+    ) -> List[Dict]:
+        """
+        Detect topics that are gaining momentum.
+
+        Approach:
+        1. Extract key terms from recent vs older documents
+        2. Calculate term frequency changes
+        3. Identify terms with significant increases
+        4. Return ranked emerging topics
+        """
+        pass
+
+    def analyze_sentiment(self, content: str) -> Dict:
+        """
+        Analyze sentiment of content.
+
+        Returns:
+        - overall: positive/negative/neutral
+        - confidence: 0.0-1.0
+        - key_phrases: phrases driving sentiment
+        """
+        # Implementation hint: Use TextBlob, VADER, or LLM-based analysis
+        pass
+
+    def generate_trend_report(
+        self,
+        topic_id: str,
+        days: int = 30
+    ) -> Dict:
+        """
+        Generate a trend report for a topic.
+
+        Include:
+        - Volume trends (articles per day)
+        - Sentiment trends over time
+        - Emerging subtopics
+        - Key influencers/sources
+        """
+        pass
+```
+
+### Challenge 3: Multi-Language Support
+
+Extend the system to monitor sources in multiple languages.
+
+```python
+# extensions/multilingual.py
+from typing import Optional
+
+class MultilingualProcessor:
+    """Process content in multiple languages."""
+
+    def detect_language(self, text: str) -> str:
+        """Detect the language of text."""
+        # Use langdetect or similar library
+        pass
+
+    async def translate_to_english(
+        self,
+        text: str,
+        source_lang: Optional[str] = None
+    ) -> str:
+        """
+        Translate text to English for unified processing.
+
+        Options:
+        - Google Translate API
+        - DeepL API
+        - Local models (Helsinki-NLP)
+        """
+        pass
+
+    def generate_multilingual_briefing(
+        self,
+        briefing: Dict,
+        target_languages: List[str]
+    ) -> Dict[str, str]:
+        """Generate briefing in multiple languages."""
+        pass
+```
+
+### Challenge 4: Interactive Briefing Dashboard
+
+Build a web dashboard for viewing and interacting with briefings.
+
+```typescript
+// Frontend: React + TypeScript dashboard
+// Key features:
+// - Real-time briefing updates
+// - Interactive citation exploration
+// - Topic management UI
+// - Trend visualizations
+// - Source credibility breakdown
+
+interface BriefingDashboard {
+  // Topic management
+  createTopic(config: TopicConfig): Promise<Topic>;
+  listTopics(): Promise<Topic[]>;
+
+  // Briefing viewing
+  getBriefing(id: string): Promise<Briefing>;
+  streamBriefing(topicId: string): AsyncIterator<BriefingUpdate>;
+
+  // Analytics
+  getTopicTrends(topicId: string, days: number): Promise<TrendData>;
+  getSourceStats(topicId: string): Promise<SourceStats>;
+}
+```
+
+### Challenge 5: Collaborative Research
+
+Add multi-user support with shared topics and annotations.
+
+```python
+# extensions/collaboration.py
+from typing import List, Optional
+
+class CollaborativeResearch:
+    """Multi-user research collaboration features."""
+
+    async def share_topic(
+        self,
+        topic_id: str,
+        user_emails: List[str],
+        permission: str = "read"  # read, write, admin
+    ) -> bool:
+        """Share a topic with other users."""
+        pass
+
+    async def add_annotation(
+        self,
+        briefing_id: str,
+        citation_id: int,
+        user_id: str,
+        note: str
+    ) -> str:
+        """Add a user annotation to a citation."""
+        pass
+
+    async def get_team_insights(
+        self,
+        topic_id: str
+    ) -> Dict:
+        """
+        Aggregate insights from team annotations.
+
+        Returns:
+        - Most discussed citations
+        - Common themes in annotations
+        - Disagreements/debates
+        """
+        pass
+```
+
+---
+
+## Summary
+
+In this project, you built a comprehensive personal research assistant that:
+
+1. **Monitors Multiple Sources**: Parses RSS feeds and scrapes websites with respectful rate limiting and robots.txt compliance.
+
+2. **Scores Source Credibility**: Evaluates sources based on domain authority, publication patterns, cross-references, and content quality.
+
+3. **Stores and Retrieves with RAG**: Uses ChromaDB for vector storage and retrieval-augmented generation for intelligent document retrieval.
+
+4. **Synthesizes Multi-Document Summaries**: Leverages LLMs to create coherent summaries from multiple sources with proper citation tracking.
+
+5. **Generates Professional Briefings**: Creates executive-style briefings with key takeaways, structured sections, and verified citations.
+
+6. **Delivers Automatically**: Sends briefings via email (SMTP) and Slack webhooks on configurable schedules.
+
+7. **Runs on Schedule**: Uses APScheduler for automated monitoring and briefing generation.
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "What You Built"
+        A[Topic Monitoring] --> B[Content Acquisition]
+        B --> C[Credibility Scoring]
+        C --> D[RAG Storage]
+        D --> E[Multi-Doc Synthesis]
+        E --> F[Briefing Generation]
+        F --> G[Multi-Channel Delivery]
+    end
+    
+    subgraph "Skills Gained"
+        S1[Web Scraping]
+        S2[RAG Pipelines]
+        S3[LLM Synthesis]
+        S4[Task Scheduling]
+        S5[API Design]
+    end
+    
+    style E fill:#f9f,stroke:#333
+    style D fill:#e3f2fd,stroke:#0277bd
+`}
+  caption="Project Summary: End-to-end research assistant pipeline."
+/>
+
+**Key Takeaways**:
+
+- **Respectful Scraping**: Always respect robots.txt and implement rate limiting
+- **Credibility Matters**: Not all sources are equal—scoring helps filter noise
+- **RAG for Synthesis**: Vector databases enable intelligent retrieval for summarization
+- **Citation Integrity**: Every fact should trace back to a verifiable source
+- **Automation**: Scheduled tasks turn a tool into a service
+
+**Next Steps**:
+
+- Add more sophisticated NLP for entity extraction and relationship mapping
+- Implement user feedback loops to improve credibility scoring
+- Build a web dashboard for interactive briefing exploration
+- Add support for PDF and document parsing
+- Integrate with calendar systems for meeting prep briefings
+
+<Callout type="success">
+  Congratulations! You've built a personal research analyst that works 24/7.
+  This project demonstrates production-ready patterns for content aggregation,
+  intelligent synthesis, and automated delivery.
+</Callout>

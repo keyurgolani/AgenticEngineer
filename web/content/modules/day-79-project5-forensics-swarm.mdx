@@ -566,14 +566,35 @@ class GraphFraudDetector:
 
 Behavioral biometrics analyze how users interact with devices—typing patterns, mouse movements, touch gestures—to detect account takeover and synthetic identities.
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "BehaviorSimulator" component where users can:
-
-1. Choose "Legitimate User" or "Bot/Fraudster" mode
-2. Type in a text field and move mouse around
-3. See real-time behavioral metrics (typing cadence, mouse velocity, pause patterns)
-4. View a risk score that updates based on their behavior
-5. Compare their patterns against stored profiles
-   This demonstrates how behavioral biometrics work in practice. Place after the code example. */}
+<Mermaid
+  chart={`
+graph LR
+    User[User Behavior] --> Metrics{Metrics Engine}
+    
+    subgraph "Behavioral Signals"
+        Type[Typing Cadence]
+        Mouse[Mouse Velocity]
+        Pause[Pause Patterns]
+    end
+    
+    User --> Type
+    User --> Mouse
+    User --> Pause
+    
+    Type --> Metrics
+    Mouse --> Metrics
+    Pause --> Metrics
+    
+    Metrics --> Compare{Profile Match?}
+    Compare -->|Match| Safe[✅ Legitimate]
+    Compare -->|Mismatch| Risk[❌ Anomaly Detected]
+    
+    style User fill:#e1f5fe,stroke:#01579b
+    style Safe fill:#c8e6c9,stroke:#2e7d32
+    style Risk fill:#ffcdd2,stroke:#c62828
+`}
+  caption="Behavioral Simulator: How biometric patterns determine risk scores."
+/>
 
 ```python
 @dataclass
@@ -940,7 +961,32 @@ class ATODetector:
 
 ## 79.1 Architecture: Hub-and-Spoke Swarm
 
-{/* IMAGE_PLACEHOLDER: Create a detailed hub-and-spoke architecture diagram. CENTER: Large "Investigation Hub" node with an AI brain icon. SPOKES: Four MCP client nodes radiating outward (Stripe, PostgreSQL, Slack, Filesystem), each connected to their respective data sources (shown as cylinders/icons). Add animated data flow arrows showing queries going out and results coming back. Include a "Checkpoint Store" and "Report Generator" at the bottom. Use different colors for each data source type (blue for payments, green for database, purple for communications, orange for files). Style: Professional architecture diagram with 3D-style nodes and glowing connection lines. */}
+<Mermaid
+  chart={`
+graph TD
+    Hub[Investigation Agent 🧠]
+    
+    Hub -->|Query| Stripe[Stripe MCP]
+    Hub -->|Query| PG[Postgres MCP]
+    Hub -->|Query| Slack[Slack MCP]
+    Hub -->|Read| FS[Filesystem MCP]
+    
+    Stripe --> Data1[(Transactions)]
+    PG --> Data2[(User DB)]
+    Slack --> Data3[(Messages)]
+    FS --> Data4[(Logs)]
+    
+    Hub -->|Store| Checkpoint[Checkpoint DB]
+    Hub -->|Generate| Report[Report Generator]
+    
+    style Hub fill:#f9f,stroke:#333,stroke-width:2px
+    style Stripe fill:#bbf,stroke:#333
+    style PG fill:#bfb,stroke:#333
+    style Slack fill:#e1bee7,stroke:#333
+    style FS fill:#ffccbc,stroke:#333
+`}
+  caption="Hub-and-Spoke Architecture: The central agent orchestrates specialized MCP tools."
+/>
 
 ![Forensics Swarm Architecture](/images/forensics_swarm.png)
 
@@ -979,7 +1025,26 @@ graph TB
 
 ## Multi-Agent Investigation Patterns (2024-2025)
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing parallel agent execution. Display a "Lead Investigator" agent at the top spawning 4 specialist agents simultaneously (Payment Analyst, Communication Analyst, Behavior Analyst, Graph Analyst). Show each specialist with their own data source and magnifying glass. Use parallel horizontal lanes to show they work simultaneously, not sequentially. Add clock icons showing time saved (Sequential: 8 minutes vs Parallel: 2 minutes). Include an "Evidence Aggregator" at the bottom collecting findings from all agents. Style: Flowchart-style with agent avatars, parallel swim lanes, and time indicators. */}
+<Mermaid
+  chart={`
+graph TB
+    Lead[Lead Investigator] -->|Spawn| Pay[Payment Analyst]
+    Lead -->|Spawn| Comm[Communication Analyst]
+    Lead -->|Spawn| Behav[Behavior Analyst]
+    Lead -->|Spawn| Graph[Graph Analyst]
+    
+    Pay -->|Evidence| Agg[Evidence Aggregator]
+    Comm -->|Evidence| Agg
+    Behav -->|Evidence| Agg
+    Graph -->|Evidence| Agg
+    
+    Agg --> Result[Final Report]
+    
+    style Lead fill:#f9f,stroke:#333
+    style Agg fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Parallel Execution: Specialist agents work simultaneously to reduce investigation time."
+/>
 
 <Callout type="tip">
   **2025 Update**: Modern investigation systems use parallel specialist agents
@@ -1376,7 +1441,30 @@ def calculate_final_risk_score(
 
 ## 79.2 MCP Ecosystem & Server Discovery (2024-2025)
 
-{/* IMAGE_PLACEHOLDER: Create an ecosystem map showing the MCP landscape. CENTER: "MCP Registry" hub. OUTER RING: Major platform logos (Stripe, Notion, Linear, Figma, GitHub, Slack, PostgreSQL) with their official MCP servers. MIDDLE RING: Community servers organized by category (Payments, Databases, Communication, Files, Analytics). Show connection lines and include a counter showing "17,000+ Servers". Add a timeline at the bottom showing growth from Nov 2024 launch to 2025. Style: Circular ecosystem diagram with logos, categories, and growth metrics. */}
+<Mermaid
+  chart={`
+mindmap
+  root((MCP Registry))
+    Platforms
+        Stripe
+        GitHub
+        Slack
+        PostgreSQL
+        Notion
+        Sentry
+    Community
+        Filesystem
+        Git
+        Memory
+        Fetch
+        Brave Search
+    Tools
+        Inspector
+        SDKs
+        CLI
+`}
+  caption="MCP Ecosystem: A rapidly growing network of official and community-built servers."
+/>
 
 <Callout type="tip">
   **2025 Update**: The MCP landscape has matured significantly since the
@@ -1872,17 +1960,64 @@ def build_investigation_workflow():
 
 ## 79.6 Running an Investigation
 
-{/* IMAGE_PLACEHOLDER: Create a terminal-style visualization showing the investigation flow. Design it as an animated sequence with 4 stages, each expanding to show details: Stage 1 (Gathering Transaction Data) with Stripe API calls, Stage 2 (Checking User History) with database queries, Stage 3 (Analyzing Patterns) with red flag warnings appearing, Stage 4 (Final Report) with risk score gauge. Use terminal green text on black background with colored highlights for warnings and success messages. Include ASCII art for the detective emoji and progress bars. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Analyst as Investigator
+    participant Stripe
+    participant DB as Database
+    participant Slack
+    participant Report
+    
+    Note over Analyst: Stage 1: Gather Data
+    Analyst->>Stripe: Get Transaction
+    Stripe-->>Analyst: {amount: 4999, ...}
+    
+    Note over Analyst: Stage 2: History
+    Analyst->>DB: Check User History
+    DB-->>Analyst: Account Created < 2 mins ago
+    
+    Note over Analyst: Stage 3: Patterns
+    Analyst->>Slack: Check Comms
+    Slack-->>Analyst: No History
+    
+    Note over Analyst: Stage 4: Report
+    Analyst->>Report: Generate Risk Score
+    Report-->>Analyst: Score: 92/100 (BLOCK)
+`}
+  caption="Investigation Flow: The agent systematically gathers evidence across multiple channels."
+/>
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Create an "InvestigationSimulator" component that:
-
-1. Lets users input a transaction ID
-2. Shows a live progress view as the investigation runs through stages
-3. Displays each MCP tool call with input/output in expandable sections
-4. Highlights red flags as they're detected with explanations
-5. Shows the final risk score calculation with factor breakdown
-6. Generates a downloadable investigation report
-   This would replace or supplement the static Terminal component to make the investigation process interactive. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Swarm as Investigation Swarm
+    participant Tools as MCP Tools
+    
+    User->>Swarm: Investigate(tx_id)
+    
+    rect rgb(240, 248, 255)
+        Note right of Swarm: Stage 1: Data Gathering
+        Swarm->>Tools: stripe.get_transaction
+        Tools-->>Swarm: Transaction Details
+        Swarm->>Tools: database.get_user_history
+        Tools-->>Swarm: User Profile
+    end
+    
+    rect rgb(255, 248, 240)
+        Note right of Swarm: Stage 2: Pattern Analysis
+        Swarm->>Tools: behavior.analyze_login
+        Tools-->>Swarm: VPN Detected (Flag!)
+        Swarm->>Tools: device.fingerprint
+        Tools-->>Swarm: New Device (Flag!)
+    end
+    
+    Swarm->>Swarm: Calculate Risk Score (85/100)
+    Swarm-->>User: Final Report (High Risk)
+`}
+  caption="Investigation Simulator: Step-by-step forensic process."
+/>
 
 <Terminal 
   command="python investigate.py --transaction pi_3ABC123XYZ"
@@ -1997,7 +2132,26 @@ Generate a PDF report with charts showing transaction patterns.
 
 ## Compliance & Regulatory Requirements (2024-2025)
 
-{/* IMAGE_PLACEHOLDER: Create a compliance checklist infographic showing PCI DSS 4.0, GDPR, and CCPA requirements. Use three columns, each with a regulation logo/icon at the top. List key requirements as checkboxes with brief descriptions. Highlight the March 2025 PCI DSS 4.0 deadline with a calendar icon. Include penalty amounts for non-compliance at the bottom ($50K-$500K for PCI DSS violations). Style: Professional compliance document style with official colors (blue for PCI, EU flag colors for GDPR, California flag colors for CCPA). */}
+<Mermaid
+  chart={`
+mindmap
+  root((Compliance))
+    PCI DSS 4.0
+        Log Integrity
+        Change Detection
+        MFA Access
+        Risk Analysis
+    GDPR
+        Right to Erasure
+        Data Minimization
+        Human Oversight
+    CCPA
+        Right to Know
+        Non-Discrimination
+        Opt-Out
+`}
+  caption="Compliance Checklist: Adhering to major frameworks is mandatory for financial forensics."
+/>
 
 <Callout type="warning">
   **Critical**: Financial forensics systems must comply with PCI DSS 4.0
@@ -2330,7 +2484,24 @@ class ComplianceAuditTrail:
 
 ## Production Considerations (2024-2025)
 
-{/* IMAGE_PLACEHOLDER: Create a production architecture diagram showing resilience patterns. Display the Investigation Agent at the center with three protective layers around it: 1) Rate Limiter (with request counters), 2) Cache Layer (with hit/miss indicators), 3) Fallback Handler (with retry logic). Show MCP servers outside these layers with health status indicators (green/yellow/red). Include metrics panels showing latency, error rates, and cache hit ratios. Style: Technical architecture diagram with monitoring dashboards and traffic flow indicators. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Resilience Layers"
+        RL[Rate Limiter] --> Cache[Cache Layer]
+        Cache --> Fallback[Fallback Handler]
+        Fallback --> Agent[Investigation Agent]
+    end
+    
+    Agent -->|Calls| Server1[MCP Server 1]
+    Agent -->|Calls| Server2[MCP Server 2]
+    
+    style RL fill:#bbdefb,stroke:#0d47a1
+    style Cache fill:#c8e6c9,stroke:#2e7d32
+    style Fallback fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Production Architecture: Multiple layers of defense ensure system stability."
+/>
 
 <Callout type="info">
   **Production Reality**: Multi-source investigation systems face unique

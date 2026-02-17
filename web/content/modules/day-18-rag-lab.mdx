@@ -33,7 +33,11 @@ day: 18
 
 ## Lab Overview
 
-<ConceptVisual src="/images/company_policy_system_architecture.png" alt="Company Policy Assistant Architecture" caption="The system combines a RAG pipeline, a persistent memory store, and an intelligent agent." />
+<ConceptVisual
+  src="/images/company_policy_system_architecture.png"
+  alt="Company Policy Assistant Architecture"
+  caption="The system combines a RAG pipeline, a persistent memory store, and an intelligent agent."
+/>
 
 In this lab, you'll build a **Company Policy Assistant**—an agent that can answer questions about company documents while remembering user preferences and past interactions. This combines:
 
@@ -53,7 +57,11 @@ In this lab, you'll build a **Company Policy Assistant**—an agent that can ans
 
 Traditional RAG follows a fixed pipeline: retrieve → generate. **Agentic RAG** adds intelligence to this process:
 
-<ConceptVisual src="/images/rag_vs_agentic_rag_comparison.png" alt="Traditional vs Agentic RAG" caption="Agentic RAG adds critical reasoning loops to evaluate and improve quality." />
+<ConceptVisual
+  src="/images/rag_vs_agentic_rag_comparison.png"
+  alt="Traditional vs Agentic RAG"
+  caption="Agentic RAG adds critical reasoning loops to evaluate and improve quality."
+/>
 
 <Mermaid
   chart={`
@@ -97,7 +105,13 @@ Key agentic RAG patterns we'll implement:
 - **Hallucination checking**: Ensure answers are grounded in retrieved context
 
 <Callout type="info">
-  **Analogy: The Research Librarian** — Think of Agentic RAG like a skilled research librarian vs. a simple search engine. A search engine returns results and stops. A librarian evaluates if the books they found actually answer your question, tries different search terms if the first attempt fails, and double-checks that their recommendations are based on the books they found (not their own assumptions). That's the difference between traditional RAG and Agentic RAG.
+  **Analogy: The Research Librarian** — Think of Agentic RAG like a skilled
+  research librarian vs. a simple search engine. A search engine returns results
+  and stops. A librarian evaluates if the books they found actually answer your
+  question, tries different search terms if the first attempt fails, and
+  double-checks that their recommendations are based on the books they found
+  (not their own assumptions). That's the difference between traditional RAG and
+  Agentic RAG.
 </Callout>
 
 <Mermaid
@@ -134,7 +148,11 @@ graph TB
 
 ## 6.1 Setup
 
-<ConceptVisual src="/images/setup_checklist_file_tree.png" alt="Project Structure" caption="Everything you need to build a production-ready agent." />
+<ConceptVisual
+  src="/images/setup_checklist_file_tree.png"
+  alt="Project Structure"
+  caption="Everything you need to build a production-ready agent."
+/>
 
 First, install the required dependencies:
 
@@ -261,7 +279,11 @@ print("✅ Created sample policy documents")
 
 ## 6.3 Building the RAG Pipeline
 
-<ConceptVisual src="/images/rag_indexing_visualization.png" alt="Vector Indexing Process" caption="Documents are split into chunks, converted to vectors, and stored in high-dimensional space." />
+<ConceptVisual
+  src="/images/rag_indexing_visualization.png"
+  alt="Vector Indexing Process"
+  caption="Documents are split into chunks, converted to vectors, and stored in high-dimensional space."
+/>
 
 Now let's build a RAG pipeline that indexes these documents:
 
@@ -428,7 +450,11 @@ if __name__ == "__main__":
 
 ## 6.4 Agentic RAG: Document Grading and Query Rewriting
 
-<ConceptVisual src="/images/agentic_rag_flowchart.png" alt="Agentic RAG Retry Loop" caption="Self-correction allows the agent to recover from poor initial retrieval." />
+<ConceptVisual
+  src="/images/agentic_rag_flowchart.png"
+  alt="Agentic RAG Retry Loop"
+  caption="Self-correction allows the agent to recover from poor initial retrieval."
+/>
 
 Let's enhance our RAG pipeline with agentic capabilities—the ability to evaluate retrieval quality and self-correct when needed.
 
@@ -636,13 +662,21 @@ if __name__ == "__main__":
   can afford extra latency.
 </Callout>
 
-<ConceptVisual src="/images/rag_decision_tree.png" alt="Decision Tree: When to use Agentic RAG?" caption="Use Agentic RAG for complex queries where accuracy outweighs speed." />
+<ConceptVisual
+  src="/images/rag_decision_tree.png"
+  alt="Decision Tree: When to use Agentic RAG?"
+  caption="Use Agentic RAG for complex queries where accuracy outweighs speed."
+/>
 
 ---
 
 ## 6.5 Adding User Memory
 
-<ConceptVisual src="/images/semantic_memory_filing_cabinet.png" alt="Semantic Memory vs Storage" caption="Semantic memory works like specific associations in the brain, not just keyword matches." />
+<ConceptVisual
+  src="/images/semantic_memory_filing_cabinet.png"
+  alt="Semantic Memory vs Storage"
+  caption="Semantic memory works like specific associations in the brain, not just keyword matches."
+/>
 
 Now let's add semantic memory to remember user preferences:
 
@@ -763,7 +797,11 @@ if __name__ == "__main__":
 
 ## 6.6 Building the LangGraph Agent
 
-<ConceptVisual src="/images/langgraph_state_machine.png" alt="LangGraph State Machine" caption="The architecture explicitly separates retrieval, reasoning, and learning phases." />
+<ConceptVisual
+  src="/images/langgraph_state_machine.png"
+  alt="LangGraph State Machine"
+  caption="The architecture explicitly separates retrieval, reasoning, and learning phases."
+/>
 
 Now let's combine everything into a LangGraph agent with checkpointing and the Store API for cross-thread memory:
 
@@ -996,14 +1034,41 @@ Guidelines:
 </Callout>
 
 <Callout type="info">
-  **Analogy: Checkpointer vs Store** — Think of the Checkpointer as your conversation notebook—it records everything said in one meeting (thread). The Store is like your contact database—it remembers facts about people across all meetings. When Alice starts a new conversation (new thread), the Checkpointer starts fresh, but the Store still remembers she's in Engineering with 3 years tenure. This separation allows personalization without carrying over irrelevant conversation history.
+  **Analogy: Checkpointer vs Store** — Think of the Checkpointer as your
+  conversation notebook—it records everything said in one meeting (thread). The
+  Store is like your contact database—it remembers facts about people across all
+  meetings. When Alice starts a new conversation (new thread), the Checkpointer
+  starts fresh, but the Store still remembers she's in Engineering with 3 years
+  tenure. This separation allows personalization without carrying over
+  irrelevant conversation history.
 </Callout>
 
 ---
 
 ## 6.7 Testing the Agent
 
-{/* IMAGE_PLACEHOLDER: Create an interactive test scenario visualizer showing the 6 test cases as a timeline. Each test should be a card showing: (1) Test number and title, (2) User input as a speech bubble, (3) Expected behavior/outcome, (4) Visual indicator of what's being tested (e.g., RAG icon for test 1, memory icon for test 2, persistence icon for test 6). Make it interactive so clicking on a test card expands to show the full conversation flow and what's happening behind the scenes (which memories are accessed, what's retrieved from RAG, etc.). Add a "Run Test" button for each that simulates the test execution with animated progress. Use a vertical timeline layout with connecting lines between tests to show the progression. Place this at the start of section 6.7 to help learners understand the test strategy before running the code. */}
+<Mermaid
+  chart={`
+timeline
+    title Testing Scenario Timeline
+    Test 1 : Basic Policy (RAG)
+           : "Can I work from home Friday?"
+           : -> Rules retrieved from remote-work.md
+    Test 2 : User Intro (Memory)
+           : "My name is Alice..."
+           : -> Saved to UserMemory & Store
+    Test 3 : Personalized (Hybrid)
+           : "How much PTO do I get?"
+           : -> Uses Tenure (3 years) to calc 20 days
+    Test 4 : Follow-up (Context)
+           : "What about sick days?"
+           : -> Maintains conversation history
+    Test 5 : Persistence (Store)
+           : RESTART AGENT
+           : "Who am I?" -> Remembers Alice
+`}
+  caption="Test Scenarios: Verifying RAG, Memory, and Persistence."
+/>
 
 Create a test script to verify everything works:
 
@@ -1118,7 +1183,30 @@ if __name__ == "__main__":
 
 ## 6.8 Production Considerations
 
-{/* IMAGE_PLACEHOLDER: Create a comparison diagram showing Development vs Production architecture. Left side "Development": Show InMemoryStore (with warning icon), MemorySaver (with temporary icon), local ChromaDB. Right side "Production": Show PostgresStore (with checkmark), PostgresSaver (with checkmark), managed vector DB (Pinecone/Weaviate). Use arrows to show the migration path from dev to prod. Include metrics/stats showing the benefits of production setup: "Survives restarts ✓", "Scales horizontally ✓", "Multi-process safe ✓", "Backup & recovery ✓". Add a cost/complexity scale at the bottom showing the tradeoff. Use green for production-ready components and yellow/orange for development-only components. Place this at the start of section 6.8 to help learners understand the production migration path. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph Development
+        DevStore[InMemory Store\n(Volatile)]
+        DevCheck[MemorySaver\n(In-RAM)]
+        LocalDB[Local Chroma\n(./memory)]
+    end
+    
+    subgraph Production
+        ProdStore[Postgres Store\n(Persistent)]
+        ProdCheck[Postgres Saver\n(Persistent)]
+        VecDB[Pinecone / Weaviate\n(Managed)]
+    end
+    
+    DevStore -.->|Migrate| ProdStore
+    DevCheck -.->|Migrate| ProdCheck
+    LocalDB -.->|Migrate| VecDB
+    
+    style Development fill:#fff9c4
+    style Production fill:#c8e6c9
+`}
+  caption="Architecture Evolution: Moving from local dev to production."
+/>
 
 For production deployments, replace the in-memory components with persistent backends:
 
@@ -1184,7 +1272,25 @@ Mem0 handles memory extraction, deduplication, and conflict resolution automatic
 
 ## 6.9 Advanced RAG Patterns
 
-{/* IMAGE_PLACEHOLDER: Create a visual comparison grid showing three advanced RAG patterns side-by-side. Each pattern should have: (1) Hybrid Search: Show two parallel paths (dense embeddings as colorful vectors, BM25 as keyword matching) merging into combined results with a weighted fusion formula visualization, (2) Contextual Compression: Show a document being "squeezed" through a filter that removes irrelevant sentences, with before/after text comparison, (3) Multi-Query Retrieval: Show one user query branching into 3 variations, each retrieving different documents, then deduplicating into a final result set. Use icons and visual metaphors (magnifying glass for search, filter funnel for compression, branching tree for multi-query). Add performance metrics for each (latency, accuracy improvement). Place this at the start of section 6.9 to give learners a visual overview of the patterns before diving into implementation details. */}
+<Mermaid
+  chart={`
+mindmap
+  root((Advanced RAG))
+    Hybrid Search
+      Dense Vectors
+      Sparse Keywords
+      Result Fusion
+    Compression
+      Filter Noise
+      Extract Highlights
+      Save Tokens
+    Multi-Query
+      Variations
+      Deduplication
+      Higher Recall
+`}
+  caption="Advanced Patterns: Improving retrieval quality and efficiency."
+/>
 
 Here are additional patterns to consider for production RAG systems:
 
@@ -1192,10 +1298,43 @@ Here are additional patterns to consider for production RAG systems:
 
 Dense embeddings excel at semantic similarity but can miss exact keyword matches. Combine with sparse retrieval (BM25) for best results:
 
-{/* IMAGE_PLACEHOLDER: Create an interactive comparison tool showing Hybrid Search in action. Display a sample query "remote work Friday policy" with two side-by-side result panels: (1) Dense-only results showing semantically similar docs (may miss exact "Friday" mention), (2) Sparse-only results showing keyword matches (may miss semantic variations like "end of week"). Below, show the hybrid results combining both with adjustable alpha slider (0.0 = all sparse, 1.0 = all dense, 0.5 = balanced). Each result should show its dense score, sparse score, and combined score with visual bars. Highlight how hybrid catches both semantic matches AND exact keywords. Include example queries where each approach excels. Place this right after the heading to demonstrate the value of hybrid search before showing the implementation. */}
+<Mermaid
+  chart={`
+graph LR
+    Query["Query: 'Remote work Friday'"]
+    
+    subgraph Dense[Dense Search]
+        V1[Vector: 'Telecommute policy']
+        V2[Vector: 'WFH guidelines']
+    end
+    
+    subgraph Sparse[Sparse Search]
+        K1[Keyword: 'Friday']
+        K2[Keyword: 'Remote']
+    end
+    
+    Query --> Dense
+    Query --> Sparse
+    
+    Dense --> Fusion{Weighted Fusion}
+    Sparse --> Fusion
+    
+    Fusion --> Result["Result: 'Fri WFH OK'"]
+    
+    style Dense fill:#e1bee7
+    style Sparse fill:#bbdefb
+    style Fusion fill:#c8e6c9
+`}
+  caption="Hybrid Search: Combining semantic understanding with keyword precision."
+/>
 
 <Callout type="info">
-  **Analogy: Google Search** — Modern search engines use hybrid retrieval! When you search "best pizza near me", they use semantic understanding (you want food recommendations) AND keyword matching (the word "pizza" must appear). Dense embeddings are like understanding intent; sparse retrieval is like exact word matching. Combining both gives you the best of both worlds—understanding AND precision.
+  **Analogy: Google Search** — Modern search engines use hybrid retrieval! When
+  you search "best pizza near me", they use semantic understanding (you want
+  food recommendations) AND keyword matching (the word "pizza" must appear).
+  Dense embeddings are like understanding intent; sparse retrieval is like exact
+  word matching. Combining both gives you the best of both worlds—understanding
+  AND precision.
 </Callout>
 
 ```python
@@ -1249,7 +1388,22 @@ class HybridSearch:
 
 Reduce noise by compressing retrieved documents to only the relevant parts:
 
-{/* IMAGE_PLACEHOLDER: Create an animated before/after visualization of contextual compression. Show a long policy document (500+ words) on the left with most text grayed out and only 2-3 relevant sentences highlighted in color. An animated "compression" effect (like a squeeze or filter) transitions to the right side showing only the highlighted sentences extracted. Include metrics showing "Original: 487 tokens → Compressed: 89 tokens (81% reduction)". Add a side-by-side comparison of LLM responses using full doc vs compressed doc, showing that compressed version produces the same quality answer but faster. Use a visual metaphor of a juicer extracting the essential juice from fruit. Place this right after the heading to show the dramatic impact of compression before the code. */}
+<Mermaid
+  chart={`
+flowchart LR
+    Doc[Original Document\n(500 tokens)] --> LLM{LLM Compressor}
+    
+    LLM -->|Extract| Sent1[Relevant Sentence 1]
+    LLM -->|Extract| Sent2[Relevant Sentence 2]
+    LLM -->|Ignore| Noise[Irrelevant Text]
+    
+    Sent1 & Sent2 --> Final[Compressed Context\n(50 tokens)]
+    
+    style Doc fill:#ffccbc
+    style Final fill:#c8e6c9
+`}
+  caption="Contextual Compression: Reducing noise before generation."
+/>
 
 ```python
 class ContextualCompressor:
@@ -1291,7 +1445,27 @@ If nothing is relevant, return "NOT_RELEVANT"."""
 
 Generate multiple query variations to improve recall:
 
-{/* IMAGE_PLACEHOLDER: Create an interactive multi-query visualization showing query expansion in action. Start with a single user query "How many vacation days do I get?" in the center. Show it branching into 3 variations: "PTO allowance policy", "annual leave entitlement", "vacation time allocation". Each variation retrieves 3 documents (show as cards). Use a Venn diagram or set visualization to show overlapping and unique documents from each query. Highlight deduplicated final results with a count (e.g., "9 retrieved → 6 unique"). Add a "coverage improvement" metric showing how multi-query finds 40% more relevant docs than single query. Make it interactive so users can input their own query and see it expand. Use a tree/branching visual metaphor. Place this right after the heading to demonstrate the power of query expansion before the implementation code. */}
+<Mermaid
+  chart={`
+graph TD
+    Q[Original Query]
+    
+    Q --> Q1[Variation 1]
+    Q --> Q2[Variation 2]
+    Q --> Q3[Variation 3]
+    
+    Q1 --> D1[Docs 1]
+    Q2 --> D2[Docs 2]
+    Q3 --> D3[Docs 3]
+    
+    D1 & D2 & D3 --> Dedup{Deduplicate}
+    Dedup --> Final[Final Set]
+    
+    style Q fill:#e1bee7
+    style Final fill:#c8e6c9
+`}
+  caption="Multi-Query: Expanding search coverage with variations."
+/>
 
 ```python
 class MultiQueryRetriever:

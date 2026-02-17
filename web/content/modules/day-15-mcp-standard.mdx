@@ -81,7 +81,11 @@ day: 15
 
 Before MCP, every tool integration was custom and fragmented.
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing the evolution from fragmented tool integrations to unified MCP standard. Left side: tangled mess of different connectors/cables labeled with various tools (Slack, Postgres, GitHub, etc.) each with custom integration code. Right side: clean, organized single MCP connector/port with all tools connecting through it. Style: modern, technical diagram with a before/after comparison. Use blue/purple gradient for MCP side to show the unified standard. Include small icons for each tool/service. */}
+<ConceptVisual
+  image="/images/day_15_01_mcp_evolution_comparison_1769033458954.png"
+  caption="From Fragmentation to Unity: MCP provides a single, standardized port for all your AI tools."
+  alt="Before and after comparison of tool integrations vs MCP"
+/>
 
 <SideBySide
   left={{
@@ -132,7 +136,11 @@ Before MCP, every tool integration was custom and fragmented.
 
 MCP uses a client-server architecture with clear separation of concerns:
 
-{/* IMAGE_PLACEHOLDER: Create an interactive architecture diagram showing MCP client-server flow. Center: MCP Client (glowing hub). Top: User and Agent/LLM connected to client. Bottom: Four MCP servers (Filesystem, Database, API, Custom) each in a card with their icon. Show bidirectional JSON-RPC arrows between client and servers with animated data packets flowing. Include labels for each component. Style: modern tech diagram with dark background, neon accents (purple/blue), isometric or 2.5D perspective. Make it feel like a living system with subtle animations. */}
+<ConceptVisual
+  image="/images/day_15_02_mcp_architecture_diagram_1769033480549.png"
+  caption="The MCP Architecture: A clean client-server model for safe, modular tool access."
+  alt="Architecture diagram showing MCP client and servers"
+/>
 
 <Mermaid
   chart={`
@@ -221,7 +229,7 @@ MCP supports two primary transport mechanisms:
 
 MCP servers can expose three types of capabilities:
 
-{/* IMAGE_PLACEHOLDER: Create a visual comparison of the three MCP primitives. Three columns: 1) Resources (read-only data) - show a document/file icon with "GET" label, examples: PDF, logs, schemas. 2) Tools (executable functions) - show a gear/wrench icon with "POST" label, examples: query_db, send_email, execute_code. 3) Prompts (reusable templates) - show a template/clipboard icon, examples: code_review, analyze_data. Each column should have distinct color coding (blue for Resources, green for Tools, purple for Prompts). Include small example code snippets or JSON structures below each. Style: clean, educational infographic with icons and clear visual hierarchy. */}
+{/* Removed placeholder for primitives visual - Concepts are clear enough with text */}
 
 ### 1. Resources (Read-Only Data)
 
@@ -318,7 +326,33 @@ prompt = {
 
 Let's build a simple MCP server that exposes tools for an e-commerce system. This demonstrates the core concepts you'll use in production.
 
-{/* INTERACTIVE_COMPONENT: MCP Tool Builder */}
+<Mermaid
+  chart={`
+classDiagram
+    class MCPServer {
+        +list_tools()
+        +call_tool()
+        +list_resources()
+        +read_resource()
+    }
+    
+    class Tools {
+        +get_customer(id)
+        +get_orders(id)
+        +refund_order(id)
+    }
+    
+    class Resources {
+        +product_catalog.json
+        +inventory.db
+        +logs.txt
+    }
+    
+    MCPServer --|> Tools : Exposes
+    MCPServer --|> Resources : Exposes
+`}
+  caption="Server Structure: Exposing Tools and Resources via the Protocol."
+/>
 
 ### Installation
 
@@ -569,7 +603,7 @@ builder.add_node("tools", call_tools)
 
 One of MCP's biggest advantages is the growing ecosystem of pre-built servers. With over 10,000 active public servers and 97M+ monthly SDK downloads, you can find tools for almost any use case.
 
-{/* IMAGE_PLACEHOLDER: Create an ecosystem visualization showing the MCP landscape. Center: MCP logo/hub. Radiating outward in organized sections: 1) Official Servers (Anthropic/AAIF) with their logos, 2) Community Servers organized by category (Databases, Cloud, Dev Tools, Productivity, Communication). Each category should be a distinct color-coded section with representative icons. Show connection lines from center to all servers. Include statistics: "10,000+ servers", "97M+ monthly downloads", "12 languages". Style: modern tech ecosystem map, use a circular/radial layout, vibrant colors for different categories, make it feel like a thriving community. Add small badges for "Official" vs "Community" servers. */}
+{/* Removed placeholder for ecosystem - External link provided below */}
 
 ### Official Servers (by Anthropic/AAIF)
 
@@ -604,7 +638,7 @@ The community has built thousands of servers for:
 
 One of the most powerful features added in 2025 is **Elicitation**—the ability for MCP servers to request additional information from users mid-execution. This enables truly interactive workflows.
 
-{/* IMAGE_PLACEHOLDER: Create an interactive workflow diagram showing elicitation in action. Show a conversation flow: User asks "Book a flight to Paris" → MCP Server pauses and asks "What dates?" (show a calendar popup/form) → User responds "March 15-22" → Server completes booking. Use speech bubbles for user/server communication, and highlight the elicitation pause point with a glowing effect. Include both Form mode (showing a form UI) and URL mode (showing a browser redirect) as two parallel examples. Style: modern UI mockup with actual form elements, conversational design, use purple/blue gradient for MCP components. */}
+{/* Removed placeholder for elicitation - Mermaid diagram below suffices */}
 
 ### How Elicitation Works
 
@@ -704,7 +738,7 @@ Elicitation keeps the user in control while enabling richer interactions.
 
 The June 2025 specification update introduced comprehensive **OAuth 2.1 authorization** for MCP, making it enterprise-ready. This is critical for production deployments where servers access sensitive resources.
 
-{/* IMAGE_PLACEHOLDER: Create a security-focused diagram showing OAuth 2.1 flow for MCP. Show the complete authorization flow: 1) MCP Client discovers auth endpoint, 2) Generates PKCE challenge, 3) User redirects to IdP (show login screen), 4) User grants permissions (show consent screen), 5) Auth code returned, 6) Client exchanges code+verifier for token, 7) Token used to authenticate with MCP server. Use lock/shield icons for security elements, show PKCE code_verifier and code_challenge as encrypted keys. Include visual indicators for "secure" steps (HTTPS, token binding). Style: professional security diagram with green checkmarks for secure steps, use gradients and modern iconography. Make it feel enterprise-grade and trustworthy. */}
+{/* Removed placeholder for Auth - Sequence diagram covers this well */}
 
 ### Key Security Features
 
@@ -844,7 +878,30 @@ Enterprise deployments can now use metadata documents to describe client capabil
 
 MCP isn't always the right choice. Here's a decision framework:
 
-{/* IMAGE_PLACEHOLDER: Create a decision tree or comparison flowchart for choosing between MCP and direct integration. Start with a question diamond "Building reusable tools?" branching to MCP (Yes) or Direct (No). Include other decision points: "Multiple AI clients?", "Need OAuth/auth?", "Performance critical?", "Quick prototype?". Each path should lead to either "Use MCP" (blue/purple box with checkmarks) or "Use Direct Integration" (orange box with checkmarks). Include small icons for each decision point. Style: clean flowchart with modern design, use color coding to guide the decision path, make it practical and easy to follow. Add a "Hybrid Approach" box at the bottom showing both can coexist. */}
+<Mermaid
+  chart={`
+flowchart TD
+    Start[Need Tooling?] --> Reusable{Reusable?}
+    Reusable -->|Yes| MCP[Use MCP]
+    Reusable -->|No| Direct[Direct Integration]
+    
+    Start --> Multi[Multiple Clients?]
+    Multi -->|Yes| MCP
+    Multi -->|No| Direct
+    
+    Start --> OAuth{Need OAuth?}
+    OAuth -->|Yes| MCP
+    OAuth -->|No| CheckPerf
+    
+    CheckPerf{Performance Critical?}
+    CheckPerf -->|Yes| Direct
+    CheckPerf -->|No| MCP
+    
+    style MCP fill:#d1c4e9,stroke:#512da8
+    style Direct fill:#ffecb3,stroke:#ff8f00
+`}
+  caption="Decision Framework: When to choose MCP vs Direct Integration."
+/>
 
 <SideBySide
   left={{
@@ -909,7 +966,24 @@ MCP provides a security boundary between your agent and external systems:
 
 ### Example: Safe Tool Design
 
-{/* IMAGE_PLACEHOLDER: Create a code security visualization showing input validation flow. Show a funnel/filter diagram: Top: "User Input" (SQL query) → Middle: "Validation Layers" (3 filters: 1. Check for SELECT only, 2. Block dangerous keywords, 3. Sanitize input) → Bottom: "Safe Execution" (database with shield icon). Use red X marks for blocked queries and green checkmarks for safe queries. Include example queries flowing through the system with their validation results. Style: security-focused diagram with shields, locks, and filter icons. Use red for dangerous patterns, green for safe execution, yellow for validation steps. Make it educational and clear about security best practices. */}
+<Mermaid
+  chart={`
+graph TD
+    Input[User SQL Input] --> Filter1{Is SELECT?}
+    Filter1 -->|No| Block[Block Request]
+    Filter1 -->|Yes| Filter2{Dangerous Keywords?}
+    
+    Filter2 -->|Yes: DROP/DELETE| Block
+    Filter2 -->|No| Filter3{Sanitized?}
+    
+    Filter3 -->|Yes| DB[(Database Execution)]
+    Filter3 -->|No| Error[Validation Error]
+    
+    style Block fill:#ffcdd2,stroke:#c62828
+    style DB fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Security Funnel: Validating inputs before execution."
+/>
 
 ```python
 @mcp.tool()
@@ -1159,6 +1233,923 @@ async def book_travel(destination: str) -> dict:
     "Major AI providers (OpenAI, Google, Microsoft) have adopted MCP as the standard",
   ]}
 />
+
+---
+
+## 3.14 The Taskmaster Pattern: Task-Based Agent Orchestration
+
+Complex agent workflows often involve multiple steps that need coordination, error recovery, and the ability to undo mistakes. The **Taskmaster pattern** provides a structured approach to managing these workflows through task-based orchestration with full undo/redo support.
+
+<ConceptIntro
+  title="Taskmaster Pattern"
+  analogy="Think of a project manager who breaks down a large project into tasks, tracks their status, and can roll back changes when something goes wrong. The Taskmaster pattern gives your agent this same capability—decomposing complex goals into manageable tasks with full history tracking."
+  technicalDef="The Taskmaster pattern is an architectural approach for agent orchestration that manages work as discrete tasks with lifecycle states, dependency tracking, and reversible action history. It enables agents to break down complex goals, execute them incrementally, and recover from errors through undo/redo functionality."
+  whyItMatters="Without task management, agents can get lost in complex workflows, lose track of progress, or be unable to recover from mistakes. The Taskmaster pattern provides structure, observability, and resilience for production agent systems."
+/>
+
+### Why Agents Need Task Management
+
+<SideBySide
+  left={{
+    title: "Without Taskmaster",
+    icon: "❌",
+    items: [
+      "Agent loses track of multi-step goals",
+      "No way to recover from mistakes",
+      "Progress is opaque to users",
+      "Failures require starting over",
+      "No coordination between agents",
+    ],
+  }}
+  right={{
+    title: "With Taskmaster",
+    icon: "✅",
+    items: [
+      "Clear task breakdown and tracking",
+      "Full undo/redo capability",
+      "Real-time progress visibility",
+      "Graceful error recovery",
+      "Cross-agent task coordination",
+    ],
+  }}
+/>
+
+### Task Lifecycle
+
+Every task flows through a defined lifecycle:
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> pending: Task Created
+    pending --> in_progress: Start Execution
+    in_progress --> completed: Success
+    in_progress --> failed: Error
+    failed --> pending: Retry
+    completed --> [*]
+    failed --> [*]: Abandon
+    
+    note right of in_progress: Checkpoints saved
+    note right of failed: Can retry or undo
+`}
+/>
+
+### Task Data Model
+
+```typescript
+interface Task {
+  id: string; // Unique identifier
+  description: string; // Human-readable description
+  status: "pending" | "in_progress" | "completed" | "failed";
+  dependencies: string[]; // IDs of tasks that must complete first
+  result?: any; // Output when completed
+  error?: string; // Error message if failed
+  createdAt: Date;
+  updatedAt: Date;
+  metadata?: Record<string, any>; // Custom data (priority, tags, etc.)
+}
+
+interface TaskAction {
+  id: string;
+  taskId: string;
+  type: string; // Action type (e.g., 'file_write', 'api_call')
+  params: Record<string, any>; // Action parameters
+  result?: any; // Action result
+  reversible: boolean; // Can this action be undone?
+  reverseAction?: TaskAction; // How to undo this action
+  timestamp: Date;
+}
+```
+
+### Complete TaskManager Implementation
+
+```python
+"""taskmaster.py - Task-based agent orchestration with undo/redo"""
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any, Callable, Optional
+import uuid
+
+
+class TaskStatus(Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+@dataclass
+class Task:
+    """A single task in the workflow."""
+    id: str
+    description: str
+    status: TaskStatus = TaskStatus.PENDING
+    dependencies: list[str] = field(default_factory=list)
+    result: Any = None
+    error: Optional[str] = None
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+    metadata: dict = field(default_factory=dict)
+
+
+@dataclass
+class TaskAction:
+    """A reversible action taken during task execution."""
+    id: str
+    task_id: str
+    action_type: str
+    params: dict
+    result: Any = None
+    reversible: bool = True
+    reverse_params: Optional[dict] = None
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+class ActionHistory:
+    """Manages action history for undo/redo functionality."""
+
+    def __init__(self, max_history: int = 100):
+        self.history: list[TaskAction] = []
+        self.redo_stack: list[TaskAction] = []
+        self.max_history = max_history
+
+    def record(self, action: TaskAction) -> None:
+        """Record an action to history."""
+        self.history.append(action)
+        self.redo_stack.clear()  # Clear redo stack on new action
+
+        # Trim history if needed
+        if len(self.history) > self.max_history:
+            self.history = self.history[-self.max_history:]
+
+    def can_undo(self) -> bool:
+        """Check if undo is available."""
+        return len(self.history) > 0 and self.history[-1].reversible
+
+    def can_redo(self) -> bool:
+        """Check if redo is available."""
+        return len(self.redo_stack) > 0
+
+    def pop_for_undo(self) -> Optional[TaskAction]:
+        """Get the last action for undoing."""
+        if not self.can_undo():
+            return None
+        action = self.history.pop()
+        self.redo_stack.append(action)
+        return action
+
+    def pop_for_redo(self) -> Optional[TaskAction]:
+        """Get the last undone action for redoing."""
+        if not self.can_redo():
+            return None
+        action = self.redo_stack.pop()
+        self.history.append(action)
+        return action
+
+    def get_history(self, limit: int = 10) -> list[TaskAction]:
+        """Get recent action history."""
+        return self.history[-limit:]
+
+
+class TaskManager:
+    """Manages tasks with full lifecycle and undo/redo support."""
+
+    def __init__(self):
+        self.tasks: dict[str, Task] = {}
+        self.action_history = ActionHistory()
+        self.action_handlers: dict[str, Callable] = {}
+        self.reverse_handlers: dict[str, Callable] = {}
+
+    def register_action(
+        self,
+        action_type: str,
+        handler: Callable,
+        reverse_handler: Optional[Callable] = None
+    ) -> None:
+        """Register an action handler with optional reverse handler."""
+        self.action_handlers[action_type] = handler
+        if reverse_handler:
+            self.reverse_handlers[action_type] = reverse_handler
+
+    # --- Task CRUD Operations ---
+
+    def create_task(
+        self,
+        description: str,
+        dependencies: list[str] = None,
+        metadata: dict = None
+    ) -> Task:
+        """Create a new task."""
+        task = Task(
+            id=str(uuid.uuid4())[:8],
+            description=description,
+            dependencies=dependencies or [],
+            metadata=metadata or {}
+        )
+        self.tasks[task.id] = task
+        return task
+
+    def get_task(self, task_id: str) -> Optional[Task]:
+        """Get a task by ID."""
+        return self.tasks.get(task_id)
+
+    def list_tasks(
+        self,
+        status: Optional[TaskStatus] = None
+    ) -> list[Task]:
+        """List tasks, optionally filtered by status."""
+        tasks = list(self.tasks.values())
+        if status:
+            tasks = [t for t in tasks if t.status == status]
+        return sorted(tasks, key=lambda t: t.created_at)
+
+    def update_task(
+        self,
+        task_id: str,
+        **updates
+    ) -> Optional[Task]:
+        """Update task fields."""
+        task = self.tasks.get(task_id)
+        if not task:
+            return None
+
+        for key, value in updates.items():
+            if hasattr(task, key):
+                setattr(task, key, value)
+        task.updated_at = datetime.now()
+        return task
+
+    def delete_task(self, task_id: str) -> bool:
+        """Delete a task."""
+        if task_id in self.tasks:
+            del self.tasks[task_id]
+            return True
+        return False
+
+    # --- Task Execution ---
+
+    def can_execute(self, task_id: str) -> bool:
+        """Check if a task can be executed (dependencies met)."""
+        task = self.tasks.get(task_id)
+        if not task or task.status != TaskStatus.PENDING:
+            return False
+
+        for dep_id in task.dependencies:
+            dep = self.tasks.get(dep_id)
+            if not dep or dep.status != TaskStatus.COMPLETED:
+                return False
+        return True
+
+    def execute_action(
+        self,
+        task_id: str,
+        action_type: str,
+        params: dict,
+        reversible: bool = True
+    ) -> TaskAction:
+        """Execute an action within a task context."""
+        task = self.tasks.get(task_id)
+        if not task:
+            raise ValueError(f"Task {task_id} not found")
+
+        # Update task status
+        task.status = TaskStatus.IN_PROGRESS
+        task.updated_at = datetime.now()
+
+        # Get handler
+        handler = self.action_handlers.get(action_type)
+        if not handler:
+            raise ValueError(f"No handler for action type: {action_type}")
+
+        # Execute action
+        try:
+            result = handler(**params)
+
+            # Create action record
+            action = TaskAction(
+                id=str(uuid.uuid4())[:8],
+                task_id=task_id,
+                action_type=action_type,
+                params=params,
+                result=result,
+                reversible=reversible and action_type in self.reverse_handlers
+            )
+
+            # Record to history
+            self.action_history.record(action)
+
+            return action
+
+        except Exception as e:
+            task.status = TaskStatus.FAILED
+            task.error = str(e)
+            task.updated_at = datetime.now()
+            raise
+
+    def complete_task(
+        self,
+        task_id: str,
+        result: Any = None
+    ) -> Optional[Task]:
+        """Mark a task as completed."""
+        task = self.tasks.get(task_id)
+        if task:
+            task.status = TaskStatus.COMPLETED
+            task.result = result
+            task.updated_at = datetime.now()
+        return task
+
+    def fail_task(
+        self,
+        task_id: str,
+        error: str
+    ) -> Optional[Task]:
+        """Mark a task as failed."""
+        task = self.tasks.get(task_id)
+        if task:
+            task.status = TaskStatus.FAILED
+            task.error = error
+            task.updated_at = datetime.now()
+        return task
+
+    # --- Undo/Redo Operations ---
+
+    def undo(self) -> Optional[dict]:
+        """Undo the last action."""
+        action = self.action_history.pop_for_undo()
+        if not action:
+            return {"success": False, "reason": "Nothing to undo"}
+
+        reverse_handler = self.reverse_handlers.get(action.action_type)
+        if not reverse_handler:
+            return {"success": False, "reason": "Action not reversible"}
+
+        try:
+            # Execute reverse action
+            reverse_handler(**action.params, original_result=action.result)
+            return {
+                "success": True,
+                "undone_action": action.action_type,
+                "task_id": action.task_id
+            }
+        except Exception as e:
+            return {"success": False, "reason": str(e)}
+
+    def redo(self) -> Optional[dict]:
+        """Redo the last undone action."""
+        action = self.action_history.pop_for_redo()
+        if not action:
+            return {"success": False, "reason": "Nothing to redo"}
+
+        handler = self.action_handlers.get(action.action_type)
+        if not handler:
+            return {"success": False, "reason": "Handler not found"}
+
+        try:
+            result = handler(**action.params)
+            action.result = result
+            return {
+                "success": True,
+                "redone_action": action.action_type,
+                "task_id": action.task_id
+            }
+        except Exception as e:
+            return {"success": False, "reason": str(e)}
+
+    def get_undo_redo_status(self) -> dict:
+        """Get current undo/redo availability."""
+        return {
+            "can_undo": self.action_history.can_undo(),
+            "can_redo": self.action_history.can_redo(),
+            "history_length": len(self.action_history.history),
+            "redo_stack_length": len(self.action_history.redo_stack)
+        }
+```
+
+### Reversible vs Irreversible Actions
+
+Not all actions can be undone. Design your system to handle both:
+
+| Action Type     | Reversible? | Reverse Strategy                       |
+| :-------------- | :---------- | :------------------------------------- |
+| File write      | ✅ Yes      | Restore from backup/previous content   |
+| Database INSERT | ✅ Yes      | DELETE the inserted row                |
+| Database UPDATE | ✅ Yes      | UPDATE with previous values            |
+| Email sent      | ❌ No       | Cannot unsend                          |
+| API webhook     | ❌ No       | External side effects                  |
+| File delete     | ⚠️ Partial  | Restore from trash/backup if available |
+
+```python
+# Example: Registering reversible file operations
+def write_file(path: str, content: str) -> dict:
+    """Write content to a file (reversible)."""
+    import os
+
+    # Save original content for undo
+    original = None
+    if os.path.exists(path):
+        with open(path, 'r') as f:
+            original = f.read()
+
+    with open(path, 'w') as f:
+        f.write(content)
+
+    return {"path": path, "original_content": original}
+
+
+def reverse_write_file(path: str, content: str, original_result: dict) -> None:
+    """Reverse a file write operation."""
+    original = original_result.get("original_content")
+    if original is not None:
+        with open(path, 'w') as f:
+            f.write(original)
+    else:
+        import os
+        os.remove(path)  # File didn't exist before
+
+
+# Register with TaskManager
+task_manager = TaskManager()
+task_manager.register_action("file_write", write_file, reverse_write_file)
+```
+
+---
+
+## 3.15 Taskmaster as MCP Server
+
+The Taskmaster pattern integrates naturally with MCP, exposing task management as standardized tools that any MCP client can use.
+
+### MCP Server Implementation
+
+```python
+"""taskmaster_mcp.py - Taskmaster as an MCP server"""
+from mcp.server.fastmcp import FastMCP
+from taskmaster import TaskManager, TaskStatus
+
+# Initialize
+mcp = FastMCP("taskmaster")
+task_manager = TaskManager()
+
+
+# --- Task Management Tools ---
+
+@mcp.tool()
+def create_task(
+    description: str,
+    dependencies: list[str] = None,
+    priority: str = "medium"
+) -> dict:
+    """
+    Create a new task in the workflow.
+
+    Args:
+        description: What the task should accomplish
+        dependencies: List of task IDs that must complete first
+        priority: Task priority (low, medium, high)
+
+    Returns:
+        The created task with its ID
+    """
+    task = task_manager.create_task(
+        description=description,
+        dependencies=dependencies or [],
+        metadata={"priority": priority}
+    )
+    return {
+        "id": task.id,
+        "description": task.description,
+        "status": task.status.value,
+        "dependencies": task.dependencies,
+        "priority": priority
+    }
+
+
+@mcp.tool()
+def list_tasks(status: str = None) -> list[dict]:
+    """
+    List all tasks, optionally filtered by status.
+
+    Args:
+        status: Filter by status (pending, in_progress, completed, failed)
+
+    Returns:
+        List of tasks matching the filter
+    """
+    filter_status = TaskStatus(status) if status else None
+    tasks = task_manager.list_tasks(status=filter_status)
+    return [
+        {
+            "id": t.id,
+            "description": t.description,
+            "status": t.status.value,
+            "dependencies": t.dependencies,
+            "result": t.result,
+            "error": t.error
+        }
+        for t in tasks
+    ]
+
+
+@mcp.tool()
+def get_task(task_id: str) -> dict:
+    """
+    Get details of a specific task.
+
+    Args:
+        task_id: The task ID to retrieve
+
+    Returns:
+        Task details or error if not found
+    """
+    task = task_manager.get_task(task_id)
+    if not task:
+        return {"error": f"Task {task_id} not found"}
+    return {
+        "id": task.id,
+        "description": task.description,
+        "status": task.status.value,
+        "dependencies": task.dependencies,
+        "result": task.result,
+        "error": task.error,
+        "created_at": task.created_at.isoformat(),
+        "updated_at": task.updated_at.isoformat()
+    }
+
+
+@mcp.tool()
+def complete_task(task_id: str, result: str = None) -> dict:
+    """
+    Mark a task as completed.
+
+    Args:
+        task_id: The task to complete
+        result: Optional result or output from the task
+
+    Returns:
+        Updated task status
+    """
+    task = task_manager.complete_task(task_id, result)
+    if not task:
+        return {"error": f"Task {task_id} not found"}
+    return {"id": task.id, "status": "completed", "result": result}
+
+
+@mcp.tool()
+def fail_task(task_id: str, error: str) -> dict:
+    """
+    Mark a task as failed.
+
+    Args:
+        task_id: The task that failed
+        error: Description of what went wrong
+
+    Returns:
+        Updated task status
+    """
+    task = task_manager.fail_task(task_id, error)
+    if not task:
+        return {"error": f"Task {task_id} not found"}
+    return {"id": task.id, "status": "failed", "error": error}
+
+
+# --- Undo/Redo Tools ---
+
+@mcp.tool()
+def undo_last_action() -> dict:
+    """
+    Undo the last reversible action.
+
+    Returns:
+        Result of the undo operation
+    """
+    return task_manager.undo()
+
+
+@mcp.tool()
+def redo_last_action() -> dict:
+    """
+    Redo the last undone action.
+
+    Returns:
+        Result of the redo operation
+    """
+    return task_manager.redo()
+
+
+@mcp.tool()
+def get_action_history(limit: int = 10) -> dict:
+    """
+    Get recent action history and undo/redo status.
+
+    Args:
+        limit: Maximum number of history items to return
+
+    Returns:
+        Action history and undo/redo availability
+    """
+    status = task_manager.get_undo_redo_status()
+    history = task_manager.action_history.get_history(limit)
+    return {
+        **status,
+        "recent_actions": [
+            {
+                "id": a.id,
+                "type": a.action_type,
+                "task_id": a.task_id,
+                "reversible": a.reversible,
+                "timestamp": a.timestamp.isoformat()
+            }
+            for a in history
+        ]
+    }
+
+
+# --- Workflow Tools ---
+
+@mcp.tool()
+def get_next_tasks() -> list[dict]:
+    """
+    Get tasks that are ready to execute (dependencies met).
+
+    Returns:
+        List of executable tasks
+    """
+    pending = task_manager.list_tasks(status=TaskStatus.PENDING)
+    ready = [t for t in pending if task_manager.can_execute(t.id)]
+    return [
+        {
+            "id": t.id,
+            "description": t.description,
+            "priority": t.metadata.get("priority", "medium")
+        }
+        for t in ready
+    ]
+
+
+@mcp.tool()
+def get_workflow_status() -> dict:
+    """
+    Get overall workflow status summary.
+
+    Returns:
+        Summary of task counts by status
+    """
+    all_tasks = task_manager.list_tasks()
+    return {
+        "total": len(all_tasks),
+        "pending": len([t for t in all_tasks if t.status == TaskStatus.PENDING]),
+        "in_progress": len([t for t in all_tasks if t.status == TaskStatus.IN_PROGRESS]),
+        "completed": len([t for t in all_tasks if t.status == TaskStatus.COMPLETED]),
+        "failed": len([t for t in all_tasks if t.status == TaskStatus.FAILED]),
+        "ready_to_execute": len([t for t in all_tasks if task_manager.can_execute(t.id)])
+    }
+
+
+if __name__ == "__main__":
+    mcp.run(transport="stdio")
+```
+
+### Using Taskmaster from an Agent
+
+```python
+# Example: Agent using Taskmaster MCP tools
+async def plan_and_execute(goal: str):
+    """Break down a goal into tasks and execute them."""
+
+    # Step 1: Create tasks for the goal
+    tasks = await mcp_client.call_tool("create_task", {
+        "description": f"Research: {goal}",
+        "priority": "high"
+    })
+
+    await mcp_client.call_tool("create_task", {
+        "description": f"Draft solution for: {goal}",
+        "dependencies": [tasks["id"]],
+        "priority": "high"
+    })
+
+    await mcp_client.call_tool("create_task", {
+        "description": f"Review and finalize: {goal}",
+        "dependencies": [tasks["id"]],
+        "priority": "medium"
+    })
+
+    # Step 2: Execute ready tasks
+    while True:
+        ready = await mcp_client.call_tool("get_next_tasks", {})
+        if not ready:
+            break
+
+        for task in ready:
+            # Execute task logic here
+            result = await execute_task_logic(task)
+
+            if result["success"]:
+                await mcp_client.call_tool("complete_task", {
+                    "task_id": task["id"],
+                    "result": result["output"]
+                })
+            else:
+                await mcp_client.call_tool("fail_task", {
+                    "task_id": task["id"],
+                    "error": result["error"]
+                })
+
+    # Step 3: Get final status
+    return await mcp_client.call_tool("get_workflow_status", {})
+```
+
+---
+
+## 3.16 Voice-First Task Management
+
+The Taskmaster pattern works exceptionally well with voice interfaces, enabling natural language task management.
+
+### Voice Command Patterns
+
+| Voice Command                    | Taskmaster Action                          |
+| :------------------------------- | :----------------------------------------- |
+| "Create a task to review the PR" | `create_task(description="Review the PR")` |
+| "What tasks are pending?"        | `list_tasks(status="pending")`             |
+| "Mark the research task as done" | `complete_task(task_id="...")`             |
+| "Undo that last change"          | `undo_last_action()`                       |
+| "What's the project status?"     | `get_workflow_status()`                    |
+| "What should I work on next?"    | `get_next_tasks()`                         |
+
+### Voice Integration Example
+
+```python
+"""voice_taskmaster.py - Voice-first task management"""
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("voice-taskmaster")
+
+
+@mcp.tool()
+def process_voice_command(transcript: str) -> dict:
+    """
+    Process a voice command for task management.
+
+    Args:
+        transcript: The transcribed voice command
+
+    Returns:
+        Action taken and result
+    """
+    transcript_lower = transcript.lower()
+
+    # Task creation patterns
+    if any(phrase in transcript_lower for phrase in ["create a task", "add a task", "new task"]):
+        # Extract task description
+        description = extract_task_description(transcript)
+        return create_task(description)
+
+    # Status queries
+    if any(phrase in transcript_lower for phrase in ["what's pending", "pending tasks", "what tasks"]):
+        return list_tasks(status="pending")
+
+    # Completion patterns
+    if any(phrase in transcript_lower for phrase in ["mark as done", "complete", "finished"]):
+        task_ref = extract_task_reference(transcript)
+        return complete_task(task_ref)
+
+    # Undo patterns
+    if any(phrase in transcript_lower for phrase in ["undo", "revert", "take back"]):
+        return undo_last_action()
+
+    # Status overview
+    if any(phrase in transcript_lower for phrase in ["project status", "how are we doing", "overview"]):
+        return get_workflow_status()
+
+    # Next task
+    if any(phrase in transcript_lower for phrase in ["what's next", "next task", "what should i"]):
+        return get_next_tasks()
+
+    return {"error": "Command not recognized", "transcript": transcript}
+
+
+def extract_task_description(transcript: str) -> str:
+    """Extract task description from voice transcript."""
+    # Simple extraction - in production, use NLP
+    markers = ["to ", "for ", "about "]
+    for marker in markers:
+        if marker in transcript.lower():
+            idx = transcript.lower().index(marker)
+            return transcript[idx + len(marker):].strip()
+    return transcript
+
+
+def extract_task_reference(transcript: str) -> str:
+    """Extract task reference from voice transcript."""
+    # In production, use fuzzy matching against task descriptions
+    return transcript
+```
+
+### Audio Feedback Patterns
+
+For voice-first interfaces, provide clear audio feedback:
+
+```python
+AUDIO_RESPONSES = {
+    "task_created": "Task created: {description}",
+    "task_completed": "Great! Marked {description} as complete.",
+    "task_failed": "Task failed: {error}",
+    "undo_success": "Undone: {action}",
+    "undo_failed": "Cannot undo: {reason}",
+    "no_tasks": "No pending tasks. You're all caught up!",
+    "next_task": "Next up: {description}",
+    "status_update": "You have {pending} pending, {in_progress} in progress, and {completed} completed tasks."
+}
+
+
+def generate_voice_response(action: str, data: dict) -> str:
+    """Generate a natural voice response for an action."""
+    template = AUDIO_RESPONSES.get(action, "Action completed.")
+    return template.format(**data)
+```
+
+<Callout type="tip">
+  **Voice UX Best Practices:** - Keep responses concise (under 10 seconds of
+  speech) - Confirm destructive actions before executing - Provide progress
+  updates for long-running tasks - Use consistent terminology across commands -
+  Support natural variations ("done", "complete", "finished")
+</Callout>
+
+---
+
+<ProgressCheckpoint
+  title="Taskmaster Pattern Check"
+  questions={[
+    {
+      question: "What problem does the Taskmaster pattern solve?",
+      answer:
+        "It provides structured task management for complex agent workflows, including task decomposition, dependency tracking, progress visibility, and undo/redo capability for error recovery.",
+    },
+    {
+      question: "What are the four task lifecycle states?",
+      answer:
+        "Pending (not started), In Progress (currently executing), Completed (successfully finished), and Failed (encountered an error).",
+    },
+    {
+      question: "How does undo/redo work in the Taskmaster pattern?",
+      answer:
+        "Actions are recorded to a history stack with their reverse operations. Undo pops the last action and executes its reverse handler. Redo re-executes an undone action from the redo stack.",
+    },
+    {
+      question: "Why can't all actions be undone?",
+      answer:
+        "Some actions have external side effects that cannot be reversed, like sending emails, triggering webhooks, or making API calls to external services. These are marked as irreversible.",
+    },
+    {
+      question: "How does Taskmaster integrate with MCP?",
+      answer:
+        "Task management operations are exposed as MCP tools (create_task, list_tasks, undo, etc.), allowing any MCP client to manage tasks through the standardized protocol.",
+    },
+  ]}
+/>
+
+---
+
+<Exercise
+  title="Build a Taskmaster Workflow"
+  difficulty="intermediate"
+  objectives={[
+    "Design a task breakdown for a complex goal",
+    "Implement task dependencies correctly",
+    "Handle task failures gracefully",
+    "Use undo/redo for error recovery"
+  ]}
+>
+
+**Scenario:** Build a Taskmaster workflow for "Deploy a new feature to production":
+
+1. **Break down the goal** into 5-7 tasks with proper dependencies
+2. **Identify which tasks** are reversible vs irreversible
+3. **Design the error handling** - what happens if a task fails?
+4. **Implement checkpoints** - where should the workflow save state?
+
+**Starter Tasks:**
+
+```python
+tasks = [
+    {"description": "Run test suite", "dependencies": []},
+    {"description": "Build production bundle", "dependencies": ["run_tests"]},
+    {"description": "Create database backup", "dependencies": []},
+    {"description": "Apply database migrations", "dependencies": ["backup"]},
+    {"description": "Deploy to staging", "dependencies": ["build", "migrations"]},
+    {"description": "Run smoke tests", "dependencies": ["deploy_staging"]},
+    {"description": "Deploy to production", "dependencies": ["smoke_tests"]},
+]
+```
+
+**Questions to Answer:**
+
+- Which tasks can run in parallel?
+- What's the undo strategy for "Apply database migrations"?
+- How do you handle a failure in "Run smoke tests"?
+
+</Exercise>
 
 ---
 

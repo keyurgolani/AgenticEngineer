@@ -1,0 +1,1193 @@
+---
+title: "Day 22: Spec-Driven Agentic Development"
+description: "Move beyond vibe coding to structured, PRD-based workflows that deliver production-ready AI-assisted code."
+week: 4
+day: 22
+---
+
+<ReadingTime minutes={30} />
+
+<SkillLevel
+  level="intermediate"
+  description="Conceptual with practical workflows"
+/>
+
+<Prerequisites
+  items={[
+    "Completed Day 11: Building Agent Loops",
+    "Completed Day 09: Context Engineering",
+    "Experience with AI coding assistants (Copilot, Cursor, Claude, etc.)",
+    "Basic understanding of software development lifecycle",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Understand the '70% Problem' and why AI-assisted coding plateaus",
+    "Distinguish between vibe coding and spec-driven development",
+    "Apply the three pillars: planning, iteration, and verification",
+    "Implement the PRD-to-Tasks decomposition pattern (Task Master)",
+    "Create and maintain Automated Decision Logs (ADLs)",
+    "Engineer context effectively for spec-driven workflows",
+    "Transition from 'coder' to 'AI architect' mindset",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Vibe Coding",
+      definition:
+        "Ad-hoc prompting where developers accept AI suggestions without systematic review or planning—works for prototypes, fails for production",
+    },
+    {
+      term: "Spec-Driven Development",
+      definition:
+        "A structured workflow where natural language requirements are transformed into formal specs, decomposed into tasks, and executed with verification loops",
+    },
+    {
+      term: "The 70% Problem",
+      definition:
+        "The phenomenon where AI handles ~70% of coding work easily, but the remaining 30% (integration, edge cases, polish) requires human expertise",
+    },
+    {
+      term: "Task Master Pattern",
+      definition:
+        "A workflow pattern that decomposes PRDs into dependency-aware tasks with clear acceptance criteria and verification steps",
+    },
+    {
+      term: "Automated Decision Log (ADL)",
+      definition:
+        "A structured record of architectural decisions, trade-offs, and rationale generated during AI-assisted development",
+    },
+    {
+      term: "T-Shaped Engineer",
+      definition:
+        "A developer with broad AI-enabled capabilities across domains and deep specialized knowledge for orchestrating AI systems",
+    },
+    {
+      term: "Context Engineering",
+      definition:
+        "The practice of curating and managing the information environment for optimal AI performance during development",
+    },
+  ]}
+/>
+
+---
+
+## The 70% Problem
+
+<ConceptVisual
+  image="/images/day_22_01_70_percent_problem.png"
+  caption="The 70% Problem: AI excels at the bulk of coding work, but the critical 30% requires human expertise."
+  alt="Diagram showing the 70-30 split between AI-handled and human-required work"
+/>
+
+<ConceptIntro
+  title="The 70% Problem"
+  analogy="Imagine hiring a brilliant junior developer who can write code incredibly fast but has never shipped to production. They'll knock out 70% of your features in record time, but the remaining 30%—error handling, edge cases, security, integration—requires your senior expertise. AI coding assistants are that brilliant junior developer at scale."
+  technicalDef="The 70% Problem describes the asymmetry in AI-assisted development: LLMs excel at generating boilerplate, implementing well-documented patterns, and scaffolding features (the 'easy 70%'), but struggle with integration complexity, edge cases, performance optimization, and architectural decisions (the 'hard 30%')."
+  whyItMatters="Understanding this split is crucial for effective AI collaboration. Developers who expect AI to handle 100% of the work get frustrated. Those who understand the 70/30 split can strategically leverage AI for maximum productivity while focusing their expertise where it matters most."
+/>
+
+### Where AI Excels (The 70%)
+
+| Task Type                  | AI Capability | Example                                               |
+| :------------------------- | :------------ | :---------------------------------------------------- |
+| **Boilerplate Generation** | ⭐⭐⭐⭐⭐    | CRUD endpoints, form components, test scaffolds       |
+| **Pattern Implementation** | ⭐⭐⭐⭐⭐    | Authentication flows, pagination, caching layers      |
+| **Documentation**          | ⭐⭐⭐⭐      | API docs, README files, inline comments               |
+| **Refactoring**            | ⭐⭐⭐⭐      | Extract functions, rename variables, modernize syntax |
+| **Bug Fixes (Simple)**     | ⭐⭐⭐⭐      | Null checks, type errors, missing imports             |
+
+### Where Humans Are Essential (The 30%)
+
+| Task Type              | Why AI Struggles                 | Human Value                            |
+| :--------------------- | :------------------------------- | :------------------------------------- |
+| **System Integration** | Can't see the full picture       | Understands cross-service dependencies |
+| **Edge Cases**         | Doesn't know your domain         | Knows what can go wrong in production  |
+| **Performance**        | Optimizes locally, not globally  | Sees bottlenecks across the stack      |
+| **Security**           | Follows patterns, misses context | Understands threat models              |
+| **Architecture**       | No long-term memory              | Maintains system coherence over time   |
+
+<Callout type="warning">
+  **The Danger Zone:** The 70% that AI handles well creates a false sense of
+  completion. Code that "looks done" but hasn't been integrated, tested under
+  load, or reviewed for security is technical debt waiting to explode. The 30%
+  is where production systems succeed or fail.
+</Callout>
+
+---
+
+## From Vibe Coding to Spec-Driven Development
+
+### What is Vibe Coding?
+
+<ConceptVisual
+  image="/images/day_22_02_vibe_coding_chaos.png"
+  caption="Vibe Coding: The chaotic, ad-hoc approach that works for prototypes but fails at scale."
+  alt="Illustration of scattered, disconnected code snippets representing vibe coding"
+/>
+
+**Vibe coding** is the default mode most developers fall into with AI assistants:
+
+```
+Developer: "Add a login form"
+AI: [generates login form]
+Developer: "Now add validation"
+AI: [adds validation]
+Developer: "Make it look better"
+AI: [adds styling]
+Developer: "Actually, use a different library"
+AI: [rewrites everything]
+...repeat until frustrated or "good enough"
+```
+
+<CommonMistakes
+  mistakes={[
+    {
+      mistake: "Accepting AI output without reading it",
+      fix: "Review every suggestion—AI makes confident-sounding mistakes",
+    },
+    {
+      mistake: "No clear end state defined",
+      fix: "Write acceptance criteria before generating code",
+    },
+    {
+      mistake: "Iterating without a plan",
+      fix: "Define the full feature scope, then decompose into tasks",
+    },
+    {
+      mistake: "Losing context between sessions",
+      fix: "Maintain a spec.md file that persists your requirements",
+    },
+    {
+      mistake: "No verification step",
+      fix: "Test each generated component before moving on",
+    },
+  ]}
+/>
+
+### Why Vibe Coding Fails for Production
+
+| Problem                  | Symptom                        | Root Cause                     |
+| :----------------------- | :----------------------------- | :----------------------------- |
+| **Context Loss**         | AI forgets previous decisions  | No persistent spec document    |
+| **Scope Creep**          | Features grow uncontrollably   | No defined acceptance criteria |
+| **Integration Failures** | Components don't work together | No system-level planning       |
+| **Technical Debt**       | Code becomes unmaintainable    | No architectural guidelines    |
+| **Knowledge Loss**       | "Why did we do it this way?"   | No decision documentation      |
+
+<Callout type="info">
+  **When Vibe Coding Works:** Prototypes, learning exercises, throwaway scripts,
+  and exploration. If you're going to delete it tomorrow, vibe away. If it's
+  going to production, you need a spec.
+</Callout>
+
+### The Spec-Driven Alternative
+
+Spec-driven development inverts the vibe coding workflow:
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Vibe Coding (Chaotic)"
+        V1[Prompt] --> V2[Generate]
+        V2 --> V3[Accept/Reject]
+        V3 --> V4[Prompt Again]
+        V4 --> V2
+    end
+    
+    subgraph "Spec-Driven (Structured)"
+        S1[Requirements] --> S2[PRD/Spec]
+        S2 --> S3[Task Decomposition]
+        S3 --> S4[Execute Task]
+        S4 --> S5[Verify]
+        S5 -->|Pass| S6[Next Task]
+        S5 -->|Fail| S4
+        S6 --> S4
+    end
+    
+    style S2 fill:#c8e6c9
+    style S5 fill:#c8e6c9
+`}
+/>
+
+---
+
+## The Three Pillars of Spec-Driven Development
+
+<ConceptVisual
+  image="/images/day_22_03_three_pillars.png"
+  caption="The Three Pillars: Planning, Iteration, and Verification form the foundation of spec-driven development."
+  alt="Three pillars diagram showing Planning, Iteration, and Verification"
+/>
+
+### Pillar 1: Rigorous Planning with Shared Specs
+
+The spec is your single source of truth—a living document that both you and the AI reference throughout development.
+
+```markdown
+# Feature Spec: User Authentication
+
+## Overview
+
+Implement JWT-based authentication with email/password login.
+
+## Requirements
+
+- [ ] Users can register with email and password
+- [ ] Passwords must be 8+ characters with 1 number
+- [ ] Users receive email verification
+- [ ] Login returns JWT valid for 24 hours
+- [ ] Refresh tokens extend sessions
+
+## Technical Constraints
+
+- Use bcrypt for password hashing (cost factor 12)
+- Store refresh tokens in Redis
+- JWT secret from environment variable
+
+## Out of Scope
+
+- Social login (Phase 2)
+- MFA (Phase 2)
+- Password reset (separate spec)
+
+## Acceptance Criteria
+
+1. User can register and receive verification email
+2. User can login and receive valid JWT
+3. Invalid credentials return 401
+4. Expired tokens are rejected
+```
+
+<Callout type="tip">
+  **The Spec as Context:** When you start each AI session, load the spec first.
+  This gives the AI the full picture and prevents it from making decisions that
+  contradict your requirements. Think of the spec as "memory" that persists
+  across sessions.
+</Callout>
+
+### Pillar 2: Small, Iterative Chunks
+
+Break work into tasks that can be completed and verified in a single session:
+
+| ❌ Too Large                      | ✅ Right Size                                 |
+| :-------------------------------- | :-------------------------------------------- |
+| "Build the authentication system" | "Create the User model with password hashing" |
+| "Add all the API endpoints"       | "Implement POST /auth/register endpoint"      |
+| "Write the tests"                 | "Write unit tests for password validation"    |
+
+**The 15-Minute Rule:** If a task can't be completed and verified in ~15 minutes, break it down further.
+
+### Pillar 3: Human-in-the-Loop Verification
+
+Every generated artifact must be verified before moving on:
+
+```python
+# Verification Loop Pattern
+def execute_task(task: Task) -> Result:
+    """Execute a single task with verification."""
+
+    # 1. Generate with AI
+    code = ai.generate(task.prompt, context=spec)
+
+    # 2. Automated checks
+    if not lint(code):
+        return retry_with_feedback("Lint errors", code)
+    if not type_check(code):
+        return retry_with_feedback("Type errors", code)
+    if not tests_pass(code):
+        return retry_with_feedback("Test failures", code)
+
+    # 3. Human review
+    if not human_approves(code):
+        return retry_with_feedback(human_feedback, code)
+
+    # 4. Integration check
+    if not integrates_cleanly(code):
+        return retry_with_feedback("Integration issues", code)
+
+    return Result.success(code)
+```
+
+<Callout type="success">
+  **The Verification Hierarchy:** 1. **Syntax** — Does it parse? (Instant,
+  automated) 2. **Types** — Does it type-check? (Fast, automated) 3. **Tests** —
+  Does it pass tests? (Minutes, automated) 4. **Review** — Does it make sense?
+  (Human judgment) 5. **Integration** — Does it work in context? (Human +
+  automated)
+</Callout>
+
+---
+
+## PRD-to-Tasks Decomposition (Task Master Pattern)
+
+<ConceptVisual
+  image="/images/day_22_04_task_master_flow.png"
+  caption="The Task Master Pattern: From natural language to executable, verified tasks."
+  alt="Flowchart showing PRD to task decomposition workflow"
+/>
+
+The Task Master pattern is a systematic approach to converting requirements into executable work:
+
+<Mermaid
+  chart={`
+graph TD
+    NL[Natural Language<br/>Requirements] --> PRD[PRD Generation]
+    PRD --> Decomp[Task Decomposition]
+    Decomp --> Deps[Dependency Analysis]
+    Deps --> Queue[Task Queue]
+    Queue --> Exec[Execute Task]
+    Exec --> Verify[Verify Output]
+    Verify -->|Pass| Next[Next Task]
+    Verify -->|Fail| Exec
+    Next --> Queue
+    Queue -->|Empty| Done[Feature Complete]
+    
+    style PRD fill:#e3f2fd
+    style Verify fill:#c8e6c9
+    style Done fill:#fff9c4
+`}
+/>
+
+### Step 1: Natural Language → PRD
+
+Transform informal requirements into structured specifications:
+
+```markdown
+## Input (Natural Language)
+
+"We need users to be able to save their favorite items
+and see them on a dedicated page. Should work offline too."
+
+## Output (PRD)
+
+### Feature: Favorites System
+
+#### User Stories
+
+- As a user, I can mark items as favorites
+- As a user, I can view all my favorites on a dedicated page
+- As a user, I can access my favorites offline
+
+#### Functional Requirements
+
+1. Favorite toggle on item cards and detail pages
+2. Dedicated /favorites route with grid layout
+3. Offline storage using IndexedDB
+4. Sync favorites when connection restored
+
+#### Non-Functional Requirements
+
+- Favorite action < 100ms response time
+- Support up to 1000 favorites per user
+- Offline-first architecture
+
+#### Technical Approach
+
+- React Query for server state
+- IndexedDB via Dexie.js for offline
+- Background sync via Service Worker
+```
+
+### Step 2: PRD → Dependency-Aware Tasks
+
+Break the PRD into tasks with explicit dependencies:
+
+```yaml
+tasks:
+  - id: FAV-001
+    title: "Create Favorite model and API"
+    dependencies: []
+    acceptance:
+      - Favorite model with userId, itemId, createdAt
+      - POST /api/favorites endpoint
+      - DELETE /api/favorites/:id endpoint
+      - GET /api/favorites endpoint with pagination
+
+  - id: FAV-002
+    title: "Implement FavoriteButton component"
+    dependencies: [FAV-001]
+    acceptance:
+      - Toggle button with filled/outline heart icon
+      - Optimistic UI update
+      - Error handling with rollback
+
+  - id: FAV-003
+    title: "Create Favorites page"
+    dependencies: [FAV-001, FAV-002]
+    acceptance:
+      - Grid layout matching existing item cards
+      - Empty state with CTA
+      - Loading skeleton
+
+  - id: FAV-004
+    title: "Add offline support"
+    dependencies: [FAV-001, FAV-002, FAV-003]
+    acceptance:
+      - IndexedDB schema for favorites
+      - Sync queue for offline actions
+      - Conflict resolution strategy
+```
+
+### Step 3: Task Execution with Verification
+
+Execute each task with a structured prompt:
+
+```markdown
+## Task: FAV-002 - Implement FavoriteButton component
+
+### Context
+
+You are implementing a favorites system. The API is complete (FAV-001).
+See spec.md for full requirements.
+
+### Current Task
+
+Create a FavoriteButton component that:
+
+1. Shows filled heart when favorited, outline when not
+2. Calls POST/DELETE /api/favorites on click
+3. Uses optimistic updates with rollback on error
+
+### Constraints
+
+- Use existing Button component as base
+- Follow project's React Query patterns
+- Match existing icon style (Lucide icons)
+
+### Files to Reference
+
+- src/components/ui/Button.tsx (base component)
+- src/hooks/useItems.ts (React Query pattern example)
+- src/api/favorites.ts (API client - already created)
+
+### Acceptance Criteria
+
+- [ ] Component renders correct icon state
+- [ ] Click toggles favorite status
+- [ ] Optimistic update shows immediately
+- [ ] Error triggers rollback and toast notification
+- [ ] Loading state prevents double-clicks
+
+### Output Format
+
+Provide the complete component file and any necessary hooks.
+```
+
+<Callout type="tip">
+  **The Power of Constraints:** Notice how the prompt includes specific
+  constraints (existing components, patterns, icons). This prevents the AI from
+  inventing new patterns that don't match your codebase. Constraints are context
+  engineering in action.
+</Callout>
+
+### Step 4: Verification Loop
+
+After generation, verify against acceptance criteria:
+
+```bash
+# Automated verification script
+#!/bin/bash
+
+echo "🔍 Verifying FAV-002: FavoriteButton"
+
+# 1. Syntax check
+echo "Checking syntax..."
+npx tsc --noEmit src/components/FavoriteButton.tsx || exit 1
+
+# 2. Lint check
+echo "Checking lint..."
+npx eslint src/components/FavoriteButton.tsx || exit 1
+
+# 3. Unit tests
+echo "Running tests..."
+npx vitest run src/components/FavoriteButton.test.tsx || exit 1
+
+# 4. Integration check
+echo "Checking imports..."
+grep -r "FavoriteButton" src/ | grep -v test | grep -v ".tsx:" || {
+  echo "⚠️  Component not imported anywhere yet"
+}
+
+echo "✅ FAV-002 verification complete"
+```
+
+---
+
+## Automated Decision Logs (ADLs)
+
+<ConceptVisual
+  image="/images/day_22_05_adl_structure.png"
+  caption="Automated Decision Logs: Capturing the 'why' behind AI-generated code."
+  alt="Structure diagram of an Automated Decision Log"
+/>
+
+### The "Code Without Understanding" Problem
+
+<Callout type="warning">
+  **The Hidden Danger:** When AI generates code, the reasoning disappears. Six
+  months later, you're staring at a function asking "Why did we do it this way?"
+  The AI knew. You approved it. But neither of you documented the reasoning.
+  This is how codebases become unmaintainable.
+</Callout>
+
+ADLs solve this by capturing decisions as they're made:
+
+### ADL Structure
+
+```markdown
+# ADL-2024-001: Authentication Token Strategy
+
+## Date
+
+2024-01-15
+
+## Status
+
+Accepted
+
+## Context
+
+We need to implement user authentication for the API.
+Options considered:
+
+1. Session-based with cookies
+2. JWT with short expiry
+3. JWT with refresh tokens
+
+## Decision
+
+JWT with refresh tokens (Option 3)
+
+## Rationale
+
+- Mobile app requires stateless auth (rules out sessions)
+- Short-lived JWTs (15min) limit exposure if compromised
+- Refresh tokens (7 days) balance security with UX
+- Redis storage enables token revocation
+
+## Consequences
+
+- Must implement refresh token rotation
+- Need Redis infrastructure
+- Slightly more complex client logic
+
+## Alternatives Rejected
+
+- **Sessions**: Doesn't work for mobile/API clients
+- **Long-lived JWT**: Security risk, no revocation
+
+## AI Assistance
+
+This decision was made with AI assistance. The AI suggested
+the refresh token pattern based on the mobile requirement.
+Human review confirmed alignment with security requirements.
+```
+
+### Integrating ADLs with Git
+
+Link decisions to code changes:
+
+```bash
+# Commit message format
+git commit -m "feat(auth): implement JWT refresh tokens
+
+Implements refresh token rotation with Redis storage.
+Access tokens expire in 15 minutes, refresh tokens in 7 days.
+
+Decision: ADL-2024-001
+Task: AUTH-003
+Spec: docs/specs/authentication.md"
+```
+
+### Generating ADLs During Development
+
+Prompt the AI to generate ADLs as part of the workflow:
+
+```markdown
+## Prompt Template for ADL Generation
+
+After implementing [FEATURE], generate an ADL that captures:
+
+1. **Context**: What problem were we solving?
+2. **Options Considered**: What alternatives existed?
+3. **Decision**: What did we choose and why?
+4. **Trade-offs**: What did we give up?
+5. **Future Considerations**: What might change this decision?
+
+Format as markdown following our ADL template.
+Reference the relevant spec and task IDs.
+```
+
+<Callout type="success">
+  **ADL Benefits:** - **Onboarding**: New team members understand decisions
+  quickly - **Debugging**: "Why does this work this way?" has an answer -
+  **Refactoring**: Know what constraints led to current design - **Auditing**:
+  Track AI involvement in architectural decisions
+</Callout>
+
+---
+
+## Context Engineering for Specs
+
+<ConceptVisual
+  image="/images/day_22_06_context_layers.png"
+  caption="Context Layers: Building the right information environment for spec-driven development."
+  alt="Layered diagram showing different context levels"
+/>
+
+Effective spec-driven development requires careful context management. From Day 09, we know context is finite and precious. Here's how to apply those principles:
+
+### Loading Memory Instructions
+
+Start each session by loading relevant context:
+
+```markdown
+## Session Initialization Prompt
+
+Load the following context for this session:
+
+1. **Project Spec**: @docs/specs/current-feature.md
+2. **Architecture**: @docs/architecture/overview.md
+3. **Conventions**: @docs/CONVENTIONS.md
+4. **Current Task**: Task AUTH-003 from tasks.yaml
+
+You are continuing work on the authentication system.
+Previous session completed AUTH-002 (User model).
+Current task: Implement login endpoint.
+
+Constraints:
+
+- Follow existing patterns in src/api/
+- Use Zod for validation (see src/schemas/)
+- Error responses follow RFC 7807
+```
+
+### The Context Hierarchy for Specs
+
+```
+Context Priority (highest to lowest):
+├── Current Task          (what we're doing now)
+├── Feature Spec          (requirements and constraints)
+├── Related Code          (files we'll modify or reference)
+├── Project Conventions   (how we do things here)
+├── Architecture Docs     (system-level context)
+└── Previous Decisions    (ADLs for this feature)
+```
+
+### Keeping Codebases Small and Focused
+
+<Callout type="tip">
+  **The Monorepo Trap:** Large codebases overwhelm AI context windows. Consider:
+  - **Modular architecture**: Independent packages with clear boundaries -
+  **Focused repos**: One service per repository when possible - **Explicit
+  interfaces**: Well-documented APIs between modules Smaller, focused codebases
+  = better AI assistance.
+</Callout>
+
+### Clearing Context Often
+
+Context accumulates noise over time. Clear it strategically:
+
+```markdown
+## When to Clear Context
+
+✅ Clear context when:
+
+- Starting a new task (fresh start)
+- AI responses become confused or repetitive
+- Switching between unrelated features
+- After completing a major milestone
+
+❌ Don't clear when:
+
+- In the middle of a multi-step task
+- Debugging requires conversation history
+- Building on immediately previous work
+```
+
+---
+
+## The T-Shaped Engineer
+
+<ConceptVisual
+  image="/images/day_22_07_t_shaped_engineer.png"
+  caption="The T-Shaped Engineer: Broad AI-enabled capabilities with deep orchestration expertise."
+  alt="T-shape diagram showing breadth of AI capabilities and depth of specialization"
+/>
+
+<ConceptIntro
+  title="The T-Shaped Engineer"
+  analogy="A traditional specialist is like a deep-sea diver—they go very deep in one area but can't breathe anywhere else. A generalist is like a snorkeler—they can go anywhere but never deep. The T-shaped engineer is like a diver with a submarine—they can explore broadly AND go deep when needed, with AI as their vessel."
+  technicalDef="The T-shaped engineer combines broad, AI-enabled capabilities across multiple domains (the horizontal bar) with deep specialized knowledge in orchestrating AI systems and making architectural decisions (the vertical bar). This represents a shift from 'knowing how to code everything' to 'knowing how to direct AI to code anything.'"
+  whyItMatters="As AI handles more implementation work, the value shifts from 'can you write this code?' to 'can you architect systems, verify correctness, and orchestrate AI effectively?' The T-shaped engineer is positioned for this future."
+/>
+
+### The Horizontal Bar: AI-Enabled Breadth
+
+With AI assistance, engineers can now work effectively across domains they haven't mastered:
+
+| Domain       | Without AI                | With AI + Spec-Driven                        |
+| :----------- | :------------------------ | :------------------------------------------- |
+| **Frontend** | "I only do backend"       | Can implement React components with guidance |
+| **DevOps**   | "I don't know Kubernetes" | Can write manifests with proper review       |
+| **Data**     | "SQL is not my thing"     | Can write complex queries with verification  |
+| **Mobile**   | "Never touched Swift"     | Can contribute with careful testing          |
+
+<Callout type="info">
+  **The Key Insight:** AI doesn't make you an expert in these domains. It makes
+  you *capable* in them. The difference matters—you can contribute, but you
+  still need domain experts for critical decisions and review.
+</Callout>
+
+### The Vertical Bar: Deep Orchestration Skills
+
+The irreplaceable skills of the AI-age engineer:
+
+```markdown
+## Core Competencies for AI Orchestration
+
+### 1. System Design
+
+- Decomposing problems into AI-tractable tasks
+- Identifying integration points and risks
+- Designing verification strategies
+
+### 2. Context Engineering
+
+- Curating effective prompts and specs
+- Managing context windows efficiently
+- Knowing what information AI needs
+
+### 3. Quality Assurance
+
+- Reviewing AI output critically
+- Identifying subtle bugs and security issues
+- Ensuring architectural consistency
+
+### 4. Decision Making
+
+- Choosing when to use AI vs. manual coding
+- Evaluating trade-offs AI can't see
+- Maintaining long-term system coherence
+
+### 5. Knowledge Management
+
+- Documenting decisions (ADLs)
+- Maintaining specs and conventions
+- Preserving institutional knowledge
+```
+
+### From Coder to AI Architect
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Traditional Role"
+        T1[Requirements] --> T2[Design]
+        T2 --> T3[Code]
+        T3 --> T4[Test]
+        T4 --> T5[Deploy]
+    end
+    
+    subgraph "AI-Age Role"
+        A1[Requirements] --> A2[Spec Writing]
+        A2 --> A3[Task Decomposition]
+        A3 --> A4[AI Orchestration]
+        A4 --> A5[Verification]
+        A5 --> A6[Integration]
+    end
+    
+    style A2 fill:#e3f2fd
+    style A4 fill:#e3f2fd
+    style A5 fill:#c8e6c9
+`}
+/>
+
+| Traditional Focus            | AI-Age Focus                       |
+| :--------------------------- | :--------------------------------- |
+| Writing code                 | Writing specs                      |
+| Memorizing syntax            | Engineering context                |
+| Individual productivity      | AI orchestration                   |
+| Deep single-domain expertise | Broad capability + deep judgment   |
+| "How do I implement this?"   | "How do I verify this is correct?" |
+
+---
+
+## Practical Workflow Example
+
+Let's walk through a complete spec-driven workflow for a real feature:
+
+### Scenario: Add Search Functionality
+
+```markdown
+## Step 1: Capture Requirements (5 min)
+
+User request: "Add search to the product catalog"
+
+Questions to clarify:
+
+- Full-text search or filters only?
+- Real-time (as-you-type) or submit-based?
+- Search products only or include categories?
+- Need search history/suggestions?
+
+Answers: Full-text, real-time, products only, no history (MVP)
+```
+
+### Step 2: Generate PRD (10 min)
+
+```markdown
+# PRD: Product Search
+
+## Overview
+
+Add real-time full-text search to the product catalog.
+
+## User Stories
+
+- As a user, I can type in a search box and see matching products
+- As a user, I see results update as I type (debounced)
+- As a user, I see a "no results" state when nothing matches
+
+## Requirements
+
+### Functional
+
+- Search box in catalog header
+- Searches product name and description
+- Results update after 300ms debounce
+- Minimum 2 characters to trigger search
+- Clear button resets to full catalog
+
+### Non-Functional
+
+- Search response < 200ms (p95)
+- Handle 100 concurrent searches
+- Graceful degradation if search fails
+
+## Technical Approach
+
+- PostgreSQL full-text search (pg_trgm)
+- React Query for search state
+- Debounced input with useDeferredValue
+
+## Out of Scope
+
+- Faceted search (Phase 2)
+- Search suggestions (Phase 2)
+- Search analytics (Phase 2)
+```
+
+### Step 3: Decompose into Tasks (5 min)
+
+```yaml
+tasks:
+  - id: SEARCH-001
+    title: "Add full-text search index to products table"
+    estimate: 15min
+    acceptance:
+      - GIN index on name and description
+      - Migration file created
+      - Index verified in development
+
+  - id: SEARCH-002
+    title: "Create search API endpoint"
+    dependencies: [SEARCH-001]
+    estimate: 20min
+    acceptance:
+      - GET /api/products/search?q=term
+      - Returns matching products with relevance score
+      - Handles empty query (returns all)
+      - Input sanitization
+
+  - id: SEARCH-003
+    title: "Implement SearchBox component"
+    estimate: 15min
+    acceptance:
+      - Controlled input with debounce
+      - Clear button when has value
+      - Loading indicator during search
+      - Accessible (proper ARIA labels)
+
+  - id: SEARCH-004
+    title: "Integrate search into catalog page"
+    dependencies: [SEARCH-002, SEARCH-003]
+    estimate: 20min
+    acceptance:
+      - SearchBox in catalog header
+      - Results replace product grid
+      - Empty state for no results
+      - Error state with retry
+
+  - id: SEARCH-005
+    title: "Add search tests"
+    dependencies: [SEARCH-004]
+    estimate: 15min
+    acceptance:
+      - Unit tests for SearchBox
+      - Integration test for search flow
+      - API endpoint tests
+```
+
+### Step 4: Execute with Verification
+
+```markdown
+## Executing SEARCH-002: Create search API endpoint
+
+### Prompt to AI
+
+Context: Implementing product search per docs/specs/search.md
+Task: SEARCH-002 - Create search API endpoint
+
+Create GET /api/products/search endpoint that:
+
+1. Accepts query parameter `q`
+2. Uses PostgreSQL full-text search on products table
+3. Returns products sorted by relevance
+4. Handles empty query by returning all products
+
+Reference files:
+
+- src/api/products.ts (existing product endpoints)
+- src/db/schema.ts (database schema)
+- prisma/migrations/ (migration patterns)
+
+Follow existing patterns for:
+
+- Error handling (see src/lib/api-error.ts)
+- Response format (see src/types/api.ts)
+- Validation (Zod schemas in src/schemas/)
+
+### Generated Code Review Checklist
+
+□ SQL injection prevented (parameterized query)
+□ Input validated and sanitized
+□ Error responses follow RFC 7807
+□ Matches existing code patterns
+□ TypeScript types are correct
+□ No unnecessary dependencies added
+```
+
+### Step 5: Document Decision
+
+```markdown
+# ADL-2024-015: Product Search Implementation
+
+## Date
+
+2024-01-20
+
+## Context
+
+Needed to add search to product catalog. Options:
+
+1. PostgreSQL full-text search (pg_trgm)
+2. Elasticsearch
+3. Algolia (SaaS)
+
+## Decision
+
+PostgreSQL full-text search with pg_trgm extension
+
+## Rationale
+
+- Already using PostgreSQL, no new infrastructure
+- pg_trgm handles typos and partial matches
+- Sufficient for current catalog size (~10k products)
+- Can migrate to Elasticsearch later if needed
+
+## Trade-offs
+
+- Less sophisticated ranking than Elasticsearch
+- No built-in synonyms or stemming
+- Performance may degrade at scale
+
+## Trigger for Revisiting
+
+- Catalog exceeds 100k products
+- Search latency exceeds 500ms p95
+- Need for advanced features (facets, synonyms)
+```
+
+---
+
+<Exercise
+  title="Convert Vibe Coding to Spec-Driven"
+  difficulty="intermediate"
+  objectives={[
+    "Transform ad-hoc requirements into a structured PRD",
+    "Decompose a feature into dependency-aware tasks",
+    "Write acceptance criteria for each task",
+    "Create an ADL for a key decision"
+  ]}
+  hints={[
+    "Start by listing all the implicit requirements",
+    "Identify what's in scope vs. out of scope",
+    "Think about what could go wrong (error states)",
+    "Consider non-functional requirements (performance, security)"
+  ]}
+>
+
+**Scenario:** Your PM says "Add a way for users to export their data."
+
+**Task 1:** Write a PRD that clarifies:
+
+- What data can be exported?
+- What formats are supported?
+- How is the export delivered?
+- What are the size/rate limits?
+
+**Task 2:** Decompose into 4-6 tasks with:
+
+- Clear acceptance criteria
+- Dependency relationships
+- Time estimates
+
+**Task 3:** Write an ADL for choosing the export format (CSV vs JSON vs both).
+
+</Exercise>
+
+---
+
+<Exercise
+  title="Build a Task Master Prompt"
+  difficulty="advanced"
+  objectives={[
+    "Create a reusable prompt template for task decomposition",
+    "Include context loading instructions",
+    "Add verification checkpoints",
+    "Handle edge cases and errors"
+  ]}
+  hints={[
+    "Think about what context the AI needs at each step",
+    "Include examples of good task breakdowns",
+    "Add constraints to prevent scope creep",
+    "Include a verification checklist"
+  ]}
+>
+
+**Task:** Create a prompt template that takes a feature description and outputs:
+
+1. A structured PRD
+2. A task breakdown with dependencies
+3. Acceptance criteria for each task
+
+Your template should be reusable across different features and include:
+
+- Placeholders for project-specific context
+- Instructions for handling ambiguity
+- Output format specifications
+
+**Bonus:** Add a section that generates potential ADL topics based on the feature.
+
+</Exercise>
+
+---
+
+<ProgressCheckpoint
+  title="Spec-Driven Development Knowledge Check"
+  questions={[
+    {
+      question: "What is the '70% Problem' in AI-assisted development?",
+      answer:
+        "AI handles ~70% of coding work easily (boilerplate, patterns, docs), but the remaining 30% (integration, edge cases, security, architecture) requires human expertise. Understanding this split is key to effective AI collaboration.",
+    },
+    {
+      question: "Why does vibe coding fail for production code?",
+      answer:
+        "Vibe coding lacks persistent specs (context loss), defined acceptance criteria (scope creep), system-level planning (integration failures), and decision documentation (knowledge loss). It works for prototypes but creates unmaintainable production code.",
+    },
+    {
+      question: "What are the three pillars of spec-driven development?",
+      answer:
+        "1) Rigorous planning with shared specs (single source of truth), 2) Small iterative chunks (15-minute tasks), 3) Human-in-the-loop verification (automated checks + human review).",
+    },
+    {
+      question: "What is an ADL and why is it important?",
+      answer:
+        "An Automated Decision Log captures architectural decisions, trade-offs, and rationale during development. It prevents 'code without understanding' where AI-generated code works but no one knows why it was designed that way.",
+    },
+    {
+      question:
+        "How does the T-shaped engineer model apply to AI-assisted development?",
+      answer:
+        "The horizontal bar represents broad AI-enabled capabilities across domains. The vertical bar represents deep expertise in orchestrating AI, verifying correctness, and making architectural decisions. Value shifts from 'writing code' to 'directing AI and ensuring quality.'",
+    },
+  ]}
+/>
+
+---
+
+<ModuleSummary
+  points={[
+    "The 70% Problem: AI excels at bulk work, humans handle integration and polish",
+    "Vibe coding (ad-hoc prompting) fails for production—use spec-driven workflows",
+    "Three pillars: rigorous planning, small iterations, human verification",
+    "Task Master pattern: PRD → dependency-aware tasks → verified execution",
+    "ADLs capture decisions and rationale to prevent 'code without understanding'",
+    "Context engineering: load specs, clear often, keep codebases focused",
+    "T-shaped engineers combine AI-enabled breadth with deep orchestration skills",
+    "The role shifts from 'coder' to 'AI architect'—specs over syntax",
+    "Every task needs acceptance criteria and verification steps",
+    "Document decisions as you make them—future you will thank present you",
+  ]}
+/>
+
+---
+
+## Hands-On Practice
+
+<Callout type="tip">
+  **Builds Toward Capstone:** The spec-driven workflow you learn here is
+  essential for the multi-agent systems in Month 3. When you have multiple AI
+  agents collaborating, clear specs and task decomposition become even more
+  critical. Your orchestrator agent will use these same patterns to coordinate
+  worker agents.
+</Callout>
+
+### Recommended Exercises
+
+Complete these exercises to reinforce the concepts from this module:
+
+- **EX-10: Spec-Driven Feature** (45 min) - Take a feature request and implement it using the full spec-driven workflow: PRD → tasks → execution → ADL. Compare the result to what you would have produced with vibe coding.
+
+- **EX-11: ADL Practice** (20 min) - Review a recent PR or feature you implemented. Write ADLs for 2-3 key decisions that were made. Notice what information is missing that you wish you had documented.
+
+### What's Next
+
+With spec-driven development mastered, you're ready to scale up. In the capstone projects, you'll apply these patterns to multi-agent systems where clear specs and task decomposition are essential for coordinating multiple AI workers.
+
+---
+
+## Connection to Other Modules
+
+| Module                          | Connection                                                                                       |
+| :------------------------------ | :----------------------------------------------------------------------------------------------- |
+| **Day 09: Context Engineering** | Spec-driven development is context engineering applied to the full development lifecycle         |
+| **Day 11: Agent Loops**         | Task execution follows the ReAct pattern—reason about the task, act (generate), observe (verify) |
+| **Day 31: Orchestration**       | Multi-agent systems require even more rigorous specs to coordinate workers                       |
+| **Day 23: Project Hierarchy**   | Specs and ADLs fit into the broader project documentation structure                              |
+
+---
+
+## Further Reading
+
+- **[The Pragmatic Programmer](https://pragprog.com/titles/tpp20/)** — Classic on software craftsmanship, now more relevant than ever
+- **[Architecture Decision Records](https://adr.github.io/)** — The original ADR format that inspired ADLs
+- **[Shape Up](https://basecamp.com/shapeup)** — Basecamp's approach to scoping and shipping, applicable to AI workflows
+- **[Anthropic's Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents)** — Production guidance for AI systems
+- **[Context Engineering (Day 09)](/modules/day-09-context-engineering)** — Deep dive into managing AI context
+
+**Next:** [Day 23: Project Hierarchy](/modules/day-23-project-hierarchy) — Organizing specs, ADLs, and documentation in your projects.
+
+<PageNavigation
+  previous={{ href: "/modules/day-20-memory", title: "Day 20: Memory Systems" }}
+  next={{
+    href: "/modules/day-23-project-hierarchy",
+    title: "Day 23: Project Hierarchy",
+  }}
+/>

@@ -1,0 +1,3606 @@
+---
+title: "Day 21: Durable Execution Patterns"
+description: "Build agents that survive crashes, timeouts, and restarts using Temporal.io, Inngest, and checkpoint-based recovery."
+week: 4
+day: 21
+---
+
+<ReadingTime minutes={50} />
+
+<SkillLevel
+  level="intermediate"
+  description="Hands-on Python implementation with distributed systems concepts"
+/>
+
+<Prerequisites
+  items={[
+    "Completed Days 01-20 (especially Day 20: Memory Systems)",
+    "Python async/await patterns",
+    "Basic understanding of distributed systems",
+    "Familiarity with databases (SQLite/PostgreSQL)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Understand why durable execution is critical for production agents",
+    "Implement checkpoint-based recovery for long-running tasks",
+    "Build workflows with Temporal.io for enterprise-grade durability",
+    "Use Inngest for serverless durable functions",
+    "Design Human-in-the-Loop (HITL) patterns that survive restarts",
+    "Implement idempotency and exactly-once semantics",
+    "Monitor and manage long-running agent tasks",
+  ]}
+/>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Durable Execution",
+      definition:
+        "A programming model where function execution state is automatically persisted, allowing recovery from failures without losing progress",
+    },
+    {
+      term: "Checkpoint",
+      definition:
+        "A saved snapshot of execution state that can be used to resume processing after a failure or restart",
+    },
+    {
+      term: "Workflow",
+      definition:
+        "A durable function that orchestrates activities and maintains state across failures—the core abstraction in Temporal.io",
+    },
+    {
+      term: "Activity",
+      definition:
+        "A single unit of work in a durable workflow that can be retried independently on failure",
+    },
+    {
+      term: "Idempotency",
+      definition:
+        "The property where an operation produces the same result whether executed once or multiple times—critical for safe retries",
+    },
+    {
+      term: "Dead Letter Queue (DLQ)",
+      definition:
+        "A queue that stores messages/tasks that failed processing after all retry attempts, enabling manual review and recovery",
+    },
+    {
+      term: "Human-in-the-Loop (HITL)",
+      definition:
+        "A pattern where automated workflows pause for human approval or input before continuing execution",
+    },
+    {
+      term: "Saga Pattern",
+      definition:
+        "A pattern for managing distributed transactions through a sequence of local transactions with compensating actions for rollback",
+    },
+  ]}
+/>
+
+---
+
+## The Durability Problem
+
+<Callout type="warning">
+  **Critical Production Issue:** 70% of production agent failures stem from lack
+  of durable execution. Agents that work perfectly in development fail
+  catastrophically when they encounter timeouts, rate limits, or infrastructure
+  restarts in production.
+</Callout>
+
+<ConceptIntro
+  title="Durable Execution"
+  analogy="Imagine writing a novel on a computer without auto-save. You write for hours, then the power goes out—all progress lost. Now imagine a system that saves every sentence as you write it, so even after a power outage, you resume exactly where you left off. Durable execution is auto-save for your agent's work."
+  technicalDef="Durable execution is a programming model where the runtime automatically persists function state at each step. When failures occur, execution resumes from the last checkpoint rather than restarting from scratch. This is achieved through event sourcing, where all state changes are recorded as a sequence of events that can be replayed."
+  whyItMatters="Production agents run for minutes to hours, interact with external APIs, and handle valuable user data. Without durability, a single timeout or crash can waste compute resources, lose user context, and require manual intervention. Durable execution transforms fragile scripts into reliable systems."
+/>
+
+### Why Agents Fail in Production
+
+<Mermaid
+  chart={`
+flowchart TD
+    subgraph "Agent Execution"
+        Start([Start Task]) --> Step1[Step 1: Search]
+        Step1 --> Step2[Step 2: Analyze]
+        Step2 --> Step3[Step 3: Generate]
+        Step3 --> Step4[Step 4: Review]
+        Step4 --> End([Complete])
+    end
+    
+    subgraph "Failure Points"
+        F1[⚡ API Timeout] -.-> Step1
+        F2[💥 Rate Limit] -.-> Step2
+        F3[🔄 Server Restart] -.-> Step3
+        F4[⏰ Lambda Timeout] -.-> Step4
+    end
+    
+    style F1 fill:#ffcccc,stroke:#cc0000
+    style F2 fill:#ffcccc,stroke:#cc0000
+    style F3 fill:#ffcccc,stroke:#cc0000
+    style F4 fill:#ffcccc,stroke:#cc0000
+`}
+/>
+
+| Failure Type          | Cause                               | Impact Without Durability                 |
+| :-------------------- | :---------------------------------- | :---------------------------------------- |
+| **API Timeout**       | External service slow/unavailable   | Entire task restarts, duplicate API calls |
+| **Rate Limiting**     | Too many requests to LLM/API        | Task fails, user must retry manually      |
+| **Server Restart**    | Deployment, scaling, maintenance    | All in-flight tasks lost                  |
+| **Lambda Timeout**    | Serverless execution limit (15 min) | Long tasks impossible                     |
+| **Memory Exhaustion** | Large context accumulation          | Process killed, no recovery               |
+| **Network Partition** | Connectivity issues                 | Partial completion, inconsistent state    |
+
+### The "Fire and Forget" Anti-Pattern
+
+```python
+# ❌ ANTI-PATTERN: Fire and Forget
+async def research_agent(query: str) -> str:
+    """This agent will fail in production."""
+
+    # Step 1: Search (what if this times out?)
+    results = await search_web(query)
+
+    # Step 2: Analyze (what if we hit rate limits?)
+    analysis = await llm.analyze(results)
+
+    # Step 3: Generate report (what if server restarts here?)
+    report = await llm.generate_report(analysis)
+
+    # If ANY step fails, we lose ALL progress
+    return report
+```
+
+<Callout type="danger">
+  **The Problem:** If the server restarts after Step 2 completes, we lose the
+  analysis results and must redo Steps 1 and 2. With expensive LLM calls and
+  rate limits, this wastes money and time.
+</Callout>
+
+### Real-World Failure Scenarios
+
+<RealWorldExample
+  title="The $500 Research Report"
+  scenario="A user requests a comprehensive market research report. The agent spends 45 minutes gathering data, analyzing trends, and generating insights using GPT-4."
+  implementation="At minute 43, during final formatting, the Kubernetes pod is evicted for a rolling deployment. The agent has no checkpoints. All 45 minutes of work—and approximately $50 in API costs—are lost. The user must start over."
+  takeaway="Without durable execution, long-running tasks are gambling. The longer the task, the higher the probability of failure, and the greater the loss when it occurs."
+/>
+
+---
+
+## 21.1 Checkpoint-Based Recovery
+
+<ConceptIntro
+  title="Checkpointing"
+  analogy="Video games have save points. When you die, you don't restart the entire game—you resume from your last save. Checkpointing gives your agents the same superpower: save progress at key points, and resume from there after any failure."
+  technicalDef="Checkpointing is the practice of periodically saving execution state to durable storage. The checkpoint contains all information needed to resume execution: completed steps, intermediate results, and current position. On recovery, the system loads the latest checkpoint and continues from that point."
+  whyItMatters="Checkpointing is the simplest form of durable execution. It doesn't require external infrastructure like Temporal or Inngest—just a database. It's the foundation for understanding more sophisticated durability patterns."
+/>
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Agent
+    participant Checkpoint as Checkpoint Store
+    participant External as External APIs
+    
+    Agent->>Checkpoint: Load latest checkpoint
+    Checkpoint-->>Agent: State: {step: 2, data: {...}}
+    
+    Note over Agent: Resume from Step 2
+    
+    Agent->>External: Execute Step 3
+    External-->>Agent: Result
+    Agent->>Checkpoint: Save checkpoint (step: 3)
+    
+    Agent->>External: Execute Step 4
+    Note over Agent: 💥 Crash!
+    
+    Agent->>Checkpoint: Load latest checkpoint
+    Checkpoint-->>Agent: State: {step: 3, data: {...}}
+    
+    Note over Agent: Resume from Step 3
+    Agent->>External: Execute Step 4 (retry)
+    External-->>Agent: Result
+    Agent->>Checkpoint: Save checkpoint (step: 4)
+`}
+/>
+
+### Complete CheckpointManager Implementation
+
+```python
+import json
+import sqlite3
+import hashlib
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, TypeVar, Generic
+from dataclasses import dataclass, asdict
+from enum import Enum
+from pathlib import Path
+import asyncio
+
+class CheckpointStatus(Enum):
+    """Status of a checkpointed task."""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class Checkpoint:
+    """A saved execution state."""
+    task_id: str
+    step: int
+    step_name: str
+    status: CheckpointStatus
+    data: Dict[str, Any]
+    created_at: str
+    version: int
+    checksum: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for storage."""
+        result = asdict(self)
+        result["status"] = self.status.value
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Checkpoint":
+        """Create from dictionary."""
+        data["status"] = CheckpointStatus(data["status"])
+        return cls(**data)
+```
+
+class CheckpointManager:
+"""
+Manages checkpoints for durable task execution.
+
+    Features:
+    - Save and restore execution state
+    - Checkpoint versioning for schema migrations
+    - Automatic cleanup of old checkpoints
+    - Integrity verification via checksums
+    """
+
+    CURRENT_VERSION = 1
+
+    def __init__(
+        self,
+        db_path: str = "./checkpoints.db",
+        max_checkpoints_per_task: int = 10,
+        retention_days: int = 7
+    ):
+        """
+        Initialize the checkpoint manager.
+
+        Args:
+            db_path: Path to SQLite database
+            max_checkpoints_per_task: Maximum checkpoints to keep per task
+            retention_days: Days to retain completed task checkpoints
+        """
+        self.db_path = db_path
+        self.max_checkpoints = max_checkpoints_per_task
+        self.retention_days = retention_days
+        self._init_db()
+
+    def _init_db(self) -> None:
+        """Initialize the database schema."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS checkpoints (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id TEXT NOT NULL,
+                    step INTEGER NOT NULL,
+                    step_name TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    data TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    checksum TEXT NOT NULL,
+                    UNIQUE(task_id, step)
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_task_id
+                ON checkpoints(task_id)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_created_at
+                ON checkpoints(created_at)
+            """)
+            conn.commit()
+
+    def _compute_checksum(self, data: Dict[str, Any]) -> str:
+        """Compute checksum for data integrity verification."""
+        json_str = json.dumps(data, sort_keys=True)
+        return hashlib.sha256(json_str.encode()).hexdigest()[:16]
+
+    def save(
+        self,
+        task_id: str,
+        step: int,
+        step_name: str,
+        data: Dict[str, Any],
+        status: CheckpointStatus = CheckpointStatus.IN_PROGRESS
+    ) -> Checkpoint:
+        """
+        Save a checkpoint.
+
+        Args:
+            task_id: Unique identifier for the task
+            step: Step number (0-indexed)
+            step_name: Human-readable step name
+            data: State data to persist
+            status: Current task status
+
+        Returns:
+            The saved checkpoint
+        """
+        checksum = self._compute_checksum(data)
+        checkpoint = Checkpoint(
+            task_id=task_id,
+            step=step,
+            step_name=step_name,
+            status=status,
+            data=data,
+            created_at=datetime.utcnow().isoformat(),
+            version=self.CURRENT_VERSION,
+            checksum=checksum
+        )
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO checkpoints
+                (task_id, step, step_name, status, data, created_at, version, checksum)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                checkpoint.task_id,
+                checkpoint.step,
+                checkpoint.step_name,
+                checkpoint.status.value,
+                json.dumps(checkpoint.data),
+                checkpoint.created_at,
+                checkpoint.version,
+                checkpoint.checksum
+            ))
+            conn.commit()
+
+        # Cleanup old checkpoints for this task
+        self._cleanup_task_checkpoints(task_id)
+
+        return checkpoint
+
+
+    def load_latest(self, task_id: str) -> Optional[Checkpoint]:
+        """
+        Load the latest checkpoint for a task.
+
+        Args:
+            task_id: The task identifier
+
+        Returns:
+            The latest checkpoint, or None if no checkpoints exist
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT * FROM checkpoints
+                WHERE task_id = ?
+                ORDER BY step DESC
+                LIMIT 1
+            """, (task_id,))
+            row = cursor.fetchone()
+
+            if row is None:
+                return None
+
+            checkpoint = Checkpoint(
+                task_id=row["task_id"],
+                step=row["step"],
+                step_name=row["step_name"],
+                status=CheckpointStatus(row["status"]),
+                data=json.loads(row["data"]),
+                created_at=row["created_at"],
+                version=row["version"],
+                checksum=row["checksum"]
+            )
+
+            # Verify integrity
+            if not self._verify_checksum(checkpoint):
+                raise ValueError(f"Checkpoint integrity check failed for {task_id}")
+
+            return checkpoint
+
+    def _verify_checksum(self, checkpoint: Checkpoint) -> bool:
+        """Verify checkpoint data integrity."""
+        computed = self._compute_checksum(checkpoint.data)
+        return computed == checkpoint.checksum
+
+    def load_all(self, task_id: str) -> List[Checkpoint]:
+        """Load all checkpoints for a task, ordered by step."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT * FROM checkpoints
+                WHERE task_id = ?
+                ORDER BY step ASC
+            """, (task_id,))
+
+            checkpoints = []
+            for row in cursor.fetchall():
+                checkpoints.append(Checkpoint(
+                    task_id=row["task_id"],
+                    step=row["step"],
+                    step_name=row["step_name"],
+                    status=CheckpointStatus(row["status"]),
+                    data=json.loads(row["data"]),
+                    created_at=row["created_at"],
+                    version=row["version"],
+                    checksum=row["checksum"]
+                ))
+
+            return checkpoints
+
+    def mark_completed(self, task_id: str, final_result: Any = None) -> None:
+        """Mark a task as completed."""
+        checkpoint = self.load_latest(task_id)
+        if checkpoint:
+            data = checkpoint.data.copy()
+            if final_result is not None:
+                data["final_result"] = final_result
+            self.save(
+                task_id=task_id,
+                step=checkpoint.step,
+                step_name=checkpoint.step_name,
+                data=data,
+                status=CheckpointStatus.COMPLETED
+            )
+
+    def mark_failed(self, task_id: str, error: str) -> None:
+        """Mark a task as failed."""
+        checkpoint = self.load_latest(task_id)
+        if checkpoint:
+            data = checkpoint.data.copy()
+            data["error"] = error
+            self.save(
+                task_id=task_id,
+                step=checkpoint.step,
+                step_name=checkpoint.step_name,
+                data=data,
+                status=CheckpointStatus.FAILED
+            )
+
+
+    def _cleanup_task_checkpoints(self, task_id: str) -> None:
+        """Remove old checkpoints exceeding the limit."""
+        with sqlite3.connect(self.db_path) as conn:
+            # Keep only the most recent N checkpoints
+            conn.execute("""
+                DELETE FROM checkpoints
+                WHERE task_id = ?
+                AND id NOT IN (
+                    SELECT id FROM checkpoints
+                    WHERE task_id = ?
+                    ORDER BY step DESC
+                    LIMIT ?
+                )
+            """, (task_id, task_id, self.max_checkpoints))
+            conn.commit()
+
+    def cleanup_old_checkpoints(self) -> int:
+        """
+        Remove checkpoints older than retention period.
+
+        Returns:
+            Number of checkpoints deleted
+        """
+        cutoff = (datetime.utcnow() - timedelta(days=self.retention_days)).isoformat()
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                DELETE FROM checkpoints
+                WHERE created_at < ?
+                AND status IN (?, ?)
+            """, (cutoff, CheckpointStatus.COMPLETED.value, CheckpointStatus.FAILED.value))
+            deleted = cursor.rowcount
+            conn.commit()
+
+        return deleted
+
+    def get_pending_tasks(self) -> List[str]:
+        """Get all tasks that are in progress (for recovery on startup)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                SELECT DISTINCT task_id FROM checkpoints
+                WHERE status = ?
+            """, (CheckpointStatus.IN_PROGRESS.value,))
+            return [row[0] for row in cursor.fetchall()]
+
+````
+
+### Using CheckpointManager in an Agent
+
+```python
+import uuid
+from typing import Callable, List, Tuple
+
+class DurableAgent:
+    """An agent with checkpoint-based recovery."""
+
+    def __init__(self, checkpoint_manager: CheckpointManager):
+        self.checkpoints = checkpoint_manager
+        self.steps: List[Tuple[str, Callable]] = []
+
+    def add_step(self, name: str, func: Callable) -> "DurableAgent":
+        """Add a step to the agent pipeline."""
+        self.steps.append((name, func))
+        return self
+
+    async def run(self, task_id: Optional[str] = None, initial_data: Dict[str, Any] = None) -> Any:
+        """
+        Run the agent with checkpoint recovery.
+
+        Args:
+            task_id: Optional task ID (generated if not provided)
+            initial_data: Initial data for the task
+
+        Returns:
+            Final result from the last step
+        """
+        task_id = task_id or str(uuid.uuid4())
+
+        # Try to resume from checkpoint
+        checkpoint = self.checkpoints.load_latest(task_id)
+
+        if checkpoint and checkpoint.status == CheckpointStatus.COMPLETED:
+            return checkpoint.data.get("final_result")
+
+        # Determine starting point
+        start_step = 0
+        data = initial_data or {}
+
+        if checkpoint:
+            start_step = checkpoint.step + 1
+            data = checkpoint.data.copy()
+            print(f"Resuming task {task_id} from step {start_step}: {self.steps[start_step][0]}")
+        else:
+            print(f"Starting new task {task_id}")
+            # Save initial checkpoint
+            self.checkpoints.save(
+                task_id=task_id,
+                step=-1,
+                step_name="initialized",
+                data=data,
+                status=CheckpointStatus.PENDING
+            )
+````
+
+        # Execute remaining steps
+        try:
+            for i in range(start_step, len(self.steps)):
+                step_name, step_func = self.steps[i]
+                print(f"Executing step {i}: {step_name}")
+
+                # Execute the step
+                result = await step_func(data)
+                data[f"step_{i}_result"] = result
+
+                # Save checkpoint after each step
+                self.checkpoints.save(
+                    task_id=task_id,
+                    step=i,
+                    step_name=step_name,
+                    data=data,
+                    status=CheckpointStatus.IN_PROGRESS
+                )
+
+            # Mark as completed
+            self.checkpoints.mark_completed(task_id, data.get(f"step_{len(self.steps)-1}_result"))
+            return data.get(f"step_{len(self.steps)-1}_result")
+
+        except Exception as e:
+            self.checkpoints.mark_failed(task_id, str(e))
+            raise
+
+# Example usage
+
+async def main():
+checkpoint_mgr = CheckpointManager("./research_checkpoints.db")
+
+    # Define step functions
+    async def search(data: Dict) -> List[str]:
+        query = data.get("query", "AI agents")
+        # Simulate search
+        await asyncio.sleep(1)
+        return [f"Result 1 for {query}", f"Result 2 for {query}"]
+
+    async def analyze(data: Dict) -> str:
+        results = data.get("step_0_result", [])
+        # Simulate analysis
+        await asyncio.sleep(2)
+        return f"Analysis of {len(results)} results"
+
+    async def generate_report(data: Dict) -> str:
+        analysis = data.get("step_1_result", "")
+        # Simulate report generation
+        await asyncio.sleep(1)
+        return f"Report based on: {analysis}"
+
+    # Build and run agent
+    agent = DurableAgent(checkpoint_mgr)
+    agent.add_step("search", search)
+    agent.add_step("analyze", analyze)
+    agent.add_step("generate_report", generate_report)
+
+    # Run with a specific task ID (allows resumption)
+    result = await agent.run(
+        task_id="research-task-001",
+        initial_data={"query": "durable execution patterns"}
+    )
+    print(f"Final result: {result}")
+
+if **name** == "**main**":
+asyncio.run(main())
+
+```
+
+<Callout type="tip">
+  **LangGraph Integration:** LangGraph provides built-in checkpointing via
+  `MemorySaver`, `SqliteSaver`, and `PostgresSaver`. If you're using LangGraph,
+  leverage these instead of building custom checkpointing. The patterns above
+  are useful for non-LangGraph agents or when you need custom checkpoint
+  behavior.
+</Callout>
+
+---
+
+## 21.2 Temporal.io Fundamentals
+
+<ConceptIntro
+  title="Temporal.io"
+  analogy="Temporal is like a super-powered task manager that never forgets. Imagine a project manager who writes down every single thing that happens, and if anyone gets sick or quits, they can hand the notes to someone else who picks up exactly where things left off. That's Temporal—it records every step of your workflow so it can survive any failure."
+  technicalDef="Temporal.io is a durable execution platform that provides fault-tolerant workflow orchestration. It uses event sourcing to record all workflow state changes, enabling automatic recovery from failures. Workflows are deterministic functions that orchestrate activities (side effects), with the runtime handling retries, timeouts, and state persistence."
+  whyItMatters="Temporal is the gold standard for durable execution in production. It's used by companies like Netflix, Snap, and Stripe for mission-critical workflows. For AI agents that need enterprise-grade reliability, Temporal provides battle-tested infrastructure."
+/>
+```
+
+### Temporal Architecture
+
+<Mermaid
+  chart={`
+flowchart TB
+    subgraph Client["Client Application"]
+        WC[Workflow Client]
+    end
+    
+    subgraph Temporal["Temporal Server"]
+        FE[Frontend Service]
+        HS[History Service]
+        MS[Matching Service]
+        DB[(Event Store)]
+    end
+    
+    subgraph Workers["Worker Processes"]
+        WW1[Workflow Worker]
+        WW2[Workflow Worker]
+        AW1[Activity Worker]
+        AW2[Activity Worker]
+    end
+    
+    subgraph External["External Services"]
+        LLM[LLM API]
+        Search[Search API]
+        DB2[(Database)]
+    end
+    
+    WC -->|Start Workflow| FE
+    FE --> HS
+    HS --> DB
+    HS --> MS
+    MS --> WW1
+    MS --> WW2
+    WW1 -->|Schedule Activity| MS
+    MS --> AW1
+    MS --> AW2
+    AW1 --> LLM
+    AW1 --> Search
+    AW2 --> DB2
+    
+    style Temporal fill:#e8f5e9,stroke:#2e7d32
+    style Workers fill:#e3f2fd,stroke:#1565c0
+`}
+/>
+
+### Key Concepts
+
+| Concept        | Description                                   | Agent Use Case                            |
+| :------------- | :-------------------------------------------- | :---------------------------------------- |
+| **Workflow**   | Durable function that orchestrates activities | The main agent loop                       |
+| **Activity**   | Single unit of work (can have side effects)   | LLM calls, API requests, database writes  |
+| **Worker**     | Process that executes workflows/activities    | Your Python application                   |
+| **Task Queue** | Named queue for routing work to workers       | Separate queues for different agent types |
+| **Signal**     | External input to a running workflow          | Human approval, new instructions          |
+| **Query**      | Read-only access to workflow state            | Check agent progress                      |
+
+### Complete Temporal Research Agent
+
+First, install the Temporal SDK:
+
+```bash
+pip install temporalio
+```
+
+```python
+# workflows.py - Workflow definitions (must be deterministic)
+from datetime import timedelta
+from typing import List, Dict, Any
+from dataclasses import dataclass
+from temporalio import workflow
+from temporalio.common import RetryPolicy
+
+# Import activity stubs (not the actual implementations)
+with workflow.unsafe.imports_passed_through():
+    from activities import (
+        search_web,
+        analyze_results,
+        generate_report,
+        send_notification
+    )
+
+
+@dataclass
+class ResearchRequest:
+    """Input for the research workflow."""
+    query: str
+    user_id: str
+    max_sources: int = 10
+    require_approval: bool = False
+
+
+@dataclass
+class ResearchResult:
+    """Output from the research workflow."""
+    query: str
+    sources_found: int
+    report: str
+    approved: bool
+
+
+@workflow.defn
+class ResearchWorkflow:
+    """
+    Durable research workflow that survives failures.
+
+    This workflow:
+    1. Searches for information
+    2. Analyzes results
+    3. Optionally waits for human approval
+    4. Generates a final report
+    """
+
+    def __init__(self) -> None:
+        self._approved = False
+        self._cancelled = False
+        self._progress = "initialized"
+
+    @workflow.run
+    async def run(self, request: ResearchRequest) -> ResearchResult:
+        """Execute the research workflow."""
+
+        # Configure retry policy for activities
+        retry_policy = RetryPolicy(
+            initial_interval=timedelta(seconds=1),
+            backoff_coefficient=2.0,
+            maximum_interval=timedelta(minutes=5),
+            maximum_attempts=5,
+        )
+
+        self._progress = "searching"
+
+        # Step 1: Search (with automatic retries)
+        search_results = await workflow.execute_activity(
+            search_web,
+            args=[request.query, request.max_sources],
+            start_to_close_timeout=timedelta(minutes=2),
+            retry_policy=retry_policy,
+        )
+
+        self._progress = f"found {len(search_results)} sources, analyzing"
+
+        # Step 2: Analyze results
+        analysis = await workflow.execute_activity(
+            analyze_results,
+            args=[search_results],
+            start_to_close_timeout=timedelta(minutes=5),
+            retry_policy=retry_policy,
+        )
+```
+
+        # Step 3: Wait for approval if required
+        approved = True
+        if request.require_approval:
+            self._progress = "waiting for approval"
+
+            # Send notification that approval is needed
+            await workflow.execute_activity(
+                send_notification,
+                args=[request.user_id, "Research ready for review", analysis[:500]],
+                start_to_close_timeout=timedelta(seconds=30),
+            )
+
+            # Wait for approval signal (with timeout)
+            try:
+                await workflow.wait_condition(
+                    lambda: self._approved or self._cancelled,
+                    timeout=timedelta(hours=24)
+                )
+                approved = self._approved
+            except asyncio.TimeoutError:
+                approved = False
+
+        if not approved or self._cancelled:
+            return ResearchResult(
+                query=request.query,
+                sources_found=len(search_results),
+                report="Research cancelled or not approved",
+                approved=False
+            )
+
+        self._progress = "generating report"
+
+        # Step 4: Generate final report
+        report = await workflow.execute_activity(
+            generate_report,
+            args=[request.query, analysis],
+            start_to_close_timeout=timedelta(minutes=10),
+            retry_policy=retry_policy,
+        )
+
+        self._progress = "completed"
+
+        return ResearchResult(
+            query=request.query,
+            sources_found=len(search_results),
+            report=report,
+            approved=True
+        )
+
+    @workflow.signal
+    async def approve(self) -> None:
+        """Signal to approve the research."""
+        self._approved = True
+
+    @workflow.signal
+    async def cancel(self) -> None:
+        """Signal to cancel the research."""
+        self._cancelled = True
+
+    @workflow.query
+    def get_progress(self) -> str:
+        """Query the current progress."""
+        return self._progress
+
+````
+
+```python
+# activities.py - Activity implementations (can have side effects)
+from typing import List, Dict, Any
+from temporalio import activity
+from openai import OpenAI
+import httpx
+
+
+@activity.defn
+async def search_web(query: str, max_results: int) -> List[Dict[str, Any]]:
+    """
+    Search the web for information.
+
+    This is an activity because it has side effects (network calls).
+    Temporal will automatically retry on failure.
+    """
+    activity.logger.info(f"Searching for: {query}")
+
+    # Simulate web search (replace with actual implementation)
+    async with httpx.AsyncClient() as client:
+        # Example: Use a search API
+        response = await client.get(
+            "https://api.search.example.com/search",
+            params={"q": query, "limit": max_results},
+            timeout=30.0
+        )
+        response.raise_for_status()
+        return response.json()["results"]
+
+
+@activity.defn
+async def analyze_results(results: List[Dict[str, Any]]) -> str:
+    """
+    Analyze search results using an LLM.
+
+    Activities can use heartbeats for long-running operations.
+    """
+    activity.logger.info(f"Analyzing {len(results)} results")
+
+    client = OpenAI()
+
+    # Format results for analysis
+    results_text = "\n".join([
+        f"- {r.get('title', 'Untitled')}: {r.get('snippet', '')}"
+        for r in results[:10]
+    ])
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": "Analyze the following search results and provide key insights."
+            },
+            {
+                "role": "user",
+                "content": f"Search results:\n{results_text}"
+            }
+        ],
+        max_tokens=1000
+    )
+
+    return response.choices[0].message.content or ""
+````
+
+@activity.defn
+async def generate_report(query: str, analysis: str) -> str:
+"""Generate a final research report."""
+activity.logger.info(f"Generating report for: {query}")
+
+    client = OpenAI()
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": "Generate a comprehensive research report based on the analysis."
+            },
+            {
+                "role": "user",
+                "content": f"Query: {query}\n\nAnalysis:\n{analysis}"
+            }
+        ],
+        max_tokens=2000
+    )
+
+    return response.choices[0].message.content or ""
+
+@activity.defn
+async def send_notification(user_id: str, title: str, message: str) -> bool:
+"""Send a notification to the user."""
+activity.logger.info(f"Sending notification to {user_id}: {title}")
+
+    # Implement your notification logic (email, Slack, etc.)
+    # For now, just log it
+    print(f"NOTIFICATION to {user_id}: {title}\n{message}")
+    return True
+
+````
+
+```python
+# worker.py - Worker process that executes workflows and activities
+import asyncio
+from temporalio.client import Client
+from temporalio.worker import Worker
+
+from workflows import ResearchWorkflow
+from activities import search_web, analyze_results, generate_report, send_notification
+
+
+async def main():
+    """Start the Temporal worker."""
+
+    # Connect to Temporal server
+    client = await Client.connect("localhost:7233")
+
+    # Create worker with workflows and activities
+    worker = Worker(
+        client,
+        task_queue="research-tasks",
+        workflows=[ResearchWorkflow],
+        activities=[
+            search_web,
+            analyze_results,
+            generate_report,
+            send_notification
+        ],
+    )
+
+    print("Worker started, waiting for tasks...")
+    await worker.run()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+````
+
+```python
+# client.py - Client code to start and interact with workflows
+import asyncio
+from temporalio.client import Client
+from workflows import ResearchWorkflow, ResearchRequest
+
+
+async def start_research(query: str, user_id: str, require_approval: bool = False) -> str:
+    """Start a new research workflow."""
+
+    client = await Client.connect("localhost:7233")
+
+    # Start the workflow
+    handle = await client.start_workflow(
+        ResearchWorkflow.run,
+        ResearchRequest(
+            query=query,
+            user_id=user_id,
+            require_approval=require_approval
+        ),
+        id=f"research-{user_id}-{hash(query) % 10000}",
+        task_queue="research-tasks",
+    )
+
+    print(f"Started workflow: {handle.id}")
+    return handle.id
+
+
+async def check_progress(workflow_id: str) -> str:
+    """Check the progress of a running workflow."""
+
+    client = await Client.connect("localhost:7233")
+    handle = client.get_workflow_handle(workflow_id)
+
+    progress = await handle.query(ResearchWorkflow.get_progress)
+    return progress
+
+
+async def approve_research(workflow_id: str) -> None:
+    """Approve a research workflow waiting for approval."""
+
+    client = await Client.connect("localhost:7233")
+    handle = client.get_workflow_handle(workflow_id)
+
+    await handle.signal(ResearchWorkflow.approve)
+    print(f"Approved workflow: {workflow_id}")
+
+
+async def get_result(workflow_id: str):
+    """Wait for and get the workflow result."""
+
+    client = await Client.connect("localhost:7233")
+    handle = client.get_workflow_handle(workflow_id)
+
+    result = await handle.result()
+    return result
+
+
+# Example usage
+async def main():
+    # Start a research task
+    workflow_id = await start_research(
+        query="Latest developments in AI agents",
+        user_id="user-123",
+        require_approval=True
+    )
+
+    # Check progress
+    await asyncio.sleep(5)
+    progress = await check_progress(workflow_id)
+    print(f"Progress: {progress}")
+
+    # Approve when ready
+    if progress == "waiting for approval":
+        await approve_research(workflow_id)
+
+    # Get final result
+    result = await get_result(workflow_id)
+    print(f"Result: {result}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+<Callout type="info">
+  **Running Temporal Locally:** Use `temporal server start-dev` to run a local
+  Temporal server for development. For production, use Temporal Cloud or deploy
+  the self-hosted server with PostgreSQL/Cassandra.
+</Callout>
+
+---
+
+## 21.3 Inngest for Serverless Durability
+
+<ConceptIntro
+  title="Inngest"
+  analogy="If Temporal is a full orchestra with a conductor, Inngest is a talented solo musician who can play anywhere. It's lighter, serverless-native, and perfect for teams who want durable execution without managing infrastructure. You write functions, Inngest handles the rest."
+  technicalDef="Inngest is a serverless durable execution platform that provides step functions, automatic retries, and event-driven triggers. Unlike Temporal, it doesn't require separate worker processes—your functions run in your existing serverless environment (Vercel, AWS Lambda, etc.) with Inngest managing state and orchestration."
+  whyItMatters="For teams already using serverless architectures, Inngest provides durable execution without the operational overhead of Temporal. It's particularly well-suited for event-driven AI agents that need to respond to webhooks, scheduled triggers, or user actions."
+/>
+
+### When to Use Inngest vs Temporal
+
+| Factor             | Inngest                          | Temporal                              |
+| :----------------- | :------------------------------- | :------------------------------------ |
+| **Infrastructure** | Serverless, no workers to manage | Requires worker processes             |
+| **Complexity**     | Simpler, faster to start         | More powerful, steeper learning curve |
+| **Scale**          | Great for moderate scale         | Enterprise-grade, massive scale       |
+| **Pricing**        | Usage-based                      | Self-hosted or Temporal Cloud         |
+| **Best For**       | Serverless apps, event-driven    | Mission-critical, complex workflows   |
+
+### Complete Inngest Example with FastAPI
+
+```bash
+pip install inngest fastapi uvicorn
+```
+
+```python
+# inngest_agent.py - Durable agent functions with Inngest
+import inngest
+from inngest.fast_api import serve
+from fastapi import FastAPI
+from openai import OpenAI
+from typing import Dict, Any, List
+import httpx
+
+# Initialize Inngest client
+inngest_client = inngest.Inngest(
+    app_id="research-agent",
+    # In production, set INNGEST_SIGNING_KEY environment variable
+)
+
+# Initialize FastAPI
+app = FastAPI()
+
+
+@inngest_client.create_function(
+    fn_id="research-workflow",
+    trigger=inngest.TriggerEvent(event="research/start"),
+    # Automatic retries on failure
+    retries=3,
+)
+async def research_workflow(
+    ctx: inngest.Context,
+    step: inngest.Step,
+) -> Dict[str, Any]:
+    """
+    Durable research workflow using Inngest step functions.
+
+    Each step.run() call is automatically checkpointed.
+    If the function fails, it resumes from the last successful step.
+    """
+
+    event_data = ctx.event.data
+    query = event_data.get("query", "")
+    user_id = event_data.get("user_id", "")
+
+    # Step 1: Search (automatically retried on failure)
+    search_results = await step.run(
+        "search-web",
+        lambda: search_web(query)
+    )
+
+    # Step 2: Analyze results
+    analysis = await step.run(
+        "analyze-results",
+        lambda: analyze_with_llm(search_results)
+    )
+
+    # Step 3: Wait for approval (if required)
+    if event_data.get("require_approval", False):
+        # Send notification
+        await step.run(
+            "send-notification",
+            lambda: send_approval_request(user_id, analysis)
+        )
+
+        # Wait for approval event (up to 24 hours)
+        approval_event = await step.wait_for_event(
+            "wait-for-approval",
+            event=f"research/approved",
+            match="data.workflow_id",
+            timeout="24h"
+        )
+
+        if approval_event is None:
+            return {"status": "timeout", "message": "Approval timeout"}
+
+        if not approval_event.data.get("approved", False):
+            return {"status": "rejected", "message": "Research rejected"}
+
+    # Step 4: Generate final report
+    report = await step.run(
+        "generate-report",
+        lambda: generate_report(query, analysis)
+    )
+
+    # Step 5: Send completion notification
+    await step.run(
+        "notify-completion",
+        lambda: send_completion_notification(user_id, report)
+    )
+
+    return {
+        "status": "completed",
+        "query": query,
+        "sources": len(search_results),
+        "report": report
+    }
+```
+
+@inngest_client.create_function(
+fn_id="scheduled-research",
+trigger=inngest.TriggerCron(cron="0 9 \* \* \*"), # Daily at 9 AM
+)
+async def scheduled_research(
+ctx: inngest.Context,
+step: inngest.Step,
+) -> Dict[str, Any]:
+"""
+Scheduled research that runs daily.
+
+    Inngest handles cron scheduling with automatic retries.
+    """
+
+    # Get topics to research from database
+    topics = await step.run(
+        "get-topics",
+        lambda: get_daily_research_topics()
+    )
+
+    results = []
+    for topic in topics:
+        # Each topic is processed as a separate step
+        result = await step.run(
+            f"research-{topic['id']}",
+            lambda t=topic: research_topic(t)
+        )
+        results.append(result)
+
+    # Aggregate and store results
+    await step.run(
+        "store-results",
+        lambda: store_research_results(results)
+    )
+
+    return {"topics_researched": len(results)}
+
+# Helper functions (these are the actual implementations)
+
+async def search_web(query: str) -> List[Dict[str, Any]]:
+"""Search the web for information."""
+async with httpx.AsyncClient() as client: # Replace with actual search API
+response = await client.get(
+"https://api.search.example.com/search",
+params={"q": query, "limit": 10},
+timeout=30.0
+)
+return response.json().get("results", [])
+
+def analyze_with_llm(results: List[Dict[str, Any]]) -> str:
+"""Analyze search results with LLM."""
+client = OpenAI()
+
+    results_text = "\n".join([
+        f"- {r.get('title', '')}: {r.get('snippet', '')}"
+        for r in results[:10]
+    ])
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "Analyze these search results."},
+            {"role": "user", "content": results_text}
+        ]
+    )
+
+    return response.choices[0].message.content or ""
+
+def generate_report(query: str, analysis: str) -> str:
+"""Generate a research report."""
+client = OpenAI()
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "Generate a research report."},
+            {"role": "user", "content": f"Query: {query}\n\nAnalysis:\n{analysis}"}
+        ]
+    )
+
+    return response.choices[0].message.content or ""
+
+def send_approval_request(user_id: str, preview: str) -> bool:
+"""Send approval request notification."""
+print(f"Approval request sent to {user_id}")
+return True
+
+def send_completion_notification(user_id: str, report: str) -> bool:
+"""Send completion notification."""
+print(f"Research completed for {user_id}")
+return True
+
+def get_daily_research_topics() -> List[Dict[str, Any]]:
+"""Get topics for daily research."""
+return [{"id": "1", "topic": "AI agents"}, {"id": "2", "topic": "LLMs"}]
+
+def research_topic(topic: Dict[str, Any]) -> Dict[str, Any]:
+"""Research a single topic."""
+return {"topic": topic["topic"], "status": "completed"}
+
+def store_research_results(results: List[Dict[str, Any]]) -> bool:
+"""Store research results."""
+return True
+
+# Serve Inngest functions via FastAPI
+
+serve(
+app,
+inngest_client,
+[research_workflow, scheduled_research],
+serve_path="/api/inngest"
+)
+
+# API endpoints to trigger workflows
+
+@app.post("/research/start")
+async def start_research(query: str, user_id: str, require_approval: bool = False):
+"""Start a new research workflow."""
+
+    await inngest_client.send(
+        inngest.Event(
+            name="research/start",
+            data={
+                "query": query,
+                "user_id": user_id,
+                "require_approval": require_approval,
+                "workflow_id": f"research-{user_id}-{hash(query) % 10000}"
+            }
+        )
+    )
+
+    return {"status": "started", "message": "Research workflow initiated"}
+
+@app.post("/research/approve/{workflow_id}")
+async def approve_research(workflow_id: str, approved: bool = True):
+"""Approve or reject a research workflow."""
+
+    await inngest_client.send(
+        inngest.Event(
+            name="research/approved",
+            data={
+                "workflow_id": workflow_id,
+                "approved": approved
+            }
+        )
+    )
+
+    return {"status": "sent", "approved": approved}
+
+if **name** == "**main**":
+import uvicorn
+uvicorn.run(app, host="0.0.0.0", port=8000)
+
+```
+
+```
+
+<Callout type="tip">
+  **Inngest Dev Server:** Run `npx inngest-cli@latest dev` to start the Inngest
+  dev server locally. It provides a UI to view function runs, replay failed
+  executions, and debug step-by-step.
+</Callout>
+
+---
+
+## 21.4 Human-in-the-Loop with State Persistence
+
+<ConceptIntro
+  title="Durable HITL Patterns"
+  analogy="Imagine a factory assembly line that can pause mid-production, wait days for a quality inspector to approve a part, and then resume exactly where it left off—even if the factory lost power in between. Durable HITL patterns give your agents this same capability for human oversight."
+  technicalDef="Human-in-the-Loop (HITL) patterns with state persistence allow workflows to pause for human input while maintaining all execution state. The workflow state is stored durably, enabling resumption hours or days later, even after system restarts. This is essential for high-stakes agent actions that require human approval."
+  whyItMatters="Many agent actions—financial transactions, content publication, code deployment—require human oversight. Without durable HITL, you either block a thread waiting (wasteful) or lose context when the human responds (broken). Durable HITL solves both problems."
+/>
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Agent
+    participant Store as State Store
+    participant Notifier as Notification Service
+    participant Approver as Human Approver
+    
+    User->>Agent: Start task
+    Agent->>Agent: Execute steps 1-3
+    Agent->>Store: Save state (pending approval)
+    Agent->>Notifier: Request approval
+    Notifier->>Approver: Email/Slack notification
+    
+    Note over Agent: Agent process can terminate
+    
+    rect rgb(255, 240, 240)
+        Note over Approver: Hours/days later...
+    end
+    
+    Approver->>Agent: Approve via webhook
+    Agent->>Store: Load saved state
+    Agent->>Agent: Resume from step 4
+    Agent->>Store: Save final state
+    Agent->>User: Return result
+`}
+/>
+
+### Complete HITL Implementation
+
+```python
+# hitl_manager.py - Human-in-the-Loop with durable state
+import json
+import sqlite3
+import uuid
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional, Callable, Awaitable
+from dataclasses import dataclass, asdict
+from enum import Enum
+import asyncio
+from abc import ABC, abstractmethod
+
+
+class ApprovalStatus(Enum):
+    """Status of an approval request."""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class ApprovalRequest:
+    """A request for human approval."""
+    id: str
+    workflow_id: str
+    user_id: str
+    title: str
+    description: str
+    context: Dict[str, Any]
+    status: ApprovalStatus
+    created_at: str
+    expires_at: str
+    decided_at: Optional[str] = None
+    decided_by: Optional[str] = None
+    decision_reason: Optional[str] = None
+
+
+class NotificationChannel(ABC):
+    """Abstract base for notification channels."""
+
+    @abstractmethod
+    async def send(self, user_id: str, request: ApprovalRequest) -> bool:
+        """Send approval notification."""
+        pass
+
+
+class SlackNotifier(NotificationChannel):
+    """Send approval requests via Slack."""
+
+    def __init__(self, webhook_url: str, approval_url_base: str):
+        self.webhook_url = webhook_url
+        self.approval_url_base = approval_url_base
+
+    async def send(self, user_id: str, request: ApprovalRequest) -> bool:
+        """Send Slack notification with approval buttons."""
+        import httpx
+
+        approve_url = f"{self.approval_url_base}/approve/{request.id}?action=approve"
+        reject_url = f"{self.approval_url_base}/approve/{request.id}?action=reject"
+
+        message = {
+            "blocks": [
+                {
+                    "type": "header",
+                    "text": {"type": "plain_text", "text": f"🔔 {request.title}"}
+                },
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": request.description}
+                },
+                {
+                    "type": "context",
+                    "elements": [
+                        {"type": "mrkdwn", "text": f"*Workflow:* {request.workflow_id}"},
+                        {"type": "mrkdwn", "text": f"*Expires:* {request.expires_at}"}
+                    ]
+                },
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "✅ Approve"},
+                            "style": "primary",
+                            "url": approve_url
+                        },
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "❌ Reject"},
+                            "style": "danger",
+                            "url": reject_url
+                        }
+                    ]
+                }
+            ]
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(self.webhook_url, json=message)
+            return response.status_code == 200
+```
+
+class EmailNotifier(NotificationChannel):
+"""Send approval requests via email."""
+
+    def __init__(self, smtp_config: Dict[str, Any], approval_url_base: str):
+        self.smtp_config = smtp_config
+        self.approval_url_base = approval_url_base
+
+    async def send(self, user_id: str, request: ApprovalRequest) -> bool:
+        """Send email notification."""
+        # Implementation would use smtplib or an email service
+        print(f"Email sent to {user_id} for approval {request.id}")
+        return True
+
+class HITLManager:
+"""
+Manages Human-in-the-Loop approvals with durable state.
+
+    Features:
+    - Persistent approval requests
+    - Multiple notification channels
+    - Timeout handling
+    - Webhook-based approval/rejection
+    - Workflow resumption callbacks
+    """
+
+    def __init__(
+        self,
+        db_path: str = "./hitl.db",
+        default_timeout_hours: int = 24
+    ):
+        self.db_path = db_path
+        self.default_timeout = timedelta(hours=default_timeout_hours)
+        self.notifiers: list[NotificationChannel] = []
+        self.resume_callbacks: Dict[str, Callable[[ApprovalRequest], Awaitable[None]]] = {}
+        self._init_db()
+
+    def _init_db(self) -> None:
+        """Initialize the database schema."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS approval_requests (
+                    id TEXT PRIMARY KEY,
+                    workflow_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    context TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    decided_at TEXT,
+                    decided_by TEXT,
+                    decision_reason TEXT
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_workflow_id
+                ON approval_requests(workflow_id)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_status
+                ON approval_requests(status)
+            """)
+            conn.commit()
+
+    def add_notifier(self, notifier: NotificationChannel) -> None:
+        """Add a notification channel."""
+        self.notifiers.append(notifier)
+
+    def register_resume_callback(
+        self,
+        workflow_id: str,
+        callback: Callable[[ApprovalRequest], Awaitable[None]]
+    ) -> None:
+        """Register a callback to resume workflow after approval."""
+        self.resume_callbacks[workflow_id] = callback
+
+    async def request_approval(
+        self,
+        workflow_id: str,
+        user_id: str,
+        title: str,
+        description: str,
+        context: Dict[str, Any],
+        timeout: Optional[timedelta] = None
+    ) -> ApprovalRequest:
+        """
+        Create an approval request and notify the user.
+
+        Args:
+            workflow_id: ID of the workflow requesting approval
+            user_id: User who should approve
+            title: Short title for the request
+            description: Detailed description
+            context: Additional context data
+            timeout: How long to wait for approval
+
+        Returns:
+            The created approval request
+        """
+        timeout = timeout or self.default_timeout
+        now = datetime.utcnow()
+
+        request = ApprovalRequest(
+            id=str(uuid.uuid4()),
+            workflow_id=workflow_id,
+            user_id=user_id,
+            title=title,
+            description=description,
+            context=context,
+            status=ApprovalStatus.PENDING,
+            created_at=now.isoformat(),
+            expires_at=(now + timeout).isoformat()
+        )
+
+        # Save to database
+        self._save_request(request)
+
+        # Send notifications
+        for notifier in self.notifiers:
+            try:
+                await notifier.send(user_id, request)
+            except Exception as e:
+                print(f"Failed to send notification: {e}")
+
+        return request
+
+
+    def _save_request(self, request: ApprovalRequest) -> None:
+        """Save approval request to database."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO approval_requests
+                (id, workflow_id, user_id, title, description, context,
+                 status, created_at, expires_at, decided_at, decided_by, decision_reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                request.id,
+                request.workflow_id,
+                request.user_id,
+                request.title,
+                request.description,
+                json.dumps(request.context),
+                request.status.value,
+                request.created_at,
+                request.expires_at,
+                request.decided_at,
+                request.decided_by,
+                request.decision_reason
+            ))
+            conn.commit()
+
+    def get_request(self, request_id: str) -> Optional[ApprovalRequest]:
+        """Get an approval request by ID."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT * FROM approval_requests WHERE id = ?",
+                (request_id,)
+            )
+            row = cursor.fetchone()
+
+            if row is None:
+                return None
+
+            return ApprovalRequest(
+                id=row["id"],
+                workflow_id=row["workflow_id"],
+                user_id=row["user_id"],
+                title=row["title"],
+                description=row["description"],
+                context=json.loads(row["context"]),
+                status=ApprovalStatus(row["status"]),
+                created_at=row["created_at"],
+                expires_at=row["expires_at"],
+                decided_at=row["decided_at"],
+                decided_by=row["decided_by"],
+                decision_reason=row["decision_reason"]
+            )
+
+    async def process_decision(
+        self,
+        request_id: str,
+        approved: bool,
+        decided_by: str,
+        reason: Optional[str] = None
+    ) -> ApprovalRequest:
+        """
+        Process an approval decision.
+
+        Args:
+            request_id: The approval request ID
+            approved: Whether the request was approved
+            decided_by: Who made the decision
+            reason: Optional reason for the decision
+
+        Returns:
+            The updated approval request
+        """
+        request = self.get_request(request_id)
+
+        if request is None:
+            raise ValueError(f"Approval request {request_id} not found")
+
+        if request.status != ApprovalStatus.PENDING:
+            raise ValueError(f"Request {request_id} already processed: {request.status}")
+
+        # Check for timeout
+        if datetime.fromisoformat(request.expires_at) < datetime.utcnow():
+            request.status = ApprovalStatus.TIMEOUT
+            self._save_request(request)
+            raise ValueError(f"Request {request_id} has expired")
+
+        # Update request
+        request.status = ApprovalStatus.APPROVED if approved else ApprovalStatus.REJECTED
+        request.decided_at = datetime.utcnow().isoformat()
+        request.decided_by = decided_by
+        request.decision_reason = reason
+
+        self._save_request(request)
+
+        # Trigger resume callback if registered
+        if request.workflow_id in self.resume_callbacks:
+            callback = self.resume_callbacks[request.workflow_id]
+            await callback(request)
+
+        return request
+
+    def get_pending_requests(self, user_id: Optional[str] = None) -> list[ApprovalRequest]:
+        """Get all pending approval requests."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            if user_id:
+                cursor = conn.execute(
+                    "SELECT * FROM approval_requests WHERE status = ? AND user_id = ?",
+                    (ApprovalStatus.PENDING.value, user_id)
+                )
+            else:
+                cursor = conn.execute(
+                    "SELECT * FROM approval_requests WHERE status = ?",
+                    (ApprovalStatus.PENDING.value,)
+                )
+
+            requests = []
+            for row in cursor.fetchall():
+                requests.append(ApprovalRequest(
+                    id=row["id"],
+                    workflow_id=row["workflow_id"],
+                    user_id=row["user_id"],
+                    title=row["title"],
+                    description=row["description"],
+                    context=json.loads(row["context"]),
+                    status=ApprovalStatus(row["status"]),
+                    created_at=row["created_at"],
+                    expires_at=row["expires_at"],
+                    decided_at=row["decided_at"],
+                    decided_by=row["decided_by"],
+                    decision_reason=row["decision_reason"]
+                ))
+
+            return requests
+
+    async def check_timeouts(self) -> int:
+        """Check and mark timed-out requests. Returns count of timed-out requests."""
+        now = datetime.utcnow().isoformat()
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                UPDATE approval_requests
+                SET status = ?, decided_at = ?
+                WHERE status = ? AND expires_at < ?
+            """, (ApprovalStatus.TIMEOUT.value, now, ApprovalStatus.PENDING.value, now))
+
+            count = cursor.rowcount
+            conn.commit()
+
+        return count
+
+```
+
+```
+
+### FastAPI Integration for HITL
+
+```python
+# hitl_api.py - FastAPI endpoints for HITL
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from pydantic import BaseModel
+from typing import Optional
+import asyncio
+
+app = FastAPI()
+hitl_manager = HITLManager()
+
+# Add notification channels
+hitl_manager.add_notifier(SlackNotifier(
+    webhook_url="https://hooks.slack.com/services/...",
+    approval_url_base="https://your-app.com/api"
+))
+
+
+class ApprovalDecision(BaseModel):
+    """Request body for approval decisions."""
+    approved: bool
+    decided_by: str
+    reason: Optional[str] = None
+
+
+@app.get("/api/approvals/pending")
+async def get_pending_approvals(user_id: Optional[str] = None):
+    """Get all pending approval requests."""
+    requests = hitl_manager.get_pending_requests(user_id)
+    return {"requests": [asdict(r) for r in requests]}
+
+
+@app.get("/api/approvals/{request_id}")
+async def get_approval(request_id: str):
+    """Get a specific approval request."""
+    request = hitl_manager.get_request(request_id)
+    if request is None:
+        raise HTTPException(status_code=404, detail="Request not found")
+    return asdict(request)
+
+
+@app.post("/api/approvals/{request_id}/decide")
+async def decide_approval(request_id: str, decision: ApprovalDecision):
+    """Process an approval decision."""
+    try:
+        request = await hitl_manager.process_decision(
+            request_id=request_id,
+            approved=decision.approved,
+            decided_by=decision.decided_by,
+            reason=decision.reason
+        )
+        return asdict(request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/approve/{request_id}")
+async def approve_via_link(request_id: str, action: str, user: str = "anonymous"):
+    """Handle approval via link (from Slack/email buttons)."""
+    approved = action == "approve"
+    try:
+        request = await hitl_manager.process_decision(
+            request_id=request_id,
+            approved=approved,
+            decided_by=user
+        )
+        status = "approved" if approved else "rejected"
+        return {"message": f"Request {status} successfully", "request": asdict(request)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# Background task to check timeouts periodically
+async def timeout_checker():
+    """Periodically check for timed-out approval requests."""
+    while True:
+        count = await hitl_manager.check_timeouts()
+        if count > 0:
+            print(f"Marked {count} requests as timed out")
+        await asyncio.sleep(60)  # Check every minute
+
+
+@app.on_event("startup")
+async def startup():
+    """Start background tasks."""
+    asyncio.create_task(timeout_checker())
+```
+
+<Callout type="warning">
+  **Security Note:** In production, always validate that the user making the
+  decision has permission to approve the specific request. The example above
+  uses a simple `decided_by` field, but you should integrate with your
+  authentication system.
+</Callout>
+
+---
+
+## 21.5 Long-Running Task Management
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Queued: Submit task
+    Queued --> Running: Worker picks up
+    Running --> Running: Progress updates
+    Running --> Paused: Pause requested
+    Paused --> Running: Resume
+    Running --> Completed: Success
+    Running --> Failed: Error (after retries)
+    Running --> Cancelled: Cancel requested
+    Paused --> Cancelled: Cancel while paused
+    Failed --> [*]
+    Completed --> [*]
+    Cancelled --> [*]
+`}
+/>
+
+### Complete DurableTaskManager Implementation
+
+```python
+# task_manager.py - Long-running task management
+import json
+import sqlite3
+import uuid
+import asyncio
+from datetime import datetime
+from typing import Any, Dict, Optional, Callable, Awaitable, List
+from dataclasses import dataclass, asdict, field
+from enum import Enum
+from contextlib import asynccontextmanager
+
+
+class TaskStatus(Enum):
+    """Status of a long-running task."""
+    QUEUED = "queued"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class TaskProgress:
+    """Progress information for a task."""
+    current_step: int
+    total_steps: int
+    step_name: str
+    percentage: float
+    message: str
+    updated_at: str
+
+
+@dataclass
+class DurableTask:
+    """A long-running task with durable state."""
+    id: str
+    name: str
+    status: TaskStatus
+    input_data: Dict[str, Any]
+    output_data: Optional[Dict[str, Any]]
+    progress: Optional[TaskProgress]
+    error: Optional[str]
+    created_at: str
+    started_at: Optional[str]
+    completed_at: Optional[str]
+    retry_count: int = 0
+    max_retries: int = 3
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+class DurableTaskManager:
+    """
+    Manages long-running tasks with progress tracking and graceful cancellation.
+
+    Features:
+    - Persistent task state
+    - Progress tracking and reporting
+    - Graceful pause/resume/cancel
+    - Automatic retries with backoff
+    - Task queuing and prioritization
+    """
+
+    def __init__(self, db_path: str = "./tasks.db"):
+        self.db_path = db_path
+        self._init_db()
+        self._task_handlers: Dict[str, Callable] = {}
+        self._running_tasks: Dict[str, asyncio.Task] = {}
+        self._cancel_flags: Dict[str, asyncio.Event] = {}
+        self._pause_flags: Dict[str, asyncio.Event] = {}
+
+    def _init_db(self) -> None:
+        """Initialize the database schema."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    input_data TEXT NOT NULL,
+                    output_data TEXT,
+                    progress TEXT,
+                    error TEXT,
+                    created_at TEXT NOT NULL,
+                    started_at TEXT,
+                    completed_at TEXT,
+                    retry_count INTEGER DEFAULT 0,
+                    max_retries INTEGER DEFAULT 3,
+                    metadata TEXT DEFAULT '{}'
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_status ON tasks(status)")
+            conn.commit()
+
+    def register_handler(
+        self,
+        task_name: str,
+        handler: Callable[[DurableTask, "TaskContext"], Awaitable[Dict[str, Any]]]
+    ) -> None:
+        """Register a handler for a task type."""
+        self._task_handlers[task_name] = handler
+
+    async def submit(
+        self,
+        name: str,
+        input_data: Dict[str, Any],
+        max_retries: int = 3,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> DurableTask:
+        """
+        Submit a new task for execution.
+
+        Args:
+            name: Task type name (must have registered handler)
+            input_data: Input data for the task
+            max_retries: Maximum retry attempts
+            metadata: Additional metadata
+
+        Returns:
+            The created task
+        """
+        if name not in self._task_handlers:
+            raise ValueError(f"No handler registered for task type: {name}")
+
+        task = DurableTask(
+            id=str(uuid.uuid4()),
+            name=name,
+            status=TaskStatus.QUEUED,
+            input_data=input_data,
+            output_data=None,
+            progress=None,
+            error=None,
+            created_at=datetime.utcnow().isoformat(),
+            started_at=None,
+            completed_at=None,
+            max_retries=max_retries,
+            metadata=metadata or {}
+        )
+
+        self._save_task(task)
+        return task
+```
+
+    def _save_task(self, task: DurableTask) -> None:
+        """Save task to database."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO tasks
+                (id, name, status, input_data, output_data, progress, error,
+                 created_at, started_at, completed_at, retry_count, max_retries, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                task.id,
+                task.name,
+                task.status.value,
+                json.dumps(task.input_data),
+                json.dumps(task.output_data) if task.output_data else None,
+                json.dumps(asdict(task.progress)) if task.progress else None,
+                task.error,
+                task.created_at,
+                task.started_at,
+                task.completed_at,
+                task.retry_count,
+                task.max_retries,
+                json.dumps(task.metadata)
+            ))
+            conn.commit()
+
+    def get_task(self, task_id: str) -> Optional[DurableTask]:
+        """Get a task by ID."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+            row = cursor.fetchone()
+
+            if row is None:
+                return None
+
+            progress = None
+            if row["progress"]:
+                progress_data = json.loads(row["progress"])
+                progress = TaskProgress(**progress_data)
+
+            return DurableTask(
+                id=row["id"],
+                name=row["name"],
+                status=TaskStatus(row["status"]),
+                input_data=json.loads(row["input_data"]),
+                output_data=json.loads(row["output_data"]) if row["output_data"] else None,
+                progress=progress,
+                error=row["error"],
+                created_at=row["created_at"],
+                started_at=row["started_at"],
+                completed_at=row["completed_at"],
+                retry_count=row["retry_count"],
+                max_retries=row["max_retries"],
+                metadata=json.loads(row["metadata"])
+            )
+
+    async def start(self, task_id: str) -> DurableTask:
+        """Start executing a queued task."""
+        task = self.get_task(task_id)
+
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
+
+        if task.status not in (TaskStatus.QUEUED, TaskStatus.PAUSED):
+            raise ValueError(f"Task {task_id} cannot be started: {task.status}")
+
+        # Set up control flags
+        self._cancel_flags[task_id] = asyncio.Event()
+        self._pause_flags[task_id] = asyncio.Event()
+
+        # Update status
+        task.status = TaskStatus.RUNNING
+        task.started_at = datetime.utcnow().isoformat()
+        self._save_task(task)
+
+        # Create task context
+        context = TaskContext(
+            task_id=task_id,
+            manager=self,
+            cancel_flag=self._cancel_flags[task_id],
+            pause_flag=self._pause_flags[task_id]
+        )
+
+        # Start execution in background
+        handler = self._task_handlers[task.name]
+        self._running_tasks[task_id] = asyncio.create_task(
+            self._execute_task(task, handler, context)
+        )
+
+        return task
+
+    async def _execute_task(
+        self,
+        task: DurableTask,
+        handler: Callable,
+        context: "TaskContext"
+    ) -> None:
+        """Execute a task with error handling and retries."""
+        try:
+            result = await handler(task, context)
+
+            task.status = TaskStatus.COMPLETED
+            task.output_data = result
+            task.completed_at = datetime.utcnow().isoformat()
+
+        except asyncio.CancelledError:
+            task.status = TaskStatus.CANCELLED
+            task.completed_at = datetime.utcnow().isoformat()
+
+        except Exception as e:
+            task.retry_count += 1
+
+            if task.retry_count < task.max_retries:
+                # Schedule retry with exponential backoff
+                delay = 2 ** task.retry_count
+                task.status = TaskStatus.QUEUED
+                task.error = f"Retry {task.retry_count}/{task.max_retries}: {str(e)}"
+                self._save_task(task)
+
+                await asyncio.sleep(delay)
+                await self.start(task.id)
+                return
+            else:
+                task.status = TaskStatus.FAILED
+                task.error = str(e)
+                task.completed_at = datetime.utcnow().isoformat()
+
+        finally:
+            self._save_task(task)
+            # Cleanup
+            self._running_tasks.pop(task.id, None)
+            self._cancel_flags.pop(task.id, None)
+            self._pause_flags.pop(task.id, None)
+
+
+    async def cancel(self, task_id: str) -> DurableTask:
+        """Request cancellation of a running task."""
+        task = self.get_task(task_id)
+
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
+
+        if task.status == TaskStatus.RUNNING:
+            # Signal cancellation
+            if task_id in self._cancel_flags:
+                self._cancel_flags[task_id].set()
+
+            # Cancel the asyncio task
+            if task_id in self._running_tasks:
+                self._running_tasks[task_id].cancel()
+
+        elif task.status in (TaskStatus.QUEUED, TaskStatus.PAUSED):
+            task.status = TaskStatus.CANCELLED
+            task.completed_at = datetime.utcnow().isoformat()
+            self._save_task(task)
+
+        return self.get_task(task_id) or task
+
+    async def pause(self, task_id: str) -> DurableTask:
+        """Request pause of a running task."""
+        task = self.get_task(task_id)
+
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
+
+        if task.status != TaskStatus.RUNNING:
+            raise ValueError(f"Task {task_id} is not running")
+
+        if task_id in self._pause_flags:
+            self._pause_flags[task_id].set()
+
+        return task
+
+    async def resume(self, task_id: str) -> DurableTask:
+        """Resume a paused task."""
+        task = self.get_task(task_id)
+
+        if task is None:
+            raise ValueError(f"Task {task_id} not found")
+
+        if task.status != TaskStatus.PAUSED:
+            raise ValueError(f"Task {task_id} is not paused")
+
+        return await self.start(task_id)
+
+    def get_tasks_by_status(self, status: TaskStatus) -> List[DurableTask]:
+        """Get all tasks with a specific status."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC",
+                (status.value,)
+            )
+
+            tasks = []
+            for row in cursor.fetchall():
+                progress = None
+                if row["progress"]:
+                    progress_data = json.loads(row["progress"])
+                    progress = TaskProgress(**progress_data)
+
+                tasks.append(DurableTask(
+                    id=row["id"],
+                    name=row["name"],
+                    status=TaskStatus(row["status"]),
+                    input_data=json.loads(row["input_data"]),
+                    output_data=json.loads(row["output_data"]) if row["output_data"] else None,
+                    progress=progress,
+                    error=row["error"],
+                    created_at=row["created_at"],
+                    started_at=row["started_at"],
+                    completed_at=row["completed_at"],
+                    retry_count=row["retry_count"],
+                    max_retries=row["max_retries"],
+                    metadata=json.loads(row["metadata"])
+                ))
+
+            return tasks
+
+class TaskContext:
+"""Context provided to task handlers for progress reporting and control."""
+
+    def __init__(
+        self,
+        task_id: str,
+        manager: DurableTaskManager,
+        cancel_flag: asyncio.Event,
+        pause_flag: asyncio.Event
+    ):
+        self.task_id = task_id
+        self._manager = manager
+        self._cancel_flag = cancel_flag
+        self._pause_flag = pause_flag
+
+    async def update_progress(
+        self,
+        current_step: int,
+        total_steps: int,
+        step_name: str,
+        message: str = ""
+    ) -> None:
+        """Update task progress."""
+        task = self._manager.get_task(self.task_id)
+        if task is None:
+            return
+
+        task.progress = TaskProgress(
+            current_step=current_step,
+            total_steps=total_steps,
+            step_name=step_name,
+            percentage=(current_step / total_steps) * 100 if total_steps > 0 else 0,
+            message=message,
+            updated_at=datetime.utcnow().isoformat()
+        )
+        self._manager._save_task(task)
+
+    async def check_cancellation(self) -> bool:
+        """Check if cancellation was requested."""
+        return self._cancel_flag.is_set()
+
+    async def check_pause(self) -> None:
+        """Check and handle pause requests."""
+        if self._pause_flag.is_set():
+            task = self._manager.get_task(self.task_id)
+            if task:
+                task.status = TaskStatus.PAUSED
+                self._manager._save_task(task)
+
+            # Wait until resumed (flag cleared) or cancelled
+            while self._pause_flag.is_set() and not self._cancel_flag.is_set():
+                await asyncio.sleep(1)
+
+            self._pause_flag.clear()
+
+    @asynccontextmanager
+    async def step(self, step_num: int, total: int, name: str):
+        """Context manager for a task step with automatic progress updates."""
+        await self.update_progress(step_num, total, name, f"Starting {name}")
+        await self.check_pause()
+
+        if await self.check_cancellation():
+            raise asyncio.CancelledError()
+
+        try:
+            yield
+        finally:
+            await self.update_progress(step_num, total, name, f"Completed {name}")
+
+# Example: Research task handler
+
+async def research_handler(task: DurableTask, ctx: TaskContext) -> Dict[str, Any]:
+"""Example handler for a research task."""
+query = task.input_data.get("query", "")
+total_steps = 4
+
+    async with ctx.step(1, total_steps, "Searching"):
+        results = await search_web(query)
+
+    async with ctx.step(2, total_steps, "Analyzing"):
+        analysis = await analyze_results(results)
+
+    async with ctx.step(3, total_steps, "Generating Report"):
+        report = await generate_report(query, analysis)
+
+    async with ctx.step(4, total_steps, "Finalizing"):
+        # Final cleanup
+        pass
+
+    return {"report": report, "sources": len(results)}
+
+# Usage example
+
+async def main():
+manager = DurableTaskManager()
+manager.register_handler("research", research_handler)
+
+    # Submit a task
+    task = await manager.submit(
+        name="research",
+        input_data={"query": "durable execution patterns"},
+        max_retries=3
+    )
+    print(f"Submitted task: {task.id}")
+
+    # Start execution
+    await manager.start(task.id)
+
+    # Monitor progress
+    while True:
+        task = manager.get_task(task.id)
+        if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
+            break
+
+        if task.progress:
+            print(f"Progress: {task.progress.percentage:.1f}% - {task.progress.step_name}")
+
+        await asyncio.sleep(1)
+
+    print(f"Final status: {task.status}")
+    if task.output_data:
+        print(f"Result: {task.output_data}")
+
+if **name** == "**main**":
+asyncio.run(main())
+
+```
+
+---
+
+## 21.6 Production Patterns
+
+<Callout type="info">
+  **Production Readiness:** The patterns in this section are essential for
+  deploying durable agents in production. They address real-world concerns like
+  duplicate processing, failure recovery, and operational visibility.
+</Callout>
+
+### Idempotency Keys
+
+Idempotency ensures that retrying an operation produces the same result as executing it once. This is critical when operations have side effects (API calls, database writes, payments).
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Client
+    participant Server
+    participant DB as Idempotency Store
+    participant External as External API
+
+    Client->>Server: Request (idempotency_key=abc123)
+    Server->>DB: Check key abc123
+    DB-->>Server: Not found
+    Server->>External: Execute operation
+    External-->>Server: Result
+    Server->>DB: Store (abc123 -> Result)
+    Server-->>Client: Result
+
+    Note over Client,Server: Network timeout, client retries
+
+    Client->>Server: Request (idempotency_key=abc123)
+    Server->>DB: Check key abc123
+    DB-->>Server: Found: Result
+    Server-->>Client: Result (cached)
+
+    Note over External: External API NOT called again
+`}
+/>
+```
+
+```python
+# idempotency.py - Idempotency key management
+import json
+import sqlite3
+import hashlib
+from datetime import datetime, timedelta
+from typing import Any, Optional, Callable, TypeVar, Generic
+from dataclasses import dataclass
+from functools import wraps
+
+T = TypeVar('T')
+
+
+@dataclass
+class IdempotencyRecord:
+    """Record of an idempotent operation."""
+    key: str
+    result: Any
+    created_at: str
+    expires_at: str
+
+
+class IdempotencyStore:
+    """
+    Store for idempotency keys and results.
+
+    Ensures operations are executed exactly once, even with retries.
+    """
+
+    def __init__(self, db_path: str = "./idempotency.db", ttl_hours: int = 24):
+        self.db_path = db_path
+        self.ttl = timedelta(hours=ttl_hours)
+        self._init_db()
+
+    def _init_db(self) -> None:
+        """Initialize the database schema."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS idempotency_keys (
+                    key TEXT PRIMARY KEY,
+                    result TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_expires_at
+                ON idempotency_keys(expires_at)
+            """)
+            conn.commit()
+
+    def get(self, key: str) -> Optional[IdempotencyRecord]:
+        """Get a stored result by idempotency key."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT * FROM idempotency_keys WHERE key = ?",
+                (key,)
+            )
+            row = cursor.fetchone()
+
+            if row is None:
+                return None
+
+            # Check expiration
+            if datetime.fromisoformat(row["expires_at"]) < datetime.utcnow():
+                self.delete(key)
+                return None
+
+            return IdempotencyRecord(
+                key=row["key"],
+                result=json.loads(row["result"]),
+                created_at=row["created_at"],
+                expires_at=row["expires_at"]
+            )
+
+    def set(self, key: str, result: Any) -> IdempotencyRecord:
+        """Store a result with an idempotency key."""
+        now = datetime.utcnow()
+        record = IdempotencyRecord(
+            key=key,
+            result=result,
+            created_at=now.isoformat(),
+            expires_at=(now + self.ttl).isoformat()
+        )
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO idempotency_keys
+                (key, result, created_at, expires_at)
+                VALUES (?, ?, ?, ?)
+            """, (
+                record.key,
+                json.dumps(record.result),
+                record.created_at,
+                record.expires_at
+            ))
+            conn.commit()
+
+        return record
+
+    def delete(self, key: str) -> None:
+        """Delete an idempotency key."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM idempotency_keys WHERE key = ?", (key,))
+            conn.commit()
+
+    def cleanup_expired(self) -> int:
+        """Remove expired keys. Returns count of deleted keys."""
+        now = datetime.utcnow().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "DELETE FROM idempotency_keys WHERE expires_at < ?",
+                (now,)
+            )
+            count = cursor.rowcount
+            conn.commit()
+        return count
+
+
+def idempotent(store: IdempotencyStore, key_func: Callable[..., str]):
+    """
+    Decorator to make a function idempotent.
+
+    Args:
+        store: IdempotencyStore instance
+        key_func: Function to generate idempotency key from arguments
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        async def wrapper(*args, **kwargs) -> T:
+            # Generate idempotency key
+            key = key_func(*args, **kwargs)
+
+            # Check for existing result
+            record = store.get(key)
+            if record is not None:
+                return record.result
+
+            # Execute function
+            result = await func(*args, **kwargs)
+
+            # Store result
+            store.set(key, result)
+
+            return result
+
+        return wrapper
+    return decorator
+
+
+# Usage example
+idempotency_store = IdempotencyStore()
+
+@idempotent(
+    store=idempotency_store,
+    key_func=lambda user_id, amount: f"charge_{user_id}_{amount}"
+)
+async def charge_user(user_id: str, amount: float) -> dict:
+    """Charge a user - guaranteed to execute only once per key."""
+    # This will only execute once per (user_id, amount) combination
+    result = await payment_api.charge(user_id, amount)
+    return {"transaction_id": result.id, "amount": amount}
+```
+
+### Dead Letter Queue (DLQ)
+
+When tasks fail after all retries, they shouldn't disappear. A Dead Letter Queue captures failed tasks for manual review and recovery.
+
+```python
+# dlq.py - Dead Letter Queue implementation
+import json
+import sqlite3
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from enum import Enum
+
+
+class DLQStatus(Enum):
+    """Status of a DLQ entry."""
+    PENDING = "pending"      # Awaiting review
+    RETRYING = "retrying"    # Being retried
+    RESOLVED = "resolved"    # Successfully resolved
+    DISCARDED = "discarded"  # Manually discarded
+
+
+@dataclass
+class DLQEntry:
+    """An entry in the Dead Letter Queue."""
+    id: str
+    task_type: str
+    task_id: str
+    payload: Dict[str, Any]
+    error: str
+    retry_count: int
+    status: DLQStatus
+    created_at: str
+    resolved_at: Optional[str] = None
+    resolution_notes: Optional[str] = None
+
+
+class DeadLetterQueue:
+    """
+    Dead Letter Queue for failed tasks.
+
+    Captures tasks that failed after all retry attempts,
+    enabling manual review and recovery.
+    """
+
+    def __init__(self, db_path: str = "./dlq.db"):
+        self.db_path = db_path
+        self._init_db()
+
+    def _init_db(self) -> None:
+        """Initialize the database schema."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS dlq_entries (
+                    id TEXT PRIMARY KEY,
+                    task_type TEXT NOT NULL,
+                    task_id TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    error TEXT NOT NULL,
+                    retry_count INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    resolved_at TEXT,
+                    resolution_notes TEXT
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_status ON dlq_entries(status)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_task_type ON dlq_entries(task_type)")
+            conn.commit()
+
+    def add(
+        self,
+        task_type: str,
+        task_id: str,
+        payload: Dict[str, Any],
+        error: str,
+        retry_count: int
+    ) -> DLQEntry:
+        """Add a failed task to the DLQ."""
+        import uuid
+
+        entry = DLQEntry(
+            id=str(uuid.uuid4()),
+            task_type=task_type,
+            task_id=task_id,
+            payload=payload,
+            error=error,
+            retry_count=retry_count,
+            status=DLQStatus.PENDING,
+            created_at=datetime.utcnow().isoformat()
+        )
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                INSERT INTO dlq_entries
+                (id, task_type, task_id, payload, error, retry_count, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                entry.id,
+                entry.task_type,
+                entry.task_id,
+                json.dumps(entry.payload),
+                entry.error,
+                entry.retry_count,
+                entry.status.value,
+                entry.created_at
+            ))
+            conn.commit()
+
+        return entry
+
+    def get_pending(self, task_type: Optional[str] = None) -> List[DLQEntry]:
+        """Get all pending DLQ entries."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            if task_type:
+                cursor = conn.execute(
+                    "SELECT * FROM dlq_entries WHERE status = ? AND task_type = ?",
+                    (DLQStatus.PENDING.value, task_type)
+                )
+            else:
+                cursor = conn.execute(
+                    "SELECT * FROM dlq_entries WHERE status = ?",
+                    (DLQStatus.PENDING.value,)
+                )
+
+            return [self._row_to_entry(row) for row in cursor.fetchall()]
+
+    def _row_to_entry(self, row: sqlite3.Row) -> DLQEntry:
+        """Convert a database row to a DLQEntry."""
+        return DLQEntry(
+            id=row["id"],
+            task_type=row["task_type"],
+            task_id=row["task_id"],
+            payload=json.loads(row["payload"]),
+            error=row["error"],
+            retry_count=row["retry_count"],
+            status=DLQStatus(row["status"]),
+            created_at=row["created_at"],
+            resolved_at=row["resolved_at"],
+            resolution_notes=row["resolution_notes"]
+        )
+
+    def retry(self, entry_id: str) -> DLQEntry:
+        """Mark an entry for retry."""
+        return self._update_status(entry_id, DLQStatus.RETRYING)
+
+    def resolve(self, entry_id: str, notes: str = "") -> DLQEntry:
+        """Mark an entry as resolved."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                UPDATE dlq_entries
+                SET status = ?, resolved_at = ?, resolution_notes = ?
+                WHERE id = ?
+            """, (
+                DLQStatus.RESOLVED.value,
+                datetime.utcnow().isoformat(),
+                notes,
+                entry_id
+            ))
+            conn.commit()
+
+        return self.get(entry_id)
+
+    def discard(self, entry_id: str, reason: str = "") -> DLQEntry:
+        """Discard an entry (won't be retried)."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                UPDATE dlq_entries
+                SET status = ?, resolved_at = ?, resolution_notes = ?
+                WHERE id = ?
+            """, (
+                DLQStatus.DISCARDED.value,
+                datetime.utcnow().isoformat(),
+                reason,
+                entry_id
+            ))
+            conn.commit()
+
+        return self.get(entry_id)
+
+    def _update_status(self, entry_id: str, status: DLQStatus) -> DLQEntry:
+        """Update entry status."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE dlq_entries SET status = ? WHERE id = ?",
+                (status.value, entry_id)
+            )
+            conn.commit()
+
+        return self.get(entry_id)
+
+    def get(self, entry_id: str) -> Optional[DLQEntry]:
+        """Get a DLQ entry by ID."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT * FROM dlq_entries WHERE id = ?",
+                (entry_id,)
+            )
+            row = cursor.fetchone()
+            return self._row_to_entry(row) if row else None
+
+    def get_stats(self) -> Dict[str, int]:
+        """Get DLQ statistics."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                SELECT status, COUNT(*) as count
+                FROM dlq_entries
+                GROUP BY status
+            """)
+            return {row[0]: row[1] for row in cursor.fetchall()}
+```
+
+### Monitoring and Alerting
+
+Production durable execution requires visibility into task health and performance.
+
+```python
+# monitoring.py - Task monitoring and alerting
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Callable
+from enum import Enum
+import asyncio
+
+
+class AlertSeverity(Enum):
+    """Alert severity levels."""
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
+
+@dataclass
+class Alert:
+    """An alert from the monitoring system."""
+    id: str
+    severity: AlertSeverity
+    title: str
+    message: str
+    metric_name: str
+    metric_value: float
+    threshold: float
+    created_at: str
+
+
+@dataclass
+class TaskMetrics:
+    """Metrics for task execution."""
+    total_tasks: int
+    running_tasks: int
+    completed_tasks: int
+    failed_tasks: int
+    avg_duration_seconds: float
+    success_rate: float
+    dlq_size: int
+    pending_approvals: int
+
+
+class TaskMonitor:
+    """
+    Monitors task execution and generates alerts.
+
+    Tracks:
+    - Task success/failure rates
+    - Execution duration
+    - Queue depths
+    - DLQ growth
+    """
+
+    def __init__(
+        self,
+        task_manager: "DurableTaskManager",
+        dlq: "DeadLetterQueue",
+        hitl_manager: "HITLManager"
+    ):
+        self.task_manager = task_manager
+        self.dlq = dlq
+        self.hitl_manager = hitl_manager
+        self.alert_handlers: List[Callable[[Alert], None]] = []
+        self._thresholds = {
+            "failure_rate": 0.1,      # Alert if > 10% failure rate
+            "dlq_size": 10,           # Alert if DLQ > 10 entries
+            "pending_approvals": 50,  # Alert if > 50 pending approvals
+            "avg_duration": 300,      # Alert if avg duration > 5 minutes
+        }
+
+    def set_threshold(self, metric: str, value: float) -> None:
+        """Set an alert threshold."""
+        self._thresholds[metric] = value
+
+    def add_alert_handler(self, handler: Callable[[Alert], None]) -> None:
+        """Add a handler for alerts (e.g., send to Slack, PagerDuty)."""
+        self.alert_handlers.append(handler)
+
+    def collect_metrics(self) -> TaskMetrics:
+        """Collect current task metrics."""
+        # Get task counts by status
+        running = len(self.task_manager.get_tasks_by_status(TaskStatus.RUNNING))
+        completed = len(self.task_manager.get_tasks_by_status(TaskStatus.COMPLETED))
+        failed = len(self.task_manager.get_tasks_by_status(TaskStatus.FAILED))
+        queued = len(self.task_manager.get_tasks_by_status(TaskStatus.QUEUED))
+
+        total = running + completed + failed + queued
+        success_rate = completed / total if total > 0 else 1.0
+
+        # Get DLQ stats
+        dlq_stats = self.dlq.get_stats()
+        dlq_size = dlq_stats.get("pending", 0)
+
+        # Get pending approvals
+        pending_approvals = len(self.hitl_manager.get_pending_requests())
+
+        # Calculate average duration (simplified)
+        avg_duration = 0.0  # Would calculate from completed tasks
+
+        return TaskMetrics(
+            total_tasks=total,
+            running_tasks=running,
+            completed_tasks=completed,
+            failed_tasks=failed,
+            avg_duration_seconds=avg_duration,
+            success_rate=success_rate,
+            dlq_size=dlq_size,
+            pending_approvals=pending_approvals
+        )
+
+    def check_alerts(self) -> List[Alert]:
+        """Check metrics against thresholds and generate alerts."""
+        metrics = self.collect_metrics()
+        alerts = []
+
+        # Check failure rate
+        failure_rate = 1 - metrics.success_rate
+        if failure_rate > self._thresholds["failure_rate"]:
+            alerts.append(self._create_alert(
+                severity=AlertSeverity.ERROR,
+                title="High Task Failure Rate",
+                message=f"Task failure rate is {failure_rate:.1%}, threshold is {self._thresholds['failure_rate']:.1%}",
+                metric_name="failure_rate",
+                metric_value=failure_rate,
+                threshold=self._thresholds["failure_rate"]
+            ))
+
+        # Check DLQ size
+        if metrics.dlq_size > self._thresholds["dlq_size"]:
+            alerts.append(self._create_alert(
+                severity=AlertSeverity.WARNING,
+                title="Dead Letter Queue Growing",
+                message=f"DLQ has {metrics.dlq_size} entries, threshold is {self._thresholds['dlq_size']}",
+                metric_name="dlq_size",
+                metric_value=metrics.dlq_size,
+                threshold=self._thresholds["dlq_size"]
+            ))
+
+        # Check pending approvals
+        if metrics.pending_approvals > self._thresholds["pending_approvals"]:
+            alerts.append(self._create_alert(
+                severity=AlertSeverity.WARNING,
+                title="Many Pending Approvals",
+                message=f"{metrics.pending_approvals} approvals pending, threshold is {self._thresholds['pending_approvals']}",
+                metric_name="pending_approvals",
+                metric_value=metrics.pending_approvals,
+                threshold=self._thresholds["pending_approvals"]
+            ))
+
+        # Dispatch alerts
+        for alert in alerts:
+            for handler in self.alert_handlers:
+                try:
+                    handler(alert)
+                except Exception as e:
+                    print(f"Alert handler failed: {e}")
+
+        return alerts
+
+    def _create_alert(
+        self,
+        severity: AlertSeverity,
+        title: str,
+        message: str,
+        metric_name: str,
+        metric_value: float,
+        threshold: float
+    ) -> Alert:
+        """Create an alert."""
+        import uuid
+        return Alert(
+            id=str(uuid.uuid4()),
+            severity=severity,
+            title=title,
+            message=message,
+            metric_name=metric_name,
+            metric_value=metric_value,
+            threshold=threshold,
+            created_at=datetime.utcnow().isoformat()
+        )
+
+    async def start_monitoring(self, interval_seconds: int = 60) -> None:
+        """Start periodic monitoring."""
+        while True:
+            self.check_alerts()
+            await asyncio.sleep(interval_seconds)
+
+
+# Example alert handlers
+def slack_alert_handler(webhook_url: str):
+    """Create a Slack alert handler."""
+    import httpx
+
+    def handler(alert: Alert):
+        emoji = {
+            AlertSeverity.INFO: "ℹ️",
+            AlertSeverity.WARNING: "⚠️",
+            AlertSeverity.ERROR: "🚨",
+            AlertSeverity.CRITICAL: "🔥"
+        }
+
+        message = {
+            "text": f"{emoji[alert.severity]} *{alert.title}*\n{alert.message}"
+        }
+
+        httpx.post(webhook_url, json=message)
+
+    return handler
+
+
+def pagerduty_alert_handler(routing_key: str):
+    """Create a PagerDuty alert handler."""
+    import httpx
+
+    def handler(alert: Alert):
+        if alert.severity not in (AlertSeverity.ERROR, AlertSeverity.CRITICAL):
+            return  # Only page for errors and critical
+
+        event = {
+            "routing_key": routing_key,
+            "event_action": "trigger",
+            "payload": {
+                "summary": alert.title,
+                "severity": alert.severity.value,
+                "source": "durable-task-monitor",
+                "custom_details": {
+                    "message": alert.message,
+                    "metric": alert.metric_name,
+                    "value": alert.metric_value,
+                    "threshold": alert.threshold
+                }
+            }
+        }
+
+        httpx.post(
+            "https://events.pagerduty.com/v2/enqueue",
+            json=event
+        )
+
+    return handler
+```
+
+### Production-Ready Example: Combining All Patterns
+
+```python
+# production_agent.py - Complete production-ready durable agent
+import asyncio
+from typing import Dict, Any, Optional
+from dataclasses import dataclass
+from openai import OpenAI
+
+
+@dataclass
+class ProductionAgentConfig:
+    """Configuration for the production agent."""
+    db_path: str = "./production_agent.db"
+    max_retries: int = 3
+    checkpoint_interval: int = 1  # Checkpoint after every step
+    approval_timeout_hours: int = 24
+    enable_monitoring: bool = True
+    slack_webhook: Optional[str] = None
+
+
+class ProductionResearchAgent:
+    """
+    Production-ready research agent with:
+    - Checkpoint-based recovery
+    - Idempotent operations
+    - Human-in-the-loop approval
+    - Dead letter queue for failures
+    - Monitoring and alerting
+    """
+
+    def __init__(self, config: ProductionAgentConfig):
+        self.config = config
+        self.llm = OpenAI()
+
+        # Initialize components
+        self.checkpoints = CheckpointManager(f"{config.db_path}_checkpoints.db")
+        self.idempotency = IdempotencyStore(f"{config.db_path}_idempotency.db")
+        self.hitl = HITLManager(f"{config.db_path}_hitl.db", config.approval_timeout_hours)
+        self.dlq = DeadLetterQueue(f"{config.db_path}_dlq.db")
+        self.tasks = DurableTaskManager(f"{config.db_path}_tasks.db")
+
+        # Set up monitoring
+        if config.enable_monitoring:
+            self.monitor = TaskMonitor(self.tasks, self.dlq, self.hitl)
+            if config.slack_webhook:
+                self.monitor.add_alert_handler(
+                    slack_alert_handler(config.slack_webhook)
+                )
+
+        # Register task handler
+        self.tasks.register_handler("research", self._research_handler)
+
+    async def research(
+        self,
+        query: str,
+        user_id: str,
+        require_approval: bool = False,
+        idempotency_key: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Execute a research task with full durability.
+
+        Args:
+            query: Research query
+            user_id: User requesting the research
+            require_approval: Whether to require human approval
+            idempotency_key: Optional key for idempotent execution
+        """
+        # Check idempotency
+        if idempotency_key:
+            existing = self.idempotency.get(idempotency_key)
+            if existing:
+                return existing.result
+
+        # Submit task
+        task = await self.tasks.submit(
+            name="research",
+            input_data={
+                "query": query,
+                "user_id": user_id,
+                "require_approval": require_approval
+            },
+            max_retries=self.config.max_retries,
+            metadata={"idempotency_key": idempotency_key}
+        )
+
+        # Start execution
+        try:
+            await self.tasks.start(task.id)
+
+            # Wait for completion
+            while True:
+                task = self.tasks.get_task(task.id)
+                if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
+                    break
+                await asyncio.sleep(1)
+
+            if task.status == TaskStatus.COMPLETED:
+                result = task.output_data
+
+                # Store in idempotency cache
+                if idempotency_key:
+                    self.idempotency.set(idempotency_key, result)
+
+                return result
+
+            elif task.status == TaskStatus.FAILED:
+                # Add to DLQ
+                self.dlq.add(
+                    task_type="research",
+                    task_id=task.id,
+                    payload=task.input_data,
+                    error=task.error or "Unknown error",
+                    retry_count=task.retry_count
+                )
+                raise Exception(f"Research failed: {task.error}")
+
+            else:
+                raise Exception(f"Research cancelled")
+
+        except Exception as e:
+            # Ensure task is in DLQ for review
+            if task.status != TaskStatus.FAILED:
+                self.dlq.add(
+                    task_type="research",
+                    task_id=task.id,
+                    payload=task.input_data,
+                    error=str(e),
+                    retry_count=task.retry_count
+                )
+            raise
+```
+
+    async def _research_handler(
+        self,
+        task: DurableTask,
+        ctx: TaskContext
+    ) -> Dict[str, Any]:
+        """Internal handler for research tasks."""
+        query = task.input_data["query"]
+        user_id = task.input_data["user_id"]
+        require_approval = task.input_data.get("require_approval", False)
+
+        total_steps = 5 if require_approval else 4
+
+        # Step 1: Search
+        async with ctx.step(1, total_steps, "Searching"):
+            search_results = await self._search(query)
+
+        # Step 2: Analyze
+        async with ctx.step(2, total_steps, "Analyzing"):
+            analysis = await self._analyze(search_results)
+
+        # Step 3: Approval (if required)
+        if require_approval:
+            async with ctx.step(3, total_steps, "Awaiting Approval"):
+                approved = await self._request_approval(
+                    task.id, user_id, query, analysis
+                )
+                if not approved:
+                    return {
+                        "status": "rejected",
+                        "query": query,
+                        "message": "Research not approved"
+                    }
+
+        # Step 4: Generate report
+        step_num = 4 if require_approval else 3
+        async with ctx.step(step_num, total_steps, "Generating Report"):
+            report = await self._generate_report(query, analysis)
+
+        # Step 5: Finalize
+        final_step = 5 if require_approval else 4
+        async with ctx.step(final_step, total_steps, "Finalizing"):
+            pass
+
+        return {
+            "status": "completed",
+            "query": query,
+            "sources": len(search_results),
+            "report": report
+        }
+
+    async def _search(self, query: str) -> list:
+        """Search for information (idempotent)."""
+        # In production, use actual search API
+        await asyncio.sleep(1)  # Simulate API call
+        return [
+            {"title": f"Result 1 for {query}", "snippet": "..."},
+            {"title": f"Result 2 for {query}", "snippet": "..."},
+        ]
+
+    async def _analyze(self, results: list) -> str:
+        """Analyze search results."""
+        results_text = "\n".join([
+            f"- {r['title']}: {r['snippet']}"
+            for r in results
+        ])
+
+        response = self.llm.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Analyze these search results."},
+                {"role": "user", "content": results_text}
+            ]
+        )
+
+        return response.choices[0].message.content or ""
+
+    async def _generate_report(self, query: str, analysis: str) -> str:
+        """Generate final report."""
+        response = self.llm.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Generate a research report."},
+                {"role": "user", "content": f"Query: {query}\n\nAnalysis:\n{analysis}"}
+            ]
+        )
+
+        return response.choices[0].message.content or ""
+
+    async def _request_approval(
+        self,
+        task_id: str,
+        user_id: str,
+        query: str,
+        preview: str
+    ) -> bool:
+        """Request human approval."""
+        request = await self.hitl.request_approval(
+            workflow_id=task_id,
+            user_id=user_id,
+            title=f"Research Approval: {query[:50]}",
+            description=f"Please review the research analysis:\n\n{preview[:500]}...",
+            context={"query": query, "preview": preview}
+        )
+
+        # Wait for decision
+        while True:
+            updated = self.hitl.get_request(request.id)
+            if updated.status != ApprovalStatus.PENDING:
+                return updated.status == ApprovalStatus.APPROVED
+            await asyncio.sleep(5)
+
+    async def get_status(self, task_id: str) -> Dict[str, Any]:
+        """Get the status of a research task."""
+        task = self.tasks.get_task(task_id)
+        if task is None:
+            return {"error": "Task not found"}
+
+        return {
+            "id": task.id,
+            "status": task.status.value,
+            "progress": asdict(task.progress) if task.progress else None,
+            "error": task.error,
+            "output": task.output_data
+        }
+
+    async def cancel(self, task_id: str) -> bool:
+        """Cancel a running research task."""
+        try:
+            await self.tasks.cancel(task_id)
+            return True
+        except Exception:
+            return False
+
+# Usage example
+
+async def main():
+config = ProductionAgentConfig(
+db_path="./my_agent",
+max_retries=3,
+approval_timeout_hours=24,
+enable_monitoring=True,
+slack_webhook="https://hooks.slack.com/services/..."
+)
+
+    agent = ProductionResearchAgent(config)
+
+    # Execute research with full durability
+    result = await agent.research(
+        query="Latest developments in durable execution",
+        user_id="user-123",
+        require_approval=True,
+        idempotency_key="research-2024-01-15-durable-exec"
+    )
+
+    print(f"Research completed: {result}")
+
+if **name** == "**main**":
+asyncio.run(main())
+
+```
+
+<Callout type="tip">
+  **Deployment Tip:** In production, run the monitoring loop as a separate
+  process or use a scheduled job (cron, CloudWatch Events) to periodically check
+  metrics and send alerts.
+</Callout>
+
+---
+```
+
+## Exercise: Build a Durable Research Agent
+
+<Exercise
+  title="Durable Research Agent"
+  difficulty="intermediate"
+  objectives={[
+    "Implement checkpoint-based recovery",
+    "Add Human-in-the-Loop approval",
+    "Track and report progress",
+    "Handle rate limits gracefully",
+  ]}
+  hints={[
+    "Start with the CheckpointManager class",
+    "Use exponential backoff for rate limit retries",
+    "Test recovery by killing the process mid-execution",
+    "Store approval state in the database, not memory",
+  ]}
+>
+
+### Requirements
+
+Build a durable research agent that:
+
+1. **Survives Restarts**
+   - Checkpoint after each major step (search, analyze, generate)
+   - On startup, check for incomplete tasks and resume them
+   - Verify checkpoint integrity with checksums
+
+2. **Supports HITL Approval**
+   - Pause before generating final report
+   - Send notification (console log is fine for exercise)
+   - Wait for approval via API endpoint
+   - Timeout after configurable period
+
+3. **Tracks Progress**
+   - Report current step and percentage complete
+   - Expose progress via API endpoint
+   - Update progress at least every 10 seconds
+
+4. **Handles Rate Limits**
+   - Detect rate limit errors from LLM API
+   - Implement exponential backoff (1s, 2s, 4s, 8s...)
+   - Max 5 retries before failing to DLQ
+
+### Acceptance Criteria
+
+```python
+# Test 1: Recovery after crash
+agent.start_research("AI agents", task_id="test-1")
+# Kill process after step 2
+# Restart process
+agent.resume_task("test-1")
+# Should continue from step 3, not restart
+
+# Test 2: HITL approval
+agent.start_research("AI agents", task_id="test-2", require_approval=True)
+# Should pause at approval step
+agent.get_status("test-2")  # status: "awaiting_approval"
+agent.approve("test-2")
+# Should continue to completion
+
+# Test 3: Progress tracking
+agent.start_research("AI agents", task_id="test-3")
+for _ in range(10):
+    status = agent.get_status("test-3")
+    print(f"Progress: {status['progress']['percentage']}%")
+    time.sleep(1)
+
+# Test 4: Rate limit handling
+# Configure LLM client to return 429 errors
+agent.start_research("AI agents", task_id="test-4")
+# Should retry with backoff, eventually succeed or fail to DLQ
+```
+
+### Starter Code
+
+```python
+class DurableResearchAgent:
+    """Your implementation here."""
+
+    def __init__(self, db_path: str = "./agent.db"):
+        self.checkpoints = CheckpointManager(db_path)
+        self.hitl = HITLManager(db_path)
+        # Add more components as needed
+
+    async def start_research(
+        self,
+        query: str,
+        task_id: str,
+        require_approval: bool = False
+    ) -> str:
+        """Start a new research task."""
+        raise NotImplementedError
+
+    async def resume_task(self, task_id: str) -> None:
+        """Resume an incomplete task."""
+        raise NotImplementedError
+
+    async def get_status(self, task_id: str) -> dict:
+        """Get task status and progress."""
+        raise NotImplementedError
+
+    async def approve(self, task_id: str) -> None:
+        """Approve a task waiting for HITL."""
+        raise NotImplementedError
+```
+
+</Exercise>
+
+---
+
+## Key Takeaways
+
+<ModuleSummary
+  points={[
+    "70% of production agent failures stem from lack of durable execution—crashes, timeouts, and restarts lose all progress",
+    "Checkpointing saves execution state at key points, enabling recovery without restarting from scratch",
+    "Temporal.io provides enterprise-grade durable execution with workflows, activities, and automatic retries",
+    "Inngest offers serverless durability with step functions—simpler than Temporal, no workers to manage",
+    "Human-in-the-Loop patterns must persist state to survive restarts—store approvals in database, not memory",
+    "Long-running tasks need progress tracking, graceful cancellation, and pause/resume capabilities",
+    "Idempotency keys ensure operations execute exactly once, even with retries—critical for side effects",
+    "Dead Letter Queues capture failed tasks for manual review—don't let failures disappear silently",
+    "Production agents need monitoring and alerting for failure rates, queue depths, and pending approvals",
+    "Combine all patterns for production: checkpoints + idempotency + HITL + DLQ + monitoring",
+  ]}
+/>
+
+---
+
+## Comparison: Durability Approaches
+
+| Approach                    | Complexity | Infrastructure       | Best For                      |
+| :-------------------------- | :--------- | :------------------- | :---------------------------- |
+| **Custom Checkpoints**      | Low        | SQLite/PostgreSQL    | Simple agents, learning       |
+| **LangGraph Checkpointers** | Low        | Built-in             | LangGraph-based agents        |
+| **Inngest**                 | Medium     | Serverless (managed) | Event-driven, serverless apps |
+| **Temporal.io**             | High       | Self-hosted or Cloud | Enterprise, complex workflows |
+
+<Mermaid
+  chart={`
+quadrantChart
+    title Durability Approach Selection
+    x-axis Simple --> Complex Workflows
+    y-axis Low Scale --> High Scale
+    quadrant-1 Temporal.io
+    quadrant-2 Inngest
+    quadrant-3 Custom Checkpoints
+    quadrant-4 LangGraph Checkpointers
+    
+    Custom Checkpoints: [0.2, 0.3]
+    LangGraph: [0.3, 0.5]
+    Inngest: [0.5, 0.7]
+    Temporal: [0.8, 0.9]
+`}
+/>
+
+---
+
+## 🔗 Further Reading
+
+- [Temporal.io Documentation](https://docs.temporal.io/) — Official Temporal documentation and tutorials
+- [Inngest Documentation](https://www.inngest.com/docs) — Inngest guides and API reference
+- [LangGraph Persistence](https://langchain-ai.github.io/langgraph/concepts/persistence/) — Built-in checkpointing for LangGraph
+- [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann's book on distributed systems fundamentals
+- [Saga Pattern](https://microservices.io/patterns/data/saga.html) — Pattern for distributed transactions
+- [Idempotency Patterns](https://stripe.com/docs/api/idempotent_requests) — Stripe's guide to idempotent API design
+
+---
+
+## Related Modules
+
+<Callout type="info" title="Continue Your Learning">
+  - **[Day 19: Model Routing](/modules/day-19-model-routing)** - Optimize costs
+  while maintaining durability - **[Day 31:
+  Orchestration](/modules/day-31-orchestration)** - LangGraph checkpointing
+  complements Temporal.io patterns - **[Day 55: K8s
+  Operator](/modules/day-55-project2-k8s-operator)** - Apply durable execution
+  to infrastructure automation
+</Callout>
+
+---
+
+<PageNavigation
+  prev={{
+    href: "/modules/day-20-memory",
+    title: "Day 20: Agent Memory Systems",
+  }}
+  next={{
+    href: "/modules/day-22-spec-driven-development",
+    title: "Day 22: Spec-Driven Development",
+  }}
+/>

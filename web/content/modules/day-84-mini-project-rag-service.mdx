@@ -28,9 +28,9 @@ day: 84
 />
 
 <Callout type="info">
-  **Series Context:** Mini-project 3 of 5 in our 90-day curriculum. This service enables your agents to
-  answer questions from uploaded documents—the knowledge layer of your
-  ecosystem. Part of Month 3's advanced architectures focus.
+  **Series Context:** Mini-project 3 of 5 in our 90-day curriculum. This service
+  enables your agents to answer questions from uploaded documents—the knowledge
+  layer of your ecosystem. Part of Month 3's advanced architectures focus.
 </Callout>
 
 <KeyTerms
@@ -81,13 +81,23 @@ day: 84
 
 In this mini-project, we created a specialized RAG service that handles the "knowledge" aspect of our agent ecosystem—a critical component in the 90-day journey toward production-grade AI systems.
 
-{/* IMAGE_PLACEHOLDER: Create an infographic showing "The RAG Pipeline Journey" with four connected stages:
-1. "Ingestion" - Icon of documents entering a funnel, with labels for PDF/MD/TXT support
-2. "Chunking" - Visual of a document being intelligently split with overlapping sections highlighted
-3. "Embedding" - Transformation visualization showing text converting to vector space (perhaps a 3D scatter plot representation)
-4. "Retrieval" - Two parallel paths merging (semantic + keyword) leading to ranked results with citation badges
-Style: Use a horizontal timeline/pipeline layout with icons and brief annotations. Color-code each stage. Include small "pro tip" callouts like "Overlap prevents context loss" and "Hybrid search = best of both worlds"
-This infographic should be placed right after the Module Summary heading to provide a visual overview of what students built. */}
+<Mermaid
+  chart={`
+flowchart LR
+    Ingest[Ingestion<br/>PDF/MD/TXT] --> Chunk[Chunking<br/>Split & Overlap]
+    Chunk --> Embed[Embedding<br/>Vector Space]
+    
+    Query[Query] --> Retrieve
+    Embed --> Retrieve[Retrieval<br/>Semantic + Keyword]
+    Retrieve --> Result[Ranked Results]
+    
+    style Ingest fill:#e1f5fe,stroke:#01579b
+    style Chunk fill:#fff9c4,stroke:#fbc02d
+    style Embed fill:#e8f5e9,stroke:#2e7d32
+    style Retrieve fill:#f3e5f5,stroke:#7b1fa2
+`}
+  caption="The RAG Pipeline: From raw documents to retrievable knowledge."
+/>
 
 1. **Ingestion Pipeline**: We built a robust parser that handles PDFs, Markdowns, and Text files, intelligently chunking them for optimal retrieval.
 2. **Vector Storage**: We integrated ChromaDB to store high-dimensional embeddings of our document chunks.
@@ -95,22 +105,6 @@ This infographic should be placed right after the Module Summary heading to prov
 4. **Agent Integration**: We demonstrated how an agent can query this service to answer questions with citations, grounding its responses in truth.
 
 ## Architecture
-
-{/* IMAGE_PLACEHOLDER: Create an architectural diagram showing the RAG service pipeline. The image should illustrate:
-1. Left side: Three document types (PDF, Markdown, Text) with icons
-2. Center: Processing pipeline with stages:
-   - Document Parser (with file format icons)
-   - Smart Chunker (showing a document being split into overlapping chunks)
-   - Embedding Model (showing text transforming into vector representations)
-   - Vector Database (ChromaDB logo/icon with storage symbol)
-3. Right side: Query flow showing:
-   - Query input
-   - Hybrid Retriever (split into two paths: semantic search and BM25 keyword search)
-   - Score combination/ranking
-   - Ranked results with citations
-4. Visual style: Modern, clean design with a tech aesthetic. Use arrows to show data flow. Include small annotations for key concepts like "1000 char chunks", "200 char overlap", "384-dim vectors", "cosine similarity"
-5. Color scheme: Use blues/purples for the pipeline, green for successful operations, and highlight the vector database as a central component
-Place this image at the top of the Architecture section to give learners a visual overview before diving into the Mermaid diagram details. */}
 
 <Mermaid
   chart={`
@@ -346,19 +340,22 @@ SEPARATORS: ["\n\n", "\n", ". ", " ", ""]
 
 ### Document Processing Pipeline
 
-{/* IMAGE_PLACEHOLDER: Create a detailed visualization of "Document Chunking Strategies" showing:
-1. A sample document page on the left
-2. Three different chunking approaches side-by-side:
-   - Fixed-size chunking (showing rigid blocks, some cutting mid-sentence) - marked with a caution icon
-   - Sentence-based chunking (showing clean sentence boundaries) - marked with a checkmark
-   - Recursive chunking with overlap (showing intelligent splits with highlighted overlap regions) - marked with a star as "best practice"
-3. For the recursive approach, annotate with:
-   - "1000 char chunks" label
-   - "200 char overlap" with arrows showing the overlap region
-   - "Preserves context across boundaries" callout
-4. Visual style: Use a side-by-side comparison layout. Color-code the overlap regions in the recursive approach. Show text snippets to make it concrete.
-5. Include a small "Why Overlap Matters" box explaining how it prevents losing context when a key concept spans chunk boundaries
-Place this image right before the code block to help learners understand the chunking strategy before seeing the implementation. */}
+<Mermaid
+  chart={`
+graph TD
+    Doc[Document] --> Fixed[Fixed Size]
+    Doc --> Sent[Sentence Split]
+    Doc --> Agent[Semantic/Agentic]
+    
+    Fixed -->|Risk| Cut[Cut mid-sentence]
+    Sent -->|Better| Bounds[Sentence Boundaries]
+    Agent -->|Best| Context[ Semantic Coherence]
+    
+    style Agent fill:#cfc,stroke:#333
+    style Fixed fill:#fcc,stroke:#333
+`}
+  caption="Chunking Strategies: Balancing context window with semantic completeness."
+/>
 
 ```python
 # services/document_processor.py
@@ -507,22 +504,25 @@ class DocumentProcessor:
 
 ### Hybrid Search (Semantic + Keyword)
 
-{/* IMAGE_PLACEHOLDER: Create an educational diagram titled "Hybrid Search: Best of Both Worlds" showing:
-1. Top section: Split view comparing two search approaches:
-   - Left: "Semantic Search" with an illustration of vector space (3D scatter plot with query vector and document vectors, showing cosine similarity)
-   - Right: "Keyword Search (BM25)" with an illustration of term matching (showing query terms highlighted in documents)
-2. Middle section: "The Hybrid Advantage" showing:
-   - Two parallel scoring paths converging
-   - Alpha weighting visualization (slider showing 0.7 semantic, 0.3 keyword)
-   - Score normalization step
-   - Final combined ranking
-3. Bottom section: "When Each Shines" comparison table:
-   - Semantic: "What is machine learning?" → finds conceptually similar content even without exact terms
-   - Keyword: "Python 3.11 release date" → finds exact matches for specific terms
-   - Hybrid: Gets the best of both approaches
-4. Visual style: Use contrasting colors for semantic (blue/purple gradient) vs keyword (orange/red). Show actual example queries and results.
-5. Include a "Pro Tip" callout: "Tune alpha based on your use case: Higher for conceptual queries, lower for fact-finding"
-Place this image before the code to help learners understand why hybrid search outperforms either approach alone. */}
+<Mermaid
+  chart={`
+graph LR
+    User -->|Query| Sem[Semantic Search]
+    User -->|Query| Key[Keyword Search]
+    
+    Sem -->|0.8| Norm1[Normalize]
+    Key -->|0.2| Norm2[Normalize]
+    
+    Norm1 --> Mix{Alpha-Mix}
+    Norm2 --> Mix
+    
+    Mix --> Result[Ranked Result]
+    
+    style Sem fill:#e1bee7,stroke:#4a148c
+    style Key fill:#ffecb3,stroke:#ff6f00
+`}
+  caption="Hybrid Search: Combining vector similarity with keyword precision."
+/>
 
 ```python
 # services/hybrid_search.py
@@ -629,23 +629,25 @@ def delete_document(user_id: str, doc_id: str):
 
 ## Integration with Agents
 
-{/* IMAGE_PLACEHOLDER: Create a workflow diagram titled "RAG-Powered Agent in Action" showing:
-1. User asks a question (speech bubble: "What are the key features of our Q3 product release?")
-2. Agent receives question and initiates RAG workflow:
-   - Step 1: Query RAG service (API call visualization)
-   - Step 2: Retrieve top 5 relevant chunks (showing document snippets with metadata badges)
-   - Step 3: Build context with citations (showing formatted context with [1], [2], [3] markers)
-   - Step 4: LLM generates answer (showing GPT-4 processing the context + question)
-   - Step 5: Return cited answer (response with inline citations)
-3. Show the data flow with arrows and include sample data at each step
-4. Highlight the "grounding" concept - show how the agent's answer is anchored to actual document content
-5. Include a side panel showing "Why This Matters":
-   - Reduces hallucinations
-   - Provides verifiable sources
-   - Enables knowledge updates without retraining
-   - Maintains user trust through transparency
-6. Visual style: Use a vertical flow diagram with clear step numbers. Color-code the different stages (query=blue, retrieval=green, generation=purple, response=gold)
-Place this diagram before the code example to show learners the complete RAG agent workflow. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Agent
+    participant RAG as RAG Service
+    participant LLM
+    
+    User->>Agent: "What's in the Q3 release?"
+    Agent->>RAG: Query("Q3 release features")
+    RAG-->>Agent: Returns [Chunk 1, Chunk 2] w/ metadata
+    
+    Agent->>LLM: Prompt(Question + Context + Citations)
+    LLM-->>Agent: "Based on [1], the Q3 release includes..."
+    
+    Agent->>User: Answer with citations
+`}
+  caption="Agent Workflow: Grounding responses in retrieved facts."
+/>
 
 ```python
 # Example: RAG-powered agent
@@ -680,82 +682,95 @@ If the context doesn't contain the answer, say so."""
 
 ---
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "RAG Pipeline Simulator" interactive component that allows learners to:
-1. Upload a sample document (or use pre-loaded examples)
-2. Adjust chunking parameters (chunk size slider: 500-2000, overlap slider: 0-500)
-3. See the document split into chunks in real-time with visual boundaries
-4. Enter a query and see:
-   - Semantic search results with similarity scores
-   - BM25 keyword search results with scores
-   - Hybrid results with adjustable alpha slider (0.0-1.0)
-5. Compare results side-by-side to understand how different strategies perform
-6. View chunk metadata (source, page, index) for each result
-7. See highlighted matching terms for keyword search
-8. Visualize embeddings in 2D space (using dimensionality reduction) showing query vector and document vectors
-
-This interactive tool would help learners:
-- Understand the impact of chunking parameters
-- See hybrid search in action
-- Experiment with alpha weighting
-- Visualize semantic similarity
-
-Technical implementation: React component with state management for parameters, mock embedding generation (or use actual sentence-transformers via API), BM25 implementation in JavaScript, and visualization using D3.js or Recharts.
-
-Place this component in the "Core Implementation" section after the code examples, or create a dedicated "Interactive Lab" section. */}
+<Mermaid
+  chart={`
+graph TB
+    subgraph "RAG Simulator"
+        Doc[Document] --> Chunking
+        
+        subgraph "Configuration"
+            Size[Chunk Size Slider<br/>500-2000]
+            Overlap[Overlap Slider<br/>0-500]
+            Alpha[Hybrid Alpha<br/>0.0-1.0]
+        end
+        
+        Size --> Chunking
+        Overlap --> Chunking
+        
+        Chunking[Chunking Engine] --> Chunks[Visualized Chunks]
+        Chunks --> Embed[Embedding]
+        
+        Query[User Query] --> Search
+        Embed --> Search
+        Alpha --> Search
+        
+        Search[Hybrid Search] --> Results
+        
+        subgraph "Results View"
+            Sem[Semantic Score]
+            Key[Keyword Score]
+            Hyb[Hybrid Score]
+            
+            Results --> Sem
+            Results --> Key
+            Results --> Hyb
+        end
+    end
+    
+    style Doc fill:#e1bee7,stroke:#4a148c
+    style Chunking fill:#fff9c4,stroke:#fbc02d
+    style Search fill:#c8e6c9,stroke:#2e7d32
+    style Results fill:#bbdefb,stroke:#0d47a1
+`}
+  caption="RAG Pipeline Simulator: Visualizing the impact of chunking and hybrid search parameters."
+/>
 
 <Exercise title="RAG Service Lab">
-  **Core Challenges:**
-  
-  1. **Web Page Ingestion**: Add support for URL → chunks pipeline (hint: use BeautifulSoup or newspaper3k for HTML parsing)
-  
-  2. **Document Versioning**: Implement document versioning so updates don't lose history (hint: add version field to metadata, keep old versions)
-  
-  3. **Advanced Metadata Filtering**: Add filtering by date ranges, source types, custom tags (hint: extend ChromaDB where clauses)
-  
-  4. **Query Expansion Challenge**: Use an LLM to expand queries before retrieval to improve recall
-     - Example: "ML" → "machine learning, artificial intelligence, neural networks"
-     - Implement and measure impact on retrieval quality
-  
-  **Bonus Challenges:**
-  
-  5. **Semantic Caching**: Cache embeddings for frequently queried terms to reduce latency
-  
-  6. **Multi-modal RAG**: Extend to support images (extract text via OCR, generate image embeddings)
-  
-  7. **Reranking Pipeline**: Add a cross-encoder reranker after initial retrieval for better precision
-  
-  8. **Chunk Optimization**: Implement automatic chunk size tuning based on document type and query patterns
+  **Core Challenges:** 1. **Web Page Ingestion**: Add support for URL → chunks
+  pipeline (hint: use BeautifulSoup or newspaper3k for HTML parsing) 2.
+  **Document Versioning**: Implement document versioning so updates don't lose
+  history (hint: add version field to metadata, keep old versions) 3. **Advanced
+  Metadata Filtering**: Add filtering by date ranges, source types, custom tags
+  (hint: extend ChromaDB where clauses) 4. **Query Expansion Challenge**: Use an
+  LLM to expand queries before retrieval to improve recall - Example: "ML" →
+  "machine learning, artificial intelligence, neural networks" - Implement and
+  measure impact on retrieval quality **Bonus Challenges:** 5. **Semantic
+  Caching**: Cache embeddings for frequently queried terms to reduce latency 6.
+  **Multi-modal RAG**: Extend to support images (extract text via OCR, generate
+  image embeddings) 7. **Reranking Pipeline**: Add a cross-encoder reranker
+  after initial retrieval for better precision 8. **Chunk Optimization**:
+  Implement automatic chunk size tuning based on document type and query
+  patterns
 </Exercise>
 
 ---
 
 ## Key Takeaways
 
-{/* IMAGE_PLACEHOLDER: Create an infographic titled "RAG Service: Production Best Practices" with four key sections:
-1. "Hybrid Retrieval Wins" - Visual comparison showing:
-   - Semantic-only: 65% accuracy (icon with partial checkmark)
-   - Keyword-only: 60% accuracy (icon with partial checkmark)
-   - Hybrid: 85% accuracy (icon with full checkmark and star)
-   - Include a bar chart visualization
-2. "Chunking Strategy Matters" - Show impact visualization:
-   - Too small (100 chars): "Lost context" with broken puzzle pieces
-   - Too large (5000 chars): "Noisy retrieval" with cluttered icon
-   - Just right (1000 chars): "Optimal balance" with perfect fit icon
-   - Include overlap illustration showing 200-char overlap preventing context loss
-3. "Citations Build Trust" - Show before/after:
-   - Without citations: Generic answer with question mark and low trust indicator
-   - With citations: Answer with [1], [2], [3] markers, source badges, and high trust indicator
-4. "Service Architecture Benefits" - Show ecosystem view:
-   - Central RAG service connected to multiple agents (Research Agent, Support Agent, Analysis Agent)
-   - "Share knowledge across all agents" callout
-   - "Update once, benefit everywhere" callout
-Visual style: Use a 2x2 grid layout. Each section should have an icon, title, and visual representation. Use green checkmarks for good practices, red X for anti-patterns. Include specific metrics where shown.
-Place this infographic before the text key takeaways to provide a visual summary of the main lessons. */}
+<Mermaid
+  chart={`
+mindmap
+  root((RAG Best Practices))
+    Retrieval
+        Hybrid Search
+        Re-ranking
+    Chunking
+        Overlap
+        Semantic Splitting
+    Data
+        Citation Tracking
+        Metadata Filtering
+    Architecture
+        Service Isolation
+        Async Ingestion
+`}
+  caption="RAG Optimization: Key areas for production-grade performance."
+/>
 
-1. **Hybrid Retrieval**: Combining keywords + vectors usually outperforms either alone.
-2. **Chunking Matters**: The Chunk size and overlap directly impact answer quality—tune these!
-3. **Citations Build Trust**: Always tracking source metadata allows agents to cite their work.
-4. **Service Isolation**: By moving RAG to a service, any agent can become "knowledgeable" instantly.
+5. **Hybrid Retrieval**: Combining keywords + vectors usually outperforms either alone.
+6. **Chunking Matters**: The Chunk size and overlap directly impact answer quality—tune these!
+7. **Citations Build Trust**: Always tracking source metadata allows agents to cite their work.
+8. **Service Isolation**: By moving RAG to a service, any agent can become "knowledgeable" instantly.
 
 ---
 

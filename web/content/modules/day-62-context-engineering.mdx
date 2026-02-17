@@ -50,15 +50,30 @@ Prompt engineering is about crafting the right words. **Context engineering** is
   (summarization), and **isolating** (compartmentalized workflows).
 </Callout>
 
-{/* IMAGE_PLACEHOLDER: Context Refinery Illustration - A visual metaphor showing raw, unstructured data (documents, APIs, databases) flowing through a multi-stage refinery pipeline. The pipeline should show 5 distinct stages: (1) Fetch stage with parallel streams from multiple sources, (2) Process stage with data transformation symbols, (3) Validate stage with quality check icons, (4) Compress stage showing data reduction, (5) Structure stage organizing data into neat sections. The output should flow into an AI agent icon. Use industrial refinery aesthetics with modern tech styling. Color scheme: blues and purples for data flow, gold/amber for the refinery process. Place this image prominently after the ConceptIntro section to establish the mental model. */}
-
-![Context Refinery](/images/context_refinery.png)
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    Raw[Raw Data] --> Fetch[Fetch Stage]
+    Fetch --> Process[Process Stage]
+    Process --> Validate[Validate Stage]
+    Validate --> Compress[Compress Stage]
+    Compress --> Structure[Structure Stage]
+    Structure --> Agent[🤖 Agent]
+    
+    style Raw fill:#e3f2fd,stroke:#2196f3
+    style Process fill:#f3e5f5,stroke:#9c27b0
+    style Structure fill:#e8f5e9,stroke:#4caf50
+    style Agent fill:#fff3e0,stroke:#ff9800
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: The Context Refinery Pipeline</p>
 
 ---
 
 ## 21.1 The Context Engineering Stack
-
-{/* IMAGE_PLACEHOLDER: Context Engineering Stack Layers - A detailed architectural diagram showing the complete context engineering stack as interconnected layers. Bottom layer: Context Sources (icons for documents, web search, APIs, databases, file systems). Middle layers: The five-stage pipeline (Fetch, Process, Validate, Compress, Structure) with specific tools/techniques labeled in each stage. Top layer: Agent consumption with different agent types (research, analysis, coding). Add data flow arrows showing how information transforms through each stage. Include metrics like "10s → 2s latency" and "100K → 8K tokens". Use a modern tech stack visualization style. Place at the beginning of section 21.1. */}
 
 <Mermaid
   chart={`
@@ -107,7 +122,23 @@ graph TB
 
 ## 21.2 Context Window Management
 
-{/* IMAGE_PLACEHOLDER: Context Window Visualization - An infographic showing the "Lost in the Middle" problem. Display a horizontal bar representing a 200K token context window, divided into three zones: Beginning (green, high attention), Middle (red, low attention), and End (green, high attention). Show a heat map overlay indicating LLM attention levels across the context. Include a small graph showing recall accuracy dropping from 90% at positions 0-25% and 75-100%, down to 40% at positions 25-75%. Add annotations explaining the "sandwich strategy" for optimal placement. This should be placed right before the "Context Window Strategies" code section. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    subgraph ContextWindow [200K Context Window Attention Profile]
+        Start[Beginning\nHIGH Recall] --- Middle[Middle\nLOW Recall]
+        Middle --- End[End\nHIGH Recall]
+    end
+    
+    style Start fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style Middle fill:#ffcdd2,stroke:#c62828,stroke-width:2px
+    style End fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: The "Lost in the Middle" Phenomenon</p>
 
 Modern LLMs offer massive context windows—Claude 3.5 supports 200K tokens, Gemini 1.5 Pro handles up to 2M tokens. But bigger isn't always better. Effective context window management is critical for both cost and quality.
 
@@ -219,8 +250,6 @@ class ContextWindowManager:
 
 ### Token Budget Allocation
 
-<TokenBudgetAllocator />
-
 <Mermaid
   chart={`
 pie title Token Budget Allocation (128K Context)
@@ -243,7 +272,27 @@ pie title Token Budget Allocation (128K Context)
 
 ## 21.3 RAG Optimization
 
-{/* IMAGE_PLACEHOLDER: Hybrid RAG Architecture Diagram - A flowchart showing the two-stage retrieval process. Top section: Query input splits into two parallel paths: (1) Vector Search path with embedding model and vector database, (2) Keyword Search path with BM25 index. Both paths retrieve top-20 candidates. Middle section: Reciprocal Rank Fusion (RRF) combines results with a visual representation of score merging. Bottom section: Neural Reranker (Cohere) refines to top-5 results. Use arrows to show data flow, include small icons for each component. Color code: purple for vector path, orange for keyword path, green for fusion. Place before "Hybrid Search: Vector + Keyword" section. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    Query[User Query] --> Vector[Vector Search]
+    Query --> Keyword[Keyword Search]
+    
+    Vector -->|Top 20| RRF[Reciprocal Rank Fusion]
+    Keyword -->|Top 20| RRF
+    
+    RRF -->|Ranked Candidates| Rerank[Neural Reranker]
+    Rerank -->|Top 5| Final[Final Context]
+    
+    style Query fill:#e3f2fd,stroke:#2196f3
+    style RRF fill:#fff9c4,stroke:#fbc02d
+    style Final fill:#e8f5e9,stroke:#4caf50
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Hybrid RAG Architecture</p>
 
 Basic RAG (retrieve top-k by vector similarity) leaves significant accuracy on the table. Modern RAG pipelines combine multiple retrieval strategies.
 
@@ -340,7 +389,22 @@ class RerankedRetriever:
 
 ### Query Expansion with HyDE
 
-{/* IMAGE_PLACEHOLDER: HyDE Process Flow - A three-step visual showing: (1) User query "How do I implement rate limiting?" in a speech bubble, (2) LLM generates hypothetical answer shown as a document with technical content about rate limiting implementation, (3) The hypothetical answer's embedding is used to search a vector database, retrieving actual relevant documents. Use a bridge metaphor to show how HyDE "bridges the gap" between question-style and document-style content. Include before-and-after comparison showing better retrieval results. Place immediately after the HyDE callout. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    Query[User Query] -->|Ask| LLM[LLM]
+    LLM -->|Generate| Hypo[Hypothetical Answer]
+    Hypo -->|Embed| Embedding[Embedding]
+    Embedding -->|Search| DB[(Vector DB)]
+    DB -->|Retrieve| Docs[Actual Documents]
+    
+    style Hypo fill:#e1f5fe,stroke:#0277bd,stroke-dasharray: 5 5
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: HyDE Process Flow</p>
 
 <Callout type="info">
   **HyDE (Hypothetical Document Embeddings)**: Generate a hypothetical answer to
@@ -425,7 +489,28 @@ Return only the 3 queries, one per line."""
 
 ## 21.4 Caching Strategies
 
-{/* IMAGE_PLACEHOLDER: Multi-Tier Caching Architecture - A layered pyramid diagram showing three caching tiers: Top tier (fastest): In-Memory Cache with LRU eviction, showing ~1ms latency. Middle tier: Redis Cache with TTL, showing ~10ms latency. Bottom tier: Recompute/Fetch from source, showing ~1000ms latency. Add arrows showing cache hit/miss flow between tiers. Include a sidebar showing cost savings: 90% cost reduction with prompt caching, 50% with semantic caching. Use green for cache hits, red for misses. Place at the start of section 21.4. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    Req[Request] --> L1{L1: Memory?}
+    L1 -- Hit (1ms) --> Ret[Return]
+    L1 -- Miss --> L2{L2: Redis?}
+    L2 -- Hit (10ms) --> Ret
+    L2 -- Miss --> L3[Fetch/Compute]
+    L3 -- 1000ms --> Ret
+    
+    L3 -.->|Cache| L2
+    L2 -.->|Cache| L1
+    
+    style L1 fill:#c8e6c9,stroke:#2e7d32
+    style L2 fill:#fff9c4,stroke:#fbc02d
+    style L3 fill:#ffccbc,stroke:#d84315
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Multi-Tier Caching Strategy</p>
 
 Context fetching is expensive—both in latency and API costs. Strategic caching dramatically improves both.
 
@@ -611,7 +696,20 @@ class TieredCache:
 
 ## 21.5 Parallel Data Fetching
 
-{/* IMAGE_PLACEHOLDER: Sequential vs Parallel Fetching Comparison - A side-by-side comparison showing: Left side "Sequential Fetching": 5 API calls stacked vertically, each taking 2 seconds, total 10 seconds with a sad face emoji. Right side "Parallel Fetching": 5 API calls shown horizontally at the same level, all completing in 2 seconds total with a happy face emoji. Use timeline bars to show duration. Add annotations for "Latency Bottleneck" vs "Optimized Performance". Include small icons for different sources (database, API, web, file system). Place right before the ProductionPattern component. */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-8">
+  <div>
+    <h4 className="text-center font-bold mb-2">Sequential (Slow)</h4>
+    ```mermaid gantt dateFormat s axisFormat %s title Total: 10s Source 1 :a1,
+    0, 2s Source 2 :a2, after a1, 2s Source 3 :a3, after a2, 2s Source 4 :a4,
+    after a3, 2s Source 5 :a5, after a4, 2s ```
+  </div>
+  <div>
+    <h4 className="text-center font-bold mb-2">Parallel (Fast)</h4>
+    ```mermaid gantt dateFormat s axisFormat %s title Total: 2s Source 1
+    :active, b1, 0, 2s Source 2 :active, b2, 0, 2s Source 3 :active, b3, 0, 2s
+    Source 4 :active, b4, 0, 2s Source 5 :active, b5, 0, 2s ```
+  </div>
+</div>
 
 <ProductionPattern
   type="performance"
@@ -781,7 +879,23 @@ class ProductionContextFetcher:
 
 ### Rate Limit Handling
 
-{/* IMAGE_PLACEHOLDER: Adaptive Rate Limiting Visualization - A timeline graph showing adaptive rate limiting in action. X-axis: time, Y-axis: requests per second. Show the rate starting at 10 req/s, then: (1) A rate limit error occurs (marked with red X), rate drops to 5 req/s and enters backoff period, (2) After successful requests, rate gradually increases back up (shown as green checkmarks), (3) Another rate limit hit, rate drops again. Include annotations for "Exponential Backoff", "Gradual Recovery", and "Circuit Breaker Open" states. Add a small table showing the adaptive algorithm's decision logic. Place before the AdaptiveRateLimiter code. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    Normal[🟢 Normal Phase] -->|Error/Limit| Backoff[🟠 Backoff Phase]
+    Backoff -->|Wait| Recovery[🟡 Recovery Phase]
+    Recovery -->|Success| Normal
+    Recovery -->|Error| Backoff
+    
+    style Normal fill:#c8e6c9,stroke:#2e7d32
+    style Backoff fill:#ffcdd2,stroke:#c62828
+    style Recovery fill:#fff9c4,stroke:#fbc02d
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Adaptive Rate Limiting Logic</p>
 
 ```python
 import asyncio
@@ -891,7 +1005,34 @@ async def process_streaming():
 
 ## 21.6 Automated Resilience
 
-{/* IMAGE_PLACEHOLDER: Circuit Breaker State Machine - A state diagram showing the three states of a circuit breaker: (1) CLOSED state (green): Normal operation, requests flow through, failure counter increments on errors. (2) OPEN state (red): Circuit trips after threshold failures, all requests immediately fail fast, timer starts. (3) HALF-OPEN state (yellow): After timeout, allows one test request, success returns to CLOSED, failure returns to OPEN. Show transitions between states with labeled arrows and conditions. Include a timeline example showing a service failing, circuit opening, timeout period, test request, and recovery. Place at the beginning of section 21.6. */}
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Closed
+    
+    Closed --> Open: Failure Threshold Reached
+    Open --> HalfOpen: Timeout Expired
+    
+    HalfOpen --> Closed: Success
+    HalfOpen --> Open: Failure
+    
+    state Closed {
+        [*] --> NormalOp
+        note right of NormalOp: Requests Allowed (Green)
+    }
+    
+    state Open {
+        [*] --> Blocked
+        note right of Blocked: Fail Fast (Red)
+    }
+    
+    state HalfOpen {
+        [*] --> TestRequest
+        note right of TestRequest: Limited Traffic (Yellow)
+    }
+`}
+  caption="Circuit Breaker: A state machine for preventing cascading failures."
+/>
 
 Real-world data sources fail. Context engineering builds resilience into the pipeline.
 
@@ -977,7 +1118,22 @@ class ResilientFetcher:
 
 ## 21.7 Structured Context Delivery
 
-{/* IMAGE_PLACEHOLDER: Structured vs Unstructured Context Comparison - A before/after comparison showing: Left side "Unstructured": A messy blob of text with no organization, an agent icon looking confused with question marks. Right side "Structured": The same content organized into clear sections with metadata (source, confidence, relevance, timestamp), the agent icon looking confident with a checkmark. Include callouts highlighting key differences: metadata presence, section organization, relevance scoring, source attribution. Use contrasting colors (gray/chaotic for unstructured, organized blue/green for structured). Place at the beginning of section 21.7. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Unstructured"
+        Raw[Messy Blob Text\n???] --> Agent1[Agent 😕]
+    end
+    
+    subgraph "Structured"
+        Struct[Structured JSON\n- Source\n- Confidence\n- Relevance] --> Agent2[Agent ✅]
+    end
+    
+    style Raw fill:#eeeeee,stroke:#9e9e9e
+    style Struct fill:#e3f2fd,stroke:#2196f3
+`}
+  caption="Context Structure: Organized metadata vs raw text dumps."
+/>
 
 Raw data isn't useful. Context must be structured for reliable agent consumption.
 
@@ -1079,7 +1235,29 @@ class ContextBuilder:
 
 ## 21.8 Context Compression
 
-{/* IMAGE_PLACEHOLDER: Context Compression Strategies Comparison - A three-panel infographic showing: Panel 1 "Extractive": Original document with sentences highlighted in different colors by relevance score, arrows pointing to selected sentences being extracted and reassembled. Panel 2 "Abstractive": Original document flowing through an LLM icon, emerging as a condensed summary. Panel 3 "Hybrid": Two-stage process combining both approaches. Show compression ratios (2-10x) and token counts before/after. Use visual metaphors like a compressor or funnel. Place at the beginning of section 21.8. */}
+<Mermaid
+  chart={`
+graph TD
+    Input[Long Context] --> Split{Strategy?}
+    
+    Split -->|Extractive| Highlight[Highlight Key Sentences]
+    Highlight --> Extract[Extract Top K]
+    
+    Split -->|Abstractive| LLM[LLM Summarization]
+    LLM --> Summary[Generate Summary]
+    
+    Split -->|Hybrid| Hyb1[Extract 50%]
+    Hyb1 --> Hyb2[Summarize Remaining]
+    
+    Extract --> Output[Compressed Context]
+    Summary --> Output
+    Hyb2 --> Output
+    
+    style Input fill:#e3f2fd,stroke:#2196f3
+    style Output fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Compression Strategies: Reducing tokens while preserving meaning."
+/>
 
 When context exceeds token budgets, intelligent compression preserves the most valuable information.
 
@@ -1433,7 +1611,20 @@ class SelectiveContextBuilder:
 
 ## 21.9 Complete Pipeline Example
 
-{/* IMAGE_PLACEHOLDER: End-to-End Context Pipeline Flow - A comprehensive workflow diagram showing a complete research agent pipeline using LangGraph. Show four sequential stages as connected nodes: (1) Gather Context node with parallel fetching from arxiv, github, and web sources, (2) Process Context node transforming raw data into structured sections, (3) Analyze Context node with LLM analyzing the structured data, (4) Generate Report node producing final output. Include state transitions between nodes, show example data flowing through each stage (getting progressively more refined), and add timing annotations (Stage 1: 2s, Stage 2: 0.5s, Stage 3: 3s, Stage 4: 2s, Total: 7.5s). Use LangGraph visual style with rounded rectangles for nodes and arrows for edges. Place at the beginning of section 21.9. */}
+<Mermaid
+  chart={`
+graph LR
+    Gather[1. Gather Context\n(Parallel Fetch)\n2s] --> Process[2. Process Context\n(Structure)\n0.5s]
+    Process --> Analyze[3. Analyze Context\n(LLM)\n3s]
+    Analyze --> Report[4. Generate Report\n(Final Output)\n2s]
+    
+    style Gather fill:#bbdefb,stroke:#1976d2
+    style Process fill:#c8e6c9,stroke:#2e7d32
+    style Analyze fill:#fff9c4,stroke:#fbc02d
+    style Report fill:#f3e5f5,stroke:#9c27b0
+`}
+  caption="End-to-End Pipeline: From raw data to final report in 7.5s."
+/>
 
 ```python
 from langgraph.graph import StateGraph, START, END

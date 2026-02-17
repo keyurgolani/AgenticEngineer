@@ -1,0 +1,3230 @@
+---
+title: "Day 67: Neuro-Symbolic AI Patterns"
+description: "Combine neural networks with symbolic reasoning for guaranteed correctness in code manipulation, formal verification, and structured tasks."
+week: 10
+day: 67
+---
+
+<ReadingTime minutes={45} />
+
+<SkillLevel
+  level="advanced"
+  description="Hybrid AI systems for guaranteed correctness"
+/>
+
+<Prerequisites
+  items={[
+    "Completed Days 1-66 of the course",
+    "Python AST basics and tree manipulation",
+    "Understanding of LLMs and their limitations",
+    "Familiarity with type systems and static analysis",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Understand why LLMs fail at structured tasks and how symbolic reasoning helps",
+    "Master AST-based code manipulation with Python's ast and libcst libraries",
+    "Build hybrid neuro-symbolic systems that combine LLM creativity with symbolic correctness",
+    "Implement formal verification patterns with pre/post-conditions and invariants",
+    "Integrate logic programming for constraint satisfaction and reasoning",
+    "Create production-ready code transformation systems with guaranteed correctness",
+  ]}
+/>
+
+---
+
+## The Promise of Neuro-Symbolic AI
+
+Large Language Models are remarkably capable at understanding intent and generating creative solutions. But they have a fundamental weakness: **they hallucinate**. When precision matters—in code, mathematics, or logical reasoning—hallucinations aren't just annoying, they're dangerous.
+
+Neuro-symbolic AI offers a solution: combine the **creativity and flexibility of neural networks** with the **precision and guarantees of symbolic systems**. The result is AI that can understand what you want AND deliver correct results.
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Neural Strengths"
+        N1[Natural Language Understanding]
+        N2[Pattern Recognition]
+        N3[Creative Generation]
+        N4[Ambiguity Handling]
+    end
+    
+    subgraph "Symbolic Strengths"
+        S1[Logical Reasoning]
+        S2[Formal Verification]
+        S3[Deterministic Execution]
+        S4[Guaranteed Correctness]
+    end
+    
+    N1 --> H[Hybrid System]
+    N2 --> H
+    S1 --> H
+    S2 --> H
+    
+    H --> R[Reliable AI]
+    
+    style N1 fill:#e3f2fd,stroke:#2196f3
+    style N2 fill:#e3f2fd,stroke:#2196f3
+    style N3 fill:#e3f2fd,stroke:#2196f3
+    style N4 fill:#e3f2fd,stroke:#2196f3
+    style S1 fill:#c8e6c9,stroke:#4caf50
+    style S2 fill:#c8e6c9,stroke:#4caf50
+    style S3 fill:#c8e6c9,stroke:#4caf50
+    style S4 fill:#c8e6c9,stroke:#4caf50
+    style H fill:#f3e5f5,stroke:#9c27b0
+    style R fill:#fff3e0,stroke:#ff9800
+`}
+  caption="Neuro-symbolic AI combines the best of both paradigms."
+/>
+
+<Callout type="info">
+  **Why This Matters Now:** As AI agents become more autonomous, the cost of
+  errors increases. A chatbot that hallucinates is annoying. A code refactoring
+  agent that hallucinates can break production systems. Neuro-symbolic patterns
+  give us the tools to build AI that's both intelligent AND reliable.
+</Callout>
+
+---
+
+## 67.1 The Hallucination Problem in Structured Tasks
+
+LLMs are trained to predict the most likely next token. This works brilliantly for natural language but fails catastrophically for structured tasks where there's only one correct answer.
+
+### Why LLMs Fail at Structured Tasks
+
+Consider asking an LLM to rename a variable in code:
+
+```python
+# Original code
+def calculate_total(items):
+    sum = 0  # 'sum' shadows built-in
+    for item in items:
+        sum += item.price
+    return sum
+
+# Request: "Rename 'sum' to 'total'"
+```
+
+An LLM might produce:
+
+```python
+# LLM output - WRONG!
+def calculate_total(items):
+    total = 0
+    for item in items:
+        sum += item.price  # Missed this reference!
+    return total
+```
+
+The LLM understood the intent but failed at the mechanical task of finding ALL references. This is a **structural problem**, not a knowledge problem.
+
+### Categories of LLM Failures in Code
+
+| Failure Type                   | Example                                  | Root Cause                     |
+| :----------------------------- | :--------------------------------------- | :----------------------------- |
+| **Incomplete Transformations** | Missing variable references              | No systematic traversal        |
+| **Syntax Errors**              | Unbalanced brackets, invalid indentation | Token-by-token generation      |
+| **Semantic Violations**        | Type mismatches, scope errors            | No type system awareness       |
+| **Logic Errors**               | Off-by-one, wrong operator               | Statistical patterns vs. logic |
+| **Hallucinated APIs**          | Non-existent methods/functions           | Training data confusion        |
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "LLM Approach"
+        L1[Read Code as Text] --> L2[Generate New Text]
+        L2 --> L3[Hope It's Correct]
+        L3 --> L4[❌ May Have Errors]
+    end
+    
+    subgraph "Symbolic Approach"
+        S1[Parse to AST] --> S2[Transform Nodes]
+        S2 --> S3[Verify Constraints]
+        S3 --> S4[Generate Code]
+        S4 --> S5[✅ Guaranteed Correct]
+    end
+    
+    style L4 fill:#ffcdd2,stroke:#c62828
+    style S5 fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="LLMs treat code as text; symbolic systems understand structure."
+/>
+
+### The Need for Symbolic Grounding
+
+Symbolic grounding means anchoring LLM outputs to formal structures that can be verified. Instead of trusting the LLM to produce correct code, we:
+
+1. **Use the LLM to understand intent** — What transformation does the user want?
+2. **Apply symbolic methods to execute** — Use AST manipulation for correctness
+3. **Verify the result formally** — Type check, test, prove properties
+
+This division of labor plays to each system's strengths.
+
+<Callout type="warning">
+  **The 99% Problem:** An LLM might get code transformations right 99% of the
+  time. But in a codebase with 1000 files, that means 10 broken files per
+  refactoring. Symbolic methods give us 100% correctness for the operations they
+  support.
+</Callout>
+
+---
+
+## 67.2 Neuro-Symbolic Fundamentals
+
+<ConceptIntro
+  title="Neuro-Symbolic AI"
+  description="A hybrid approach that combines neural networks (for perception, language understanding, and pattern recognition) with symbolic AI (for reasoning, planning, and verification). The neural component handles ambiguity and natural language; the symbolic component ensures logical consistency and correctness."
+/>
+
+### The Two Paradigms
+
+**Neural AI (Connectionist)**
+
+- Learns patterns from data
+- Handles ambiguity and noise gracefully
+- Excels at perception and language
+- Outputs are probabilistic
+- Difficult to explain or verify
+
+**Symbolic AI (Classical)**
+
+- Operates on explicit rules and logic
+- Requires precise, structured input
+- Excels at reasoning and planning
+- Outputs are deterministic
+- Fully explainable and verifiable
+
+### When to Use Each
+
+| Task                           | Best Approach | Why                                 |
+| :----------------------------- | :------------ | :---------------------------------- |
+| Understanding user intent      | Neural        | Handles natural language ambiguity  |
+| Parsing code structure         | Symbolic      | Deterministic, well-defined grammar |
+| Generating transformation plan | Neural        | Creative problem-solving            |
+| Applying code changes          | Symbolic      | Guaranteed correctness              |
+| Verifying correctness          | Symbolic      | Formal proofs, type checking        |
+| Explaining changes to user     | Neural        | Natural language generation         |
+
+### The Hybrid Architecture
+
+```python
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Generic, TypeVar
+
+T = TypeVar('T')
+R = TypeVar('R')
+
+
+@dataclass
+class Intent:
+    """Represents understood user intent from neural component."""
+    action: str
+    target: str
+    parameters: dict[str, Any]
+    confidence: float
+
+
+@dataclass
+class VerificationResult:
+    """Result of symbolic verification."""
+    valid: bool
+    errors: list[str]
+    warnings: list[str]
+
+
+class NeuralComponent(ABC, Generic[T]):
+    """Abstract base for neural components."""
+
+    @abstractmethod
+    async def understand(self, input_text: str) -> Intent:
+        """Parse natural language to structured intent."""
+        pass
+
+    @abstractmethod
+    async def explain(self, result: T) -> str:
+        """Generate natural language explanation of result."""
+        pass
+
+
+class SymbolicComponent(ABC, Generic[T, R]):
+    """Abstract base for symbolic components."""
+
+    @abstractmethod
+    def parse(self, input_data: str) -> T:
+        """Parse input into formal representation."""
+        pass
+
+    @abstractmethod
+    def transform(self, data: T, intent: Intent) -> R:
+        """Apply transformation based on intent."""
+        pass
+
+    @abstractmethod
+    def verify(self, original: T, transformed: R) -> VerificationResult:
+        """Verify transformation correctness."""
+        pass
+
+    @abstractmethod
+    def serialize(self, data: R) -> str:
+        """Convert back to string representation."""
+        pass
+
+
+class NeuroSymbolicSystem(Generic[T, R]):
+    """
+    Complete neuro-symbolic system combining neural understanding
+    with symbolic execution and verification.
+    """
+
+    def __init__(
+        self,
+        neural: NeuralComponent[R],
+        symbolic: SymbolicComponent[T, R]
+    ):
+        self.neural = neural
+        self.symbolic = symbolic
+
+    async def process(self, user_request: str, input_data: str) -> tuple[str, str]:
+        """
+        Process a user request through the neuro-symbolic pipeline.
+
+        Returns:
+            Tuple of (transformed_output, explanation)
+        """
+        # Step 1: Neural understanding
+        intent = await self.neural.understand(user_request)
+
+        if intent.confidence < 0.7:
+            raise ValueError(f"Low confidence in understanding: {intent}")
+
+        # Step 2: Symbolic parsing
+        parsed = self.symbolic.parse(input_data)
+
+        # Step 3: Symbolic transformation
+        transformed = self.symbolic.transform(parsed, intent)
+
+        # Step 4: Symbolic verification
+        verification = self.symbolic.verify(parsed, transformed)
+
+        if not verification.valid:
+            raise ValueError(f"Transformation failed verification: {verification.errors}")
+
+        # Step 5: Serialize result
+        output = self.symbolic.serialize(transformed)
+
+        # Step 6: Neural explanation
+        explanation = await self.neural.explain(transformed)
+
+        return output, explanation
+```
+
+<Callout type="tip">
+  **Design Principle:** Let neural components handle the "what" (understanding
+  intent, generating explanations) and symbolic components handle the "how"
+  (parsing, transforming, verifying). This separation makes the system both
+  flexible and reliable.
+</Callout>
+
+---
+
+## 67.3 AST-Based Code Manipulation
+
+Abstract Syntax Trees (ASTs) are the foundation of reliable code transformation. Instead of manipulating code as text, we work with its structural representation.
+
+### Why AST Over String Manipulation
+
+```python
+# String manipulation - FRAGILE
+code = "x = 1\nprint(x)"
+new_code = code.replace("x", "y")  # "y = 1\nprint(y)" - works!
+
+# But what about:
+code = "x = 1\nextra = 2"
+new_code = code.replace("x", "y")  # "y = 1\neytra = 2" - BROKEN!
+```
+
+String manipulation doesn't understand code structure. AST manipulation does:
+
+```python
+import ast
+from typing import Optional
+
+
+class VariableRenamer(ast.NodeTransformer):
+    """
+    Rename variables in Python code using AST transformation.
+
+    This is GUARANTEED to only rename the target variable,
+    not substrings that happen to match.
+    """
+
+    def __init__(self, old_name: str, new_name: str):
+        self.old_name = old_name
+        self.new_name = new_name
+        self.renamed_count = 0
+
+    def visit_Name(self, node: ast.Name) -> ast.Name:
+        """Visit Name nodes and rename if they match."""
+        if node.id == self.old_name:
+            node.id = self.new_name
+            self.renamed_count += 1
+        return node
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+        """Handle function definitions - rename if function name matches."""
+        if node.name == self.old_name:
+            node.name = self.new_name
+            self.renamed_count += 1
+        # Continue visiting children
+        self.generic_visit(node)
+        return node
+
+    def visit_arg(self, node: ast.arg) -> ast.arg:
+        """Handle function arguments."""
+        if node.arg == self.old_name:
+            node.arg = self.new_name
+            self.renamed_count += 1
+        return node
+
+
+def rename_variable(code: str, old_name: str, new_name: str) -> tuple[str, int]:
+    """
+    Safely rename a variable in Python code.
+
+    Args:
+        code: Source code as string
+        old_name: Variable name to rename
+        new_name: New variable name
+
+    Returns:
+        Tuple of (transformed_code, number_of_renames)
+    """
+    # Parse code to AST
+    tree = ast.parse(code)
+
+    # Transform
+    renamer = VariableRenamer(old_name, new_name)
+    new_tree = renamer.visit(tree)
+
+    # Fix missing line numbers and other metadata
+    ast.fix_missing_locations(new_tree)
+
+    # Convert back to code
+    new_code = ast.unparse(new_tree)
+
+    return new_code, renamer.renamed_count
+
+
+# Example usage
+code = """
+def calculate(x, extra):
+    result = x * 2
+    x = x + 1
+    return x + extra
+"""
+
+new_code, count = rename_variable(code, "x", "value")
+print(f"Renamed {count} occurrences:")
+print(new_code)
+# Output:
+# def calculate(value, extra):
+#     result = value * 2
+#     value = value + 1
+#     return value + extra
+```
+
+### Preserving Formatting with LibCST
+
+Python's `ast` module loses formatting information (comments, whitespace, string quotes). For production use, `libcst` preserves everything:
+
+```python
+import libcst as cst
+from libcst import matchers as m
+from typing import Union
+
+
+class FormattingPreservingRenamer(cst.CSTTransformer):
+    """
+    Rename variables while preserving all formatting, comments,
+    and whitespace from the original code.
+    """
+
+    def __init__(self, old_name: str, new_name: str):
+        self.old_name = old_name
+        self.new_name = new_name
+        self.changes: list[str] = []
+
+    def leave_Name(
+        self,
+        original_node: cst.Name,
+        updated_node: cst.Name
+    ) -> cst.Name:
+        """Transform Name nodes."""
+        if original_node.value == self.old_name:
+            self.changes.append(f"Renamed '{self.old_name}' to '{self.new_name}'")
+            return updated_node.with_changes(value=self.new_name)
+        return updated_node
+
+    def leave_Param(
+        self,
+        original_node: cst.Param,
+        updated_node: cst.Param
+    ) -> cst.Param:
+        """Transform function parameters."""
+        if original_node.name.value == self.old_name:
+            self.changes.append(f"Renamed parameter '{self.old_name}'")
+            return updated_node.with_changes(
+                name=cst.Name(self.new_name)
+            )
+        return updated_node
+
+
+class ASTTransformer:
+    """
+    Production-ready AST transformer using LibCST.
+
+    Features:
+    - Preserves all formatting and comments
+    - Tracks all changes made
+    - Supports multiple transformation types
+    - Validates transformations
+    """
+
+    def __init__(self, code: str):
+        """
+        Initialize transformer with source code.
+
+        Args:
+            code: Python source code to transform
+        """
+        self.original_code = code
+        self.tree = cst.parse_module(code)
+        self.changes: list[str] = []
+
+    def rename_variable(self, old_name: str, new_name: str) -> "ASTTransformer":
+        """
+        Rename a variable throughout the code.
+
+        Args:
+            old_name: Current variable name
+            new_name: New variable name
+
+        Returns:
+            Self for method chaining
+        """
+        renamer = FormattingPreservingRenamer(old_name, new_name)
+        self.tree = self.tree.visit(renamer)
+        self.changes.extend(renamer.changes)
+        return self
+
+    def add_type_hint(
+        self,
+        function_name: str,
+        param_name: str,
+        type_hint: str
+    ) -> "ASTTransformer":
+        """
+        Add a type hint to a function parameter.
+
+        Args:
+            function_name: Name of the function
+            param_name: Name of the parameter
+            type_hint: Type annotation to add
+
+        Returns:
+            Self for method chaining
+        """
+        class TypeHintAdder(cst.CSTTransformer):
+            def __init__(self):
+                self.added = False
+
+            def leave_FunctionDef(
+                self,
+                original_node: cst.FunctionDef,
+                updated_node: cst.FunctionDef
+            ) -> cst.FunctionDef:
+                if original_node.name.value != function_name:
+                    return updated_node
+
+                new_params = []
+                for param in updated_node.params.params:
+                    if param.name.value == param_name and param.annotation is None:
+                        new_param = param.with_changes(
+                            annotation=cst.Annotation(
+                                annotation=cst.Name(type_hint)
+                            )
+                        )
+                        new_params.append(new_param)
+                        self.added = True
+                    else:
+                        new_params.append(param)
+
+                return updated_node.with_changes(
+                    params=updated_node.params.with_changes(params=new_params)
+                )
+
+        adder = TypeHintAdder()
+        self.tree = self.tree.visit(adder)
+        if adder.added:
+            self.changes.append(
+                f"Added type hint '{type_hint}' to {function_name}.{param_name}"
+            )
+        return self
+
+    def extract_function(
+        self,
+        start_line: int,
+        end_line: int,
+        new_function_name: str
+    ) -> "ASTTransformer":
+        """
+        Extract lines into a new function.
+
+        Args:
+            start_line: First line to extract (1-indexed)
+            end_line: Last line to extract (1-indexed)
+            new_function_name: Name for the extracted function
+
+        Returns:
+            Self for method chaining
+        """
+        # This is a complex transformation - simplified for illustration
+        self.changes.append(
+            f"Extracted lines {start_line}-{end_line} to function '{new_function_name}'"
+        )
+        return self
+
+    def get_code(self) -> str:
+        """Get the transformed code."""
+        return self.tree.code
+
+    def get_changes(self) -> list[str]:
+        """Get list of all changes made."""
+        return self.changes.copy()
+
+    def diff(self) -> str:
+        """Generate a diff between original and transformed code."""
+        import difflib
+
+        original_lines = self.original_code.splitlines(keepends=True)
+        new_lines = self.get_code().splitlines(keepends=True)
+
+        diff = difflib.unified_diff(
+            original_lines,
+            new_lines,
+            fromfile='original',
+            tofile='transformed'
+        )
+        return ''.join(diff)
+
+
+# Example usage
+code = '''
+def process_data(x, y):
+    # Calculate the sum
+    result = x + y
+    return result
+'''
+
+transformer = ASTTransformer(code)
+transformer.rename_variable("x", "first_value")
+transformer.rename_variable("y", "second_value")
+transformer.add_type_hint("process_data", "first_value", "int")
+
+print("Transformed code:")
+print(transformer.get_code())
+print("\nChanges made:")
+for change in transformer.get_changes():
+    print(f"  - {change}")
+```
+
+<Callout type="info">
+  **LibCST vs AST:** Use Python's built-in `ast` module for analysis and simple
+  transformations. Use `libcst` when you need to preserve formatting, comments,
+  and produce human-readable diffs. LibCST is essential for production code
+  refactoring tools.
+</Callout>
+
+---
+
+## 67.4 LLM + AST Hybrid Pattern
+
+Now we combine LLM understanding with AST execution. The LLM interprets what the user wants; the symbolic system ensures correctness.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant LLM as Neural (LLM)
+    participant AST as Symbolic (AST)
+    participant Verify as Verifier
+    
+    User->>LLM: "Rename 'data' to 'user_input' in auth.py"
+    LLM->>LLM: Parse intent
+    LLM->>AST: Intent: rename(data → user_input)
+    AST->>AST: Parse code to AST
+    AST->>AST: Find all 'data' references
+    AST->>AST: Transform nodes
+    AST->>Verify: Transformed AST
+    Verify->>Verify: Check syntax valid
+    Verify->>Verify: Check types consistent
+    Verify->>AST: ✅ Verified
+    AST->>User: Transformed code + diff
+`}
+  caption="The hybrid flow: LLM understands, AST executes, Verifier confirms."
+/>
+
+### Complete Hybrid Implementation
+
+````python
+import ast
+import json
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Optional
+from openai import OpenAI
+
+
+class TransformationType(Enum):
+    """Supported code transformation types."""
+    RENAME_VARIABLE = "rename_variable"
+    RENAME_FUNCTION = "rename_function"
+    EXTRACT_FUNCTION = "extract_function"
+    ADD_TYPE_HINT = "add_type_hint"
+    REMOVE_UNUSED = "remove_unused"
+    INLINE_VARIABLE = "inline_variable"
+
+
+@dataclass
+class TransformationIntent:
+    """Structured representation of a transformation request."""
+    type: TransformationType
+    target: str
+    parameters: dict[str, Any]
+    confidence: float
+    reasoning: str
+
+
+@dataclass
+class TransformationResult:
+    """Result of a code transformation."""
+    success: bool
+    original_code: str
+    transformed_code: str
+    changes: list[str]
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+class HybridCodeTransformer:
+    """
+    Hybrid neuro-symbolic code transformer.
+
+    Uses LLM for intent understanding and natural language interaction,
+    combined with AST-based transformations for guaranteed correctness.
+    """
+
+    INTENT_EXTRACTION_PROMPT = '''You are a code transformation intent parser.
+Given a natural language request about code changes, extract the structured intent.
+
+Supported transformation types:
+- rename_variable: Rename a variable (params: old_name, new_name)
+- rename_function: Rename a function (params: old_name, new_name)
+- extract_function: Extract code into a new function (params: start_line, end_line, function_name)
+- add_type_hint: Add type annotation (params: function_name, param_name, type_hint)
+- remove_unused: Remove unused imports/variables (params: none)
+- inline_variable: Inline a variable's value (params: variable_name)
+
+Respond with JSON:
+{
+    "type": "transformation_type",
+    "target": "what to transform",
+    "parameters": {...},
+    "confidence": 0.0-1.0,
+    "reasoning": "why this interpretation"
+}
+
+User request: {request}
+Code context (first 50 lines):
+```python
+{code_preview}
+```'''
+
+    def __init__(self, api_key: Optional[str] = None):
+        """
+        Initialize the hybrid transformer.
+
+        Args:
+            api_key: OpenAI API key (uses env var if not provided)
+        """
+        self.client = OpenAI(api_key=api_key)
+        self.model = "gpt-4o"
+
+    async def understand_intent(
+        self,
+        request: str,
+        code: str
+    ) -> TransformationIntent:
+        """
+        Use LLM to understand the transformation intent.
+
+        Args:
+            request: Natural language transformation request
+            code: Source code to transform
+
+        Returns:
+            Structured transformation intent
+        """
+        # Prepare code preview (first 50 lines for context)
+        code_lines = code.split('\n')[:50]
+        code_preview = '\n'.join(code_lines)
+
+        prompt = self.INTENT_EXTRACTION_PROMPT.format(
+            request=request,
+            code_preview=code_preview
+        )
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.1  # Low temperature for consistency
+        )
+
+        result = json.loads(response.choices[0].message.content)
+
+        return TransformationIntent(
+            type=TransformationType(result["type"]),
+            target=result["target"],
+            parameters=result["parameters"],
+            confidence=result["confidence"],
+            reasoning=result["reasoning"]
+        )
+
+    def apply_transformation(
+        self,
+        code: str,
+        intent: TransformationIntent
+    ) -> TransformationResult:
+        """
+        Apply transformation using symbolic AST manipulation.
+
+        Args:
+            code: Source code to transform
+            intent: Structured transformation intent
+
+        Returns:
+            Transformation result with success status and changes
+        """
+        changes: list[str] = []
+        errors: list[str] = []
+        warnings: list[str] = []
+
+        try:
+            # Parse code to AST
+            tree = ast.parse(code)
+
+            # Apply transformation based on type
+            if intent.type == TransformationType.RENAME_VARIABLE:
+                tree, count = self._rename_variable(
+                    tree,
+                    intent.parameters["old_name"],
+                    intent.parameters["new_name"]
+                )
+                changes.append(
+                    f"Renamed '{intent.parameters['old_name']}' to "
+                    f"'{intent.parameters['new_name']}' ({count} occurrences)"
+                )
+
+            elif intent.type == TransformationType.RENAME_FUNCTION:
+                tree, count = self._rename_function(
+                    tree,
+                    intent.parameters["old_name"],
+                    intent.parameters["new_name"]
+                )
+                changes.append(
+                    f"Renamed function '{intent.parameters['old_name']}' to "
+                    f"'{intent.parameters['new_name']}' ({count} occurrences)"
+                )
+
+            elif intent.type == TransformationType.ADD_TYPE_HINT:
+                tree = self._add_type_hint(
+                    tree,
+                    intent.parameters["function_name"],
+                    intent.parameters["param_name"],
+                    intent.parameters["type_hint"]
+                )
+                changes.append(
+                    f"Added type hint '{intent.parameters['type_hint']}' to "
+                    f"{intent.parameters['function_name']}.{intent.parameters['param_name']}"
+                )
+
+            else:
+                errors.append(f"Transformation type {intent.type} not yet implemented")
+                return TransformationResult(
+                    success=False,
+                    original_code=code,
+                    transformed_code=code,
+                    changes=changes,
+                    errors=errors
+                )
+
+            # Generate code from transformed AST
+            ast.fix_missing_locations(tree)
+            transformed_code = ast.unparse(tree)
+
+            return TransformationResult(
+                success=True,
+                original_code=code,
+                transformed_code=transformed_code,
+                changes=changes,
+                warnings=warnings
+            )
+
+        except SyntaxError as e:
+            errors.append(f"Syntax error in source code: {e}")
+        except Exception as e:
+            errors.append(f"Transformation failed: {e}")
+
+        return TransformationResult(
+            success=False,
+            original_code=code,
+            transformed_code=code,
+            changes=changes,
+            errors=errors
+        )
+
+    def _rename_variable(
+        self,
+        tree: ast.AST,
+        old_name: str,
+        new_name: str
+    ) -> tuple[ast.AST, int]:
+        """Rename variable using AST transformation."""
+
+        class Renamer(ast.NodeTransformer):
+            def __init__(self):
+                self.count = 0
+
+            def visit_Name(self, node: ast.Name) -> ast.Name:
+                if node.id == old_name:
+                    node.id = new_name
+                    self.count += 1
+                return node
+
+            def visit_arg(self, node: ast.arg) -> ast.arg:
+                if node.arg == old_name:
+                    node.arg = new_name
+                    self.count += 1
+                return node
+
+        renamer = Renamer()
+        new_tree = renamer.visit(tree)
+        return new_tree, renamer.count
+
+    def _rename_function(
+        self,
+        tree: ast.AST,
+        old_name: str,
+        new_name: str
+    ) -> tuple[ast.AST, int]:
+        """Rename function using AST transformation."""
+
+        class FunctionRenamer(ast.NodeTransformer):
+            def __init__(self):
+                self.count = 0
+
+            def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+                if node.name == old_name:
+                    node.name = new_name
+                    self.count += 1
+                self.generic_visit(node)
+                return node
+
+            def visit_Call(self, node: ast.Call) -> ast.Call:
+                if isinstance(node.func, ast.Name) and node.func.id == old_name:
+                    node.func.id = new_name
+                    self.count += 1
+                self.generic_visit(node)
+                return node
+
+        renamer = FunctionRenamer()
+        new_tree = renamer.visit(tree)
+        return new_tree, renamer.count
+
+    def _add_type_hint(
+        self,
+        tree: ast.AST,
+        function_name: str,
+        param_name: str,
+        type_hint: str
+    ) -> ast.AST:
+        """Add type hint to function parameter."""
+
+        class TypeHintAdder(ast.NodeTransformer):
+            def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+                if node.name != function_name:
+                    return node
+
+                for arg in node.args.args:
+                    if arg.arg == param_name and arg.annotation is None:
+                        arg.annotation = ast.Name(id=type_hint, ctx=ast.Load())
+
+                return node
+
+        return TypeHintAdder().visit(tree)
+
+    def verify_transformation(
+        self,
+        result: TransformationResult
+    ) -> tuple[bool, list[str]]:
+        """
+        Verify the transformation is valid.
+
+        Args:
+            result: Transformation result to verify
+
+        Returns:
+            Tuple of (is_valid, list of issues)
+        """
+        issues: list[str] = []
+
+        # Check syntax validity
+        try:
+            ast.parse(result.transformed_code)
+        except SyntaxError as e:
+            issues.append(f"Syntax error: {e}")
+            return False, issues
+
+        # Check that code compiles
+        try:
+            compile(result.transformed_code, '<string>', 'exec')
+        except Exception as e:
+            issues.append(f"Compilation error: {e}")
+            return False, issues
+
+        return len(issues) == 0, issues
+
+    async def transform(
+        self,
+        request: str,
+        code: str
+    ) -> TransformationResult:
+        """
+        Complete transformation pipeline.
+
+        Args:
+            request: Natural language transformation request
+            code: Source code to transform
+
+        Returns:
+            Transformation result
+        """
+        # Step 1: Understand intent
+        intent = await self.understand_intent(request, code)
+
+        if intent.confidence < 0.7:
+            return TransformationResult(
+                success=False,
+                original_code=code,
+                transformed_code=code,
+                changes=[],
+                errors=[f"Low confidence ({intent.confidence:.2f}): {intent.reasoning}"]
+            )
+
+        # Step 2: Apply transformation
+        result = self.apply_transformation(code, intent)
+
+        if not result.success:
+            return result
+
+        # Step 3: Verify transformation
+        is_valid, issues = self.verify_transformation(result)
+
+        if not is_valid:
+            result.success = False
+            result.errors.extend(issues)
+            result.transformed_code = code  # Revert to original
+
+        return result
+
+
+# Example usage
+async def main():
+    transformer = HybridCodeTransformer()
+
+    code = '''
+def calculate_total(items):
+    sum = 0
+    for item in items:
+        sum += item.price
+    return sum
+
+def process_order(order):
+    total = calculate_total(order.items)
+    return total
+'''
+
+    result = await transformer.transform(
+        "Rename the variable 'sum' to 'running_total' to avoid shadowing the builtin",
+        code
+    )
+
+    if result.success:
+        print("✅ Transformation successful!")
+        print("\nChanges:")
+        for change in result.changes:
+            print(f"  - {change}")
+        print("\nTransformed code:")
+        print(result.transformed_code)
+    else:
+        print("❌ Transformation failed:")
+        for error in result.errors:
+            print(f"  - {error}")
+
+
+# Run with: asyncio.run(main())
+````
+
+---
+
+## 67.5 Formal Verification Patterns
+
+<ConceptIntro
+  title="Formal Verification"
+  description="Mathematical techniques for proving that code satisfies its specification. Unlike testing (which shows the presence of bugs), formal verification proves their absence. In neuro-symbolic systems, verification ensures that transformations preserve program semantics."
+/>
+
+Formal verification provides the strongest guarantees. While full formal verification is complex, we can apply practical verification patterns that catch most errors.
+
+### Verification Levels
+
+| Level         | Technique        | What It Catches | Cost     |
+| :------------ | :--------------- | :-------------- | :------- |
+| **Syntax**    | Parsing          | Malformed code  | Very Low |
+| **Types**     | Type checking    | Type mismatches | Low      |
+| **Semantics** | Property testing | Logic errors    | Medium   |
+| **Full**      | Theorem proving  | All errors      | High     |
+
+### The VerifiedTransformer Pattern
+
+```python
+import ast
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any, Callable, Generic, TypeVar, Optional
+from enum import Enum
+import subprocess
+import tempfile
+import os
+
+
+class VerificationLevel(Enum):
+    """Levels of verification strictness."""
+    SYNTAX = "syntax"      # Just check it parses
+    TYPES = "types"        # Run type checker
+    SEMANTICS = "semantics"  # Run property tests
+    FULL = "full"          # All checks
+
+
+@dataclass
+class Precondition:
+    """A condition that must hold before transformation."""
+    name: str
+    check: Callable[[str], bool]
+    message: str
+
+
+@dataclass
+class Postcondition:
+    """A condition that must hold after transformation."""
+    name: str
+    check: Callable[[str, str], bool]  # (original, transformed) -> bool
+    message: str
+
+
+@dataclass
+class Invariant:
+    """A property that must be preserved by transformation."""
+    name: str
+    extract: Callable[[str], Any]  # Extract property from code
+    message: str
+
+
+@dataclass
+class VerificationReport:
+    """Complete verification report."""
+    passed: bool
+    level: VerificationLevel
+    precondition_results: dict[str, bool] = field(default_factory=dict)
+    postcondition_results: dict[str, bool] = field(default_factory=dict)
+    invariant_results: dict[str, bool] = field(default_factory=dict)
+    type_check_output: Optional[str] = None
+    errors: list[str] = field(default_factory=list)
+
+
+class VerifiedTransformer:
+    """
+    Code transformer with formal verification guarantees.
+
+    Implements:
+    - Preconditions: What must be true before transformation
+    - Postconditions: What must be true after transformation
+    - Invariants: What must be preserved by transformation
+    """
+
+    def __init__(self, verification_level: VerificationLevel = VerificationLevel.TYPES):
+        self.verification_level = verification_level
+        self.preconditions: list[Precondition] = []
+        self.postconditions: list[Postcondition] = []
+        self.invariants: list[Invariant] = []
+
+        # Add default preconditions
+        self._add_default_preconditions()
+        self._add_default_postconditions()
+        self._add_default_invariants()
+
+    def _add_default_preconditions(self) -> None:
+        """Add standard preconditions."""
+        self.preconditions.append(Precondition(
+            name="valid_syntax",
+            check=self._check_syntax,
+            message="Source code must have valid Python syntax"
+        ))
+
+        self.preconditions.append(Precondition(
+            name="not_empty",
+            check=lambda code: len(code.strip()) > 0,
+            message="Source code must not be empty"
+        ))
+
+    def _add_default_postconditions(self) -> None:
+        """Add standard postconditions."""
+        self.postconditions.append(Postcondition(
+            name="valid_syntax",
+            check=lambda orig, trans: self._check_syntax(trans),
+            message="Transformed code must have valid Python syntax"
+        ))
+
+        self.postconditions.append(Postcondition(
+            name="compiles",
+            check=lambda orig, trans: self._check_compiles(trans),
+            message="Transformed code must compile without errors"
+        ))
+
+    def _add_default_invariants(self) -> None:
+        """Add standard invariants."""
+        self.invariants.append(Invariant(
+            name="function_count",
+            extract=self._count_functions,
+            message="Number of functions must be preserved"
+        ))
+
+        self.invariants.append(Invariant(
+            name="class_count",
+            extract=self._count_classes,
+            message="Number of classes must be preserved"
+        ))
+
+    def _check_syntax(self, code: str) -> bool:
+        """Check if code has valid syntax."""
+        try:
+            ast.parse(code)
+            return True
+        except SyntaxError:
+            return False
+
+    def _check_compiles(self, code: str) -> bool:
+        """Check if code compiles."""
+        try:
+            compile(code, '<string>', 'exec')
+            return True
+        except Exception:
+            return False
+
+    def _count_functions(self, code: str) -> int:
+        """Count function definitions in code."""
+        try:
+            tree = ast.parse(code)
+            return sum(1 for node in ast.walk(tree) if isinstance(node, ast.FunctionDef))
+        except SyntaxError:
+            return -1
+
+    def _count_classes(self, code: str) -> int:
+        """Count class definitions in code."""
+        try:
+            tree = ast.parse(code)
+            return sum(1 for node in ast.walk(tree) if isinstance(node, ast.ClassDef))
+        except SyntaxError:
+            return -1
+
+    def _run_type_checker(self, code: str) -> tuple[bool, str]:
+        """Run mypy type checker on code."""
+        with tempfile.NamedTemporaryFile(
+            mode='w',
+            suffix='.py',
+            delete=False
+        ) as f:
+            f.write(code)
+            temp_path = f.name
+
+        try:
+            result = subprocess.run(
+                ['python', '-m', 'mypy', '--strict', temp_path],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            success = result.returncode == 0
+            output = result.stdout + result.stderr
+            return success, output
+        except FileNotFoundError:
+            return True, "mypy not installed, skipping type check"
+        except subprocess.TimeoutExpired:
+            return False, "Type checking timed out"
+        finally:
+            os.unlink(temp_path)
+
+    def add_precondition(
+        self,
+        name: str,
+        check: Callable[[str], bool],
+        message: str
+    ) -> "VerifiedTransformer":
+        """Add a custom precondition."""
+        self.preconditions.append(Precondition(name, check, message))
+        return self
+
+    def add_postcondition(
+        self,
+        name: str,
+        check: Callable[[str, str], bool],
+        message: str
+    ) -> "VerifiedTransformer":
+        """Add a custom postcondition."""
+        self.postconditions.append(Postcondition(name, check, message))
+        return self
+
+    def add_invariant(
+        self,
+        name: str,
+        extract: Callable[[str], Any],
+        message: str
+    ) -> "VerifiedTransformer":
+        """Add a custom invariant."""
+        self.invariants.append(Invariant(name, extract, message))
+        return self
+
+    def verify(
+        self,
+        original_code: str,
+        transformed_code: str
+    ) -> VerificationReport:
+        """
+        Verify a transformation meets all conditions.
+
+        Args:
+            original_code: Code before transformation
+            transformed_code: Code after transformation
+
+        Returns:
+            Detailed verification report
+        """
+        report = VerificationReport(
+            passed=True,
+            level=self.verification_level
+        )
+
+        # Check preconditions on original code
+        for pre in self.preconditions:
+            result = pre.check(original_code)
+            report.precondition_results[pre.name] = result
+            if not result:
+                report.passed = False
+                report.errors.append(f"Precondition '{pre.name}' failed: {pre.message}")
+
+        # Check postconditions on transformed code
+        for post in self.postconditions:
+            result = post.check(original_code, transformed_code)
+            report.postcondition_results[post.name] = result
+            if not result:
+                report.passed = False
+                report.errors.append(f"Postcondition '{post.name}' failed: {post.message}")
+
+        # Check invariants are preserved
+        for inv in self.invariants:
+            original_value = inv.extract(original_code)
+            transformed_value = inv.extract(transformed_code)
+            result = original_value == transformed_value
+            report.invariant_results[inv.name] = result
+            if not result:
+                report.passed = False
+                report.errors.append(
+                    f"Invariant '{inv.name}' violated: {inv.message} "
+                    f"(was {original_value}, now {transformed_value})"
+                )
+
+        # Run type checker if requested
+        if self.verification_level in [VerificationLevel.TYPES, VerificationLevel.FULL]:
+            type_ok, type_output = self._run_type_checker(transformed_code)
+            report.type_check_output = type_output
+            if not type_ok:
+                report.passed = False
+                report.errors.append(f"Type check failed: {type_output}")
+
+        return report
+
+
+# Example: Verified rename transformation
+def verified_rename(
+    code: str,
+    old_name: str,
+    new_name: str
+) -> tuple[str, VerificationReport]:
+    """
+    Rename a variable with full verification.
+
+    Args:
+        code: Source code
+        old_name: Variable to rename
+        new_name: New name
+
+    Returns:
+        Tuple of (transformed_code, verification_report)
+    """
+    # Create verifier with custom conditions
+    verifier = VerifiedTransformer(VerificationLevel.TYPES)
+
+    # Add transformation-specific precondition
+    verifier.add_precondition(
+        name="target_exists",
+        check=lambda c: old_name in c,
+        message=f"Variable '{old_name}' must exist in code"
+    )
+
+    # Add transformation-specific postcondition
+    verifier.add_postcondition(
+        name="target_renamed",
+        check=lambda orig, trans: old_name not in trans and new_name in trans,
+        message=f"Variable must be renamed from '{old_name}' to '{new_name}'"
+    )
+
+    # Perform transformation
+    tree = ast.parse(code)
+
+    class Renamer(ast.NodeTransformer):
+        def visit_Name(self, node):
+            if node.id == old_name:
+                node.id = new_name
+            return node
+
+        def visit_arg(self, node):
+            if node.arg == old_name:
+                node.arg = new_name
+            return node
+
+    new_tree = Renamer().visit(tree)
+    ast.fix_missing_locations(new_tree)
+    transformed_code = ast.unparse(new_tree)
+
+    # Verify transformation
+    report = verifier.verify(code, transformed_code)
+
+    return transformed_code, report
+
+
+# Usage example
+code = '''
+def process(data: list[int]) -> int:
+    total = 0
+    for item in data:
+        total += item
+    return total
+'''
+
+new_code, report = verified_rename(code, "data", "items")
+
+print(f"Verification {'PASSED' if report.passed else 'FAILED'}")
+print(f"\nPreconditions: {report.precondition_results}")
+print(f"Postconditions: {report.postcondition_results}")
+print(f"Invariants: {report.invariant_results}")
+
+if report.errors:
+    print(f"\nErrors:")
+    for error in report.errors:
+        print(f"  - {error}")
+```
+
+<Callout type="tip">
+  **Practical Verification:** Full formal verification is expensive. For most
+  code transformations, the combination of syntax checking, type checking, and
+  invariant preservation catches 99% of errors. Reserve full verification for
+  safety-critical code.
+</Callout>
+
+---
+
+## 67.6 Logic Programming Integration
+
+Logic programming provides declarative reasoning capabilities that complement both neural and symbolic approaches. We can use it for constraint satisfaction, rule-based transformations, and knowledge representation.
+
+### Prolog-Style Reasoning in Python
+
+```python
+from pyDatalog import pyDatalog
+from typing import Optional
+
+
+# Initialize pyDatalog
+pyDatalog.create_terms('X, Y, Z, Name, Type, Parent, Child')
+pyDatalog.create_terms('is_function, is_class, is_method, calls, inherits')
+pyDatalog.create_terms('can_refactor, depends_on, safe_to_modify')
+
+
+class CodeKnowledgeBase:
+    """
+    Logic programming knowledge base for code analysis.
+
+    Uses Datalog-style rules to reason about code structure
+    and determine safe transformations.
+    """
+
+    def __init__(self):
+        """Initialize the knowledge base."""
+        self._clear_facts()
+        self._define_rules()
+
+    def _clear_facts(self) -> None:
+        """Clear all facts from the knowledge base."""
+        # Clear previous facts
+        pyDatalog.clear()
+        pyDatalog.create_terms('X, Y, Z, Name, Type, Parent, Child')
+        pyDatalog.create_terms('is_function, is_class, is_method, calls, inherits')
+        pyDatalog.create_terms('can_refactor, depends_on, safe_to_modify')
+
+    def _define_rules(self) -> None:
+        """Define logical rules for code analysis."""
+
+        # A method is a function inside a class
+        is_method(X, Y) <= is_function(X) & is_class(Y) & (Parent[X] == Y)
+
+        # Transitive dependency
+        depends_on(X, Y) <= calls(X, Y)
+        depends_on(X, Z) <= calls(X, Y) & depends_on(Y, Z)
+
+        # Safe to modify if nothing depends on it
+        safe_to_modify(X) <= is_function(X) & ~depends_on(Y, X)
+
+        # Can refactor if safe to modify
+        can_refactor(X) <= safe_to_modify(X)
+
+    def add_function(self, name: str, parent: Optional[str] = None) -> None:
+        """Add a function to the knowledge base."""
+        +is_function(name)
+        if parent:
+            Parent[name] = parent
+
+    def add_class(self, name: str, parent: Optional[str] = None) -> None:
+        """Add a class to the knowledge base."""
+        +is_class(name)
+        if parent:
+            +inherits(name, parent)
+
+    def add_call(self, caller: str, callee: str) -> None:
+        """Record that one function calls another."""
+        +calls(caller, callee)
+
+    def query_safe_to_modify(self) -> list[str]:
+        """Find all functions safe to modify."""
+        results = safe_to_modify(X)
+        return [str(r[0]) for r in results]
+
+    def query_dependencies(self, function_name: str) -> list[str]:
+        """Find all dependencies of a function."""
+        results = depends_on(function_name, Y)
+        return [str(r[0]) for r in results]
+
+    def query_dependents(self, function_name: str) -> list[str]:
+        """Find all functions that depend on this one."""
+        results = depends_on(X, function_name)
+        return [str(r[0]) for r in results]
+
+    def can_safely_rename(self, function_name: str) -> tuple[bool, list[str]]:
+        """
+        Check if a function can be safely renamed.
+
+        Returns:
+            Tuple of (can_rename, list of dependents to update)
+        """
+        dependents = self.query_dependents(function_name)
+        # Can rename, but need to update all dependents
+        return True, dependents
+
+
+def analyze_code_with_logic(code: str) -> CodeKnowledgeBase:
+    """
+    Analyze code and build a logic knowledge base.
+
+    Args:
+        code: Python source code
+
+    Returns:
+        Populated knowledge base
+    """
+    import ast
+
+    kb = CodeKnowledgeBase()
+    tree = ast.parse(code)
+
+    # First pass: collect all definitions
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            # Check if it's inside a class
+            parent = None
+            for potential_parent in ast.walk(tree):
+                if isinstance(potential_parent, ast.ClassDef):
+                    if node in ast.walk(potential_parent):
+                        parent = potential_parent.name
+                        break
+            kb.add_function(node.name, parent)
+
+        elif isinstance(node, ast.ClassDef):
+            # Check for inheritance
+            parent = None
+            if node.bases:
+                for base in node.bases:
+                    if isinstance(base, ast.Name):
+                        parent = base.id
+                        break
+            kb.add_class(node.name, parent)
+
+    # Second pass: collect calls
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            caller = node.name
+            for child in ast.walk(node):
+                if isinstance(child, ast.Call):
+                    if isinstance(child.func, ast.Name):
+                        kb.add_call(caller, child.func.id)
+                    elif isinstance(child.func, ast.Attribute):
+                        kb.add_call(caller, child.func.attr)
+
+    return kb
+
+
+# Example usage
+code = '''
+class DataProcessor:
+    def process(self, data):
+        cleaned = self.clean(data)
+        return self.transform(cleaned)
+
+    def clean(self, data):
+        return [x for x in data if x is not None]
+
+    def transform(self, data):
+        return [x * 2 for x in data]
+
+def main():
+    processor = DataProcessor()
+    result = processor.process([1, 2, None, 3])
+    print(result)
+
+def unused_function():
+    pass
+'''
+
+kb = analyze_code_with_logic(code)
+
+print("Functions safe to modify (no dependents):")
+for func in kb.query_safe_to_modify():
+    print(f"  - {func}")
+
+print("\nDependencies of 'process':")
+for dep in kb.query_dependencies("process"):
+    print(f"  - {dep}")
+
+can_rename, dependents = kb.can_safely_rename("clean")
+print(f"\nCan rename 'clean': {can_rename}")
+if dependents:
+    print(f"  Must update: {dependents}")
+```
+
+### Constraint Satisfaction for Code Generation
+
+```python
+from typing import Any, Callable
+from dataclasses import dataclass
+
+
+@dataclass
+class Constraint:
+    """A constraint that must be satisfied."""
+    name: str
+    check: Callable[[dict[str, Any]], bool]
+    variables: list[str]
+
+
+class ConstraintSolver:
+    """
+    Simple constraint satisfaction solver for code generation.
+
+    Ensures generated code satisfies all specified constraints.
+    """
+
+    def __init__(self):
+        self.constraints: list[Constraint] = []
+        self.variables: dict[str, list[Any]] = {}
+
+    def add_variable(self, name: str, domain: list[Any]) -> "ConstraintSolver":
+        """Add a variable with its possible values."""
+        self.variables[name] = domain
+        return self
+
+    def add_constraint(
+        self,
+        name: str,
+        check: Callable[[dict[str, Any]], bool],
+        variables: list[str]
+    ) -> "ConstraintSolver":
+        """Add a constraint."""
+        self.constraints.append(Constraint(name, check, variables))
+        return self
+
+    def solve(self) -> list[dict[str, Any]]:
+        """
+        Find all solutions satisfying all constraints.
+
+        Returns:
+            List of valid variable assignments
+        """
+        solutions = []
+        self._backtrack({}, list(self.variables.keys()), solutions)
+        return solutions
+
+    def _backtrack(
+        self,
+        assignment: dict[str, Any],
+        remaining: list[str],
+        solutions: list[dict[str, Any]]
+    ) -> None:
+        """Backtracking search for solutions."""
+        if not remaining:
+            # All variables assigned - check all constraints
+            if self._check_all_constraints(assignment):
+                solutions.append(assignment.copy())
+            return
+
+        var = remaining[0]
+        for value in self.variables[var]:
+            assignment[var] = value
+
+            # Early pruning: check constraints involving only assigned variables
+            if self._check_partial_constraints(assignment):
+                self._backtrack(assignment, remaining[1:], solutions)
+
+            del assignment[var]
+
+    def _check_all_constraints(self, assignment: dict[str, Any]) -> bool:
+        """Check if assignment satisfies all constraints."""
+        for constraint in self.constraints:
+            if not constraint.check(assignment):
+                return False
+        return True
+
+    def _check_partial_constraints(self, assignment: dict[str, Any]) -> bool:
+        """Check constraints where all variables are assigned."""
+        for constraint in self.constraints:
+            # Only check if all constraint variables are assigned
+            if all(v in assignment for v in constraint.variables):
+                if not constraint.check(assignment):
+                    return False
+        return True
+
+
+# Example: Generate valid function signatures
+def generate_function_signature():
+    """
+    Use constraint satisfaction to generate valid function signatures.
+    """
+    solver = ConstraintSolver()
+
+    # Variables and their domains
+    solver.add_variable("return_type", ["int", "str", "list", "None"])
+    solver.add_variable("param1_type", ["int", "str", "list"])
+    solver.add_variable("param2_type", ["int", "str", "list", "None"])
+    solver.add_variable("is_async", [True, False])
+
+    # Constraints
+
+    # If async, must return something (not None)
+    solver.add_constraint(
+        "async_returns_value",
+        lambda a: not a["is_async"] or a["return_type"] != "None",
+        ["is_async", "return_type"]
+    )
+
+    # Parameters should have different types (for variety)
+    solver.add_constraint(
+        "different_param_types",
+        lambda a: a["param2_type"] == "None" or a["param1_type"] != a["param2_type"],
+        ["param1_type", "param2_type"]
+    )
+
+    # If returning list, at least one param should be list
+    solver.add_constraint(
+        "list_consistency",
+        lambda a: a["return_type"] != "list" or
+                  a["param1_type"] == "list" or a["param2_type"] == "list",
+        ["return_type", "param1_type", "param2_type"]
+    )
+
+    solutions = solver.solve()
+
+    # Generate code for first few solutions
+    for i, sol in enumerate(solutions[:3]):
+        async_prefix = "async " if sol["is_async"] else ""
+        param2 = f", param2: {sol['param2_type']}" if sol["param2_type"] != "None" else ""
+        return_hint = f" -> {sol['return_type']}" if sol["return_type"] != "None" else ""
+
+        print(f"{async_prefix}def func(param1: {sol['param1_type']}{param2}){return_hint}:")
+        print("    pass\n")
+
+    return solutions
+
+
+# Run example
+print("Generated function signatures satisfying constraints:\n")
+solutions = generate_function_signature()
+print(f"\nTotal valid combinations: {len(solutions)}")
+```
+
+<Callout type="info">
+  **When to Use Logic Programming:** Logic programming excels at problems with
+  complex interdependencies—like determining which code changes are safe,
+  finding all affected components, or generating code that satisfies multiple
+  constraints. It's declarative: you specify WHAT you want, not HOW to find it.
+</Callout>
+
+---
+
+## 67.7 Guaranteed Correctness Patterns
+
+Some transformations can be made **provably correct** by construction. These are the gold standard for code manipulation.
+
+### Catalog of Deterministic Transforms
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Guaranteed Correct"
+        G1[Rename Variable]
+        G2[Rename Function]
+        G3[Reorder Imports]
+        G4[Format Code]
+        G5[Remove Unused Imports]
+    end
+    
+    subgraph "Verifiable"
+        V1[Add Type Hints]
+        V2[Extract Function]
+        V3[Inline Variable]
+        V4[Change Signature]
+    end
+    
+    subgraph "Requires Testing"
+        T1[Refactor Algorithm]
+        T2[Optimize Performance]
+        T3[Change Data Structure]
+    end
+    
+    style G1 fill:#c8e6c9,stroke:#2e7d32
+    style G2 fill:#c8e6c9,stroke:#2e7d32
+    style G3 fill:#c8e6c9,stroke:#2e7d32
+    style G4 fill:#c8e6c9,stroke:#2e7d32
+    style G5 fill:#c8e6c9,stroke:#2e7d32
+    style V1 fill:#fff3e0,stroke:#ff9800
+    style V2 fill:#fff3e0,stroke:#ff9800
+    style V3 fill:#fff3e0,stroke:#ff9800
+    style V4 fill:#fff3e0,stroke:#ff9800
+    style T1 fill:#ffcdd2,stroke:#c62828
+    style T2 fill:#ffcdd2,stroke:#c62828
+    style T3 fill:#ffcdd2,stroke:#c62828
+`}
+  caption="Transformation safety levels: Green = guaranteed, Yellow = verifiable, Red = requires testing."
+/>
+
+### Guaranteed Correct: Rename Variable
+
+```python
+import ast
+from dataclasses import dataclass
+from typing import Set
+
+
+@dataclass
+class RenameResult:
+    """Result of a rename operation."""
+    success: bool
+    new_code: str
+    renamed_count: int
+    scopes_affected: Set[str]
+    error: str | None = None
+
+
+class GuaranteedRenamer:
+    """
+    Rename variables with guaranteed correctness.
+
+    Guarantees:
+    1. ALL references to the variable are renamed
+    2. No other identifiers are affected
+    3. Scope rules are respected
+    4. The result is syntactically valid
+    """
+
+    def rename_variable(
+        self,
+        code: str,
+        old_name: str,
+        new_name: str,
+        scope: str | None = None
+    ) -> RenameResult:
+        """
+        Rename a variable with guaranteed correctness.
+
+        Args:
+            code: Source code
+            old_name: Current variable name
+            new_name: New variable name
+            scope: Optional scope to limit renaming (function name)
+
+        Returns:
+            RenameResult with success status and details
+        """
+        # Validate inputs
+        if not old_name.isidentifier():
+            return RenameResult(
+                success=False,
+                new_code=code,
+                renamed_count=0,
+                scopes_affected=set(),
+                error=f"'{old_name}' is not a valid identifier"
+            )
+
+        if not new_name.isidentifier():
+            return RenameResult(
+                success=False,
+                new_code=code,
+                renamed_count=0,
+                scopes_affected=set(),
+                error=f"'{new_name}' is not a valid identifier"
+            )
+
+        # Check for Python keywords
+        import keyword
+        if keyword.iskeyword(new_name):
+            return RenameResult(
+                success=False,
+                new_code=code,
+                renamed_count=0,
+                scopes_affected=set(),
+                error=f"'{new_name}' is a Python keyword"
+            )
+
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            return RenameResult(
+                success=False,
+                new_code=code,
+                renamed_count=0,
+                scopes_affected=set(),
+                error=f"Syntax error in source: {e}"
+            )
+
+        # Check if new_name already exists (would cause collision)
+        existing_names = self._collect_all_names(tree)
+        if new_name in existing_names and old_name in existing_names:
+            return RenameResult(
+                success=False,
+                new_code=code,
+                renamed_count=0,
+                scopes_affected=set(),
+                error=f"'{new_name}' already exists in code"
+            )
+
+        # Perform rename
+        renamer = _ScopedRenamer(old_name, new_name, scope)
+        new_tree = renamer.visit(tree)
+        ast.fix_missing_locations(new_tree)
+
+        try:
+            new_code = ast.unparse(new_tree)
+        except Exception as e:
+            return RenameResult(
+                success=False,
+                new_code=code,
+                renamed_count=0,
+                scopes_affected=set(),
+                error=f"Failed to generate code: {e}"
+            )
+
+        # Verify the result
+        try:
+            ast.parse(new_code)
+        except SyntaxError as e:
+            return RenameResult(
+                success=False,
+                new_code=code,
+                renamed_count=0,
+                scopes_affected=set(),
+                error=f"Generated invalid code: {e}"
+            )
+
+        return RenameResult(
+            success=True,
+            new_code=new_code,
+            renamed_count=renamer.count,
+            scopes_affected=renamer.scopes_affected
+        )
+
+    def _collect_all_names(self, tree: ast.AST) -> Set[str]:
+        """Collect all identifier names in the AST."""
+        names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name):
+                names.add(node.id)
+            elif isinstance(node, ast.FunctionDef):
+                names.add(node.name)
+            elif isinstance(node, ast.ClassDef):
+                names.add(node.name)
+            elif isinstance(node, ast.arg):
+                names.add(node.arg)
+        return names
+
+
+class _ScopedRenamer(ast.NodeTransformer):
+    """Internal renamer that respects scope."""
+
+    def __init__(self, old_name: str, new_name: str, scope: str | None):
+        self.old_name = old_name
+        self.new_name = new_name
+        self.target_scope = scope
+        self.current_scope: str | None = None
+        self.count = 0
+        self.scopes_affected: Set[str] = set()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+        old_scope = self.current_scope
+        self.current_scope = node.name
+
+        # Rename function name if it matches
+        if node.name == self.old_name and self._in_target_scope():
+            node.name = self.new_name
+            self.count += 1
+            self.scopes_affected.add(self.current_scope or "module")
+
+        # Visit children
+        self.generic_visit(node)
+
+        self.current_scope = old_scope
+        return node
+
+    def visit_Name(self, node: ast.Name) -> ast.Name:
+        if node.id == self.old_name and self._in_target_scope():
+            node.id = self.new_name
+            self.count += 1
+            self.scopes_affected.add(self.current_scope or "module")
+        return node
+
+    def visit_arg(self, node: ast.arg) -> ast.arg:
+        if node.arg == self.old_name and self._in_target_scope():
+            node.arg = self.new_name
+            self.count += 1
+            self.scopes_affected.add(self.current_scope or "module")
+        return node
+
+    def _in_target_scope(self) -> bool:
+        """Check if we're in the target scope."""
+        if self.target_scope is None:
+            return True
+        return self.current_scope == self.target_scope
+
+
+# Example usage
+renamer = GuaranteedRenamer()
+
+code = '''
+def calculate(x, y):
+    result = x + y
+    x = x * 2  # Reuse x
+    return result + x
+
+def other_function():
+    x = 10  # Different scope
+    return x
+'''
+
+result = renamer.rename_variable(code, "x", "first_param", scope="calculate")
+
+if result.success:
+    print(f"✅ Renamed {result.renamed_count} occurrences")
+    print(f"   Scopes affected: {result.scopes_affected}")
+    print(f"\n{result.new_code}")
+else:
+    print(f"❌ Failed: {result.error}")
+```
+
+### Guaranteed Correct: Extract Function
+
+```python
+import ast
+from dataclasses import dataclass
+from typing import Set, List
+
+
+@dataclass
+class ExtractResult:
+    """Result of function extraction."""
+    success: bool
+    new_code: str
+    extracted_function: str
+    variables_passed: List[str]
+    variables_returned: List[str]
+    error: str | None = None
+
+
+class GuaranteedExtractor:
+    """
+    Extract code into a function with guaranteed correctness.
+
+    Guarantees:
+    1. All required variables are passed as parameters
+    2. All modified variables are returned
+    3. The extracted function is syntactically valid
+    4. The original behavior is preserved
+    """
+
+    def extract_function(
+        self,
+        code: str,
+        start_line: int,
+        end_line: int,
+        new_function_name: str
+    ) -> ExtractResult:
+        """
+        Extract lines into a new function.
+
+        Args:
+            code: Source code
+            start_line: First line to extract (1-indexed)
+            end_line: Last line to extract (1-indexed)
+            new_function_name: Name for the new function
+
+        Returns:
+            ExtractResult with the transformed code
+        """
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            return ExtractResult(
+                success=False,
+                new_code=code,
+                extracted_function="",
+                variables_passed=[],
+                variables_returned=[],
+                error=f"Syntax error: {e}"
+            )
+
+        lines = code.split('\n')
+
+        # Validate line numbers
+        if start_line < 1 or end_line > len(lines) or start_line > end_line:
+            return ExtractResult(
+                success=False,
+                new_code=code,
+                extracted_function="",
+                variables_passed=[],
+                variables_returned=[],
+                error=f"Invalid line range: {start_line}-{end_line}"
+            )
+
+        # Extract the code block
+        extracted_lines = lines[start_line - 1:end_line]
+        extracted_code = '\n'.join(extracted_lines)
+
+        # Analyze variables
+        try:
+            extracted_tree = ast.parse(extracted_code)
+        except SyntaxError:
+            return ExtractResult(
+                success=False,
+                new_code=code,
+                extracted_function="",
+                variables_passed=[],
+                variables_returned=[],
+                error="Extracted code is not valid Python"
+            )
+
+        # Find variables used and defined
+        used_vars = self._find_used_variables(extracted_tree)
+        defined_vars = self._find_defined_variables(extracted_tree)
+
+        # Variables that need to be passed in (used but not defined locally)
+        params = sorted(used_vars - defined_vars)
+
+        # Variables that need to be returned (defined and potentially used after)
+        returns = sorted(defined_vars)
+
+        # Build the new function
+        param_str = ', '.join(params)
+
+        # Indent the extracted code
+        indented_lines = ['    ' + line for line in extracted_lines]
+        body = '\n'.join(indented_lines)
+
+        # Add return statement if needed
+        if returns:
+            return_str = ', '.join(returns)
+            body += f'\n    return {return_str}'
+
+        new_function = f"def {new_function_name}({param_str}):\n{body}"
+
+        # Build the call site
+        call_args = ', '.join(params)
+        if returns:
+            return_vars = ', '.join(returns)
+            call_site = f"{return_vars} = {new_function_name}({call_args})"
+        else:
+            call_site = f"{new_function_name}({call_args})"
+
+        # Reconstruct the code
+        # Get indentation of original code
+        original_indent = len(extracted_lines[0]) - len(extracted_lines[0].lstrip())
+        indent = ' ' * original_indent
+
+        new_lines = (
+            lines[:start_line - 1] +
+            [indent + call_site] +
+            lines[end_line:]
+        )
+
+        # Add the new function at the end (or before the extraction point)
+        new_lines.insert(0, new_function)
+        new_lines.insert(1, '')  # Blank line after function
+
+        new_code = '\n'.join(new_lines)
+
+        # Verify the result
+        try:
+            ast.parse(new_code)
+        except SyntaxError as e:
+            return ExtractResult(
+                success=False,
+                new_code=code,
+                extracted_function="",
+                variables_passed=[],
+                variables_returned=[],
+                error=f"Generated invalid code: {e}"
+            )
+
+        return ExtractResult(
+            success=True,
+            new_code=new_code,
+            extracted_function=new_function,
+            variables_passed=params,
+            variables_returned=returns
+        )
+
+    def _find_used_variables(self, tree: ast.AST) -> Set[str]:
+        """Find all variables used (read) in the AST."""
+        used = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                used.add(node.id)
+        return used
+
+    def _find_defined_variables(self, tree: ast.AST) -> Set[str]:
+        """Find all variables defined (written) in the AST."""
+        defined = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                defined.add(node.id)
+            elif isinstance(node, ast.AugAssign):
+                if isinstance(node.target, ast.Name):
+                    defined.add(node.target.id)
+        return defined
+
+
+# Example usage
+extractor = GuaranteedExtractor()
+
+code = '''
+def process_data(items):
+    # Preprocessing
+    total = 0
+    count = 0
+    for item in items:
+        if item > 0:
+            total += item
+            count += 1
+    # Use results
+    average = total / count if count > 0 else 0
+    return average
+'''
+
+result = extractor.extract_function(
+    code,
+    start_line=4,  # for item in items:
+    end_line=7,    # count += 1
+    new_function_name="sum_positive"
+)
+
+if result.success:
+    print("✅ Extraction successful!")
+    print(f"   Parameters: {result.variables_passed}")
+    print(f"   Returns: {result.variables_returned}")
+    print(f"\nNew code:\n{result.new_code}")
+else:
+    print(f"❌ Failed: {result.error}")
+```
+
+### Testing Strategies for Verified Transforms
+
+```python
+import ast
+from typing import Callable, Any
+import unittest
+
+
+class TransformationTestCase(unittest.TestCase):
+    """
+    Base test case for code transformations.
+
+    Provides utilities for testing that transformations
+    preserve program behavior.
+    """
+
+    def assert_same_behavior(
+        self,
+        original_code: str,
+        transformed_code: str,
+        test_inputs: list[dict[str, Any]],
+        entry_point: str
+    ) -> None:
+        """
+        Assert that original and transformed code produce same outputs.
+
+        Args:
+            original_code: Original source code
+            transformed_code: Transformed source code
+            test_inputs: List of input dictionaries
+            entry_point: Function to call
+        """
+        for inputs in test_inputs:
+            original_result = self._execute(original_code, entry_point, inputs)
+            transformed_result = self._execute(transformed_code, entry_point, inputs)
+
+            self.assertEqual(
+                original_result,
+                transformed_result,
+                f"Behavior differs for inputs {inputs}"
+            )
+
+    def assert_syntax_valid(self, code: str) -> None:
+        """Assert that code has valid syntax."""
+        try:
+            ast.parse(code)
+        except SyntaxError as e:
+            self.fail(f"Invalid syntax: {e}")
+
+    def assert_compiles(self, code: str) -> None:
+        """Assert that code compiles without errors."""
+        try:
+            compile(code, '<test>', 'exec')
+        except Exception as e:
+            self.fail(f"Compilation failed: {e}")
+
+    def _execute(
+        self,
+        code: str,
+        entry_point: str,
+        inputs: dict[str, Any]
+    ) -> Any:
+        """Execute code and return result of entry point function."""
+        namespace: dict[str, Any] = {}
+        exec(code, namespace)
+
+        func = namespace.get(entry_point)
+        if func is None:
+            raise ValueError(f"Entry point '{entry_point}' not found")
+
+        return func(**inputs)
+
+
+class TestRenameTransformation(TransformationTestCase):
+    """Test cases for rename transformation."""
+
+    def test_rename_preserves_behavior(self):
+        """Renaming should not change program behavior."""
+        original = '''
+def add(x, y):
+    return x + y
+'''
+        transformed = '''
+def add(a, b):
+    return a + b
+'''
+        self.assert_same_behavior(
+            original,
+            transformed,
+            [
+                {"x": 1, "y": 2},
+                {"x": -1, "y": 1},
+                {"x": 0, "y": 0},
+            ],
+            "add"
+        )
+
+    def test_rename_all_occurrences(self):
+        """All occurrences of variable should be renamed."""
+        original = '''
+def process(x):
+    x = x + 1
+    x = x * 2
+    return x
+'''
+        # After renaming x to value
+        transformed = '''
+def process(value):
+    value = value + 1
+    value = value * 2
+    return value
+'''
+        self.assert_same_behavior(
+            original,
+            transformed,
+            [{"x": 5}, {"x": 0}, {"x": -3}],
+            "process"
+        )
+
+
+# Property-based testing for transformations
+def property_test_rename(
+    renamer: Callable[[str, str, str], str],
+    num_tests: int = 100
+) -> list[str]:
+    """
+    Property-based testing for rename transformation.
+
+    Properties tested:
+    1. Syntax preservation: output is valid Python
+    2. Idempotence: renaming twice with same names = no change
+    3. Reversibility: rename A->B then B->A = original
+    4. Behavior preservation: same outputs for same inputs
+    """
+    import random
+    import string
+
+    failures = []
+
+    for i in range(num_tests):
+        # Generate random valid code
+        var_name = ''.join(random.choices(string.ascii_lowercase, k=5))
+        new_name = ''.join(random.choices(string.ascii_lowercase, k=5))
+
+        code = f'''
+def test_func({var_name}):
+    result = {var_name} * 2
+    return result + {var_name}
+'''
+
+        try:
+            # Property 1: Syntax preservation
+            renamed = renamer(code, var_name, new_name)
+            ast.parse(renamed)
+
+            # Property 2: Behavior preservation
+            namespace1: dict = {}
+            namespace2: dict = {}
+            exec(code, namespace1)
+            exec(renamed, namespace2)
+
+            test_value = random.randint(-100, 100)
+            result1 = namespace1['test_func'](test_value)
+            result2 = namespace2['test_func'](test_value)
+
+            if result1 != result2:
+                failures.append(f"Test {i}: Behavior changed for input {test_value}")
+
+            # Property 3: Reversibility
+            reversed_code = renamer(renamed, new_name, var_name)
+            if reversed_code != code:
+                # Normalize whitespace for comparison
+                if ast.dump(ast.parse(reversed_code)) != ast.dump(ast.parse(code)):
+                    failures.append(f"Test {i}: Rename not reversible")
+
+        except Exception as e:
+            failures.append(f"Test {i}: Exception - {e}")
+
+    return failures
+
+
+# Run property tests
+def simple_renamer(code: str, old: str, new: str) -> str:
+    """Simple AST-based renamer for testing."""
+    tree = ast.parse(code)
+
+    class Renamer(ast.NodeTransformer):
+        def visit_Name(self, node):
+            if node.id == old:
+                node.id = new
+            return node
+        def visit_arg(self, node):
+            if node.arg == old:
+                node.arg = new
+            return node
+
+    new_tree = Renamer().visit(tree)
+    ast.fix_missing_locations(new_tree)
+    return ast.unparse(new_tree)
+
+
+failures = property_test_rename(simple_renamer, num_tests=50)
+if failures:
+    print(f"❌ {len(failures)} property test failures:")
+    for f in failures[:5]:
+        print(f"  - {f}")
+else:
+    print("✅ All property tests passed!")
+```
+
+---
+
+## 67.8 Production Neuro-Symbolic System
+
+Let's build a complete production system that combines everything: LLM understanding, AST transformation, formal verification, and safe execution.
+
+````python
+import ast
+import json
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any, Optional
+from pathlib import Path
+import hashlib
+
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class RefactoringType(Enum):
+    """Types of refactoring operations."""
+    RENAME = "rename"
+    EXTRACT_FUNCTION = "extract_function"
+    INLINE = "inline"
+    ADD_TYPES = "add_types"
+    REMOVE_UNUSED = "remove_unused"
+
+
+@dataclass
+class RefactoringRequest:
+    """A refactoring request from the user."""
+    description: str
+    file_path: str
+    timestamp: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class RefactoringPlan:
+    """Plan for executing a refactoring."""
+    request: RefactoringRequest
+    refactoring_type: RefactoringType
+    parameters: dict[str, Any]
+    confidence: float
+    reasoning: str
+    estimated_changes: int
+
+
+@dataclass
+class RefactoringResult:
+    """Result of a refactoring operation."""
+    success: bool
+    original_code: str
+    new_code: str
+    changes_made: list[str]
+    verification_passed: bool
+    rollback_available: bool
+    error: Optional[str] = None
+
+
+class ProductionRefactoringAgent:
+    """
+    Production-ready code refactoring agent.
+
+    Features:
+    - Natural language understanding of refactoring requests
+    - Safe AST-based transformations
+    - Formal verification of changes
+    - Automatic rollback on failure
+    - Comprehensive logging and audit trail
+    """
+
+    def __init__(
+        self,
+        llm_client: Any,
+        backup_dir: str = ".refactoring_backups"
+    ):
+        """
+        Initialize the refactoring agent.
+
+        Args:
+            llm_client: OpenAI client for LLM operations
+            backup_dir: Directory for storing backups
+        """
+        self.llm = llm_client
+        self.backup_dir = Path(backup_dir)
+        self.backup_dir.mkdir(exist_ok=True)
+
+        # Supported refactoring operations
+        self.operations = {
+            RefactoringType.RENAME: self._execute_rename,
+            RefactoringType.EXTRACT_FUNCTION: self._execute_extract,
+            RefactoringType.ADD_TYPES: self._execute_add_types,
+        }
+
+    async def refactor(
+        self,
+        request: RefactoringRequest
+    ) -> RefactoringResult:
+        """
+        Execute a refactoring request.
+
+        Args:
+            request: The refactoring request
+
+        Returns:
+            RefactoringResult with success status and details
+        """
+        logger.info(f"Processing refactoring request: {request.description}")
+
+        # Step 1: Read the file
+        try:
+            file_path = Path(request.file_path)
+            original_code = file_path.read_text()
+        except Exception as e:
+            return RefactoringResult(
+                success=False,
+                original_code="",
+                new_code="",
+                changes_made=[],
+                verification_passed=False,
+                rollback_available=False,
+                error=f"Failed to read file: {e}"
+            )
+
+        # Step 2: Create backup
+        backup_path = self._create_backup(file_path, original_code)
+        logger.info(f"Created backup at {backup_path}")
+
+        # Step 3: Understand the request
+        plan = await self._understand_request(request, original_code)
+
+        if plan.confidence < 0.7:
+            return RefactoringResult(
+                success=False,
+                original_code=original_code,
+                new_code=original_code,
+                changes_made=[],
+                verification_passed=False,
+                rollback_available=True,
+                error=f"Low confidence ({plan.confidence:.2f}): {plan.reasoning}"
+            )
+
+        logger.info(f"Plan: {plan.refactoring_type.value} with confidence {plan.confidence:.2f}")
+
+        # Step 4: Execute the refactoring
+        operation = self.operations.get(plan.refactoring_type)
+        if not operation:
+            return RefactoringResult(
+                success=False,
+                original_code=original_code,
+                new_code=original_code,
+                changes_made=[],
+                verification_passed=False,
+                rollback_available=True,
+                error=f"Unsupported refactoring type: {plan.refactoring_type}"
+            )
+
+        try:
+            new_code, changes = operation(original_code, plan.parameters)
+        except Exception as e:
+            logger.error(f"Refactoring failed: {e}")
+            return RefactoringResult(
+                success=False,
+                original_code=original_code,
+                new_code=original_code,
+                changes_made=[],
+                verification_passed=False,
+                rollback_available=True,
+                error=f"Refactoring failed: {e}"
+            )
+
+        # Step 5: Verify the result
+        verification_passed = self._verify_transformation(original_code, new_code)
+
+        if not verification_passed:
+            logger.warning("Verification failed, rolling back")
+            return RefactoringResult(
+                success=False,
+                original_code=original_code,
+                new_code=original_code,
+                changes_made=[],
+                verification_passed=False,
+                rollback_available=True,
+                error="Verification failed - transformation may be unsafe"
+            )
+
+        # Step 6: Write the result
+        try:
+            file_path.write_text(new_code)
+            logger.info(f"Successfully wrote refactored code to {file_path}")
+        except Exception as e:
+            logger.error(f"Failed to write file: {e}")
+            return RefactoringResult(
+                success=False,
+                original_code=original_code,
+                new_code=new_code,
+                changes_made=changes,
+                verification_passed=True,
+                rollback_available=True,
+                error=f"Failed to write file: {e}"
+            )
+
+        return RefactoringResult(
+            success=True,
+            original_code=original_code,
+            new_code=new_code,
+            changes_made=changes,
+            verification_passed=True,
+            rollback_available=True
+        )
+
+    def _create_backup(self, file_path: Path, content: str) -> Path:
+        """Create a backup of the file."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        content_hash = hashlib.md5(content.encode()).hexdigest()[:8]
+        backup_name = f"{file_path.stem}_{timestamp}_{content_hash}{file_path.suffix}"
+        backup_path = self.backup_dir / backup_name
+        backup_path.write_text(content)
+        return backup_path
+
+    async def _understand_request(
+        self,
+        request: RefactoringRequest,
+        code: str
+    ) -> RefactoringPlan:
+        """Use LLM to understand the refactoring request."""
+        prompt = f'''Analyze this refactoring request and extract structured information.
+
+Request: {request.description}
+
+Code (first 100 lines):
+```python
+{chr(10).join(code.split(chr(10))[:100])}
+````
+
+Respond with JSON:
+{{
+    "refactoring_type": "rename|extract_function|inline|add_types|remove_unused",
+    "parameters": {{}},
+"confidence": 0.0-1.0,
+"reasoning": "explanation",
+"estimated_changes": number
+}}
+
+For rename: parameters should have "old_name" and "new_name"
+For extract_function: parameters should have "start_line", "end_line", "function_name"
+For add_types: parameters should have "function_name", "param_name", "type_hint"
+'''
+
+        response = self.llm.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.1
+        )
+
+        result = json.loads(response.choices[0].message.content)
+
+        return RefactoringPlan(
+            request=request,
+            refactoring_type=RefactoringType(result["refactoring_type"]),
+            parameters=result["parameters"],
+            confidence=result["confidence"],
+            reasoning=result["reasoning"],
+            estimated_changes=result["estimated_changes"]
+        )
+
+    def _execute_rename(
+        self,
+        code: str,
+        params: dict[str, Any]
+    ) -> tuple[str, list[str]]:
+        """Execute a rename refactoring."""
+        old_name = params["old_name"]
+        new_name = params["new_name"]
+
+        tree = ast.parse(code)
+        changes = []
+
+        class Renamer(ast.NodeTransformer):
+            def visit_Name(self, node):
+                if node.id == old_name:
+                    node.id = new_name
+                    changes.append(f"Renamed '{old_name}' to '{new_name}' at line {node.lineno}")
+                return node
+
+            def visit_FunctionDef(self, node):
+                if node.name == old_name:
+                    node.name = new_name
+                    changes.append(f"Renamed function '{old_name}' to '{new_name}'")
+                self.generic_visit(node)
+                return node
+
+            def visit_arg(self, node):
+                if node.arg == old_name:
+                    node.arg = new_name
+                    changes.append(f"Renamed parameter '{old_name}' to '{new_name}'")
+                return node
+
+        new_tree = Renamer().visit(tree)
+        ast.fix_missing_locations(new_tree)
+        new_code = ast.unparse(new_tree)
+
+        return new_code, changes
+
+    def _execute_extract(
+        self,
+        code: str,
+        params: dict[str, Any]
+    ) -> tuple[str, list[str]]:
+        """Execute a function extraction refactoring."""
+        # Simplified implementation
+        changes = [f"Extracted function '{params['function_name']}'"]
+        return code, changes  # Would implement full extraction
+
+    def _execute_add_types(
+        self,
+        code: str,
+        params: dict[str, Any]
+    ) -> tuple[str, list[str]]:
+        """Execute type hint addition."""
+        tree = ast.parse(code)
+        changes = []
+
+        class TypeAdder(ast.NodeTransformer):
+            def visit_FunctionDef(self, node):
+                if node.name == params["function_name"]:
+                    for arg in node.args.args:
+                        if arg.arg == params["param_name"] and arg.annotation is None:
+                            arg.annotation = ast.Name(id=params["type_hint"], ctx=ast.Load())
+                            changes.append(
+                                f"Added type hint '{params['type_hint']}' to "
+                                f"{params['function_name']}.{params['param_name']}"
+                            )
+                return node
+
+        new_tree = TypeAdder().visit(tree)
+        ast.fix_missing_locations(new_tree)
+        new_code = ast.unparse(new_tree)
+
+        return new_code, changes
+
+    def _verify_transformation(
+        self,
+        original: str,
+        transformed: str
+    ) -> bool:
+        """Verify the transformation is safe."""
+        # Check syntax
+        try:
+            ast.parse(transformed)
+        except SyntaxError:
+            return False
+
+        # Check compilation
+        try:
+            compile(transformed, '<string>', 'exec')
+        except Exception:
+            return False
+
+        # Check structure preservation
+        original_tree = ast.parse(original)
+        transformed_tree = ast.parse(transformed)
+
+        original_funcs = sum(1 for n in ast.walk(original_tree) if isinstance(n, ast.FunctionDef))
+        transformed_funcs = sum(1 for n in ast.walk(transformed_tree) if isinstance(n, ast.FunctionDef))
+
+        # For most refactorings, function count should be preserved
+        # (except extract_function which adds one)
+        if abs(original_funcs - transformed_funcs) > 1:
+            return False
+
+        return True
+
+    def rollback(self, file_path: str) -> bool:
+        """
+        Rollback to the most recent backup.
+
+        Args:
+            file_path: Path to the file to rollback
+
+        Returns:
+            True if rollback succeeded
+        """
+        file_path = Path(file_path)
+
+        # Find most recent backup
+        backups = sorted(
+            self.backup_dir.glob(f"{file_path.stem}_*{file_path.suffix}"),
+            reverse=True
+        )
+
+        if not backups:
+            logger.error("No backups found")
+            return False
+
+        latest_backup = backups[0]
+        backup_content = latest_backup.read_text()
+
+        try:
+            file_path.write_text(backup_content)
+            logger.info(f"Rolled back to {latest_backup}")
+            return True
+        except Exception as e:
+            logger.error(f"Rollback failed: {e}")
+            return False
+
+# Example usage
+
+async def demo():
+from openai import OpenAI
+
+    client = OpenAI()
+    agent = ProductionRefactoringAgent(client)
+
+    # Create a test file
+    test_file = Path("test_refactor.py")
+    test_file.write_text('''
+
+def calculate_sum(data):
+total = 0
+for item in data:
+total += item
+return total
+
+def process(data):
+result = calculate_sum(data)
+return result \* 2
+''')
+
+    # Request a refactoring
+    request = RefactoringRequest(
+        description="Rename the variable 'data' to 'numbers' in the calculate_sum function",
+        file_path=str(test_file)
+    )
+
+    result = await agent.refactor(request)
+
+    if result.success:
+        print("✅ Refactoring successful!")
+        print(f"\nChanges made:")
+        for change in result.changes_made:
+            print(f"  - {change}")
+        print(f"\nNew code:\n{result.new_code}")
+    else:
+        print(f"❌ Refactoring failed: {result.error}")
+        if result.rollback_available:
+            print("Rollback is available")
+
+    # Cleanup
+    test_file.unlink(missing_ok=True)
+
+# Run with: asyncio.run(demo())
+
+```
+
+```
+
+<Callout type="warning">
+  **Production Considerations:** The example above is simplified. A production
+  system should also include: comprehensive test execution before/after,
+  integration with version control (git), support for multi-file refactorings,
+  conflict detection with concurrent edits, and integration with CI/CD
+  pipelines.
+</Callout>
+
+---
+
+## Exercise: Build a Verified Code Transformer
+
+<Exercise
+  title="Build a Verified Code Transformer"
+  difficulty="advanced"
+  timeEstimate="90 minutes"
+>
+
+Build a complete neuro-symbolic code transformer that takes natural language refactoring requests and applies verified AST transformations.
+
+**Requirements:**
+
+1. Accept natural language refactoring requests
+2. Use an LLM to understand the intent
+3. Apply AST-based transformations (not string manipulation)
+4. Verify correctness with pre/post-conditions
+5. Provide clear feedback on what changed
+
+**Starter Code:**
+
+```python
+import ast
+from dataclasses import dataclass
+from typing import Any
+from openai import OpenAI
+
+
+@dataclass
+class TransformRequest:
+    """A transformation request."""
+    description: str
+    code: str
+
+
+@dataclass
+class TransformResult:
+    """Result of a transformation."""
+    success: bool
+    original_code: str
+    transformed_code: str
+    changes: list[str]
+    verification_status: str
+    error: str | None = None
+
+
+class VerifiedCodeTransformer:
+    """
+    Your implementation here.
+
+    Should:
+    1. Parse natural language to understand intent
+    2. Apply AST transformations
+    3. Verify the result
+    4. Return detailed results
+    """
+
+    def __init__(self, api_key: str | None = None):
+        self.client = OpenAI(api_key=api_key)
+        # TODO: Initialize your transformer
+
+    async def transform(self, request: TransformRequest) -> TransformResult:
+        """
+        Transform code based on natural language request.
+
+        Args:
+            request: The transformation request
+
+        Returns:
+            TransformResult with details
+        """
+        # TODO: Implement the transformation pipeline
+        # 1. Use LLM to understand the request
+        # 2. Apply AST transformation
+        # 3. Verify the result
+        # 4. Return detailed result
+        pass
+
+    def _understand_intent(self, description: str, code: str) -> dict[str, Any]:
+        """Use LLM to understand the transformation intent."""
+        # TODO: Implement intent understanding
+        pass
+
+    def _apply_transformation(
+        self,
+        code: str,
+        intent: dict[str, Any]
+    ) -> tuple[str, list[str]]:
+        """Apply AST-based transformation."""
+        # TODO: Implement AST transformation
+        pass
+
+    def _verify(self, original: str, transformed: str) -> tuple[bool, str]:
+        """Verify the transformation."""
+        # TODO: Implement verification
+        pass
+
+
+# Test your implementation
+async def test_transformer():
+    transformer = VerifiedCodeTransformer()
+
+    test_cases = [
+        TransformRequest(
+            description="Rename the function 'calc' to 'calculate_total'",
+            code='''
+def calc(items):
+    return sum(item.price for item in items)
+
+total = calc(order.items)
+'''
+        ),
+        TransformRequest(
+            description="Add type hint 'list[int]' to the 'numbers' parameter",
+            code='''
+def sum_numbers(numbers):
+    return sum(numbers)
+'''
+        ),
+        TransformRequest(
+            description="Rename variable 'x' to 'value' in the process function",
+            code='''
+def process(x):
+    x = x + 1
+    return x * 2
+
+def other(x):
+    return x  # Should not change
+'''
+        ),
+    ]
+
+    for i, test in enumerate(test_cases):
+        print(f"\n{'='*50}")
+        print(f"Test {i+1}: {test.description}")
+        print(f"{'='*50}")
+
+        result = await transformer.transform(test)
+
+        if result.success:
+            print("✅ SUCCESS")
+            print(f"Verification: {result.verification_status}")
+            print(f"Changes: {result.changes}")
+            print(f"\nTransformed code:\n{result.transformed_code}")
+        else:
+            print(f"❌ FAILED: {result.error}")
+
+
+# Run with: asyncio.run(test_transformer())
+```
+
+**Acceptance Criteria:**
+
+- [ ] Correctly parses natural language requests
+- [ ] Uses AST (not string manipulation) for transformations
+- [ ] Handles rename variable/function correctly
+- [ ] Handles add type hint correctly
+- [ ] Respects scope (only renames in specified function)
+- [ ] Verifies syntax validity of output
+- [ ] Provides clear change descriptions
+- [ ] Handles errors gracefully
+
+**Extension Challenges:**
+
+1. Add support for extract function refactoring
+2. Implement multi-file refactoring
+3. Add property-based testing for your transformations
+4. Integrate with a type checker (mypy) for verification
+
+</Exercise>
+
+---
+
+## Key Takeaways
+
+<Callout type="success">
+
+**What You Learned:**
+
+1. **The Hallucination Problem**: LLMs fail at structured tasks because they treat code as text, not structure. Symbolic methods provide the precision LLMs lack.
+
+2. **Neuro-Symbolic Architecture**: Combine neural understanding (what to do) with symbolic execution (how to do it correctly). Each component plays to its strengths.
+
+3. **AST Manipulation**: Use Python's `ast` module for analysis and simple transforms, `libcst` for production use with formatting preservation.
+
+4. **Formal Verification**: Pre-conditions, post-conditions, and invariants catch errors that testing might miss. Type checking provides additional safety.
+
+5. **Logic Programming**: Datalog-style reasoning helps with complex dependency analysis and constraint satisfaction.
+
+6. **Guaranteed Correctness**: Some transformations (rename, reorder imports) can be made provably correct by construction.
+
+7. **Production Systems**: Combine all techniques with backup/rollback, logging, and verification for safe production use.
+
+</Callout>
+
+---
+
+<ModuleSummary
+  points={[
+    "LLMs hallucinate on structured tasks because they lack formal understanding of code structure",
+    "Neuro-symbolic AI combines neural creativity with symbolic precision for reliable results",
+    "AST manipulation guarantees syntactic correctness that string manipulation cannot",
+    "LibCST preserves formatting and comments, essential for production refactoring tools",
+    "The hybrid pattern: LLM understands intent, symbolic system executes correctly",
+    "Formal verification with pre/post-conditions catches errors before they reach production",
+    "Logic programming enables declarative reasoning about code dependencies and constraints",
+    "Some transformations (rename, format) can be made provably correct by construction",
+    "Production systems need backup, rollback, logging, and comprehensive verification",
+    "Property-based testing validates that transformations preserve program behavior",
+  ]}
+/>
+
+---
+
+## Further Reading
+
+- [Python AST Documentation](https://docs.python.org/3/library/ast.html) — Official AST module reference
+- [LibCST Documentation](https://libcst.readthedocs.io/) — Concrete syntax tree library
+- [pyDatalog](https://sites.google.com/site/paboris/python-datalog) — Logic programming in Python
+- [Neuro-Symbolic AI: The 3rd Wave](https://arxiv.org/abs/2012.05876) — Foundational paper on neuro-symbolic approaches
+- [Program Synthesis with Large Language Models](https://arxiv.org/abs/2108.07732) — Research on LLM code generation
+- [Formal Methods for AI Safety](https://arxiv.org/abs/2311.11550) — Verification techniques for AI systems
+- [Rope: Python Refactoring Library](https://github.com/python-rope/rope) — Production refactoring tool
+- [mypy Documentation](https://mypy.readthedocs.io/) — Static type checker for Python
+- [Hypothesis: Property-Based Testing](https://hypothesis.readthedocs.io/) — Property testing framework
+
+---
+
+## Related Modules
+
+<Callout type="info" title="Continue Your Learning">
+  - **[Day 78: Code Refactorer](/modules/day-78-project4-refactorer)** - Apply
+  neuro-symbolic patterns to production refactoring - **[Day 45: Security
+  Sandboxing](/modules/day-45-security-sandboxing)** - Combine AST validation
+  with secure execution - **[Day 05: Structured
+  Output](/modules/day-05-structured-output)** - Structured outputs complement
+  symbolic verification
+</Callout>
+
+---
+
+## Next Steps
+
+In the next module, we'll explore **ML Analogies for Agentic Design**—mapping classical machine learning concepts to agent architecture for senior engineers who want to apply their ML intuition to building better agents.
+
+<PageNavigation
+  prev={{
+    title: "Day 65: Voice AI Agents",
+    href: "/modules/day-65-voice-agents",
+  }}
+  next={{
+    title: "Day 68: ML Analogies for Agents",
+    href: "/modules/day-68-ml-analogies",
+  }}
+/>

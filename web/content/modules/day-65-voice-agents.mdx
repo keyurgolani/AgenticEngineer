@@ -1,0 +1,1780 @@
+---
+title: "Day 65: Voice AI Agents"
+description: "Build real-time voice-enabled agents with speech recognition, natural language processing, and text-to-speech synthesis."
+week: 10
+day: 65
+---
+
+<ReadingTime minutes={35} />
+
+<SkillLevel level="advanced" description="Real-time voice systems" />
+
+<Prerequisites
+  items={[
+    "Completed Month 1 & 2 foundations (Days 1-60)",
+    "Strong understanding of LangGraph and agent loops",
+    "Experience with async Python and streaming patterns",
+    "Familiarity with WebSocket or real-time protocols",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Understand the STT → LLM → TTS pipeline and latency considerations",
+    "Compare speech-to-text providers: Whisper, AssemblyAI, Deepgram, Qwen3-ASR",
+    "Evaluate text-to-speech options: ElevenLabs, OpenAI TTS, Cartesia Sonic",
+    "Build voice agents with Pipecat and LiveKit Agents frameworks",
+    "Implement sub-500ms response times with streaming and edge deployment",
+    "Handle interruptions gracefully with barge-in detection",
+    "Integrate tool calling in voice contexts with verbal feedback",
+    "Deploy production voice agents with VAD, noise handling, and cost optimization",
+  ]}
+/>
+
+---
+
+## The Voice Revolution
+
+Voice is becoming the dominant interface for AI interaction. By the end of 2025, an estimated **8.4 billion voice assistants** will be in active use worldwide—more than the global population. This shift from text to voice represents a fundamental change in how humans interact with AI systems.
+
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Text Era"
+        T1[Type Query] --> T2[Wait for Response]
+        T2 --> T3[Read Answer]
+    end
+    
+    subgraph "Voice Era"
+        V1[Speak Query] --> V2[Instant Response]
+        V2 --> V3[Natural Conversation]
+        V3 --> V1
+    end
+    
+    style T1 fill:#ffccbc,stroke:#bf360c
+    style V1 fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="The shift from text to voice: Natural, hands-free, and conversational."
+/>
+
+<Callout type="info">
+  **Why Voice Matters Now:** Three converging trends make 2025 the inflection
+  point for voice agents: 1. **Latency breakthroughs** — Sub-200ms STT and TTS
+  models enable natural conversation 2. **Native speech-to-speech** — Models
+  like OpenAI Realtime API bypass the text bottleneck 3. **Open-source parity**
+  — Whisper, Pipecat, and local TTS match commercial quality
+</Callout>
+
+### Voice Agent Use Cases
+
+| Domain               | Application                      | Why Voice Wins                        |
+| :------------------- | :------------------------------- | :------------------------------------ |
+| **Customer Service** | Call center automation           | 24/7 availability, consistent quality |
+| **Healthcare**       | Patient intake, symptom checking | Hands-free, accessible                |
+| **Automotive**       | In-car assistants                | Eyes on road, hands on wheel          |
+| **Smart Home**       | Device control, routines         | Natural, ambient interaction          |
+| **Accessibility**    | Screen reader alternatives       | Essential for visually impaired users |
+| **Field Work**       | Technician assistants            | Hands-free documentation              |
+
+---
+
+## 65.1 Voice Agent Architecture
+
+The classic voice agent follows a three-stage pipeline: **Speech-to-Text (STT) → LLM → Text-to-Speech (TTS)**. Understanding this pipeline is essential for optimizing latency and quality.
+
+<Mermaid
+  chart={`
+graph LR
+    User([🎤 User Speech]) --> VAD[Voice Activity Detection]
+    VAD --> STT[Speech-to-Text]
+    STT --> LLM[🧠 LLM Processing]
+    LLM --> TTS[Text-to-Speech]
+    TTS --> Speaker([🔊 Audio Output])
+    
+    subgraph "Latency Budget"
+        STT -.->|100-300ms| L1[STT Latency]
+        LLM -.->|200-500ms| L2[LLM Latency]
+        TTS -.->|50-150ms| L3[TTS Latency]
+    end
+    
+    style User fill:#e3f2fd,stroke:#2196f3
+    style Speaker fill:#c8e6c9,stroke:#4caf50
+    style LLM fill:#f3e5f5,stroke:#9c27b0
+`}
+  caption="The Voice Pipeline: Each stage adds latency that compounds into user-perceived delay."
+/>
+
+### Latency Breakdown
+
+For natural conversation, total round-trip latency should be **under 500ms**. Here's how the budget typically breaks down:
+
+| Stage       | Target Latency | What Affects It                     |
+| :---------- | :------------- | :---------------------------------- |
+| **VAD**     | 20-50ms        | Sensitivity settings, buffer size   |
+| **STT**     | 100-300ms      | Model size, streaming vs batch      |
+| **LLM**     | 200-400ms      | Model size, prompt length, provider |
+| **TTS**     | 50-150ms       | Voice quality, streaming support    |
+| **Network** | 20-100ms       | Edge deployment, connection quality |
+
+<Callout type="warning">
+  **The 500ms Rule:** Human conversation has natural pauses of 200-500ms between
+  turns. Exceed 500ms response time and users perceive the agent as "slow" or
+  "thinking." Exceed 1 second and they start repeating themselves.
+</Callout>
+
+### Cascaded vs End-to-End Approaches
+
+Two architectural patterns dominate voice agent design:
+
+**Cascaded (STT → LLM → TTS):**
+
+- Modular, each component independently optimizable
+- Can use best-in-class for each stage
+- Higher total latency due to sequential processing
+- Text intermediate enables logging, moderation, tool calling
+
+**End-to-End (Speech-to-Speech):**
+
+- Single model handles audio in and out
+- Lower latency, more natural prosody
+- Harder to debug, less control over intermediate steps
+- Examples: OpenAI Realtime API, Gemini Live
+
+```python
+# Cascaded approach - explicit pipeline
+async def cascaded_voice_agent(audio_input: bytes) -> bytes:
+    # Stage 1: Speech to Text
+    transcript = await stt_model.transcribe(audio_input)
+
+    # Stage 2: LLM Processing (can add tools, RAG, etc.)
+    response_text = await llm.generate(transcript)
+
+    # Stage 3: Text to Speech
+    audio_output = await tts_model.synthesize(response_text)
+
+    return audio_output
+
+# End-to-end approach - single model
+async def e2e_voice_agent(audio_input: bytes) -> bytes:
+    # Single model handles everything
+    audio_output = await realtime_model.process(audio_input)
+    return audio_output
+```
+
+---
+
+## 65.2 Speech-to-Text Options
+
+Choosing the right STT provider depends on your latency requirements, accuracy needs, language support, and deployment constraints.
+
+### OpenAI Whisper
+
+Whisper is the gold standard for accuracy and the most versatile option. Available both as an API and for local deployment.
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+# API usage - simple but adds network latency
+def transcribe_with_whisper_api(audio_file: str) -> str:
+    with open(audio_file, "rb") as f:
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=f,
+            response_format="text"
+        )
+    return transcript
+
+# Local usage with faster-whisper (optimized implementation)
+from faster_whisper import WhisperModel
+
+model = WhisperModel("large-v3", device="cuda", compute_type="float16")
+
+def transcribe_local(audio_path: str) -> str:
+    segments, info = model.transcribe(audio_path, beam_size=5)
+    return " ".join([segment.text for segment in segments])
+```
+
+### AssemblyAI Universal-2
+
+AssemblyAI's Universal-2 model excels at real-time streaming with excellent accuracy across accents and noise conditions.
+
+```python
+import assemblyai as aai
+
+aai.settings.api_key = "your-api-key"
+
+# Real-time streaming transcription
+def on_data(transcript: aai.RealtimeTranscript):
+    if isinstance(transcript, aai.RealtimeFinalTranscript):
+        print(f"Final: {transcript.text}")
+    else:
+        print(f"Partial: {transcript.text}")
+
+transcriber = aai.RealtimeTranscriber(
+    sample_rate=16_000,
+    on_data=on_data,
+    on_error=lambda e: print(f"Error: {e}"),
+)
+
+transcriber.connect()
+# Stream audio chunks...
+transcriber.close()
+```
+
+### Deepgram Nova-2
+
+Deepgram offers the lowest latency for streaming use cases, with sub-100ms response times.
+
+```python
+from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
+
+deepgram = DeepgramClient("your-api-key")
+
+async def transcribe_stream():
+    connection = deepgram.listen.live.v("1")
+
+    def on_message(self, result, **kwargs):
+        transcript = result.channel.alternatives[0].transcript
+        if transcript:
+            print(f"Transcript: {transcript}")
+
+    connection.on(LiveTranscriptionEvents.Transcript, on_message)
+
+    options = LiveOptions(
+        model="nova-2",
+        language="en-US",
+        smart_format=True,
+        interim_results=True,  # Get partial results for lower latency
+    )
+
+    await connection.start(options)
+    # Stream audio...
+    await connection.finish()
+```
+
+### Qwen3-ASR for Local/Private Deployments
+
+For on-premise or privacy-sensitive deployments, Qwen3-ASR provides excellent accuracy without cloud dependencies.
+
+```python
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+import torch
+
+model_id = "Qwen/Qwen2-Audio-7B"
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+processor = AutoProcessor.from_pretrained(model_id)
+model = AutoModelForSpeechSeq2Seq.from_pretrained(
+    model_id,
+    torch_dtype=torch.float16,
+    device_map="auto"
+)
+
+def transcribe_local_qwen(audio_array, sampling_rate=16000):
+    inputs = processor(
+        audio_array,
+        sampling_rate=sampling_rate,
+        return_tensors="pt"
+    ).to(device)
+
+    generated_ids = model.generate(**inputs, max_new_tokens=256)
+    transcription = processor.batch_decode(
+        generated_ids,
+        skip_special_tokens=True
+    )[0]
+
+    return transcription
+```
+
+### STT Comparison Table
+
+| Provider            | Latency (Streaming) | Accuracy (WER) | Cost per Hour | Best For                 |
+| :------------------ | :------------------ | :------------- | :------------ | :----------------------- |
+| **Whisper API**     | 200-400ms           | 4-6%           | $0.36         | Accuracy-critical, batch |
+| **Whisper Local**   | 100-300ms           | 4-6%           | GPU cost only | Privacy, offline         |
+| **AssemblyAI**      | 150-250ms           | 5-7%           | $0.65         | Real-time, enterprise    |
+| **Deepgram Nova-2** | 50-100ms            | 6-8%           | $0.25         | Lowest latency           |
+| **Qwen3-ASR**       | 150-300ms           | 5-7%           | GPU cost only | Local, multilingual      |
+
+<Callout type="tip">
+  **Hybrid Strategy:** Use Deepgram for real-time interim results (fast
+  feedback) and Whisper for final transcription (accuracy). This gives users
+  immediate feedback while ensuring high-quality final text.
+</Callout>
+
+---
+
+## 65.3 Text-to-Speech Synthesis
+
+TTS is the final mile of voice agents—where quality directly impacts user perception. Modern TTS has achieved near-human naturalness, but latency and cost vary significantly.
+
+### ElevenLabs (Quality Leader)
+
+ElevenLabs produces the most natural-sounding voices with excellent emotional range and prosody control.
+
+```python
+from elevenlabs import ElevenLabs, Voice, VoiceSettings
+
+client = ElevenLabs(api_key="your-api-key")
+
+def synthesize_speech(text: str, voice_id: str = "Rachel") -> bytes:
+    audio = client.generate(
+        text=text,
+        voice=Voice(
+            voice_id=voice_id,
+            settings=VoiceSettings(
+                stability=0.5,
+                similarity_boost=0.75,
+                style=0.5,
+                use_speaker_boost=True
+            )
+        ),
+        model="eleven_turbo_v2_5"  # Optimized for low latency
+    )
+    return b"".join(audio)
+
+# Streaming for lower time-to-first-byte
+async def stream_speech(text: str):
+    async for chunk in client.generate_stream(
+        text=text,
+        voice="Rachel",
+        model="eleven_turbo_v2_5",
+        stream=True
+    ):
+        yield chunk
+```
+
+### OpenAI TTS
+
+OpenAI's TTS offers good quality with simple integration, especially if you're already using their ecosystem.
+
+```python
+from openai import OpenAI
+from pathlib import Path
+
+client = OpenAI()
+
+def synthesize_openai(text: str, voice: str = "alloy") -> bytes:
+    response = client.audio.speech.create(
+        model="tts-1",  # or "tts-1-hd" for higher quality
+        voice=voice,   # alloy, echo, fable, onyx, nova, shimmer
+        input=text,
+        response_format="mp3"
+    )
+    return response.content
+
+# Streaming response
+def stream_openai_tts(text: str):
+    with client.audio.speech.with_streaming_response.create(
+        model="tts-1",
+        voice="nova",
+        input=text
+    ) as response:
+        for chunk in response.iter_bytes():
+            yield chunk
+```
+
+### Cartesia Sonic (Low Latency Champion)
+
+Cartesia Sonic is optimized for real-time applications with sub-50ms time-to-first-byte.
+
+```python
+import cartesia
+
+client = cartesia.Cartesia(api_key="your-api-key")
+
+# Ultra-low latency streaming
+async def stream_cartesia(text: str, voice_id: str):
+    voice = client.voices.get(id=voice_id)
+
+    output = client.tts.sse(
+        model_id="sonic-english",
+        transcript=text,
+        voice_embedding=voice["embedding"],
+        output_format={
+            "container": "raw",
+            "encoding": "pcm_f32le",
+            "sample_rate": 24000
+        },
+        stream=True
+    )
+
+    for chunk in output:
+        if chunk.get("audio"):
+            yield chunk["audio"]
+```
+
+### Local Options: Coqui TTS and Bark
+
+For offline or privacy-sensitive deployments, open-source TTS models provide viable alternatives.
+
+```python
+# Coqui TTS - fast and lightweight
+from TTS.api import TTS
+
+tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC")
+
+def synthesize_coqui(text: str, output_path: str):
+    tts.tts_to_file(text=text, file_path=output_path)
+
+# Bark - more expressive but slower
+from bark import SAMPLE_RATE, generate_audio, preload_models
+import scipy
+
+preload_models()
+
+def synthesize_bark(text: str) -> tuple:
+    # Bark supports emotion markers: [laughs], [sighs], etc.
+    audio_array = generate_audio(text)
+    return audio_array, SAMPLE_RATE
+```
+
+### TTS Comparison Table
+
+| Provider           | Time-to-First-Byte | Quality (MOS) | Cost per 1M chars | Best For             |
+| :----------------- | :----------------- | :------------ | :---------------- | :------------------- |
+| **ElevenLabs**     | 100-200ms          | 4.5/5         | $30-180           | Quality-critical     |
+| **OpenAI TTS**     | 150-300ms          | 4.2/5         | $15               | Simple integration   |
+| **Cartesia Sonic** | 30-50ms            | 4.3/5         | $15               | Real-time apps       |
+| **Coqui TTS**      | 200-500ms          | 3.8/5         | Free (GPU)        | Offline, budget      |
+| **Bark**           | 1-3s               | 4.0/5         | Free (GPU)        | Expressive, creative |
+
+### Voice Cloning Considerations
+
+<Callout type="warning">
+  **Ethical and Legal Considerations:** Voice cloning raises significant ethical
+  concerns. Always: - Obtain explicit consent from the voice owner - Disclose to
+  users when they're interacting with a cloned voice - Never clone voices for
+  deception or impersonation - Check local regulations (some jurisdictions
+  require disclosure) - Implement safeguards against misuse
+</Callout>
+
+```python
+# ElevenLabs voice cloning (with consent)
+def clone_voice(name: str, audio_files: list[str]) -> str:
+    voice = client.clone(
+        name=name,
+        files=audio_files,
+        description="Custom cloned voice with owner consent"
+    )
+    return voice.voice_id
+```
+
+---
+
+## 65.4 Real-Time Streaming Frameworks
+
+Building voice agents from scratch is complex. These frameworks handle the hard parts: audio streaming, VAD, turn-taking, and pipeline orchestration.
+
+### Pipecat (Open-Source, Python)
+
+Pipecat is the leading open-source framework for building voice agents. It provides a pipeline abstraction that makes it easy to compose STT, LLM, and TTS components.
+
+```python
+import asyncio
+from pipecat.frames.frames import TextFrame, AudioRawFrame
+from pipecat.pipeline.pipeline import Pipeline
+from pipecat.pipeline.runner import PipelineRunner
+from pipecat.pipeline.task import PipelineTask
+from pipecat.services.openai import OpenAILLMService
+from pipecat.services.deepgram import DeepgramSTTService, DeepgramTTSService
+from pipecat.transports.services.daily import DailyTransport
+
+async def main():
+    # Configure transport (Daily.co for WebRTC)
+    transport = DailyTransport(
+        room_url="https://your-domain.daily.co/room",
+        token="your-token",
+        bot_name="Voice Assistant"
+    )
+
+    # Configure services
+    stt = DeepgramSTTService(api_key="your-deepgram-key")
+
+    llm = OpenAILLMService(
+        api_key="your-openai-key",
+        model="gpt-4o-mini",
+        system_prompt="""You are a helpful voice assistant.
+        Keep responses concise and conversational.
+        Respond in 1-2 sentences when possible."""
+    )
+
+    tts = DeepgramTTSService(
+        api_key="your-deepgram-key",
+        voice="aura-asteria-en"
+    )
+
+    # Build the pipeline
+    pipeline = Pipeline([
+        transport.input(),   # Audio from user
+        stt,                 # Speech to text
+        llm,                 # Generate response
+        tts,                 # Text to speech
+        transport.output()   # Audio to user
+    ])
+
+    # Run the pipeline
+    task = PipelineTask(pipeline)
+    runner = PipelineRunner()
+    await runner.run(task)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### LiveKit Agents
+
+LiveKit Agents provides a robust framework built on LiveKit's real-time infrastructure, with excellent support for multi-party conversations.
+
+```python
+from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli
+from livekit.agents.voice_assistant import VoiceAssistant
+from livekit.plugins import deepgram, openai, silero
+
+async def entrypoint(ctx: JobContext):
+    # Connect to the LiveKit room
+    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+
+    # Wait for a participant to join
+    participant = await ctx.wait_for_participant()
+
+    # Create the voice assistant
+    assistant = VoiceAssistant(
+        vad=silero.VAD.load(),  # Voice Activity Detection
+        stt=deepgram.STT(),
+        llm=openai.LLM(model="gpt-4o-mini"),
+        tts=openai.TTS(voice="nova"),
+        chat_ctx=openai.ChatContext(
+            system="You are a helpful voice assistant. Be concise."
+        ),
+    )
+
+    # Start the assistant
+    assistant.start(ctx.room, participant)
+
+    # Keep running until disconnected
+    await assistant.say("Hello! How can I help you today?")
+
+if __name__ == "__main__":
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+```
+
+### OpenAI Realtime API (Native Speech-to-Speech)
+
+The OpenAI Realtime API bypasses the traditional pipeline entirely, providing native speech-to-speech with the lowest possible latency.
+
+```python
+import asyncio
+import websockets
+import json
+import base64
+
+async def realtime_voice_agent():
+    url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "OpenAI-Beta": "realtime=v1"
+    }
+
+    async with websockets.connect(url, extra_headers=headers) as ws:
+        # Configure the session
+        await ws.send(json.dumps({
+            "type": "session.update",
+            "session": {
+                "modalities": ["text", "audio"],
+                "instructions": "You are a helpful voice assistant.",
+                "voice": "alloy",
+                "input_audio_format": "pcm16",
+                "output_audio_format": "pcm16",
+                "turn_detection": {
+                    "type": "server_vad",
+                    "threshold": 0.5,
+                    "prefix_padding_ms": 300,
+                    "silence_duration_ms": 500
+                }
+            }
+        }))
+
+        # Handle messages
+        async for message in ws:
+            event = json.loads(message)
+
+            if event["type"] == "response.audio.delta":
+                # Stream audio to speaker
+                audio_chunk = base64.b64decode(event["delta"])
+                play_audio(audio_chunk)
+
+            elif event["type"] == "response.audio_transcript.delta":
+                # Optional: display transcript
+                print(event["delta"], end="", flush=True)
+
+            elif event["type"] == "input_audio_buffer.speech_started":
+                # User started speaking - handle interruption
+                await ws.send(json.dumps({"type": "response.cancel"}))
+
+asyncio.run(realtime_voice_agent())
+```
+
+<Callout type="tip">
+  **Framework Selection Guide:** - **Pipecat**: Best for custom pipelines,
+  open-source, maximum flexibility - **LiveKit Agents**: Best for multi-party,
+  production infrastructure included - **OpenAI Realtime**: Best for lowest
+  latency, simplest integration, highest cost
+</Callout>
+
+---
+
+## 65.5 Latency Optimization
+
+Achieving sub-500ms response time requires optimization at every stage. Here are the key techniques:
+
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Latency Killers"
+        K1[Cold Start] --> |Solution| S1[Keep-Alive Connections]
+        K2[Large Models] --> |Solution| S2[Model Routing]
+        K3[Batch Processing] --> |Solution| S3[Streaming Everything]
+        K4[Network Hops] --> |Solution| S4[Edge Deployment]
+    end
+    
+    style K1 fill:#ffcdd2,stroke:#c62828
+    style K2 fill:#ffcdd2,stroke:#c62828
+    style K3 fill:#ffcdd2,stroke:#c62828
+    style K4 fill:#ffcdd2,stroke:#c62828
+    style S1 fill:#c8e6c9,stroke:#2e7d32
+    style S2 fill:#c8e6c9,stroke:#2e7d32
+    style S3 fill:#c8e6c9,stroke:#2e7d32
+    style S4 fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Common latency problems and their solutions."
+/>
+
+### Streaming Everything
+
+Never wait for complete responses. Stream at every stage:
+
+```python
+import asyncio
+from typing import AsyncIterator
+
+async def streaming_voice_pipeline(
+    audio_input: AsyncIterator[bytes]
+) -> AsyncIterator[bytes]:
+    """Fully streaming voice pipeline with minimal latency."""
+
+    # Stream STT - get partial transcripts
+    transcript_buffer = ""
+    async for audio_chunk in audio_input:
+        partial_transcript = await stt.transcribe_chunk(audio_chunk)
+        transcript_buffer += partial_transcript
+
+        # Check for sentence boundary
+        if is_sentence_complete(transcript_buffer):
+            # Stream to LLM immediately
+            async for llm_chunk in llm.stream(transcript_buffer):
+                # Stream to TTS immediately
+                async for audio_chunk in tts.stream(llm_chunk):
+                    yield audio_chunk
+
+            transcript_buffer = ""
+```
+
+### Speculative Execution
+
+Start generating responses before the user finishes speaking:
+
+```python
+class SpeculativeVoiceAgent:
+    def __init__(self):
+        self.pending_responses = {}
+
+    async def on_partial_transcript(self, partial: str):
+        """Generate speculative response on partial input."""
+        # Only speculate on substantial input
+        if len(partial.split()) < 3:
+            return
+
+        # Generate response speculatively
+        task = asyncio.create_task(self.llm.generate(partial))
+        self.pending_responses[partial] = task
+
+    async def on_final_transcript(self, final: str):
+        """Use speculative response if available, else generate fresh."""
+        # Check if we have a matching speculative response
+        for partial, task in self.pending_responses.items():
+            if final.startswith(partial) and task.done():
+                # Use speculative response
+                return task.result()
+
+        # No match - generate fresh
+        return await self.llm.generate(final)
+```
+
+### Model Selection for Speed
+
+Use fast inference providers for voice applications:
+
+```python
+# Cerebras - fastest inference for open models
+from cerebras.cloud.sdk import Cerebras
+
+cerebras = Cerebras(api_key="your-key")
+
+async def fast_llm_response(prompt: str) -> str:
+    response = cerebras.chat.completions.create(
+        model="llama-3.3-70b",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=150,  # Keep responses short for voice
+        stream=True
+    )
+
+    result = ""
+    async for chunk in response:
+        if chunk.choices[0].delta.content:
+            result += chunk.choices[0].delta.content
+            yield chunk.choices[0].delta.content
+
+# Groq - extremely fast inference
+from groq import Groq
+
+groq = Groq(api_key="your-key")
+
+async def groq_response(prompt: str):
+    response = groq.chat.completions.create(
+        model="llama-3.1-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=150,
+        stream=True
+    )
+
+    for chunk in response:
+        if chunk.choices[0].delta.content:
+            yield chunk.choices[0].delta.content
+```
+
+### Edge Deployment
+
+Deploy voice agents close to users for minimal network latency:
+
+```python
+# Cloudflare Workers AI for edge inference
+# wrangler.toml
+"""
+[ai]
+binding = "AI"
+"""
+
+# worker.py (Cloudflare Worker)
+async def handle_voice_request(request, env):
+    audio_data = await request.arrayBuffer()
+
+    # STT at the edge
+    transcript = await env.AI.run(
+        "@cf/openai/whisper",
+        {"audio": list(audio_data)}
+    )
+
+    # LLM at the edge
+    response = await env.AI.run(
+        "@cf/meta/llama-3.1-8b-instruct",
+        {"prompt": transcript["text"]}
+    )
+
+    return Response(response["response"])
+```
+
+### Latency Budget Monitoring
+
+Track latency at each stage to identify bottlenecks:
+
+```python
+import time
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class LatencyMetrics:
+    vad_ms: float = 0
+    stt_ms: float = 0
+    llm_ttfb_ms: float = 0  # Time to first byte
+    llm_total_ms: float = 0
+    tts_ttfb_ms: float = 0
+    tts_total_ms: float = 0
+
+    @property
+    def total_ttfb(self) -> float:
+        """Time from user stop speaking to first audio byte."""
+        return self.vad_ms + self.stt_ms + self.llm_ttfb_ms + self.tts_ttfb_ms
+
+    def is_acceptable(self, threshold_ms: float = 500) -> bool:
+        return self.total_ttfb < threshold_ms
+
+class LatencyTracker:
+    def __init__(self):
+        self.metrics = LatencyMetrics()
+        self._stage_start: Optional[float] = None
+
+    def start_stage(self):
+        self._stage_start = time.perf_counter()
+
+    def end_stage(self, stage: str):
+        if self._stage_start:
+            elapsed = (time.perf_counter() - self._stage_start) * 1000
+            setattr(self.metrics, f"{stage}_ms", elapsed)
+            self._stage_start = None
+```
+
+---
+
+## 65.6 Interruption Handling
+
+Natural conversation includes interruptions. Users expect to be able to cut off the agent mid-sentence. Handling this gracefully is critical for user experience.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant VAD
+    participant Agent
+    participant TTS
+    
+    User->>Agent: "What's the weather..."
+    Agent->>TTS: Start response
+    TTS->>User: "The weather today is..."
+    
+    Note over User: User interrupts!
+    User->>VAD: Starts speaking
+    VAD->>Agent: Speech detected!
+    Agent->>TTS: CANCEL output
+    TTS--xUser: Audio stops immediately
+    
+    User->>Agent: "Actually, what time is it?"
+    Agent->>TTS: New response
+    TTS->>User: "It's 3:45 PM"
+`}
+  caption="Barge-in: Detecting user speech and immediately stopping agent output."
+/>
+
+### Barge-In Detection
+
+```python
+import asyncio
+from enum import Enum
+
+class AgentState(Enum):
+    LISTENING = "listening"
+    THINKING = "thinking"
+    SPEAKING = "speaking"
+
+class InterruptibleVoiceAgent:
+    def __init__(self):
+        self.state = AgentState.LISTENING
+        self.current_response_task: asyncio.Task | None = None
+        self.tts_cancel_event = asyncio.Event()
+
+    async def on_vad_speech_start(self):
+        """Called when VAD detects user started speaking."""
+        if self.state == AgentState.SPEAKING:
+            # User is interrupting - cancel current response
+            await self.handle_interruption()
+
+    async def handle_interruption(self):
+        """Gracefully handle user interruption."""
+        print("🛑 Interruption detected - stopping response")
+
+        # Signal TTS to stop
+        self.tts_cancel_event.set()
+
+        # Cancel any pending LLM generation
+        if self.current_response_task:
+            self.current_response_task.cancel()
+            try:
+                await self.current_response_task
+            except asyncio.CancelledError:
+                pass
+
+        # Transition to listening
+        self.state = AgentState.LISTENING
+        self.tts_cancel_event.clear()
+
+    async def speak_response(self, text: str):
+        """Speak response with interruption support."""
+        self.state = AgentState.SPEAKING
+
+        async for audio_chunk in self.tts.stream(text):
+            # Check for interruption before each chunk
+            if self.tts_cancel_event.is_set():
+                print("Response cancelled due to interruption")
+                return
+
+            await self.play_audio(audio_chunk)
+
+        self.state = AgentState.LISTENING
+```
+
+### Turn-Taking Protocols
+
+Implement proper turn-taking to avoid awkward overlaps:
+
+```python
+from dataclasses import dataclass
+from typing import Callable
+import asyncio
+
+@dataclass
+class TurnConfig:
+    # How long to wait after user stops speaking before responding
+    end_of_turn_silence_ms: int = 500
+
+    # Minimum speech duration to consider as intentional
+    min_speech_duration_ms: int = 200
+
+    # How quickly to stop when interrupted
+    interrupt_fade_ms: int = 50
+
+class TurnManager:
+    def __init__(self, config: TurnConfig):
+        self.config = config
+        self.user_speaking = False
+        self.agent_speaking = False
+        self.speech_start_time: float | None = None
+        self._silence_timer: asyncio.Task | None = None
+
+    async def on_speech_start(self):
+        """User started speaking."""
+        self.user_speaking = True
+        self.speech_start_time = asyncio.get_event_loop().time()
+
+        # Cancel any pending end-of-turn timer
+        if self._silence_timer:
+            self._silence_timer.cancel()
+
+        # If agent is speaking, this is an interruption
+        if self.agent_speaking:
+            await self.on_interruption()
+
+    async def on_speech_end(self):
+        """User stopped speaking."""
+        self.user_speaking = False
+
+        # Check if speech was long enough to be intentional
+        if self.speech_start_time:
+            duration = (asyncio.get_event_loop().time() - self.speech_start_time) * 1000
+            if duration < self.config.min_speech_duration_ms:
+                # Too short - probably noise, ignore
+                return
+
+        # Start end-of-turn timer
+        self._silence_timer = asyncio.create_task(
+            self._wait_for_turn_end()
+        )
+
+    async def _wait_for_turn_end(self):
+        """Wait for silence to confirm end of turn."""
+        await asyncio.sleep(self.config.end_of_turn_silence_ms / 1000)
+
+        # If user hasn't started speaking again, it's our turn
+        if not self.user_speaking:
+            await self.on_user_turn_complete()
+
+    async def on_interruption(self):
+        """Handle user interrupting the agent."""
+        # Subclass should implement
+        pass
+
+    async def on_user_turn_complete(self):
+        """User finished their turn - agent can respond."""
+        # Subclass should implement
+        pass
+```
+
+### Graceful Handoffs
+
+When interrupted, don't just stop—acknowledge and transition smoothly:
+
+```python
+class GracefulInterruptionHandler:
+    # Short acknowledgments for interruptions
+    INTERRUPTION_ACKS = [
+        "Sure—",
+        "Of course—",
+        "Got it—",
+        "Yes?",
+        "Mm-hmm?",
+    ]
+
+    async def handle_interruption_gracefully(
+        self,
+        was_mid_sentence: bool,
+        new_user_input: str
+    ) -> str:
+        """Generate appropriate response after interruption."""
+
+        if was_mid_sentence:
+            # User cut us off - acknowledge and pivot
+            ack = random.choice(self.INTERRUPTION_ACKS)
+
+            # Generate response to new input
+            response = await self.llm.generate(
+                f"User interrupted to say: {new_user_input}\n"
+                f"Respond helpfully, starting with '{ack}'"
+            )
+            return response
+        else:
+            # Clean transition - just respond to new input
+            return await self.llm.generate(new_user_input)
+```
+
+---
+
+## 65.7 Tool Calling in Voice Contexts
+
+Tool calling in voice agents presents unique challenges: users can't see progress indicators, and silence feels like failure. The key is **verbal feedback**.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant Agent
+    participant Tool
+    
+    User->>Agent: "Book a table for 2 at 7pm"
+    Agent->>User: "Let me check availability..."
+    Agent->>Tool: search_restaurants()
+    Note over Agent,Tool: 2-3 seconds
+    Tool-->>Agent: Results
+    Agent->>User: "I found 3 options. Bella Italia has..."
+    Agent->>Tool: make_reservation()
+    Agent->>User: "Just confirming that reservation..."
+    Tool-->>Agent: Confirmed
+    Agent->>User: "All set! Table for 2 at Bella Italia, 7pm."
+`}
+  caption="Verbal feedback keeps users informed during tool execution."
+/>
+
+### Verbal Acknowledgment Pattern
+
+```python
+from typing import Callable, Any
+import asyncio
+
+class VoiceToolExecutor:
+    # Acknowledgment phrases for different tool types
+    TOOL_ACKNOWLEDGMENTS = {
+        "search": ["Let me look that up...", "Searching now...", "One moment..."],
+        "book": ["I'll book that for you...", "Making that reservation..."],
+        "send": ["Sending that now...", "I'll send that right away..."],
+        "calculate": ["Let me calculate that...", "Working on that..."],
+        "default": ["One moment...", "Let me check...", "Working on it..."]
+    }
+
+    def __init__(self, tts_callback: Callable[[str], Any]):
+        self.speak = tts_callback
+
+    async def execute_with_feedback(
+        self,
+        tool_name: str,
+        tool_func: Callable,
+        *args,
+        **kwargs
+    ) -> Any:
+        """Execute tool with verbal feedback."""
+
+        # Determine acknowledgment type
+        tool_type = self._categorize_tool(tool_name)
+        ack = random.choice(self.TOOL_ACKNOWLEDGMENTS.get(
+            tool_type,
+            self.TOOL_ACKNOWLEDGMENTS["default"]
+        ))
+
+        # Speak acknowledgment (non-blocking)
+        speak_task = asyncio.create_task(self.speak(ack))
+
+        # Execute tool
+        result = await tool_func(*args, **kwargs)
+
+        # Wait for acknowledgment to finish if still speaking
+        await speak_task
+
+        return result
+
+    def _categorize_tool(self, tool_name: str) -> str:
+        """Categorize tool for appropriate acknowledgment."""
+        name_lower = tool_name.lower()
+        if any(w in name_lower for w in ["search", "find", "lookup", "get"]):
+            return "search"
+        if any(w in name_lower for w in ["book", "reserve", "schedule"]):
+            return "book"
+        if any(w in name_lower for w in ["send", "email", "message"]):
+            return "send"
+        if any(w in name_lower for w in ["calculate", "compute", "analyze"]):
+            return "calculate"
+        return "default"
+```
+
+### Progress Updates for Long Operations
+
+```python
+class ProgressiveToolExecutor:
+    """Execute tools with periodic progress updates."""
+
+    PROGRESS_PHRASES = [
+        "Still working on that...",
+        "Almost there...",
+        "Just a moment longer...",
+        "Processing...",
+    ]
+
+    async def execute_with_progress(
+        self,
+        tool_func: Callable,
+        timeout_seconds: float = 10,
+        update_interval: float = 3,
+    ) -> Any:
+        """Execute tool with progress updates for long operations."""
+
+        tool_task = asyncio.create_task(tool_func())
+        progress_count = 0
+
+        while not tool_task.done():
+            try:
+                # Wait for tool or timeout
+                result = await asyncio.wait_for(
+                    asyncio.shield(tool_task),
+                    timeout=update_interval
+                )
+                return result
+            except asyncio.TimeoutError:
+                # Tool still running - give progress update
+                if progress_count < len(self.PROGRESS_PHRASES):
+                    await self.speak(self.PROGRESS_PHRASES[progress_count])
+                    progress_count += 1
+
+                # Check total timeout
+                if progress_count * update_interval > timeout_seconds:
+                    tool_task.cancel()
+                    await self.speak("I'm sorry, that's taking too long. Let me try another way.")
+                    raise TimeoutError("Tool execution exceeded timeout")
+
+        return tool_task.result()
+```
+
+### Voice Agent with Calendar Tool Example
+
+```python
+from datetime import datetime, timedelta
+from pydantic import BaseModel
+
+class CalendarEvent(BaseModel):
+    title: str
+    start_time: datetime
+    duration_minutes: int = 60
+    attendees: list[str] = []
+
+class VoiceCalendarAgent:
+    def __init__(self, calendar_api, llm, tts):
+        self.calendar = calendar_api
+        self.llm = llm
+        self.tts = tts
+
+        self.tools = {
+            "check_availability": self.check_availability,
+            "create_event": self.create_event,
+            "list_events": self.list_events,
+        }
+
+    async def check_availability(self, date: str, time: str) -> dict:
+        """Check if a time slot is available."""
+        await self.tts.speak("Let me check your calendar...")
+
+        dt = self._parse_datetime(date, time)
+        events = await self.calendar.get_events(
+            start=dt,
+            end=dt + timedelta(hours=1)
+        )
+
+        if events:
+            return {
+                "available": False,
+                "conflict": events[0].title,
+                "suggestion": await self._find_next_available(dt)
+            }
+        return {"available": True, "time": dt.isoformat()}
+
+    async def create_event(self, event: CalendarEvent) -> dict:
+        """Create a calendar event."""
+        await self.tts.speak(f"Creating your event: {event.title}...")
+
+        result = await self.calendar.create(event)
+
+        return {
+            "success": True,
+            "event_id": result.id,
+            "confirmation": f"I've added {event.title} to your calendar for {event.start_time.strftime('%A at %I:%M %p')}"
+        }
+
+    async def process_request(self, user_input: str) -> str:
+        """Process a voice request with tool calling."""
+
+        # LLM decides which tool to use
+        tool_decision = await self.llm.generate_with_tools(
+            user_input,
+            tools=list(self.tools.keys())
+        )
+
+        if tool_decision.tool_call:
+            # Execute the tool with verbal feedback
+            tool_func = self.tools[tool_decision.tool_call.name]
+            result = await tool_func(**tool_decision.tool_call.arguments)
+
+            # Generate natural response from tool result
+            response = await self.llm.generate(
+                f"Tool result: {result}\n"
+                f"Generate a natural spoken response for the user."
+            )
+            return response
+
+        return tool_decision.response
+```
+
+---
+
+## 65.8 Production Considerations
+
+Deploying voice agents to production requires attention to audio quality, accessibility, cost, and reliability.
+
+### Voice Activity Detection (VAD)
+
+VAD determines when the user is speaking vs. background noise. Poor VAD leads to false triggers or missed speech.
+
+```python
+# Silero VAD - lightweight and accurate
+import torch
+
+model, utils = torch.hub.load(
+    repo_or_dir='snakers4/silero-vad',
+    model='silero_vad',
+    force_reload=False
+)
+
+(get_speech_timestamps, _, read_audio, _, _) = utils
+
+def detect_speech(audio_path: str) -> list[dict]:
+    """Detect speech segments in audio."""
+    wav = read_audio(audio_path, sampling_rate=16000)
+
+    speech_timestamps = get_speech_timestamps(
+        wav,
+        model,
+        threshold=0.5,           # Sensitivity (0-1)
+        min_speech_duration_ms=250,  # Minimum speech length
+        min_silence_duration_ms=100,  # Minimum silence between segments
+        speech_pad_ms=30         # Padding around speech
+    )
+
+    return speech_timestamps
+
+# WebRTC VAD - even lighter weight
+import webrtcvad
+
+vad = webrtcvad.Vad(3)  # Aggressiveness 0-3
+
+def is_speech(audio_frame: bytes, sample_rate: int = 16000) -> bool:
+    """Check if audio frame contains speech."""
+    return vad.is_speech(audio_frame, sample_rate)
+```
+
+### Noise Handling
+
+Real-world audio is noisy. Implement noise reduction and robust processing:
+
+```python
+import noisereduce as nr
+import numpy as np
+
+def preprocess_audio(audio: np.ndarray, sample_rate: int) -> np.ndarray:
+    """Clean up audio before STT."""
+
+    # Reduce background noise
+    reduced = nr.reduce_noise(
+        y=audio,
+        sr=sample_rate,
+        stationary=True,
+        prop_decrease=0.75
+    )
+
+    # Normalize volume
+    max_val = np.max(np.abs(reduced))
+    if max_val > 0:
+        reduced = reduced / max_val * 0.95
+
+    return reduced
+
+# For real-time, use a simpler approach
+def simple_noise_gate(audio: np.ndarray, threshold: float = 0.02) -> np.ndarray:
+    """Simple noise gate for real-time processing."""
+    mask = np.abs(audio) > threshold
+    return audio * mask
+```
+
+### Multi-Language Support
+
+```python
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class LanguageConfig:
+    code: str           # ISO 639-1 code
+    stt_model: str      # STT model/language
+    tts_voice: str      # TTS voice ID
+    llm_prompt: str     # Language-specific system prompt
+
+LANGUAGE_CONFIGS = {
+    "en": LanguageConfig(
+        code="en",
+        stt_model="whisper-1",
+        tts_voice="nova",
+        llm_prompt="You are a helpful assistant. Respond in English."
+    ),
+    "es": LanguageConfig(
+        code="es",
+        stt_model="whisper-1",
+        tts_voice="alloy",  # Supports Spanish
+        llm_prompt="Eres un asistente útil. Responde en español."
+    ),
+    "ja": LanguageConfig(
+        code="ja",
+        stt_model="whisper-1",
+        tts_voice="shimmer",
+        llm_prompt="あなたは親切なアシスタントです。日本語で応答してください。"
+    ),
+}
+
+class MultilingualVoiceAgent:
+    def __init__(self):
+        self.current_language = "en"
+
+    async def detect_language(self, audio: bytes) -> str:
+        """Detect language from audio."""
+        # Whisper can detect language
+        result = await self.stt.transcribe(
+            audio,
+            task="transcribe"
+        )
+        return result.language
+
+    async def switch_language(self, language_code: str):
+        """Switch agent to different language."""
+        if language_code in LANGUAGE_CONFIGS:
+            self.current_language = language_code
+            config = LANGUAGE_CONFIGS[language_code]
+
+            # Reconfigure pipeline
+            self.stt.set_language(config.code)
+            self.tts.set_voice(config.tts_voice)
+            self.llm.set_system_prompt(config.llm_prompt)
+```
+
+### Accessibility Considerations
+
+<Callout type="info">
+  **Accessibility is Essential:** Voice agents serve users with visual
+  impairments, motor disabilities, and situational limitations. Design with
+  accessibility as a core requirement, not an afterthought.
+</Callout>
+
+```python
+class AccessibleVoiceAgent:
+    """Voice agent with accessibility features."""
+
+    def __init__(self):
+        self.speech_rate = 1.0  # Adjustable speed
+        self.verbosity = "normal"  # brief, normal, verbose
+
+    async def adjust_for_user(self, preferences: dict):
+        """Adjust agent behavior for user preferences."""
+
+        if preferences.get("slower_speech"):
+            self.speech_rate = 0.8
+
+        if preferences.get("verbose_mode"):
+            self.verbosity = "verbose"
+
+        if preferences.get("repeat_confirmations"):
+            self.always_confirm = True
+
+    async def speak_with_accessibility(self, text: str):
+        """Speak with accessibility adjustments."""
+
+        # Add pauses for comprehension
+        text = self._add_natural_pauses(text)
+
+        # Spell out abbreviations if verbose
+        if self.verbosity == "verbose":
+            text = self._expand_abbreviations(text)
+
+        await self.tts.speak(
+            text,
+            rate=self.speech_rate
+        )
+
+    def _add_natural_pauses(self, text: str) -> str:
+        """Add SSML pauses for better comprehension."""
+        # Add pause after sentences
+        text = text.replace(". ", ". <break time='300ms'/> ")
+        # Add pause before important info
+        text = text.replace(":", ": <break time='200ms'/> ")
+        return text
+```
+
+### Cost Optimization
+
+Voice agents can be expensive. Here's how to optimize:
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class CostMetrics:
+    stt_seconds: float = 0
+    llm_tokens: int = 0
+    tts_characters: int = 0
+
+    @property
+    def estimated_cost(self) -> float:
+        """Estimate cost in USD."""
+        stt_cost = self.stt_seconds * 0.006 / 60  # Whisper: $0.006/min
+        llm_cost = self.llm_tokens * 0.00001     # GPT-4o-mini estimate
+        tts_cost = self.tts_characters * 0.000015  # OpenAI TTS
+        return stt_cost + llm_cost + tts_cost
+
+class CostOptimizedAgent:
+    """Voice agent with cost controls."""
+
+    def __init__(self, daily_budget: float = 10.0):
+        self.daily_budget = daily_budget
+        self.daily_cost = 0.0
+        self.metrics = CostMetrics()
+
+    async def process_with_budget(self, audio: bytes) -> str:
+        """Process request with budget awareness."""
+
+        # Check budget before processing
+        if self.daily_cost >= self.daily_budget:
+            return "I've reached my daily limit. Please try again tomorrow."
+
+        # Use cheaper models when budget is tight
+        remaining = self.daily_budget - self.daily_cost
+
+        if remaining < 1.0:
+            # Switch to cheaper options
+            self.llm_model = "gpt-4o-mini"
+            self.tts_model = "tts-1"  # vs tts-1-hd
+
+        # Process and track costs
+        result = await self._process(audio)
+        self.daily_cost += self.metrics.estimated_cost
+
+        return result
+
+    def optimize_response_length(self, response: str, max_chars: int = 200) -> str:
+        """Truncate responses to control TTS costs."""
+        if len(response) > max_chars:
+            # Find natural break point
+            truncated = response[:max_chars]
+            last_period = truncated.rfind('.')
+            if last_period > max_chars * 0.5:
+                return truncated[:last_period + 1]
+        return response
+```
+
+---
+
+## Exercise: Build a Voice Assistant with Pipecat
+
+<Exercise
+  title="Build a Simple Voice Assistant"
+  difficulty="intermediate"
+  timeEstimate="60 minutes"
+>
+
+Build a voice assistant that can answer questions and perform simple tasks using Pipecat.
+
+**Requirements**:
+
+1. Set up a Pipecat pipeline with STT, LLM, and TTS
+2. Implement basic interruption handling
+3. Add at least one tool (weather, time, or calculator)
+4. Provide verbal feedback during tool execution
+5. Handle graceful shutdown
+
+**Setup**:
+
+```bash
+pip install pipecat-ai[daily,openai,deepgram]
+```
+
+**Starter Code**:
+
+```python
+import asyncio
+from pipecat.frames.frames import EndFrame, TextFrame
+from pipecat.pipeline.pipeline import Pipeline
+from pipecat.pipeline.runner import PipelineRunner
+from pipecat.pipeline.task import PipelineTask
+from pipecat.processors.aggregators.llm_response import LLMResponseAggregator
+from pipecat.processors.aggregators.sentence import SentenceAggregator
+from pipecat.services.openai import OpenAILLMService
+from pipecat.services.deepgram import DeepgramSTTService, DeepgramTTSService
+from pipecat.transports.services.daily import DailyTransport
+import os
+from typing import Tuple
+
+async def setup_transport() -> DailyTransport:
+    """Configure Daily.co transport for WebRTC."""
+
+    # Get Daily.co credentials from environment
+    daily_api_key = os.getenv("DAILY_API_KEY")
+    daily_room_url = os.getenv("DAILY_ROOM_URL")
+
+    if not daily_api_key or not daily_room_url:
+        raise ValueError(
+            "Missing Daily.co credentials. Set DAILY_API_KEY and DAILY_ROOM_URL environment variables."
+        )
+
+    # Configure transport with audio settings
+    transport = DailyTransport(
+        room_url=daily_room_url,
+        token=daily_api_key,
+        bot_name="Voice Assistant",
+        # Audio configuration
+        audio_in_enabled=True,  # Enable microphone input
+        audio_out_enabled=True,  # Enable speaker output
+        video_in_enabled=False,  # Disable video
+        video_out_enabled=False,
+        # VAD (Voice Activity Detection) settings
+        vad_enabled=True,
+        vad_analyzer=None,  # Use default VAD
+        # Transcription settings
+        transcription_enabled=True,
+        transcription_settings={
+            "language": "en",
+            "model": "nova-2",  # Deepgram's latest model
+            "punctuate": True,
+            "interim_results": True
+        }
+    )
+
+    return transport
+
+async def setup_services() -> Tuple[DeepgramSTTService, OpenAILLMService, DeepgramTTSService]:
+    """Configure STT, LLM, and TTS services."""
+
+    # Speech-to-Text (Deepgram)
+    stt = DeepgramSTTService(
+        api_key=os.getenv("DEEPGRAM_API_KEY"),
+        model="nova-2",  # Latest Deepgram model
+        language="en",
+        # Real-time streaming settings
+        interim_results=True,
+        punctuate=True,
+        smart_format=True,
+        # VAD settings for better turn-taking
+        vad_events=True,
+        endpointing=300,  # 300ms silence = end of speech
+    )
+
+    # LLM (OpenAI GPT-4)
+    llm = OpenAILLMService(
+        api_key=os.getenv("OPENAI_API_KEY"),
+        model="gpt-4o",
+        # System prompt for voice assistant
+        system_prompt="""You are a helpful voice assistant.
+
+Guidelines:
+- Keep responses concise (2-3 sentences max)
+- Speak naturally, as if in conversation
+- Ask clarifying questions when needed
+- Be friendly and professional
+- If you don't know something, say so
+
+Remember: Users are speaking to you, so respond conversationally.""",
+        # Streaming for low latency
+        stream=True,
+        temperature=0.7,
+    )
+
+    # Text-to-Speech (Deepgram)
+    tts = DeepgramTTSService(
+        api_key=os.getenv("DEEPGRAM_API_KEY"),
+        voice="aura-asteria-en",  # Natural female voice
+        # Audio settings
+        encoding="linear16",
+        sample_rate=24000,
+        # Streaming for low latency
+        streaming=True,
+    )
+
+    return stt, llm, tts
+
+async def create_pipeline(
+    transport: DailyTransport,
+    stt: DeepgramSTTService,
+    llm: OpenAILLMService,
+    tts: DeepgramTTSService
+) -> PipelineTask:
+    """Build the voice pipeline."""
+
+    # Create aggregators for better response quality
+    sentence_aggregator = SentenceAggregator()
+    llm_response_aggregator = LLMResponseAggregator()
+
+    # Build pipeline: Audio In → STT → LLM → TTS → Audio Out
+    pipeline = [
+        transport.input(),           # Receive audio from user
+        stt,                         # Convert speech to text
+        sentence_aggregator,         # Aggregate into complete sentences
+        llm,                         # Generate response
+        llm_response_aggregator,     # Aggregate LLM chunks
+        tts,                         # Convert text to speech
+        transport.output(),          # Send audio to user
+    ]
+
+    # Create pipeline task
+    task = PipelineTask(
+        pipeline,
+        # Error handling
+        on_error=lambda e: print(f"Pipeline error: {e}"),
+        # Logging
+        log_level="INFO"
+    )
+
+    return task
+
+async def main():
+    """Run the voice assistant."""
+
+    print("🎤 Starting Voice Assistant...")
+
+    try:
+        # Setup components
+        print("Setting up transport...")
+        transport = await setup_transport()
+
+        print("Setting up services...")
+        stt, llm, tts = await setup_services()
+
+        print("Creating pipeline...")
+        task = await create_pipeline(transport, stt, llm, tts)
+
+        # Start the assistant
+        print("✅ Voice Assistant is ready!")
+        print(f"Join the call at: {os.getenv('DAILY_ROOM_URL')}")
+
+        # Run until interrupted
+        await task.run()
+
+    except KeyboardInterrupt:
+        print("\n👋 Shutting down...")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        raise
+    finally:
+        # Cleanup
+        if 'transport' in locals():
+            await transport.cleanup()
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+    asyncio.run(main())
+```
+
+**Acceptance Criteria**:
+
+- [ ] Voice input is transcribed correctly
+- [ ] LLM generates appropriate responses
+- [ ] Responses are spoken naturally
+- [ ] Interruptions stop the current response
+- [ ] Tool calls include verbal acknowledgment
+- [ ] Total response latency under 1 second
+
+**Extension Challenges**:
+
+1. Add multi-turn conversation memory
+2. Implement language detection and switching
+3. Add a "repeat that" command
+4. Track and display latency metrics
+
+</Exercise>
+
+---
+
+## Key Takeaways
+
+<Callout type="success">
+
+**What You Learned**:
+
+1. **Voice pipeline architecture**: STT → LLM → TTS with latency at each stage
+2. **STT options**: Whisper for accuracy, Deepgram for speed, local models for privacy
+3. **TTS options**: ElevenLabs for quality, Cartesia for latency, local for cost
+4. **Frameworks**: Pipecat for flexibility, LiveKit for scale, OpenAI Realtime for simplicity
+5. **Latency optimization**: Stream everything, use fast models, deploy at the edge
+6. **Interruption handling**: VAD detection, graceful cancellation, turn-taking
+7. **Tool calling**: Verbal acknowledgments, progress updates, natural responses
+8. **Production concerns**: VAD tuning, noise handling, accessibility, cost control
+
+</Callout>
+
+---
+
+<ModuleSummary
+  points={[
+    "Voice agents follow a STT → LLM → TTS pipeline with sub-500ms latency target",
+    "End-to-end models like OpenAI Realtime bypass the pipeline for lower latency",
+    "Whisper leads in accuracy; Deepgram Nova-2 leads in streaming speed",
+    "ElevenLabs produces the most natural voices; Cartesia Sonic has lowest latency",
+    "Pipecat and LiveKit Agents are the leading open-source voice frameworks",
+    "Streaming at every stage is essential for acceptable response times",
+    "Interruption handling requires VAD, cancellation, and graceful turn-taking",
+    "Tool calling in voice contexts needs verbal feedback and progress updates",
+    "Production deployments require VAD tuning, noise handling, and cost controls",
+    "Accessibility features like adjustable speed and verbosity are essential",
+  ]}
+/>
+
+---
+
+## Further Reading
+
+- [Pipecat Documentation](https://docs.pipecat.ai/) — Open-source voice agent framework
+- [LiveKit Agents](https://docs.livekit.io/agents/) — Production voice infrastructure
+- [OpenAI Realtime API](https://platform.openai.com/docs/guides/realtime) — Native speech-to-speech
+- [Deepgram Documentation](https://developers.deepgram.com/) — Low-latency STT
+- [ElevenLabs API](https://elevenlabs.io/docs) — High-quality TTS
+- [Whisper Paper](https://arxiv.org/abs/2212.04356) — "Robust Speech Recognition via Large-Scale Weak Supervision"
+- [Silero VAD](https://github.com/snakers4/silero-vad) — Lightweight voice activity detection
+- [WebRTC for Voice](https://webrtc.org/) — Real-time communication standard
+- [Voice UI Design Guidelines](https://developer.amazon.com/en-US/docs/alexa/alexa-design/get-started.html) — Best practices from Alexa
+
+---
+
+## Next Steps
+
+In the next module, we'll explore **Computer Use Agents**—building agents that can interact with desktop applications, browsers, and GUIs through visual understanding and automated input.
+
+<PageNavigation
+  prev={{
+    title: "Day 62: Advanced Context Engineering",
+    href: "/modules/day-62-context-engineering",
+  }}
+  next={{
+    title: "Day 68: ML Analogies for Agents",
+    href: "/modules/day-68-ml-analogies",
+  }}
+/>

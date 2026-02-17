@@ -202,6 +202,811 @@ The advertised context window is not the effective context window.
 
 ---
 
+## Context Window Evolution (2024-2025)
+
+The context window landscape has transformed dramatically in recent years. Understanding this evolution helps you make informed decisions about which models to use and how to architect your systems.
+
+### Historical Progression
+
+<Mermaid
+  chart={`
+timeline
+    title Context Window Evolution
+    2020 : GPT-3: 4K tokens
+    2022 : GPT-3.5: 4K-16K tokens
+    2023 : GPT-4: 8K-32K tokens
+         : Claude 2: 100K tokens
+    2024 : GPT-4 Turbo: 128K tokens
+         : Claude 3: 200K tokens
+         : Gemini 1.5: 1M tokens
+    2025 : Gemini 2.5: 1M+ tokens (2M in some variants)
+         : Claude 3.5: 200K tokens
+         : GPT-4o: 128K tokens
+`}
+/>
+
+### Major Model Context Windows (2025)
+
+| Model                 | Provider  | Context Window                   | Effective Window\* | Best Use Case                               |
+| :-------------------- | :-------- | :------------------------------- | :----------------- | :------------------------------------------ |
+| **Gemini 2.5 Pro**    | Google    | 1M+ tokens (2M in some variants) | ~256K-512K tokens  | Massive document analysis, entire codebases |
+| **Gemini 2.5 Flash**  | Google    | 1M tokens                        | ~128K-256K tokens  | Cost-effective long-context tasks           |
+| **Claude 3.5 Sonnet** | Anthropic | 200K tokens                      | ~100K-150K tokens  | Complex reasoning, coding, analysis         |
+| **Claude 3.5 Haiku**  | Anthropic | 200K tokens                      | ~80K-120K tokens   | Fast, cost-effective tasks                  |
+| **GPT-4o**            | OpenAI    | 128K tokens                      | ~64K-96K tokens    | General-purpose, multimodal                 |
+| **GPT-4 Turbo**       | OpenAI    | 128K tokens                      | ~64K-96K tokens    | Complex reasoning tasks                     |
+| **Llama 3.1 405B**    | Meta      | 128K tokens                      | ~64K-96K tokens    | Open-source, self-hosted                    |
+| **Mistral Large**     | Mistral   | 128K tokens                      | ~64K-96K tokens    | European data residency                     |
+
+<Callout type="info">
+  **\*Effective Window:** The context size where the model maintains
+  high-quality performance. Beyond this, accuracy typically degrades
+  significantly. These are approximate ranges based on research and practical
+  testing.
+</Callout>
+
+### What 1M+ Tokens Actually Means
+
+To put Gemini 2.5's 1M+ token context into perspective:
+
+```
+1 Million Tokens ≈
+├── ~750,000 words of text
+├── ~3,000 pages of documents
+├── ~10 average-length novels
+├── ~100 hours of meeting transcripts
+├── ~50,000 lines of code (entire medium-sized codebase)
+└── ~30 hours of video transcripts
+```
+
+<Callout type="warning">
+  **Reality Check:** Just because you *can* fit 1M tokens doesn't mean you
+  *should*. The "Lost in the Middle" problem becomes more severe at extreme
+  context lengths. Strategic context curation often outperforms brute-force
+  context stuffing.
+</Callout>
+
+### Choosing the Right Context Window
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Context Window Selection Guide                  │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Task requires < 32K tokens?                                 │
+│    → Any modern model works well                             │
+│    → Optimize for cost and latency                           │
+│                                                              │
+│  Task requires 32K-128K tokens?                              │
+│    → GPT-4o, Claude 3.5, Gemini all viable                   │
+│    → Consider "lost in the middle" mitigation                │
+│                                                              │
+│  Task requires 128K-500K tokens?                             │
+│    → Gemini 2.5 or Claude 3.5 recommended                    │
+│    → Implement chunking strategies                           │
+│    → Use hierarchical summarization                          │
+│                                                              │
+│  Task requires 500K+ tokens?                                 │
+│    → Gemini 2.5 Pro (1M-2M context)                          │
+│    → Consider RAG hybrid approach                            │
+│    → Strategic placement critical                            │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Deep Dive: The "Lost in the Middle" Problem
+
+<ConceptVisual
+  image="/images/day_09_04_attention_heatmap_1768860421288.png"
+  alt="Heatmap showing attention distribution across context"
+  caption="The U-Shaped Attention Curve: Models attend strongly to the beginning and end, with a significant dip in the middle."
+/>
+
+The "Lost in the Middle" phenomenon is one of the most important discoveries in LLM research. Understanding it is crucial for effective context engineering.
+
+### What Is "Lost in the Middle"?
+
+<ConceptIntro
+  title="Lost in the Middle"
+  analogy="Imagine reading a 500-page book and being asked questions about it. You'd likely remember the opening chapters vividly (primacy effect) and the ending clearly (recency effect), but struggle with details from chapter 27. LLMs exhibit the same cognitive bias—they 'remember' the beginning and end of their context much better than the middle."
+  technicalDef="Lost in the Middle refers to the empirical finding that LLMs exhibit a U-shaped performance curve when retrieving information from different positions in their context window. Performance is highest for information at the beginning (primacy) and end (recency) of the context, with significant degradation for information in the middle positions."
+  whyItMatters="This phenomenon can cause 30%+ accuracy drops when critical information is placed in the middle of long contexts. Understanding and mitigating this effect is essential for building reliable AI systems that process large amounts of information."
+/>
+
+### The Research Behind It
+
+The seminal paper "Lost in the Middle: How Language Models Use Long Contexts" (Liu et al., 2023) demonstrated this effect across multiple models:
+
+<Mermaid
+  chart={`
+xychart-beta
+    title "Accuracy by Information Position in Context"
+    x-axis ["Start", "25%", "Middle", "75%", "End"]
+    y-axis "Accuracy (%)" 0 --> 100
+    bar [85, 65, 55, 68, 82]
+`}
+/>
+
+**Key Findings from the Research:**
+
+| Finding                                       | Implication                           |
+| :-------------------------------------------- | :------------------------------------ |
+| Performance drops 30%+ in middle positions    | Critical info should be at edges      |
+| Effect worsens with longer contexts           | More severe in 100K+ token contexts   |
+| Affects all tested models (GPT, Claude, etc.) | Universal problem, not model-specific |
+| Persists even with explicit instructions      | Can't be "prompted away"              |
+| More pronounced for factual retrieval         | Less severe for reasoning tasks       |
+
+### Why Does This Happen?
+
+Several factors contribute to the "Lost in the Middle" effect:
+
+```python
+# Conceptual illustration of attention distribution
+def attention_distribution(context_length: int) -> list:
+    """
+    Simplified model of how attention is distributed across context.
+    Real attention is more complex, but this captures the U-shape pattern.
+    """
+    positions = list(range(context_length))
+    attention_scores = []
+
+    for pos in positions:
+        # Primacy effect: strong attention at start
+        primacy = math.exp(-pos / (context_length * 0.1))
+
+        # Recency effect: strong attention at end
+        recency = math.exp(-(context_length - pos) / (context_length * 0.1))
+
+        # Combined effect creates U-shape
+        score = primacy + recency
+        attention_scores.append(score)
+
+    return attention_scores
+```
+
+**Contributing Factors:**
+
+1. **Training Data Distribution**: Most training examples are shorter, so models have more experience with beginning/end patterns
+2. **Positional Encoding Limitations**: Position embeddings may not scale perfectly to very long sequences
+3. **Attention Mechanism Design**: Self-attention naturally creates competition for "attention budget"
+4. **Causal Masking**: In autoregressive models, later tokens can attend to earlier ones but not vice versa
+
+### Measuring the Impact
+
+Here's how to test for "Lost in the Middle" effects in your own applications:
+
+```python
+def test_lost_in_middle(
+    model: str,
+    needle: str,
+    haystack_size: int = 50000,
+    positions: list = [0.0, 0.25, 0.5, 0.75, 1.0]
+) -> dict:
+    """
+    Test model's ability to retrieve information from different context positions.
+
+    Args:
+        model: Model identifier
+        needle: The information to find (e.g., "The secret code is 42")
+        haystack_size: Total context size in tokens
+        positions: Relative positions to test (0.0 = start, 1.0 = end)
+
+    Returns:
+        Dictionary mapping positions to retrieval accuracy
+    """
+    results = {}
+    haystack = generate_filler_text(haystack_size)
+
+    for pos in positions:
+        # Insert needle at specified position
+        context = insert_at_position(haystack, needle, pos)
+
+        # Ask model to retrieve the information
+        prompt = f"""
+        {context}
+
+        Question: What is the secret code mentioned in the text above?
+        Answer:
+        """
+
+        response = call_model(model, prompt)
+        correct = "42" in response
+        results[pos] = correct
+
+    return results
+
+# Example usage
+results = test_lost_in_middle(
+    model="gpt-4o",
+    needle="The secret code is 42.",
+    haystack_size=50000
+)
+# Typical results: {0.0: True, 0.25: True, 0.5: False, 0.75: True, 1.0: True}
+```
+
+---
+
+## Mitigation Strategies for "Lost in the Middle"
+
+Understanding the problem is only half the battle. Here are proven strategies to mitigate the "Lost in the Middle" effect:
+
+### Strategy 1: Strategic Information Placement
+
+<Callout type="tip">
+  **The Golden Rule:** Place your most critical information at the **beginning**
+  or **end** of the context. Never bury important details in the middle.
+</Callout>
+
+```python
+def optimize_context_placement(
+    critical_info: str,
+    supporting_info: str,
+    background_info: str
+) -> str:
+    """
+    Arrange context to maximize attention on critical information.
+
+    Structure:
+    1. Critical info (beginning - primacy effect)
+    2. Background/filler (middle - lowest attention)
+    3. Supporting info (end - recency effect)
+    4. Restate critical info (very end - strongest recency)
+    """
+    return f"""
+## Critical Context (Read Carefully)
+{critical_info}
+
+## Background Information
+{background_info}
+
+## Supporting Details
+{supporting_info}
+
+## Key Points to Remember
+{critical_info}  # Restated for emphasis
+"""
+```
+
+### Strategy 2: Chunking with Overlap
+
+For very long documents, process in overlapping chunks to ensure no information falls entirely in a "dead zone":
+
+```python
+def chunk_with_overlap(
+    document: str,
+    chunk_size: int = 8000,
+    overlap: int = 1000
+) -> list:
+    """
+    Split document into overlapping chunks.
+    Overlap ensures information near chunk boundaries gets attention.
+
+    Args:
+        document: Full document text
+        chunk_size: Target size per chunk (tokens)
+        overlap: Overlap between consecutive chunks (tokens)
+
+    Returns:
+        List of overlapping chunks
+    """
+    tokens = tokenize(document)
+    chunks = []
+    start = 0
+
+    while start < len(tokens):
+        end = min(start + chunk_size, len(tokens))
+        chunk = tokens[start:end]
+        chunks.append(detokenize(chunk))
+
+        # Move start, accounting for overlap
+        start = end - overlap
+
+        # Avoid tiny final chunks
+        if len(tokens) - start < overlap:
+            break
+
+    return chunks
+
+def process_long_document(document: str, query: str) -> str:
+    """Process a long document by chunking and aggregating results."""
+    chunks = chunk_with_overlap(document)
+
+    chunk_results = []
+    for i, chunk in enumerate(chunks):
+        # Place query at both start and end of each chunk
+        prompt = f"""
+Query: {query}
+
+Document Section {i+1}/{len(chunks)}:
+{chunk}
+
+Based on this section, what information is relevant to the query?
+"""
+        result = call_model(prompt)
+        chunk_results.append(result)
+
+    # Aggregate results
+    aggregation_prompt = f"""
+Query: {query}
+
+Information gathered from document sections:
+{chr(10).join(chunk_results)}
+
+Synthesize a comprehensive answer based on all sections:
+"""
+    return call_model(aggregation_prompt)
+```
+
+### Strategy 3: Hierarchical Summarization
+
+For extremely long contexts, use a hierarchical approach:
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Level 0: Raw Documents"
+        D1[Doc 1<br/>50K tokens]
+        D2[Doc 2<br/>50K tokens]
+        D3[Doc 3<br/>50K tokens]
+        D4[Doc 4<br/>50K tokens]
+    end
+    
+    subgraph "Level 1: Section Summaries"
+        S1[Summary 1<br/>5K tokens]
+        S2[Summary 2<br/>5K tokens]
+    end
+    
+    subgraph "Level 2: Master Summary"
+        M[Master Summary<br/>2K tokens]
+    end
+    
+    D1 --> S1
+    D2 --> S1
+    D3 --> S2
+    D4 --> S2
+    S1 --> M
+    S2 --> M
+    
+    style M fill:#c8e6c9
+`}
+/>
+
+```python
+def hierarchical_summarize(
+    documents: list,
+    docs_per_group: int = 4,
+    summary_ratio: float = 0.1
+) -> str:
+    """
+    Create hierarchical summaries to compress large document sets.
+
+    Args:
+        documents: List of document texts
+        docs_per_group: Documents to summarize together
+        summary_ratio: Target compression ratio per level
+
+    Returns:
+        Final master summary
+    """
+    current_level = documents
+    level = 0
+
+    while len(current_level) > 1:
+        level += 1
+        next_level = []
+
+        # Group documents
+        for i in range(0, len(current_level), docs_per_group):
+            group = current_level[i:i + docs_per_group]
+            combined = "\n\n---\n\n".join(group)
+
+            # Summarize group
+            summary = call_model(f"""
+Summarize the following documents, preserving:
+- Key facts and figures
+- Important decisions or conclusions
+- Names, dates, and specific details
+- Any action items or recommendations
+
+Documents:
+{combined}
+
+Comprehensive Summary:
+""")
+            next_level.append(summary)
+
+        current_level = next_level
+        print(f"Level {level}: {len(current_level)} summaries")
+
+    return current_level[0]
+```
+
+### Strategy 4: Attention Anchors
+
+Use explicit markers to help the model pay attention to specific sections:
+
+```python
+def add_attention_anchors(context: str, key_sections: dict) -> str:
+    """
+    Add attention anchors to highlight important sections.
+
+    Args:
+        context: The full context
+        key_sections: Dict mapping section names to their content
+
+    Returns:
+        Context with attention anchors
+    """
+    anchored_context = """
+╔══════════════════════════════════════════════════════════════╗
+║  IMPORTANT: The following sections contain critical info     ║
+╚══════════════════════════════════════════════════════════════╝
+
+"""
+
+    for section_name, content in key_sections.items():
+        anchored_context += f"""
+┌─────────────────────────────────────────────────────────────┐
+│ 🔴 CRITICAL SECTION: {section_name}
+└─────────────────────────────────────────────────────────────┘
+{content}
+
+"""
+
+    anchored_context += f"""
+═══════════════════════════════════════════════════════════════
+BACKGROUND CONTEXT (for reference):
+═══════════════════════════════════════════════════════════════
+
+{context}
+
+═══════════════════════════════════════════════════════════════
+REMINDER: Key information is in the CRITICAL SECTIONS above.
+═══════════════════════════════════════════════════════════════
+"""
+
+    return anchored_context
+```
+
+### Strategy 5: Query-Aware Context Ordering
+
+Reorder context based on relevance to the current query:
+
+```python
+def reorder_by_relevance(
+    context_sections: list,
+    query: str,
+    model: str = "text-embedding-3-small"
+) -> list:
+    """
+    Reorder context sections by relevance to query.
+    Most relevant sections go at the beginning and end.
+
+    Args:
+        context_sections: List of context sections
+        query: The user's query
+        model: Embedding model for similarity
+
+    Returns:
+        Reordered sections (most relevant at edges)
+    """
+    # Calculate relevance scores
+    query_embedding = get_embedding(query, model)
+    scored_sections = []
+
+    for section in context_sections:
+        section_embedding = get_embedding(section, model)
+        score = cosine_similarity(query_embedding, section_embedding)
+        scored_sections.append((section, score))
+
+    # Sort by relevance
+    scored_sections.sort(key=lambda x: x[1], reverse=True)
+
+    # Interleave: most relevant at start and end
+    reordered = []
+    for i, (section, score) in enumerate(scored_sections):
+        if i % 2 == 0:
+            reordered.insert(0, section)  # Add to start
+        else:
+            reordered.append(section)  # Add to end
+
+    return reordered
+```
+
+---
+
+## Practical Context Engineering Tips
+
+Based on research and production experience, here are actionable tips for effective context engineering:
+
+### Tip 1: The "Sandwich" Pattern
+
+Structure your prompts like a sandwich—important content on the outside, filler in the middle:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  🍞 TOP BUN: System instructions + Critical context          │
+├─────────────────────────────────────────────────────────────┤
+│  🥬 FILLING: Background info, examples, supporting data      │
+├─────────────────────────────────────────────────────────────┤
+│  🍞 BOTTOM BUN: User query + Key reminders                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Tip 2: Use Clear Section Markers
+
+Help the model navigate long contexts with explicit structure:
+
+```python
+SECTION_TEMPLATE = """
+================================================================================
+SECTION: {section_name}
+PURPOSE: {purpose}
+================================================================================
+
+{content}
+
+================================================================================
+END SECTION: {section_name}
+================================================================================
+"""
+
+def format_context_sections(sections: dict) -> str:
+    """Format multiple sections with clear markers."""
+    formatted = []
+    for name, data in sections.items():
+        formatted.append(SECTION_TEMPLATE.format(
+            section_name=name.upper(),
+            purpose=data.get("purpose", "Reference information"),
+            content=data["content"]
+        ))
+    return "\n\n".join(formatted)
+```
+
+### Tip 3: Implement a Context Window Calculator
+
+Always know how much context you're using:
+
+```python
+import tiktoken
+
+class ContextWindowCalculator:
+    """Calculate and manage context window usage."""
+
+    def __init__(self, model: str = "gpt-4o", max_tokens: int = 128000):
+        self.model = model
+        self.max_tokens = max_tokens
+        self.encoder = tiktoken.encoding_for_model(model)
+
+    def count_tokens(self, text: str) -> int:
+        """Count tokens in text."""
+        return len(self.encoder.encode(text))
+
+    def analyze_context(self, components: dict) -> dict:
+        """
+        Analyze context window usage by component.
+
+        Args:
+            components: Dict mapping component names to their text
+
+        Returns:
+            Analysis with token counts and percentages
+        """
+        analysis = {
+            "components": {},
+            "total_tokens": 0,
+            "remaining_tokens": 0,
+            "utilization_percent": 0,
+            "warnings": []
+        }
+
+        for name, text in components.items():
+            tokens = self.count_tokens(text)
+            analysis["components"][name] = {
+                "tokens": tokens,
+                "percent": 0  # Calculated after total
+            }
+            analysis["total_tokens"] += tokens
+
+        # Calculate percentages
+        for name in analysis["components"]:
+            pct = (analysis["components"][name]["tokens"] /
+                   analysis["total_tokens"] * 100)
+            analysis["components"][name]["percent"] = round(pct, 1)
+
+        analysis["remaining_tokens"] = self.max_tokens - analysis["total_tokens"]
+        analysis["utilization_percent"] = round(
+            analysis["total_tokens"] / self.max_tokens * 100, 1
+        )
+
+        # Generate warnings
+        if analysis["utilization_percent"] > 90:
+            analysis["warnings"].append(
+                "⚠️ Context utilization >90% - risk of truncation"
+            )
+        if analysis["utilization_percent"] > 75:
+            analysis["warnings"].append(
+                "⚠️ High utilization - consider summarization"
+            )
+        if analysis["remaining_tokens"] < 4000:
+            analysis["warnings"].append(
+                "⚠️ Limited space for model output"
+            )
+
+        return analysis
+
+    def print_analysis(self, components: dict):
+        """Print a formatted analysis of context usage."""
+        analysis = self.analyze_context(components)
+
+        print(f"\n{'='*60}")
+        print(f"CONTEXT WINDOW ANALYSIS ({self.model})")
+        print(f"{'='*60}")
+        print(f"Max Tokens: {self.max_tokens:,}")
+        print(f"Used Tokens: {analysis['total_tokens']:,}")
+        print(f"Remaining: {analysis['remaining_tokens']:,}")
+        print(f"Utilization: {analysis['utilization_percent']}%")
+        print(f"\n{'Component':<30} {'Tokens':>10} {'%':>8}")
+        print(f"{'-'*50}")
+
+        for name, data in analysis["components"].items():
+            print(f"{name:<30} {data['tokens']:>10,} {data['percent']:>7}%")
+
+        if analysis["warnings"]:
+            print(f"\n{'='*60}")
+            print("WARNINGS:")
+            for warning in analysis["warnings"]:
+                print(f"  {warning}")
+        print(f"{'='*60}\n")
+
+# Usage example
+calculator = ContextWindowCalculator(model="gpt-4o", max_tokens=128000)
+calculator.print_analysis({
+    "system_prompt": system_prompt,
+    "tool_definitions": tool_defs,
+    "retrieved_context": rag_results,
+    "conversation_history": history,
+    "current_query": user_query
+})
+```
+
+### Tip 4: Test Context Placement Empirically
+
+Don't assume—test where your model performs best:
+
+```python
+def test_placement_sensitivity(
+    model: str,
+    critical_info: str,
+    filler_content: str,
+    test_query: str,
+    expected_answer: str,
+    num_trials: int = 5
+) -> dict:
+    """
+    Test how placement affects retrieval accuracy.
+
+    Returns accuracy at different positions.
+    """
+    positions = {
+        "start": 0.0,
+        "quarter": 0.25,
+        "middle": 0.5,
+        "three_quarter": 0.75,
+        "end": 1.0
+    }
+
+    results = {}
+
+    for pos_name, pos_value in positions.items():
+        correct_count = 0
+
+        for _ in range(num_trials):
+            # Build context with info at specified position
+            context = build_context_with_position(
+                critical_info, filler_content, pos_value
+            )
+
+            response = call_model(model, f"{context}\n\n{test_query}")
+
+            if expected_answer.lower() in response.lower():
+                correct_count += 1
+
+        results[pos_name] = {
+            "position": pos_value,
+            "accuracy": correct_count / num_trials,
+            "trials": num_trials
+        }
+
+    return results
+```
+
+### Tip 5: Monitor for Context-Related Failures
+
+Set up monitoring to detect when context issues cause problems:
+
+```python
+class ContextHealthMonitor:
+    """Monitor for context-related issues in production."""
+
+    def __init__(self):
+        self.metrics = {
+            "total_requests": 0,
+            "context_warnings": 0,
+            "suspected_lost_in_middle": 0,
+            "context_overflow": 0
+        }
+
+    def check_response_quality(
+        self,
+        query: str,
+        context: str,
+        response: str,
+        expected_keywords: list
+    ) -> dict:
+        """
+        Check if response quality suggests context issues.
+        """
+        self.metrics["total_requests"] += 1
+        issues = []
+
+        # Check if expected information was retrieved
+        keywords_found = sum(
+            1 for kw in expected_keywords
+            if kw.lower() in response.lower()
+        )
+        retrieval_rate = keywords_found / len(expected_keywords)
+
+        if retrieval_rate < 0.5:
+            issues.append("low_retrieval_rate")
+            self.metrics["suspected_lost_in_middle"] += 1
+
+        # Check for generic/evasive responses
+        evasive_phrases = [
+            "i don't see",
+            "not mentioned",
+            "cannot find",
+            "no information about"
+        ]
+        if any(phrase in response.lower() for phrase in evasive_phrases):
+            # Verify the info IS in context
+            if any(kw.lower() in context.lower() for kw in expected_keywords):
+                issues.append("info_present_but_missed")
+                self.metrics["suspected_lost_in_middle"] += 1
+
+        return {
+            "retrieval_rate": retrieval_rate,
+            "issues": issues,
+            "healthy": len(issues) == 0
+        }
+
+    def get_health_report(self) -> dict:
+        """Generate health report."""
+        total = self.metrics["total_requests"]
+        if total == 0:
+            return {"status": "no_data"}
+
+        lost_in_middle_rate = (
+            self.metrics["suspected_lost_in_middle"] / total
+        )
+
+        return {
+            "total_requests": total,
+            "lost_in_middle_rate": f"{lost_in_middle_rate:.1%}",
+            "status": "healthy" if lost_in_middle_rate < 0.1 else "degraded",
+            "recommendation": (
+                "Consider context restructuring"
+                if lost_in_middle_rate > 0.1
+                else "Context strategy working well"
+            )
+        }
+```
+
+---
+
 ## 2.1 The Memory Hierarchy
 
 <ConceptVisual

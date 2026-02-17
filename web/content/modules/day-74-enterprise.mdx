@@ -55,7 +55,31 @@ day: 74
 
 ## 74.1 The Reality Gap
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing two contrasting scenes side-by-side: Left side shows a simple, clean demo environment with a single happy user and "It works!" text. Right side shows a complex enterprise environment with multiple users, servers, compliance checkmarks, monitoring dashboards, and alert symbols. Use a split-screen design with vibrant colors on the demo side and professional, structured layout on the enterprise side. This visual should emphasize the stark difference between demo and production environments. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    subgraph Demo [The Demo]
+        U1[User] -->|Happy Path| A1[Agent]
+        A1 -->|Works!| U1
+    end
+    
+    subgraph Enterpise [Enterprise Prod]
+        U2[User] -->|Traffic| LB[Load Balancer]
+        LB -->|Auth| Sec[Security]
+        Sec -->|Route| A2[Agent Cluster]
+        A2 -->|Log| Audit[Audit DB]
+        A2 -->|Monitor| Ops[Dashboard]
+        A2 <-->|Backup| Failover[Redundancy]
+    end
+    
+    style Demo fill:#e3f2fd,stroke:#2196f3
+    style Enterpise fill:#f3e5f5,stroke:#9c27b0
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: The Reality Gap</p>
 
 <Callout type="warning">
   **The Hard Truth:** Twitter demos are not enterprise production. What works in
@@ -66,8 +90,6 @@ day: 74
 **Think of it like this:** Building a demo agent is like cooking a meal for yourself at home. Building an enterprise agent is like running a restaurant chain—you need health inspections, consistent quality across locations, supply chain management, and the ability to serve thousands of customers simultaneously without anyone getting food poisoning.
 
 ### Demo vs. Production
-
-{/* IMAGE_PLACEHOLDER: Create a comparison table visualization as an infographic. Left column shows "Demo" with casual, simple icons (single user, restart button, "works on my machine" badge). Right column shows "Enterprise Production" with professional, complex icons (multiple users, redundancy systems, SLA badges, security shields). Use contrasting colors - playful for demo side, professional for enterprise side. Make it visually striking to emphasize the gap. */}
 
 | Aspect             | Demo                   | Enterprise Production           |
 | :----------------- | :--------------------- | :------------------------------ |
@@ -80,13 +102,12 @@ day: 74
 | **Access**         | Open                   | RBAC, SSO, MFA                  |
 
 **Understanding the Numbers:**
+
 - **P99 < 2 seconds**: 99% of requests must complete in under 2 seconds (not average, but 99th percentile)
 - **99.9% SLA**: Only 43 minutes of downtime allowed per month
 - **10,000 concurrent users**: Your system must handle 10K simultaneous requests without degradation
 
 ### What Enterprises Actually Care About
-
-{/* IMAGE_PLACEHOLDER: Create an infographic showing four pillars of enterprise AI: Reliability (with icons of shields and backup systems), Compliance (with checkmarks and legal documents), Governance (with organizational charts and approval stamps), and Operations (with monitoring dashboards and alert bells). Each pillar should have 3-4 sub-items listed below it. Use a professional color scheme with icons and connecting lines to show how these pillars support the overall enterprise AI system. */}
 
 <Mermaid
   chart={`
@@ -117,6 +138,7 @@ graph TB
 />
 
 **Enterprise Priorities Explained:**
+
 - **Reliability**: Your agent must work even when external services fail. Like having backup generators in a hospital.
 - **Compliance**: Every action must be traceable and auditable. Think of it as a flight recorder for your AI.
 - **Governance**: Not everyone should be able to do everything. Like having different key cards for different areas in a building.
@@ -126,7 +148,24 @@ graph TB
 
 ## 74.2 Case Study: Retail - Proactive Shopping Assistant
 
-{/* IMAGE_PLACEHOLDER: Create a flowchart illustration showing a customer's journey through an e-commerce site with the proactive agent intervening at key moments. Show: 1) Customer viewing product (agent observing), 2) Customer hovering over cart button (hesitation detected), 3) Agent offering help with a friendly chat bubble, 4) Either conversion or escalation to human. Use e-commerce UI elements and friendly, modern design. Include metrics/stats overlays showing the 70% abandonment rate problem. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    View[User Views Product] --> Hover[Hover Cart]
+    Hover -->|Hesitation| Agent{Agent Detects}
+    Agent -->|Score > 0.5| Chat[Offer Help]
+    Agent -->|Score < 0.5| Nudge[Show Discount]
+    Chat -->|Resolve| Buy[Conversion]
+    Chat -->|Fail| Human[Human Support]
+    
+    style Agent fill:#bbf,stroke:#333
+    style Buy fill:#c8e6c9,stroke:#2e7d32
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Proactive Intervention Flow</p>
 
 ### The Problem
 
@@ -210,13 +249,24 @@ class ProactiveShopperAgent:
 
 ### Results
 
-{/* IMAGE_PLACEHOLDER: Create a results dashboard visualization showing three key metrics with before/after comparisons: 1) A pie chart showing 70% automated resolution vs 30% human intervention, 2) An upward trending arrow showing 15% conversion increase, 3) A downward trending graph showing 40% reduction in support tickets. Use green for positive metrics and include dollar signs to emphasize ROI. Make it look like a professional business dashboard. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+pie title Resolution Type
+    "Automated" : 70
+    "Human Intervention" : 30
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Automated vs Human Resolution</p>
 
 - 70% of inquiries resolved without human intervention
 - 15% increase in conversion rate
 - 40% reduction in support ticket volume
 
 **ROI Calculation:** For a mid-size retailer, this translates to:
+
 - $500K+ annual revenue increase from improved conversion
 - $200K+ savings in support costs
 - Payback period: 3-4 months
@@ -234,13 +284,12 @@ class ProactiveShopperAgent:
 
 ## 74.3 Case Study: Logistics - Intelligent Routing
 
-{/* IMAGE_PLACEHOLDER: Create an animated-style illustration of a city map with delivery trucks, showing multiple routes being dynamically adjusted. Include visual indicators for: traffic congestion (red areas), weather conditions (rain clouds), and optimized routes (green lines). Show before/after comparison with original routes in gray and optimized routes in green. Add small agent icons (planner, monitor, optimizer, coordinator) working together around the map. */}
-
 ### The Problem
 
 Complex delivery networks with dynamic conditions (traffic, weather, vehicle availability).
 
 **The Challenge:** A logistics company with 500 daily deliveries faces:
+
 - 50+ route changes per day due to traffic
 - Weather-related delays costing $10K+ weekly
 - Manual route adjustments taking 15-20 minutes each
@@ -340,13 +389,29 @@ class LogisticsOrchestrator:
 
 ### Results
 
-{/* IMAGE_PLACEHOLDER: Create a professional metrics dashboard showing three circular progress indicators: 1) Delivery time reduction (12% with a clock icon), 2) Fuel savings (8% with a gas pump icon), 3) On-time delivery rate (99.7% with a checkmark). Include small trend lines showing improvement over time. Use logistics industry colors (blues and greens) and make it look like a real-time operations dashboard. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    T1[Time] -.->|-12%| T2[Saved]
+    F1[Fuel] -.->|-8%| F2[Saved]
+    O1[On-Time] -.->|+99.7%| O2[Success]
+    
+    style T2 fill:#c8e6c9,stroke:#2e7d32
+    style F2 fill:#c8e6c9,stroke:#2e7d32
+    style O2 fill:#c8e6c9,stroke:#2e7d32
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Logistics Optimization Results</p>
 
 - 12% reduction in delivery times
-- 8% fuel cost savings  
+- 8% fuel cost savings
 - 99.7% on-time delivery rate
 
 **Business Impact:** For a fleet of 100 vehicles:
+
 - **Time savings**: 12% × 8 hours/day × 100 vehicles = 96 hours saved daily
 - **Fuel savings**: 8% × $500/vehicle/day × 100 = $4,000 saved daily ($1.46M annually)
 - **Customer satisfaction**: 99.7% on-time rate vs. industry average of 94%
@@ -355,13 +420,33 @@ class LogisticsOrchestrator:
 
 ## 74.4 Case Study: Financial Services - Compliance Agent
 
-{/* IMAGE_PLACEHOLDER: Create a professional illustration showing a document review workflow. Show documents flowing through different stages: 1) Document intake with PII redaction, 2) AI analysis with magnifying glass highlighting issues, 3) Risk scoring with color-coded risk levels (green/yellow/red), 4) Human reviewer at desk for high-risk items. Include security and compliance icons (locks, shields, checkmarks). Use financial services color palette (navy, gold, white). */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    Doc[Document] --> Redact[Redact PII]
+    Redact --> Analyze[AI Analysis]
+    Analyze --> Score{Risk Score}
+    Score -->|> 0.7| Human[Human Review]
+    Score -->|< 0.7| Auto[Auto Approve]
+    Human -->|Log| Audit[Audit Log]
+    Auto -->|Log| Audit
+    
+    style Score fill:#fff9c4,stroke:#fbc02d
+    style Human fill:#ffccbc,stroke:#bf360c
+    style Auto fill:#c8e6c9,stroke:#2e7d32
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Compliance Review Workflow</p>
 
 ### The Problem
 
 Manual compliance review is slow, expensive, and inconsistent.
 
 **The Cost of Manual Review:**
+
 - Average review time: 2-4 hours per document
 - Compliance team cost: $150-300/hour
 - Inconsistency rate: 15-20% (different reviewers, different conclusions)
@@ -464,7 +549,24 @@ class ComplianceAgent:
 
 ### Audit Log Schema
 
-{/* IMAGE_PLACEHOLDER: Create a database schema diagram showing the compliance_audit_log table structure with all fields, data types, and indexes. Use a professional database diagram style with primary keys highlighted in gold, indexes shown with lightning bolt icons, and relationships indicated with arrows. Include sample data rows to show what actual audit entries look like. Use a clean, technical style suitable for documentation. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+erDiagram
+    COMPLIANCE_AUDIT_LOG {
+        uuid id PK
+        varchar event_type
+        uuid user_id
+        varchar doc_hash
+        decimal risk_score
+        timestamp timestamp
+        jsonb metadata
+    }
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Audit Log Schema</p>
 
 ```sql
 CREATE TABLE compliance_audit_log (
@@ -487,6 +589,7 @@ CREATE INDEX idx_audit_risk ON compliance_audit_log(risk_score);
 ```
 
 **Why This Schema Matters:**
+
 - **Immutable logs**: Once written, audit logs should never be modified (use append-only storage)
 - **Queryable**: Indexes support common compliance queries ("Show me all high-risk reviews by user X")
 - **Retention**: Plan for 7+ years of retention (regulatory requirement in many industries)
@@ -496,7 +599,35 @@ CREATE INDEX idx_audit_risk ON compliance_audit_log(risk_score);
 
 ## 74.5 Enterprise Architecture Patterns
 
-{/* IMAGE_PLACEHOLDER: Create an architectural diagram showing the three enterprise patterns as interconnected systems: 1) Fallback Chains (showing GPT-4 → Claude → Local LLM → Rules cascade), 2) Cost Controls (showing budget meter and alert thresholds), 3) Approval Workflows (showing request → notify → wait → approve/reject flow). Use architectural blueprint style with clean lines, icons, and professional color scheme. Show how these patterns work together in an enterprise system. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    subgraph Fallback [1. Fallback Chains]
+        Primary[GPT-4] -->|Fail| Secondary[Claude]
+        Secondary -->|Fail| Tertiary[Rule-Based]
+    end
+    
+    subgraph Cost [2. Cost Controls]
+        Call[API Call] --> Check{Budget OK?}
+        Check -->|Yes| Exec[Execute]
+        Check -->|No| Block[Block & Alert]
+    end
+    
+    subgraph Approval [3. Approval Workflows]
+        Risk{High Risk?} -->|Yes| Wait[Wait for Human]
+        Wait -->|Approve| Act[Action]
+        Risk -->|No| Act
+    end
+    
+    style Fallback fill:#e3f2fd,stroke:#2196f3
+    style Cost fill:#fff9c4,stroke:#fbc02d
+    style Approval fill:#e8f5e9,stroke:#4caf50
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Enterprise Patterns Overview</p>
 
 ### Pattern 1: Fallback Chains
 
@@ -532,7 +663,27 @@ agent = FallbackChain(
 
 ### Pattern 2: Cost Controls
 
-{/* IMAGE_PLACEHOLDER: Create an interactive-looking cost control dashboard showing: a daily budget meter (like a fuel gauge), current spend vs. budget, alert threshold line at 80%, and a cost breakdown by API calls. Include visual indicators for "safe" (green), "warning" (yellow), and "exceeded" (red) states. Make it look like a real-time monitoring dashboard that would alert DevOps teams. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    Budget[Daily Budget: $100]
+    Spend[Current Spend: $85]
+    Status{Status}
+    
+    Budget --> Spend
+    Spend --> Status
+    
+    Status -->|85%| Warning[⚠️ Approach Limit]
+    Status -->|100%| Error[🛑 Stop]
+    
+    style Warning fill:#fff9c4,stroke:#fbc02d
+    style Error fill:#ffcdd2,stroke:#c62828
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Cost Control Dashboard Logic</p>
 
 **Why This Matters:** Without cost controls, a single bug or malicious actor can generate thousands of dollars in API costs overnight. One company reported a $50K bill from a runaway loop that ran for 6 hours.
 
@@ -561,7 +712,23 @@ class CostController:
 
 ### Pattern 3: Approval Workflows
 
-{/* IMAGE_PLACEHOLDER: Create a workflow diagram showing the approval process: 1) Agent proposes high-risk action, 2) Approval request created and stored, 3) Notifications sent to approvers (email, Slack, etc.), 4) Approvers review with context, 5) Approve/Reject decision, 6) Action executed or cancelled. Include timeout indicators and escalation paths. Use a professional workflow diagram style with swim lanes for different actors. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    Agent -->|Propose| Request[Approval Request]
+    Request -->|Notify| Approvers[Approvers]
+    Approvers -->|Review| Decision{Decision}
+    Decision -->|Approve| Execute[Execute Action]
+    Decision -->|Reject| Cancel[Cancel Action]
+    
+    style Request fill:#e3f2fd,stroke:#2196f3
+    style Decision fill:#fff9c4,stroke:#fbc02d
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Human Approval Workflow</p>
 
 **Real-World Example:** In financial services, any transaction over $10K typically requires dual approval. Your agent should follow the same principle—high-stakes actions need human oversight.
 

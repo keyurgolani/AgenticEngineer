@@ -70,11 +70,60 @@ day: 55
 
 The core of any Kubernetes Operator is its control loop:
 
-{/* IMAGE_PLACEHOLDER: Create a circular diagram showing the Kubernetes Operator Control Loop with 4 stages: 1) OBSERVE (watching K8s events, collecting metrics), 2) ANALYZE (AI diagnosis, root cause analysis), 3) DECIDE (remediation planning, policy checking), 4) ACT (human approval, GitOps execution). Use arrows connecting each stage in a continuous loop. Include icons for each stage: eye for observe, brain for analyze, checklist for decide, robot hand for act. Color scheme: blue for observe, purple for analyze, orange for decide, green for act. Place this at /images/k8s_reliability_loop.png */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    Observe[👀 OBSERVE\nCollect Metrics & Events] --> Analyze[🧠 ANALYZE\nDiagnose Root Cause]
+    Analyze --> Decide[📋 DECIDE\nPlan & check Policy]
+    Decide --> Act[🤖 ACT\nExecute Remediation]
+    Act --> Observe
+    
+    style Observe fill:#e3f2fd,stroke:#2196f3
+    style Analyze fill:#f3e5f5,stroke:#9c27b0
+    style Decide fill:#fff3e0,stroke:#ff9800
+    style Act fill:#e8f5e9,stroke:#4caf50
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: The Autonomous Control Loop</p>
 
-![Kubernetes Operator Reliability Loop](/images/k8s_reliability_loop.png)
-
-{/* IMAGE_PLACEHOLDER: Create an architectural overview diagram showing the complete K8s SRE Agent system. Show: Kubernetes cluster (left) with pods, Event Watcher monitoring the cluster, AI Agent pipeline (Diagnostician → Planner → Policy Checker), Human approval via Slack (center), GitOps PR creation, and ArgoCD reconciliation back to cluster (right). Use a left-to-right flow with clear separation between detection, analysis, approval, and execution phases. Include Prometheus feeding metrics to the Diagnostician. Color-code by risk level: green for safe operations, yellow for approval required, red for policy violations. Place this at /images/k8s_sre_agent_architecture.png */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Kubernetes Cluster"
+        P1[Pod 1] -->|Failure| Events[Events Source]
+        P2[Pod 2] -->|Metric| Prom[Prometheus]
+    end
+    
+    subgraph "Agent Core"
+        W[Watcher] -->|Trigger| D[Diagnostician]
+        Prom --> D
+        D -->|Root Cause| P[Planner]
+        P -->|Draft Plan| Po[Policy Engine]
+        Po -->|Validated| Slack
+    end
+    
+    subgraph "Human Approval"
+        Slack[Slack Bot] -->|Approval Request| User[🧑‍💻 SRE]
+        User -->|Approve/Reject| Slack
+    end
+    
+    subgraph "Execution"
+        Slack -->|Merge| Git[GitOps Repo]
+        Git -->|Sync| Argo[ArgoCD]
+        Argo -->|Fix| P1
+    end
+    
+    style W fill:#bbdefb,stroke:#1976d2
+    style D fill:#f3e5f5,stroke:#9c27b0
+    style P fill:#fff9c4,stroke:#fbc02d
+    style Po fill:#ffcdd2,stroke:#c62828
+    style Slack fill:#e0f2f1,stroke:#009688
+`}
+  caption="System Architecture: Event-driven operator with human-in-the-loop control."
+/>
 
 ## Project Overview
 
@@ -119,7 +168,25 @@ The key insight driving this evolution: **most SRE pain comes from missing conte
 
 Organizations typically progress through these stages:
 
-{/* IMAGE_PLACEHOLDER: Create a progressive maturity ladder diagram showing 5 stages from bottom to top. Each stage should be a horizontal bar with increasing automation level (shown as a gradient from blue to green). Stage 1 (bottom): "Detection" with icon of magnifying glass, Stage 2: "Diagnosis" with brain icon, Stage 3: "Recommendation" with lightbulb icon, Stage 4: "Supervised Automation" with robot + human icon (highlighted as "You are here"), Stage 5 (top): "Autonomous Remediation" with full robot icon. Show human involvement decreasing from left to right using human silhouettes that fade out. Add percentage labels: 10%, 30%, 50%, 80%, 95% automation. Place this at /images/sre_maturity_model.png */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    S1[1. Detection] --> S2[2. Diagnosis]
+    S2 --> S3[3. Recommendation]
+    S3 --> S4[4. Supervised Automation\n(You Are Here)]
+    S4 --> S5[5. Autonomous Remediation]
+    
+    style S1 fill:#eeeeee,stroke:#9e9e9e
+    style S2 fill:#e0e0e0,stroke:#9e9e9e
+    style S3 fill:#bdbdbd,stroke:#9e9e9e
+    style S4 fill:#81c784,stroke:#2e7d32,stroke-width:3px
+    style S5 fill:#4caf50,stroke:#1b5e20
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: SRE Automation Maturity Model</p>
 
 | Stage                     | Capability                      | Human Role                  |
 | :------------------------ | :------------------------------ | :-------------------------- |
@@ -155,62 +222,52 @@ Our operator targets **Stage 4**: supervised automation with human-in-the-loop a
 
 ### System Architecture
 
-{/* IMAGE_PLACEHOLDER: Create a detailed system architecture diagram showing the complete K8s SRE Agent with all layers. Use a layered approach from top to bottom: 1) Event Detection Layer (K8s Event Watcher + Prometheus Alertmanager) with cloud icons, 2) Analysis Pipeline (Diagnostician Agent with K8sGPT integration, Planner Agent, Policy Checker with OPA/Kyverno) shown as connected boxes with AI brain icons, 3) Approval Layer (Slack Handler with button UI mockup + Approval State with checkpoint icon) in yellow/warning color, 4) Execution Layer (Executor Agent + GitOps PR with GitHub icon) in green, 5) Bottom bar showing Observability (Prometheus, Grafana, Loki) and External integrations. Use arrows to show data flow. Include small icons for each component. Color code by function: blue for detection, purple for analysis, yellow for approval, green for execution. Place this at /images/k8s_operator_architecture_detailed.png */}
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     Self-Healing Kubernetes Operator                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │                        Event Detection Layer                           │ │
-│  │  ┌─────────────────┐  ┌─────────────────┐                             │ │
-│  │  │  K8s Event      │  │  Prometheus     │                             │ │
-│  │  │  Watcher        │  │  Alertmanager   │                             │ │
-│  │  └────────┬────────┘  └────────┬────────┘                             │ │
-│  │           └────────┬───────────┘                                       │ │
-│  │                    ▼                                                   │ │
-│  │           Pod Failure Events                                           │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                                    │                                         │
-│                                    ▼                                         │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │                        Analysis Pipeline                               │ │
-│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                │ │
-│  │  │Diagnostician│───▶│   Planner   │───▶│   Policy    │                │ │
-│  │  │   Agent     │    │   Agent     │    │   Checker   │                │ │
-│  │  │  (+ K8sGPT) │    │             │    │(OPA/Kyverno)│                │ │
-│  │  └─────────────┘    └─────────────┘    └─────────────┘                │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                                    │                                         │
-│                                    ▼                                         │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │                        Approval Layer                                  │ │
-│  │  ┌─────────────────┐         ┌─────────────────┐                      │ │
-│  │  │  Slack Handler  │◀───────▶│  Approval State │                      │ │
-│  │  │  (Buttons/DMs)  │         │  (Checkpointed) │                      │ │
-│  │  └─────────────────┘         └─────────────────┘                      │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                                    │                                         │
-│                                    ▼ (Only if approved)                      │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │                        Execution Layer                                 │ │
-│  │  ┌─────────────────┐         ┌─────────────────┐                      │ │
-│  │  │    Executor     │────────▶│  GitOps PR      │                      │ │
-│  │  │    Agent        │         │  (ArgoCD/Flux)  │                      │ │
-│  │  └─────────────────┘         └─────────────────┘                      │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                                                                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  Observability: Prometheus Metrics │ Grafana Dashboards │ Loki Logs         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  External: Kubernetes API │ Slack │ OpenAI/Anthropic │ GitHub │ OPA        │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    subgraph Cluster [Kubernetes Cluster]
+        Events[Events]
+        Metrics[Prometheus]
+    end
+    
+    subgraph Agent [Analysis Pipeline]
+        Watcher[Watcher]
+        Diagnose[Diagnostician + K8sGPT]
+        Plan[Planner]
+        Policy[Policy Checker]
+    end
+    
+    subgraph Human [Approval Layer]
+        Slack[Slack Interface]
+    end
+    
+    subgraph GitOps [Execution Layer]
+        PR[GitOps PR]
+        Argo[ArgoCD]
+    end
+    
+    Events --> Watcher
+    Metrics --> Watcher
+    Watcher --> Diagnose
+    Diagnose --> Plan
+    Plan --> Policy
+    Policy --> Slack
+    Slack -->|Approve| PR
+    PR --> Argo
+    Argo -->|Apply| Cluster
+    
+    style Cluster fill:#e3f2fd,stroke:#2196f3
+    style Agent fill:#f3e5f5,stroke:#9c27b0
+    style Human fill:#fff3e0,stroke:#ff9800
+    style GitOps fill:#e8f5e9,stroke:#4caf50
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: System Architecture</p>
 
 ### State Machine Design
-
-{/* IMAGE_PLACEHOLDER: Create an interactive state machine visualization showing all states and transitions for the K8s operator workflow. States should be rounded rectangles with different colors: gray for Watching (idle), blue for Detected/Diagnosing/Planning, yellow for PolicyCheck/AwaitingApproval, green for CreatingPR/AwaitingMerge/Executing/Completed, red for Failed/Rejected/Escalated. Show transitions as arrows with labels (e.g., "pod_failure_event", "diagnosis_ready", "human_approved"). Highlight the critical decision points (PolicyCheck and AwaitingApproval) with thicker borders. Add small icons for each state: eye for Watching, magnifying glass for Diagnosing, clipboard for Planning, shield for PolicyCheck, hand for AwaitingApproval, git branch for CreatingPR, checkmark for Completed, warning for Escalated. This could be an interactive component where users can click through the states to see example data at each stage. Place static version at /images/k8s_operator_state_machine.png */}
 
 <Mermaid
   chart={`
@@ -282,7 +339,38 @@ stateDiagram-v2
 
 Infrastructure agents face unique security challenges that traditional operators don't:
 
-{/* IMAGE_PLACEHOLDER: Create a security threat model diagram showing three main attack vectors for AI-powered K8s operators: 1) Prompt Injection via Logs (show malicious log entry → LLM → dangerous command), 2) Command Injection via LLM Output (show LLM generating kubectl delete --all), 3) Data Exfiltration (show secrets in logs → LLM API → external server). For each threat, show the mitigation: sanitization layer, validation layer, redaction layer. Use red for threats, green for mitigations. Include code snippets in small boxes showing bad vs good patterns. Place this at /images/k8s_operator_security_threats.png */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    subgraph AttackVectors [Attack Vectors]
+        A1[Log Injection]
+        A2[Command Injection]
+        A3[Data Exfiltration]
+    end
+    
+    subgraph Defense [Defenses]
+        D1[Sanitization & Truncation]
+        D2[Allowlist Validation]
+        D3[PII Redaction]
+    end
+    
+    subgraph Impact [Result]
+        Safe[Safe Execution]
+    end
+    
+    A1 --> D1 --> Safe
+    A2 --> D2 --> Safe
+    A3 --> D3 --> Safe
+    
+    style AttackVectors fill:#ffcdd2,stroke:#c62828
+    style Defense fill:#c8e6c9,stroke:#2e7d32
+    style Safe fill:#e1f5fe,stroke:#0277bd
+      ```
+    </div>
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Threat Model & Defenses</p>
 
 **1. Prompt Injection via Logs**
 Malicious actors can embed instructions in application logs that get passed to the LLM:
@@ -357,7 +445,35 @@ rules:
 
 ### Performance Requirements
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "K8s Operator Performance Simulator" interactive component. Users can adjust sliders for: event rate (events/sec), diagnosis complexity (simple/medium/complex), number of concurrent incidents. The component calculates and displays: expected latency at each stage, memory usage, CPU usage, and whether the operator can handle the load. Show visual indicators (green/yellow/red) for each metric. Include a "Stress Test" button that animates the flow of incidents through the pipeline. This helps learners understand performance characteristics and bottlenecks. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Performance Simulator"
+        Input[Sliders: Rate/Complexity/Concurrent]
+        Engine{Simulation Engine}
+        
+        Input --> Engine
+        
+        Engine --> Latency[Metric: Latency]
+        Engine --> Mem[Metric: Memory]
+        Engine --> CPU[Metric: CPU]
+        
+        Latency --> Indicator1{Status}
+        Mem --> Indicator2{Status}
+        CPU --> Indicator3{Status}
+        
+        Indicator1 -->|High| Red[🔴 Fail]
+        Indicator1 -->|Low| Green[🟢 Pass]
+        
+        Stress[Stress Test Button] -->|Inject Events| Engine
+    end
+    
+    style Input fill:#e1f5fe,stroke:#01579b
+    style Red fill:#ffcdd2,stroke:#c62828
+    style Green fill:#c8e6c9,stroke:#2e7d32
+`}
+  chartAlt="Simulator Logic: Calculating capacity based on load parameters."
+/>
 
 | Metric                                         | Target            | Measurement                                  |
 | :--------------------------------------------- | :---------------- | :------------------------------------------- |
@@ -2106,9 +2222,55 @@ metrics = MetricsCollector()
 
 #### Step 10.2: Grafana Dashboard Configuration
 
-{/* IMAGE_PLACEHOLDER: Create a mockup of a Grafana dashboard for the K8s SRE Agent showing 6 panels: 1) Top-left: Big number stats for Total Incidents (Detected/Resolved/Escalated) with trend arrows, 2) Top-right: Pie chart of incidents by category (OOM, Crash, Image, Config, Network, Storage), 3) Middle-left: Gauge showing p95 diagnosis duration with green/yellow/red zones, 4) Middle-right: Stat panel showing approval rate percentage with thumbs up/down icons, 5) Bottom-left: Line graph of diagnosis confidence over time, 6) Bottom-right: Stacked area chart of policy violations by severity. Use Grafana's dark theme. Include time range selector showing "Last 24 hours". Place this at /images/grafana_sre_agent_dashboard.png */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Incidents Overview"
+        Total[Detected: 142]
+        Resolved[Resolved: 138]
+        Escalated[Escalated: 4]
+    end
+    
+    subgraph "Performance"
+        MTTR[Avg MTTR: 45s]
+        Success[Success Rate: 97%]
+    end
+    
+    subgraph "Failures by Type"
+        OOM((OOM: 45%))
+        Crash((Crash: 30%))
+        Net((Network: 25%))
+    end
+    
+    style Total fill:#bbdefb
+    style Resolved fill:#c8e6c9
+    style Escalated fill:#ffcdd2
+    style OOM fill:#fff9c4
+`}
+  caption="Operator Dashboard: Monitoring the AI SRE's performance."
+/>
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "Live Metrics Dashboard" interactive component that simulates real-time operator metrics. Show animated counters for incidents detected/resolved, a live updating line chart for diagnosis duration, and a gauge for current system load. Users can click "Simulate Incident" to see metrics update in real-time. This helps learners understand what good vs bad metrics look like and how to interpret the dashboard. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Live Metrics Dashboard"
+        Source[System Events] --> Monitor
+        
+        subgraph "Panels"
+            Monitor[Monitor] --> Count[Incidents: 12]
+            Monitor --> Chart[Diagnosis Time<br/>(Line Chart)]
+            Monitor --> Gauge[System Load<br/>(Gauge)]
+        end
+        
+        Button[Simulate Incident] --> Source
+    end
+    
+    style Source fill:#e1bee7,stroke:#4a148c
+    style Count fill:#fff9c4,stroke:#fbc02d
+    style Button fill:#c8e6c9,stroke:#2e7d32
+`}
+  chartAlt="Dashboard Concept: Visualizing real-time system health."
+/>
 
 ```json
 {
@@ -2344,9 +2506,53 @@ if __name__ == "__main__":
 
 ### Multi-Cluster Support
 
-{/* IMAGE_PLACEHOLDER: Create a multi-cluster architecture diagram showing three K8s clusters (Prod US-East, Prod EU-West, Staging) each with their own operator instance. Show all operators connecting to: 1) Centralized Slack workspace (single #sre-alerts channel), 2) Shared incident tracking database, 3) Common GitOps repository, 4) Centralized Grafana for metrics aggregation. Use different colors for each cluster (blue, green, orange). Show data flow with arrows. Include a comparison table showing "Operator Per Cluster" vs "Centralized Operator" patterns with pros/cons. Place this at /images/multi_cluster_architecture.png */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Region: US-East"
+        Op1[Operator US] -->|Manage| C1[Cluster US]
+    end
+    
+    subgraph "Region: EU-West"
+        Op2[Operator EU] -->|Manage| C2[Cluster EU]
+    end
+    
+    subgraph "Control Plane"
+        Op1 -->|Alert| Slack[Central Slack]
+        Op2 -->|Alert| Slack
+        Op1 -->|Push| Git[Shared GitOps]
+        Op2 -->|Push| Git
+    end
+    
+    style Slack fill:#e0f2f1,stroke:#009688
+    style Git fill:#ef9a9a,stroke:#c62828
+`}
+  caption="Multi-Cluster Architecture: Operators in each region reporting centrally."
+/>
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "Multi-Cluster Incident Simulator" where users can see how incidents in different clusters are handled. Show a map with 3 regions, click a region to simulate an incident, watch it flow through the operator pipeline with cluster-specific policies. Display metrics aggregated across all clusters. This helps learners understand scaling patterns for enterprise deployments. */}
+<Mermaid
+  chart={`
+flowchart TB
+    subgraph "Multi-Cluster View"
+        Region1[Region: US-East]
+        Region2[Region: EU-West]
+        Region3[Region: Asia-Pac]
+        
+        Region1 --> Pipe1[Pipeline A]
+        Region2 --> Pipe2[Pipeline B]
+        Region3 --> Pipe3[Pipeline C]
+        
+        Pipe1 --> Agg[Aggregated Metrics]
+        Pipe2 --> Agg
+        Pipe3 --> Agg
+    end
+    
+    User[Click Region] -->|Simulate| Region1
+    
+    style Agg fill:#e1f5fe,stroke:#01579b
+`}
+  chartAlt="Multi-Cluster Simulation: Managing incidents across geographies."
+/>
 
 <Callout type="tip">
   **Scaling to Multiple Clusters**: In production, you'll often need to manage
@@ -2455,9 +2661,43 @@ class K8sGPTClient:
 
 ### Phase 12: Testing (30 minutes)
 
-{/* IMAGE_PLACEHOLDER: Create a testing workflow diagram showing the three test scenarios: 1) CrashLoop test (busybox container exiting with code 1), 2) OOM test (stress container exceeding memory limit), 3) ImagePullError test (non-existent image). For each, show: the test pod YAML → expected failure mode → agent detection → diagnosis output → proposed remediation. Use a 3-column layout with icons for each test type. Include expected timeline (how long each test takes). Color code: red for failure, yellow for detection, blue for diagnosis, green for remediation. Place this at /images/k8s_operator_testing_scenarios.png */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant K8s
+    participant Agent
+    
+    User->>K8s: Apply crashloop.yaml
+    K8s->>Agent: Events (CrashLoopBackOff)
+    Agent->>Agent: Diagnose (Read logs)
+    Agent->>Agent: Plan (Restart + Logs)
+    Agent-->>User: Slack Alert (Approval?)
+    User->>Agent: Approve ✅
+    Agent->>K8s: Delete Pod (Restart)
+    K8s-->>Agent: New Pod Running
+    Agent->>User: Incident Resolved 🟢
+`}
+  caption="Testing Workflow: Simulating a crash loop to verify operator response."
+/>
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Create a "K8s Failure Mode Explorer" interactive component. Users can select a failure type (CrashLoop, OOM, ImagePull, ConfigError, NetworkIssue) and see: 1) Example pod YAML that would cause this failure, 2) What the failure looks like in kubectl output, 3) Sample logs the agent would analyze, 4) Expected diagnosis from the AI, 5) Typical remediation plan. Include a "Try It" button that shows the complete flow with animated transitions. This helps learners understand different failure patterns before building the operator. */}
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> SelectFailure
+    SelectFailure --> CrashLoop : User Selects
+    
+    state CrashLoop {
+        YAML[View Pod YAML] --> Kubectl[View kubectl output]
+        Kubectl --> Logs[View Logs]
+        Logs --> Diagnosis[AI Diagnosis]
+        Diagnosis --> Remediation[Auto-Fix Plan]
+    }
+    
+    Remediation --> [*]
+`}
+  chartAlt="Failure Mode Explorer: Walking through diagnostic steps for common errors."
+/>
 
 #### Step 12.1: Create Test Pods
 
@@ -2607,7 +2847,20 @@ def test_log_sanitization():
 
 ## Architecture Summary
 
-{/* IMAGE_PLACEHOLDER: Create a simplified end-to-end flow diagram showing the complete incident lifecycle from detection to resolution. Use a horizontal timeline with 6 major phases: 1) DETECT (K8s cluster with failing pod icon), 2) DIAGNOSE (AI brain analyzing logs/metrics), 3) PLAN (robot creating remediation plan), 4) APPROVE (human at computer with Slack notification), 5) EXECUTE (GitOps PR → ArgoCD → cluster), 6) OBSERVE (Grafana dashboard showing metrics). Connect with arrows and show approximate time for each phase (5s, 60s, 30s, variable, 60s, continuous). Use icons and minimal text. Color gradient from red (problem) to green (resolved). Place this at /images/k8s_operator_incident_flow.png */}
+<Mermaid
+  chart={`
+timeline
+    title Incident Lifecycle
+    0s : Detect (Event Watcher)
+    5s : Diagnose (Log Analysis)
+    10s : Plan (Remediation Strategy)
+    15s : Policy Check (OPA)
+    20s : Await Approval (Slack)
+    60s : Execution (GitOps & ArgoCD)
+    90s : Verification & Resolve
+`}
+  caption="Incident Timeline: From detection to resolution in 90 seconds."
+/>
 
 <Mermaid
   chart={`
@@ -2640,7 +2893,31 @@ graph TD
 
 ## Key Takeaways
 
-{/* IMAGE_PLACEHOLDER: Create an infographic summarizing the 7 key takeaways as a visual checklist. Use icons for each: 1) Event-driven (lightning bolt + circular arrows), 2) Policy-as-code (shield with code brackets), 3) Human-in-the-loop (robot hand + human hand shaking), 4) GitOps (git branch icon), 5) Observability (dashboard with graphs), 6) Security-first (lock with AI brain), 7) Prometheus metrics (chart trending up). Arrange in a circular or grid layout with brief text for each. Use the course color scheme. Place this at /images/k8s_operator_key_takeaways.png */}
+<Mermaid
+  chart={`
+mindmap
+  root((Key Takeaways))
+    Event Driven
+      Reactive Agents
+      Real-time Response
+    Policy as Code
+      OPA / Kyverno
+      Safety Guardrails
+    Human in Loop
+      Approval Gates
+      Production Safety
+    GitOps
+      Audit Trails
+      Easy Rollback
+    Observability
+      Operator Health
+      Metrics & Logs
+    Security
+      Least Privilege
+      Prompt Defense
+`}
+  caption="Core Concepts: Building blocks of an autonomous SRE operator."
+/>
 
 1. **Event-driven** architecture enables reactive agents that respond to infrastructure changes in real-time
 2. **Policy-as-code** with OPA/Kyverno ensures automated actions comply with organizational rules

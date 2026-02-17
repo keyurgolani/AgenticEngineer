@@ -76,7 +76,11 @@ day: 11
 
 In Day 01, we learned that agents follow the **ReAct pattern**: Reason → Act → Observe → Repeat. In Day 03, we built our first graph with LangGraph. Today, we implement an agent loop **from scratch**—no frameworks, no magic—just Python and an LLM.
 
-{/* IMAGE_PLACEHOLDER: Create an animated diagram showing the ReAct loop in action. Visualize a circular flow with three main stages: 1) A brain icon with thought bubbles (Reasoning), 2) A gear/tool icon (Acting), and 3) An eye icon (Observing). Show arrows connecting them in a cycle, with small example text snippets at each stage (e.g., "I need to check the weather" → "Call weather API" → "Temperature is 72°F"). Use a modern, clean design with the course's color scheme. Place this at the top of the section to immediately ground learners in the concept. */}
+<ConceptVisual
+  image="/images/day_11_01_react_loop_animated_1768988285597.png"
+  caption="The ReAct Pattern: A continuous cycle of Reasoning, Acting, and Observing."
+  alt="Animated diagram showing the ReAct loop cycle"
+/>
 
 <Callout type="info">
   **Why Build From Scratch?** Understanding the fundamentals makes you a better
@@ -91,7 +95,11 @@ In Day 01, we learned that agents follow the **ReAct pattern**: Reason → Act �
 
 Every agent follows the same fundamental loop:
 
-{/* IMAGE_PLACEHOLDER: Create an interactive loop visualizer showing the agent decision-making process. Design a circular flowchart with animated transitions between states: User Input → Parse → Think → Decide (with branching paths) → Execute/Answer/Error → back to Think. Each node should be clickable to show example data at that stage. Include a "step through" button that animates one iteration at a time. Use icons for each stage (lightbulb for Think, wrench for Execute, checkmark for Answer, warning for Error). This helps learners understand the cyclical nature and decision points in agent loops. */}
+<ConceptVisual
+  image="/images/day_11_02_interactive_loop_visualizer_1769029052550.png"
+  caption="The Agent Decision Loop: A step-by-step visualization of how agents parse, think, and decide."
+  alt="Interactive diagram showing the agent decision-making process"
+/>
 
 <Mermaid
   chart={`
@@ -276,7 +284,11 @@ When you have enough information, use action: "final_answer"."""
 
 The JSON parsing in our simple agent is fragile. Production agents use **structured outputs** to guarantee valid responses. Here's the modern approach using Pydantic:
 
-{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison illustration showing "Fragile JSON Parsing" vs "Structured Outputs". Left side: Show raw JSON text with red X marks indicating parsing errors, broken brackets, and question marks. Right side: Show a clean Pydantic model schema with green checkmarks, type annotations, and validation shields. Include visual metaphors like a cracked foundation vs. a solid blueprint. Add a caption: "From brittle string parsing to type-safe guarantees". This helps learners understand why structured outputs matter for production systems. */}
+<ConceptVisual
+  image="/images/day_11_03_fragile_vs_structured_1768989039062.png"
+  caption="Fragile Parsing vs. Structured Outputs: Moving from error-prone text matching to type-safe guarantees."
+  alt="Comparison between fragile JSON parsing and structured Pydantic outputs"
+/>
 
 ```python
 from pydantic import BaseModel, Field
@@ -371,7 +383,11 @@ class StructuredAgent:
 
 Tools are just Python functions with descriptions:
 
-{/* IMAGE_PLACEHOLDER: Create an illustrated "Tool Registry" diagram showing how tools connect to the agent. Design it like a toolbox or plugin system with visual representations of different tools (file icon for read_file, folder for list_directory, terminal for run_python, magnifying glass for search_web). Show arrows from the agent's "brain" to each tool, with speech bubbles showing the tool descriptions. Include a "Tool Interface" box showing the input/output contract. This visualization helps learners understand tools as modular, pluggable capabilities. */}
+<ConceptVisual
+  image="/images/day_11_04_tool_registry_diagram_1768989201399.png"
+  caption="Tool Registry: The agent's toolbox where capabilities are defined, described, and invoked."
+  alt="Illustration of an agent tool registry with various tool icons"
+/>
 
 ```python
 import os
@@ -512,7 +528,11 @@ class AgentWithMemory(SimpleAgent):
 
 Production agents need robust error handling:
 
-{/* IMAGE_PLACEHOLDER: Create an animated retry mechanism visualization showing exponential backoff. Design a timeline with attempt markers (Attempt 1, 2, 3) and growing wait times (1s, 2s, 4s) represented by expanding clock icons or progress bars. Show a failed tool call icon transforming into a success icon after retries. Include visual indicators for "transient errors" (cloud with lightning) vs "permanent failures" (broken chain). Add a flowchart showing the decision tree: Try → Fail → Wait → Retry → Success/Give Up. This helps learners understand resilience patterns in production systems. */}
+<ConceptVisual
+  image="/images/day_11_05_retry_mechanism_animated_1768989398374.png"
+  caption="Exponential Backoff: A robust retry strategy for handling transient errors in production."
+  alt="Visualization of exponential backoff retry mechanism"
+/>
 
 ```python
 import time
@@ -624,7 +644,11 @@ result = agent.run("What files are in the current directory?")
 
 Modern LLMs support **native function calling**, which is more reliable than JSON parsing. Here's how to use OpenAI's tool calling API:
 
-{/* IMAGE_PLACEHOLDER: Create a comparison diagram showing "Manual JSON Parsing" vs "Native Function Calling". Left side: Show a complex flow with JSON string → Parse → Validate → Extract → Error handling with multiple failure points marked in red. Right side: Show a streamlined flow with LLM → Structured Tool Call → Direct Execution with green checkmarks. Include visual elements like a tangled wire vs. a clean pipeline. Add metrics showing "95% accuracy" vs "99.5% accuracy" and "High latency" vs "Low latency". This illustrates why native function calling is the production standard. */}
+<ConceptVisual
+  image="/images/day_11_06_manual_parsing_vs_native_1768989535644.png"
+  caption="Native Function Calling: A cleaner, more reliable pipeline for tool execution."
+  alt="Comparison of manual JSON parsing vs native function calling"
+/>
 
 ```python
 from openai import OpenAI
@@ -714,7 +738,11 @@ agent.register_tool(
 
 Modern LLMs can request multiple tools in a single response, dramatically improving efficiency for independent operations:
 
-{/* IMAGE_PLACEHOLDER: Create an animated performance comparison showing sequential vs parallel tool execution. Top half: Show a timeline with 3 tools executing one after another (Tool A → Tool B → Tool C) taking 9 seconds total. Bottom half: Show the same 3 tools executing simultaneously in parallel, taking only 3 seconds. Use progress bars, clock icons, and speedometer graphics to emphasize the performance gain. Include a real-world example like "Fetch weather for 3 cities: 9s → 3s (3x faster)". Add visual indicators for "Independent operations" (separate boxes) vs "Dependent operations" (connected boxes). This helps learners understand when and why to use parallel execution. */}
+<ConceptVisual
+  image="/images/day_11_07_sequential_vs_parallel_perf_1768989768403.png"
+  caption="Parallel Execution: Reducing latency by running independent operations concurrently."
+  alt="Performance comparison of sequential vs parallel tool execution"
+/>
 
 ```python
 class ParallelToolAgent:
@@ -766,7 +794,11 @@ class ParallelToolAgent:
 
 Some models like **DeepSeek-R1** and **Qwen 3** support explicit "thinking" modes where they show their reasoning process:
 
-{/* IMAGE_PLACEHOLDER: Create a visual representation of "thinking models" showing the internal reasoning process. Design a split-screen view: Left side shows a standard model with "Input → Output" as a black box. Right side shows a thinking model with "Input → <think> Step 1: Analyze... Step 2: Consider... Step 3: Conclude... </think> → Output" with the thinking process visible in a transparent container. Use thought bubble graphics, step numbers, and branching decision trees to show the reasoning chain. Include example use cases with icons: math problem (calculator), code debugging (bug icon), architecture decision (blueprint). This helps learners understand when the extra token cost is worth the improved accuracy. */}
+<ConceptVisual
+  image="/images/day_11_08_thinking_models_visualized_1768989880297.png"
+  caption="Thinking Models: Showing the hidden reasoning process (Chain of Thought) transparently."
+  alt="Visualization of standard vs thinking models with reasoning chains"
+/>
 
 ```python
 def run_with_thinking(self, user_input: str) -> dict:
@@ -910,9 +942,9 @@ result = agent.run("How many lines of code are in this project?")
 
 <Callout type="tip">
   **Builds Toward Capstone:** The ReAct loop you build here is the cognitive
-  core of every agent in the AgentOS capstone (Month 3, Days 61-90). Your research agents, code
-  analysis agents, and orchestrator all use this pattern to reason about tasks,
-  take actions, and learn from observations.
+  core of every agent in the AgentOS capstone (Month 3, Days 61-90). Your
+  research agents, code analysis agents, and orchestrator all use this pattern
+  to reason about tasks, take actions, and learn from observations.
 </Callout>
 
 ### Recommended Exercises
@@ -925,7 +957,11 @@ Complete these exercises to reinforce the concepts from this module:
 
 The ReAct pattern you've learned is fundamental to all agent architectures. In the capstone projects (Month 3), you'll see how multiple ReAct agents can be coordinated by a supervisor to tackle complex, multi-step tasks.
 
-{/* IMAGE_PLACEHOLDER: Create a "learning journey" roadmap showing progression from this module to future topics. Design a winding path with milestone markers: "Day 11: Single Agent Loop" (current location with a "You Are Here" flag) → "Day 14: Router Lab" → "Week 5-8: Multi-Agent Systems" → "Month 3: AgentOS Capstone". Each milestone should have a small icon representing the concept (single robot, router/switch, multiple robots, complex system). Use a gradient color scheme showing progression from beginner (blue) to advanced (purple). This helps learners see how today's foundational knowledge builds toward the course's advanced projects. */}
+<ConceptVisual
+  image="/images/day_11_09_course_learning_journey_map_1768990083759.png"
+  caption="Your Journey: From single agent loops to multi-agent orchestration."
+  alt="Roadmap showing progression from Day 11 to Capstone"
+/>
 
 ---
 
@@ -955,7 +991,11 @@ The manual loop we built is what LangGraph automates:
 
 When building agent loops for production, keep these principles in mind:
 
-{/* IMAGE_PLACEHOLDER: Create an infographic showing the "Complexity Ladder" for agent systems. Design a ladder or staircase with 5 steps, each showing when to use different approaches: Step 1 "Direct LLM Call" (simplest, fastest), Step 2 "Prompt Chain" (fixed sequence), Step 3 "ReAct Loop" (dynamic tools), Step 4 "Self-Correcting Agent" (with verification), Step 5 "Multi-Agent System" (most complex). Each step should show example use cases, latency indicators (fast to slow), and cost indicators ($ to $$$). Include a decision tree on the side: "Is the workflow fixed? → Use prompt chain. Need dynamic tool selection? → Use ReAct loop." This helps learners choose the right architecture for their use case. */}
+<ConceptVisual
+  image="/images/day_11_10_agent_complexity_ladder_1768990478240.png"
+  caption="The Agent Complexity Ladder: Choose the simplest tool for the job."
+  alt="Infographic showing steps of agent complexity from direct calls to multi-agent systems"
+/>
 
 <Callout type="warning">
   **Start Simple, Add Complexity Only When Needed.** As [Anthropic's engineering
@@ -970,7 +1010,11 @@ When building agent loops for production, keep these principles in mind:
 
 Effective agentic systems separate concerns into distinct phases:
 
-{/* IMAGE_PLACEHOLDER: Create a circular workflow diagram showing the self-correction cycle. Design 4 connected phases in a circle: 1) "Planning" (blueprint icon with task breakdown), 2) "Execution" (gear icon with tools running), 3) "Verification" (magnifying glass icon checking output), 4) "Revision" (pencil icon with feedback loop). Show arrows connecting them, with a "Success Exit" arrow from Verification when output is valid, and a "Retry Loop" arrow from Revision back to Execution when corrections are needed. Include a counter showing "Attempt 1/3" to indicate max corrections. Add example annotations: "Does output meet requirements?" at Verification, "Apply feedback and retry" at Revision. This visualizes the quality assurance pattern in production agents. */}
+<ConceptVisual
+  image="/images/day_11_11_self_correction_cycle_1768990754829.png"
+  caption="Self-Correction: The Plan-Execute-Verify-Revise cycle ensures reliability."
+  alt="Circular diagram showing the self-correction workflow"
+/>
 
 1. **Planning** — Decompose the task into steps
 2. **Execution** — Run each step with appropriate tools

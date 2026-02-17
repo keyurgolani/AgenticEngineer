@@ -87,19 +87,11 @@ day: 1
 
 The most common misconception is that an "LLM" is an "Agent". It is not.
 
-{/* IMAGE_PLACEHOLDER: Create a split-screen illustration showing:
-    LEFT SIDE: A glowing brain in a glass jar labeled "LLM" with thought bubbles containing text like "I can reason", "I can analyze", "I can generate"
-    RIGHT SIDE: A full robotic figure labeled "Agent" with visible components:
-    - Brain (glowing, same as left) in the head
-    - Arms labeled "Tools" holding various icons (API, database, file system)
-    - Chest area showing "Memory" with stacked layers
-    - Legs labeled "Control Loop" with circular arrows
-    - Background: The robot is interacting with the real world (touching a computer, accessing files, making API calls)
-    Style: Modern, clean, tech illustration with a color scheme of blues and purples. The contrast should clearly show isolation vs. integration.
-    Placement: Full-width hero image at the start of section 1.1
-*/}
-
-![Agent Brain vs Body](/images/brain_vs_body.png)
+<ConceptVisual
+  image="/images/day_01_01_brain_vs_body_1768961481573.png"
+  caption="Brain vs. Body: An LLM is a reasoning engine (brain in a jar), while an Agent connects that brain to tools, memory, and actions (a robot body)."
+  alt="Illustration comparing an isolated LLM brain to a full agent robot with tools and memory"
+/>
 
 <ConceptIntro
   title="The Brain-Body Distinction"
@@ -207,14 +199,11 @@ In traditional software, we build **Pipelines** (or DAGs - Directed Acyclic Grap
 Input A → Function B → Function C → Output D
 ```
 
-{/* IMAGE_PLACEHOLDER: Create an animated comparison diagram:
-    TOP: "Traditional Pipeline (DAG)" - Show a linear flow with boxes connected by arrows, labeled with steps like "Input → Process → Transform → Output". Add a red X when an error occurs in the middle, showing the entire pipeline breaking.
-    BOTTOM: "Agentic Loop" - Show a circular flow with "Reason → Act → Observe" in a cycle, with a branch showing error handling that loops back to "Reason" with adjusted strategy.
-    Include small icons: pipeline has a rigid ruler icon, loop has a flexible spring icon.
-    Animation: Show the pipeline failing and stopping vs. the loop adapting and continuing.
-    Style: Clean, technical diagram with color coding (pipeline in gray/red, loop in blue/green)
-    Placement: After the code block showing the linear pipeline
-*/}
+<ConceptVisual
+  image="/images/day_01_02_pipeline_vs_loop_1768961505506.png"
+  caption="Linear Pipeline vs. Agentic Loop: Pipelines break when they hit errors. Loops perceive constraints and adapt."
+  alt="Comparison of a linear pipeline failing vs an agentic loop adapting"
+/>
 
 This is <Glossary term="Deterministic" def="Always producing the same output for the same input. No randomness or variation." />. Run it 100 times, get the same result 100 times. This predictability is a feature—until you need to handle uncertainty.
 
@@ -294,19 +283,11 @@ graph TD
 
 ### The Three Steps of ReAct
 
-{/* IMAGE_PLACEHOLDER: Create an interactive circular diagram showing the ReAct loop:
-    - Three main nodes arranged in a circle: "Reason" (purple brain icon), "Act" (blue hand/tool icon), "Observe" (green eye icon)
-    - Arrows connecting them clockwise with labels
-    - Center shows "Task State" that updates as you hover over each step
-    - Each node expands on hover to show example text:
-      * Reason: "I need to search for flights to Tokyo"
-      * Act: "Calling search_flights(destination='Tokyo')"
-      * Observe: "Found 3 flights, cheapest is $450"
-    - Add a "Complete" exit arrow from Reason node
-    - Interactive: Click each node to see a detailed example trace
-    Style: Modern, interactive SVG with smooth animations
-    Placement: Right before the table showing the three steps
-*/}
+<ConceptVisual
+  image="/images/day_01_03_react_loop_interactive_1768961518105.png"
+  caption="The ReAct Pattern: Reason -> Act -> Observe. This continuous cycle enables agents to tackle complex, multi-step tasks."
+  alt="Circular diagram showing the Reason, Act, Observe loop"
+/>
 
 | Step           | What Happens                                     | Example                                                                |
 | :------------- | :----------------------------------------------- | :--------------------------------------------------------------------- |
@@ -327,20 +308,11 @@ Then the loop continues: Reason ("I found options, I should present them to the 
 
 Here's what a ReAct trace looks like in practice:
 
-{/* IMAGE_PLACEHOLDER: Create an interactive trace visualizer showing:
-    - A chat-like interface on the left showing the user message
-    - On the right, a step-by-step breakdown with expandable sections:
-      * Step 1: "Thought" (purple background) with brain icon
-      * Step 2: "Action" (blue background) with tool icon and JSON parameters
-      * Step 3: "Observation" (green background) with result data
-      * Step 4: "Thought" (purple) with final reasoning
-      * Step 5: "Response" (gold background) with final answer
-    - Each step has a timestamp and can be clicked to expand details
-    - Add a "Play" button to animate through the steps sequentially
-    - Include syntax highlighting for JSON data
-    Style: Modern code editor aesthetic with dark mode support
-    Placement: Replace or augment the code block showing the trace
-*/}
+<ConceptVisual
+  image="/images/day_01_04_react_trace_visualizer_1768961537309.png"
+  caption="Visualizing Thought: Explicit reasoning traces help us understand how the agent arrived at its decision."
+  alt="UI mockup of a ReAct trace with thought, action, observation steps"
+/>
 
 ```
 User: What's the weather in Tokyo and should I bring an umbrella?
@@ -485,24 +457,11 @@ We'll implement several of these patterns in later modules, culminating in multi
 
 The magic that enables agents to act in the world is **tool calling** (also called function calling). This is a capability built into modern LLMs that lets them request execution of external functions.
 
-{/* IMAGE_PLACEHOLDER: Create a detailed sequence diagram showing tool calling flow:
-    - Left column: User avatar
-    - Middle columns: Agent system (with sub-components: Orchestrator, LLM, Tool Registry)
-    - Right column: External world (APIs, databases, file systems)
-    - Show the complete flow:
-      1. User sends message
-      2. Orchestrator forwards to LLM with tool definitions
-      3. LLM returns tool call request (show JSON structure)
-      4. Orchestrator validates and executes tool
-      5. Tool interacts with external system
-      6. Results flow back through the chain
-      7. LLM generates final response
-    - Use different colors for different message types (user input, tool calls, tool results, responses)
-    - Add small code snippets showing the JSON structure at each step
-    - Include a "Security Boundary" line showing where the LLM's control ends
-    Style: Professional technical diagram with clear visual hierarchy
-    Placement: Right after the ConceptIntro for tool calling
-*/}
+<ConceptVisual
+  image="/images/day_01_05_tool_calling_sequence_1768961568311.png"
+  caption="Tool Calling Flow: The LLM generates a structured request, and the Agent executes it using the Tool. The LLM never touches the tool directly."
+  alt="Sequence diagram showing flow between User, Agent, LLM, and Tool"
+/>
 
 <ConceptIntro
   title="Tool Calling"
@@ -543,19 +502,11 @@ sequenceDiagram
 
 When you call an LLM API with tools, you provide schemas that describe what each tool does. Here's the standard format used by OpenAI and most providers:
 
-{/* IMAGE_PLACEHOLDER: Create an interactive tool schema builder/visualizer:
-    - Left panel: Shows the JSON schema with syntax highlighting
-    - Right panel: Shows how the LLM "sees" this tool with annotations:
-      * Highlights the description and shows "This is what the LLM reads to decide when to use this tool"
-      * Highlights parameters and shows "These become the function arguments"
-      * Highlights required fields and shows "LLM must provide these"
-      * Shows example LLM reasoning: "User asked about weather → I have get_weather tool → I'll use it with location='Paris'"
-    - Interactive: User can edit the schema and see how it affects LLM understanding
-    - Include a "Test" button that shows example tool calls the LLM might generate
-    - Add common mistakes section (vague descriptions, missing required fields, etc.)
-    Style: Split-panel code editor with live preview
-    Placement: Alongside or replacing the code block showing tool definition
-*/}
+<ConceptVisual
+  image="/images/day_01_06_tool_schema_visualizer_1768961587471.png"
+  caption="Tool Schemas: The 'prompt' for tools. The LLM uses the description to understand purpose and parameters to format requests."
+  alt="Split view showing JSON schema and LLM interpretation"
+/>
 
 ```python
 tools = [
@@ -591,16 +542,11 @@ The LLM reads these descriptions and decides when and how to use each tool. **Go
 
 Modern LLMs can request multiple tools in a single response. For example, if you ask "What's the weather in Paris and Tokyo?", the model might return:
 
-{/* IMAGE_PLACEHOLDER: Create a comparison visualization showing sequential vs parallel tool execution:
-    - TOP: "Sequential Execution" - Timeline showing tools called one after another with total time
-    - BOTTOM: "Parallel Execution" - Timeline showing tools called simultaneously with reduced total time
-    - Use a stopwatch/timer visual to emphasize the performance difference
-    - Show the JSON structure for parallel tool calls
-    - Include a performance metrics box: "Sequential: 4.2s | Parallel: 2.1s | 50% faster"
-    - Add visual indicators for when each tool starts and completes
-    Style: Clean timeline visualization with performance metrics
-    Placement: Right after the JSON code block showing parallel tool calls
-*/}
+<ConceptVisual
+  image="/images/day_01_07_sequential_vs_parallel_tools_1768961603811.png"
+  caption="Optimization: Parallel tool calling significantly reduces total latency for independent tasks."
+  alt="Timeline comparison of sequential vs parallel tool execution"
+/>
 
 ```json
 {
@@ -730,19 +676,11 @@ Google's Gemini models offer deep integration with Google services:
 
 How does the Brain talk to the Hands? We need a standard interface. Enter **MCP**.
 
-{/* IMAGE_PLACEHOLDER: Create an ecosystem visualization showing MCP as the universal connector:
-    - CENTER: Large "MCP Protocol" hub with the official MCP logo
-    - TOP: Row of AI provider logos (OpenAI, Anthropic, Google, Microsoft, AWS) all connecting to MCP
-    - BOTTOM: Grid of tool/service icons (databases, file systems, APIs, cloud services) all connecting to MCP
-    - Show bidirectional arrows indicating the protocol enables communication both ways
-    - Include statistics overlays: "10,000+ servers", "97M monthly downloads", "Linux Foundation governed"
-    - Add a "Before MCP" vs "After MCP" comparison:
-      * Before: Tangled web of custom connections between each AI and each tool
-      * After: Clean hub-and-spoke model with MCP at center
-    - Include small code snippets showing the same tool working with different AI providers
-    Style: Modern ecosystem diagram with clean lines and professional branding
-    Placement: Right after the section heading, before ConceptIntro
-*/}
+<ConceptVisual
+  image="/images/day_01_08_mcp_ecosystem_hub_1768961619997.png"
+  caption="The MCP Standard: A universal connector linking any AI model to any data source."
+  alt="Ecosystem diagram showing MCP as a hub connecting AI providers and tools"
+/>
 
 <ConceptIntro
   title="Model Context Protocol (MCP)"

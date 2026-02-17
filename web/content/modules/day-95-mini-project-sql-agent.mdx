@@ -1,0 +1,3474 @@
+---
+title: "Mini Project: SQL Query Agent"
+description: "Build an intelligent agent that translates natural language questions into SQL queries, executes them safely, and visualizes results with explanations."
+week: 14
+day: 95
+---
+
+<ReadingTime minutes={60} />
+
+<SkillLevel
+  level="intermediate"
+  description="Text-to-SQL, query optimization, data visualization"
+/>
+
+<Prerequisites
+  items={[
+    "Understanding of SQL fundamentals (SELECT, JOIN, GROUP BY)",
+    "Python experience with FastAPI",
+    "Familiarity with LLM structured outputs",
+    "Basic database concepts (schemas, tables, relationships)",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Build a natural language to SQL translation system",
+    "Implement schema-aware query generation with LLMs",
+    "Create robust query validation and SQL injection prevention",
+    "Design safe execution with read-only database connections",
+    "Generate result visualizations (charts and tables)",
+    "Provide query explanations in plain English",
+    "Implement query optimization suggestions",
+  ]}
+/>
+
+<Callout type="info">
+  **Project Context:** This intermediate project (8-12 hours) teaches you to
+  build a production-ready SQL agent that democratizes database access.
+  Non-technical users can ask questions in plain English and receive accurate,
+  visualized answers.
+</Callout>
+
+<KeyTerms
+  terms={[
+    {
+      term: "Text-to-SQL",
+      definition:
+        "Converting natural language questions into executable SQL queries using LLMs",
+    },
+    {
+      term: "Schema-Aware Generation",
+      definition:
+        "Using database schema information to guide accurate SQL generation",
+    },
+    {
+      term: "Query Sandboxing",
+      definition:
+        "Restricting SQL execution to safe, read-only operations to prevent data modification",
+    },
+    {
+      term: "Query Explanation",
+      definition:
+        "Translating SQL queries back into plain English for user understanding",
+    },
+    {
+      term: "Result Visualization",
+      definition:
+        "Automatically generating appropriate charts or tables based on query results",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build an intelligent SQL Query Agent that translates natural language questions into SQL queries, executes them safely against a database, and presents results with visualizations and plain-English explanations.
+
+**Why This Matters**: Databases contain valuable insights, but SQL expertise is a barrier for most users. A SQL agent democratizes data access—product managers can ask "What were our top 10 products last quarter?" without writing a single line of SQL. This is one of the most practical applications of LLMs in enterprise settings.
+
+<Mermaid
+  chart={`
+graph LR
+    User[👤 User] -->|"What were sales last month?"| Agent[🤖 SQL Agent]
+    
+    Agent -->|1. Parse| NLU[NL Understanding]
+    NLU -->|2. Generate| SQL[SQL Generator]
+    SQL -->|3. Validate| Validator[Query Validator]
+    Validator -->|4. Execute| DB[(Database)]
+    DB -->|5. Format| Formatter[Result Formatter]
+    Formatter -->|6. Visualize| Viz[📊 Visualization]
+    Viz -->|7. Explain| Explain[📝 Explanation]
+    
+    Explain -->|Answer| User
+    
+    style Agent fill:#fff9c4,stroke:#fbc02d
+    style DB fill:#e3f2fd,stroke:#0277bd
+    style Viz fill:#e8f5e9,stroke:#2e7d32
+`}
+  caption="SQL Agent Pipeline: From natural language question to visualized answer."
+/>
+
+**Real-World Analogy**: Think of the SQL Agent as a skilled data analyst sitting next to you. You ask questions in plain English, they understand your intent, write the appropriate SQL, run it against the database, and present the results in a clear format with explanations. The difference? This analyst works 24/7, never makes typos, and can handle thousands of queries simultaneously.
+
+**Skills Showcased**:
+
+- Natural language understanding and intent extraction
+- Schema-aware SQL generation with LLMs
+- Query validation and SQL injection prevention
+- Safe database execution patterns
+- Automatic visualization selection
+- Query explanation and optimization
+
+## Module Summary
+
+In this project, you'll build a complete SQL Query Agent:
+
+1. **Schema Extraction**: Automatically discover and represent database schemas for LLM context
+2. **Natural Language to SQL**: Use GPT-4o with structured outputs to generate accurate SQL
+3. **Query Validation**: Implement multi-layer validation including syntax checking and injection prevention
+4. **Safe Execution**: Execute queries through read-only connections with timeouts and row limits
+5. **Result Visualization**: Automatically select and generate appropriate charts or tables
+6. **Query Explanation**: Translate SQL back to plain English for user understanding
+7. **Optimization Suggestions**: Analyze queries and suggest performance improvements
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> ParseQuestion
+    ParseQuestion --> ExtractIntent
+    ExtractIntent --> LoadSchema
+    LoadSchema --> GenerateSQL
+    GenerateSQL --> ValidateQuery
+    
+    ValidateQuery --> ExecuteQuery: Valid
+    ValidateQuery --> GenerateSQL: Invalid (retry)
+    
+    ExecuteQuery --> FormatResults
+    FormatResults --> SelectVisualization
+    SelectVisualization --> GenerateExplanation
+    GenerateExplanation --> [*]
+`}
+  caption="SQL Agent State Machine: The complete query lifecycle."
+/>
+
+## Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "SQL Query Agent"
+        API[FastAPI Server] --> Parser[Question Parser]
+        Parser --> SchemaLoader[Schema Loader]
+        
+        SchemaLoader --> Generator[SQL Generator]
+        Generator --> Validator[Query Validator]
+        
+        Validator -->|Safe| Executor[Query Executor]
+        Validator -->|Unsafe| Reject[Rejection Handler]
+        
+        Executor --> Formatter[Result Formatter]
+        Formatter --> Visualizer[Visualizer]
+        Visualizer --> Explainer[Query Explainer]
+    end
+    
+    subgraph "External Services"
+        LLM[GPT-4o / Claude]
+        DB[(SQLite/PostgreSQL)]
+    end
+    
+    Generator <-->|Structured Output| LLM
+    Explainer <-->|Explanation| LLM
+    Executor <-->|Read-Only| DB
+    SchemaLoader <-->|Schema| DB
+    
+    style API fill:#fff9c4,stroke:#fbc02d
+    style DB fill:#e3f2fd,stroke:#0277bd
+    style LLM fill:#f3e5f5,stroke:#7b1fa2
+`}
+  caption="System Architecture: Components and data flow."
+/>
+
+**Architecture Insights**:
+
+- **Schema-First Design**: The schema loader runs at startup and caches database structure, providing rich context for SQL generation
+- **Multi-Layer Validation**: Queries pass through syntax validation, injection detection, and permission checking before execution
+- **Read-Only Enforcement**: Database connections are configured with read-only permissions at the connection level, not just query level
+- **Graceful Degradation**: If visualization fails, the system falls back to formatted tables; if explanation fails, raw results are returned
+
+---
+
+## Detailed Requirements Specification
+
+| Requirement           | Priority | FR    | NFR    | Status |
+| :-------------------- | :------- | :---- | :----- | :----- |
+| **NL to SQL**         | P0       | FR-01 |        | ✅ Met |
+| **Schema Awareness**  | P0       | FR-02 | NFR-01 | ✅ Met |
+| **Query Validation**  | P0       | FR-03 | NFR-04 | ✅ Met |
+| **Safe Execution**    | P0       | FR-04 | NFR-02 | ✅ Met |
+| **Visualization**     | P1       | FR-05 | NFR-03 | ✅ Met |
+| **Query Explanation** | P1       | FR-06 |        | ✅ Met |
+| **Optimization**      | P2       | FR-07 |        | ✅ Met |
+
+### Functional Requirements (FR)
+
+| ID    | Requirement              | Description                                                                                 | Priority |
+| ----- | ------------------------ | ------------------------------------------------------------------------------------------- | -------- |
+| FR-01 | Natural Language to SQL  | The system shall translate natural language questions into valid SQL queries                | P0       |
+| FR-02 | Schema-Aware Generation  | The system shall use database schema information to generate accurate, contextual SQL       | P0       |
+| FR-03 | Query Validation         | The system shall validate queries for syntax correctness and SQL injection attempts         | P0       |
+| FR-04 | Safe Query Execution     | The system shall execute queries through read-only connections with timeouts and row limits | P0       |
+| FR-05 | Result Visualization     | The system shall automatically generate appropriate visualizations (charts/tables)          | P1       |
+| FR-06 | Query Explanation        | The system shall explain generated SQL queries in plain English                             | P1       |
+| FR-07 | Optimization Suggestions | The system shall analyze queries and suggest performance improvements                       | P2       |
+| FR-08 | Multi-Database Support   | The system shall support SQLite and PostgreSQL databases                                    | P1       |
+| FR-09 | Query History            | The system shall maintain a history of executed queries for reference                       | P2       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement           | Target                                                         | Measurement     |
+| ------ | --------------------- | -------------------------------------------------------------- | --------------- |
+| NFR-01 | Schema Load Time      | Schema extraction shall complete in < 5 seconds for 100 tables | Startup timing  |
+| NFR-02 | Query Execution Time  | Query execution shall timeout after 30 seconds                 | Query timing    |
+| NFR-03 | Visualization Latency | Chart generation shall complete in < 2 seconds                 | Render timing   |
+| NFR-04 | Security              | Zero SQL injection vulnerabilities in production               | Security audit  |
+| NFR-05 | Result Limits         | Query results shall be limited to 10,000 rows maximum          | Row count check |
+| NFR-06 | Accuracy              | SQL generation accuracy shall exceed 85% on standard queries   | Test suite      |
+
+### API Contract
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Query Endpoint"
+        Input[Natural Language Question]
+        Config[Configuration<br/>max_rows, timeout, viz_type]
+        
+        Input --> Process[Process Query]
+        Config --> Process
+        
+        Process --> Response[Response]
+    end
+    
+    subgraph "Response Structure"
+        Response --> SQL[Generated SQL]
+        Response --> Results[Query Results]
+        Response --> Chart[Visualization]
+        Response --> Explain[Explanation]
+        Response --> Optimize[Optimization Tips]
+    end
+    
+    style Input fill:#e1f5fe,stroke:#01579b
+    style Response fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="API Flow: From question to comprehensive response."
+/>
+
+#### POST /query - Execute Natural Language Query
+
+**Request Body:**
+
+```json
+{
+  "question": "string (required) - Natural language question",
+  "max_rows": "integer (default: 100, max: 10000)",
+  "timeout_seconds": "integer (default: 30, max: 60)",
+  "include_visualization": "boolean (default: true)",
+  "include_explanation": "boolean (default: true)",
+  "include_optimization": "boolean (default: false)"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "question": "string (original question)",
+  "sql": "string (generated SQL query)",
+  "results": {
+    "columns": ["string"],
+    "rows": [["any"]],
+    "row_count": "integer",
+    "truncated": "boolean"
+  },
+  "visualization": {
+    "type": "string ('bar' | 'line' | 'pie' | 'table' | 'scatter')",
+    "html": "string (rendered HTML)",
+    "config": "object (chart configuration)"
+  },
+  "explanation": "string (plain English explanation)",
+  "optimization": {
+    "suggestions": ["string"],
+    "estimated_improvement": "string"
+  },
+  "execution_time_ms": "integer",
+  "cached": "boolean"
+}
+```
+
+**Error Responses:**
+
+```json
+// 400 Bad Request - Invalid question
+{
+  "detail": "Could not understand the question. Please rephrase.",
+  "suggestion": "string (rephrased question suggestion)"
+}
+
+// 400 Bad Request - Unsafe query
+{
+  "detail": "Query validation failed",
+  "reason": "string ('injection_detected' | 'write_operation' | 'syntax_error')",
+  "sql": "string (the rejected SQL)"
+}
+
+// 500 Internal Server Error - Execution failed
+{
+  "detail": "Query execution failed",
+  "reason": "string",
+  "sql": "string"
+}
+```
+
+#### GET /schema - Get Database Schema
+
+**Response (200 OK):**
+
+```json
+{
+  "database": "string (database name)",
+  "tables": [
+    {
+      "name": "string",
+      "columns": [
+        {
+          "name": "string",
+          "type": "string",
+          "nullable": "boolean",
+          "primary_key": "boolean",
+          "foreign_key": "string | null"
+        }
+      ],
+      "row_count": "integer (approximate)",
+      "sample_values": "object (column -> sample values)"
+    }
+  ],
+  "relationships": [
+    {
+      "from_table": "string",
+      "from_column": "string",
+      "to_table": "string",
+      "to_column": "string"
+    }
+  ]
+}
+```
+
+#### GET /history - Get Query History
+
+**Query Parameters:**
+
+- `limit` (optional, default: 20): Number of queries to return
+- `offset` (optional, default: 0): Pagination offset
+
+**Response (200 OK):**
+
+```json
+{
+  "queries": [
+    {
+      "id": "string (uuid)",
+      "question": "string",
+      "sql": "string",
+      "executed_at": "string (ISO timestamp)",
+      "execution_time_ms": "integer",
+      "row_count": "integer",
+      "success": "boolean"
+    }
+  ],
+  "total": "integer",
+  "limit": "integer",
+  "offset": "integer"
+}
+```
+
+### Data Models
+
+```
+Schema Representation:
+┌─────────────────────────────────────────────────────────────┐
+│                     TableSchema                              │
+├─────────────────────────────────────────────────────────────┤
+│ name: STRING                                                │
+│ columns: List[ColumnSchema]                                 │
+│ primary_key: List[STRING]                                   │
+│ foreign_keys: List[ForeignKey]                              │
+│ indexes: List[IndexSchema]                                  │
+│ row_count: INTEGER (approximate)                            │
+└─────────────────────────────────────────────────────────────┘
+
+Column Schema:
+┌─────────────────────────────────────────────────────────────┐
+│                     ColumnSchema                             │
+├─────────────────────────────────────────────────────────────┤
+│ name: STRING                                                │
+│ data_type: STRING (e.g., 'INTEGER', 'VARCHAR(255)')         │
+│ nullable: BOOLEAN                                           │
+│ default_value: STRING | null                                │
+│ is_primary_key: BOOLEAN                                     │
+│ is_foreign_key: BOOLEAN                                     │
+│ references: ForeignKeyRef | null                            │
+└─────────────────────────────────────────────────────────────┘
+
+Query Result:
+┌─────────────────────────────────────────────────────────────┐
+│                     QueryResult                              │
+├─────────────────────────────────────────────────────────────┤
+│ columns: List[STRING]                                       │
+│ rows: List[List[Any]]                                       │
+│ row_count: INTEGER                                          │
+│ truncated: BOOLEAN                                          │
+│ execution_time_ms: INTEGER                                  │
+└─────────────────────────────────────────────────────────────┘
+
+Visualization Config:
+┌─────────────────────────────────────────────────────────────┐
+│                  VisualizationConfig                         │
+├─────────────────────────────────────────────────────────────┤
+│ type: ENUM ('bar', 'line', 'pie', 'table', 'scatter')       │
+│ x_column: STRING | null                                     │
+│ y_columns: List[STRING]                                     │
+│ title: STRING                                               │
+│ x_label: STRING                                             │
+│ y_label: STRING                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Error Handling Matrix
+
+| Error Code         | HTTP Status | Cause                                | Response Body                                  | Recovery Action                    |
+| ------------------ | ----------- | ------------------------------------ | ---------------------------------------------- | ---------------------------------- |
+| QUESTION_UNCLEAR   | 400         | Cannot parse natural language        | `{"detail": "Could not understand question"}`  | Rephrase question                  |
+| INJECTION_DETECTED | 400         | SQL injection attempt detected       | `{"detail": "Query validation failed"}`        | Remove malicious content           |
+| WRITE_OPERATION    | 400         | Non-SELECT query attempted           | `{"detail": "Only SELECT queries allowed"}`    | Use SELECT query                   |
+| SYNTAX_ERROR       | 400         | Generated SQL has syntax errors      | `{"detail": "SQL syntax error", "sql": "..."}` | Retry with rephrased question      |
+| EXECUTION_TIMEOUT  | 500         | Query exceeded timeout               | `{"detail": "Query timed out"}`                | Simplify query or increase timeout |
+| DATABASE_ERROR     | 500         | Database connection/execution failed | `{"detail": "Database error"}`                 | Check database connectivity        |
+| LLM_ERROR          | 500         | LLM API call failed                  | `{"detail": "AI service unavailable"}`         | Retry or use fallback              |
+| SCHEMA_NOT_LOADED  | 500         | Schema not available                 | `{"detail": "Database schema not loaded"}`     | Restart service                    |
+
+### Security Requirements
+
+<Mermaid
+  chart={`
+graph TD
+    Query[User Query] --> Layer1[Layer 1: Input Sanitization]
+    Layer1 --> Layer2[Layer 2: SQL Injection Detection]
+    Layer2 --> Layer3[Layer 3: Query Type Validation]
+    Layer3 --> Layer4[Layer 4: Read-Only Connection]
+    Layer4 --> Layer5[Layer 5: Row Limit Enforcement]
+    Layer5 --> DB[(Database)]
+    
+    Layer1 -->|Fail| Reject1[Reject: Invalid Input]
+    Layer2 -->|Fail| Reject2[Reject: Injection Detected]
+    Layer3 -->|Fail| Reject3[Reject: Non-SELECT Query]
+    
+    style Layer1 fill:#ffcdd2,stroke:#c62828
+    style Layer2 fill:#ffcdd2,stroke:#c62828
+    style Layer3 fill:#ffcdd2,stroke:#c62828
+    style Layer4 fill:#c8e6c9,stroke:#2e7d32
+    style Layer5 fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Defense in Depth: Multiple security layers protect the database."
+/>
+
+| Security Layer          | Implementation                                                                |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| Input Sanitization      | Strip control characters, limit input length to 1000 chars                    |
+| SQL Injection Detection | Pattern matching for common injection vectors, parameterized query validation |
+| Query Type Validation   | AST parsing to ensure only SELECT statements, block DDL/DML                   |
+| Read-Only Connection    | Database user with SELECT-only permissions, connection-level read-only flag   |
+| Row Limit Enforcement   | LIMIT clause injection, result truncation at application level                |
+| Timeout Protection      | Query timeout at database and application level                               |
+
+---
+
+## Core Implementation
+
+### Project Structure
+
+```
+sql-query-agent/
+├── main.py                    # FastAPI application entry point
+├── config.py                  # Configuration management
+├── requirements.txt           # Python dependencies
+├── docker-compose.yml         # Docker setup with sample database
+│
+├── services/
+│   ├── __init__.py
+│   ├── schema_loader.py       # Database schema extraction
+│   ├── sql_generator.py       # NL to SQL with LLM
+│   ├── query_validator.py     # Security validation
+│   ├── query_executor.py      # Safe query execution
+│   ├── visualizer.py          # Result visualization
+│   ├── explainer.py           # Query explanation
+│   └── optimizer.py           # Query optimization suggestions
+│
+├── models/
+│   ├── __init__.py
+│   ├── schema.py              # Schema data models
+│   ├── query.py               # Query request/response models
+│   └── visualization.py       # Visualization models
+│
+├── routers/
+│   ├── __init__.py
+│   └── query.py               # API endpoints
+│
+├── database/
+│   ├── connection.py          # Database connection management
+│   └── sample_data.sql        # Sample database for testing
+│
+└── tests/
+    ├── test_generator.py      # SQL generation tests
+    ├── test_validator.py      # Security validation tests
+    └── test_integration.py    # End-to-end tests
+```
+
+### Configuration
+
+```python
+# config.py
+"""Configuration management for SQL Query Agent."""
+
+from pydantic_settings import BaseSettings
+from typing import Literal
+from functools import lru_cache
+
+
+class Settings(BaseSettings):
+    """Application settings with environment variable support."""
+
+    # Application
+    app_name: str = "SQL Query Agent"
+    debug: bool = False
+
+    # Database
+    database_type: Literal["sqlite", "postgresql"] = "sqlite"
+    database_url: str = "sqlite:///./sample.db"
+    database_read_only: bool = True
+
+    # Query Limits
+    max_rows: int = 10000
+    default_rows: int = 100
+    query_timeout_seconds: int = 30
+    max_query_timeout_seconds: int = 60
+
+    # LLM Configuration
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o"
+    llm_temperature: float = 0.0
+    llm_max_retries: int = 3
+
+    # Security
+    max_question_length: int = 1000
+    enable_query_logging: bool = True
+
+    # Visualization
+    default_chart_width: int = 800
+    default_chart_height: int = 400
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    return Settings()
+```
+
+### Data Models
+
+```python
+# models/schema.py
+"""Database schema data models."""
+
+from pydantic import BaseModel, Field
+from typing import List, Optional, Any
+from enum import Enum
+
+
+class DataType(str, Enum):
+    """Common SQL data types."""
+    INTEGER = "INTEGER"
+    BIGINT = "BIGINT"
+    FLOAT = "FLOAT"
+    DECIMAL = "DECIMAL"
+    VARCHAR = "VARCHAR"
+    TEXT = "TEXT"
+    BOOLEAN = "BOOLEAN"
+    DATE = "DATE"
+    DATETIME = "DATETIME"
+    TIMESTAMP = "TIMESTAMP"
+    JSON = "JSON"
+    BLOB = "BLOB"
+
+
+class ForeignKeyRef(BaseModel):
+    """Foreign key reference."""
+    table: str
+    column: str
+
+
+class ColumnSchema(BaseModel):
+    """Schema for a database column."""
+    name: str
+    data_type: str
+    nullable: bool = True
+    default_value: Optional[str] = None
+    is_primary_key: bool = False
+    is_foreign_key: bool = False
+    references: Optional[ForeignKeyRef] = None
+    sample_values: List[Any] = Field(default_factory=list)
+
+
+class IndexSchema(BaseModel):
+    """Schema for a database index."""
+    name: str
+    columns: List[str]
+    unique: bool = False
+
+
+class TableSchema(BaseModel):
+    """Schema for a database table."""
+    name: str
+    columns: List[ColumnSchema]
+    primary_key: List[str] = Field(default_factory=list)
+    indexes: List[IndexSchema] = Field(default_factory=list)
+    row_count: int = 0
+    description: Optional[str] = None
+
+
+class Relationship(BaseModel):
+    """Relationship between tables."""
+    from_table: str
+    from_column: str
+    to_table: str
+    to_column: str
+    relationship_type: str = "many-to-one"
+
+
+class DatabaseSchema(BaseModel):
+    """Complete database schema."""
+    database_name: str
+    database_type: str
+    tables: List[TableSchema]
+    relationships: List[Relationship] = Field(default_factory=list)
+
+    def to_prompt_context(self) -> str:
+        """Convert schema to LLM-friendly context string."""
+        lines = [f"Database: {self.database_name} ({self.database_type})\n"]
+        lines.append("Tables:\n")
+
+        for table in self.tables:
+            lines.append(f"\n{table.name} (~{table.row_count:,} rows):")
+            for col in table.columns:
+                pk = " [PK]" if col.is_primary_key else ""
+                fk = f" [FK -> {col.references.table}.{col.references.column}]" if col.references else ""
+                nullable = " NULL" if col.nullable else " NOT NULL"
+                lines.append(f"  - {col.name}: {col.data_type}{pk}{fk}{nullable}")
+                if col.sample_values:
+                    samples = ", ".join(str(v) for v in col.sample_values[:3])
+                    lines.append(f"    Examples: {samples}")
+
+        if self.relationships:
+            lines.append("\n\nRelationships:")
+            for rel in self.relationships:
+                lines.append(f"  {rel.from_table}.{rel.from_column} -> {rel.to_table}.{rel.to_column}")
+
+        return "\n".join(lines)
+```
+
+```python
+# models/query.py
+"""Query request and response models."""
+
+from pydantic import BaseModel, Field, field_validator
+from typing import List, Optional, Any, Dict
+from datetime import datetime
+from enum import Enum
+import uuid
+
+
+class VisualizationType(str, Enum):
+    """Supported visualization types."""
+    BAR = "bar"
+    LINE = "line"
+    PIE = "pie"
+    TABLE = "table"
+    SCATTER = "scatter"
+    AREA = "area"
+
+
+class QueryRequest(BaseModel):
+    """Request model for natural language query."""
+    question: str = Field(..., min_length=3, max_length=1000)
+    max_rows: int = Field(default=100, ge=1, le=10000)
+    timeout_seconds: int = Field(default=30, ge=1, le=60)
+    include_visualization: bool = True
+    include_explanation: bool = True
+    include_optimization: bool = False
+
+    @field_validator("question")
+    @classmethod
+    def validate_question(cls, v: str) -> str:
+        """Validate and clean the question."""
+        # Remove control characters
+        cleaned = "".join(char for char in v if ord(char) >= 32 or char in "\n\t")
+        return cleaned.strip()
+
+
+class QueryResult(BaseModel):
+    """Query execution result."""
+    columns: List[str]
+    rows: List[List[Any]]
+    row_count: int
+    truncated: bool = False
+
+
+class VisualizationConfig(BaseModel):
+    """Configuration for visualization."""
+    type: VisualizationType
+    x_column: Optional[str] = None
+    y_columns: List[str] = Field(default_factory=list)
+    title: str = ""
+    x_label: str = ""
+    y_label: str = ""
+
+
+class Visualization(BaseModel):
+    """Generated visualization."""
+    type: VisualizationType
+    html: str
+    config: VisualizationConfig
+
+
+class OptimizationSuggestion(BaseModel):
+    """Query optimization suggestion."""
+    suggestions: List[str] = Field(default_factory=list)
+    estimated_improvement: str = ""
+    optimized_sql: Optional[str] = None
+
+
+class QueryResponse(BaseModel):
+    """Complete response for a query."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    question: str
+    sql: str
+    results: QueryResult
+    visualization: Optional[Visualization] = None
+    explanation: Optional[str] = None
+    optimization: Optional[OptimizationSuggestion] = None
+    execution_time_ms: int
+    cached: bool = False
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class QueryError(BaseModel):
+    """Error response model."""
+    detail: str
+    reason: Optional[str] = None
+    sql: Optional[str] = None
+    suggestion: Optional[str] = None
+
+
+class QueryHistoryItem(BaseModel):
+    """Query history entry."""
+    id: str
+    question: str
+    sql: str
+    executed_at: datetime
+    execution_time_ms: int
+    row_count: int
+    success: bool
+
+
+class QueryHistoryResponse(BaseModel):
+    """Query history response."""
+    queries: List[QueryHistoryItem]
+    total: int
+    limit: int
+    offset: int
+```
+
+### Schema Loader Service
+
+<Mermaid
+  chart={`
+graph TD
+    Start[Service Start] --> Connect[Connect to Database]
+    Connect --> Extract[Extract Schema]
+    
+    subgraph "Schema Extraction"
+        Extract --> Tables[List Tables]
+        Tables --> Columns[Get Columns]
+        Columns --> Keys[Get Keys/Indexes]
+        Keys --> Samples[Sample Values]
+        Samples --> Relations[Detect Relationships]
+    end
+    
+    Relations --> Cache[Cache Schema]
+    Cache --> Ready[Ready for Queries]
+    
+    style Cache fill:#e8f5e9,stroke:#2e7d32
+`}
+  caption="Schema Loading: One-time extraction at startup."
+/>
+
+```python
+# services/schema_loader.py
+"""Database schema extraction and caching."""
+
+import asyncio
+from typing import List, Optional, Dict, Any
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine import Engine
+import logging
+
+from models.schema import (
+    DatabaseSchema, TableSchema, ColumnSchema,
+    IndexSchema, Relationship, ForeignKeyRef
+)
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+class SchemaLoader:
+    """Extracts and caches database schema for LLM context."""
+
+    def __init__(self):
+        self.settings = get_settings()
+        self._engine: Optional[Engine] = None
+        self._schema: Optional[DatabaseSchema] = None
+        self._schema_context: Optional[str] = None
+
+    @property
+    def engine(self) -> Engine:
+        """Get or create database engine."""
+        if self._engine is None:
+            connect_args = {}
+            if self.settings.database_type == "sqlite":
+                # SQLite read-only mode
+                connect_args["check_same_thread"] = False
+                if self.settings.database_read_only:
+                    connect_args["uri"] = True
+
+            self._engine = create_engine(
+                self.settings.database_url,
+                connect_args=connect_args,
+                echo=self.settings.debug
+            )
+        return self._engine
+
+    async def load_schema(self) -> DatabaseSchema:
+        """Load complete database schema."""
+        if self._schema is not None:
+            return self._schema
+
+        logger.info("Loading database schema...")
+
+        inspector = inspect(self.engine)
+        tables: List[TableSchema] = []
+        relationships: List[Relationship] = []
+
+        table_names = inspector.get_table_names()
+        logger.info(f"Found {len(table_names)} tables")
+
+        for table_name in table_names:
+            table_schema = await self._extract_table_schema(
+                inspector, table_name
+            )
+            tables.append(table_schema)
+
+            # Extract relationships from foreign keys
+            for col in table_schema.columns:
+                if col.references:
+                    relationships.append(Relationship(
+                        from_table=table_name,
+                        from_column=col.name,
+                        to_table=col.references.table,
+                        to_column=col.references.column
+                    ))
+
+        self._schema = DatabaseSchema(
+            database_name=self._get_database_name(),
+            database_type=self.settings.database_type,
+            tables=tables,
+            relationships=relationships
+        )
+
+        # Pre-compute context string
+        self._schema_context = self._schema.to_prompt_context()
+
+        logger.info(f"Schema loaded: {len(tables)} tables, {len(relationships)} relationships")
+        return self._schema
+
+    async def _extract_table_schema(
+        self,
+        inspector,
+        table_name: str
+    ) -> TableSchema:
+        """Extract schema for a single table."""
+        columns: List[ColumnSchema] = []
+
+        # Get column information
+        column_info = inspector.get_columns(table_name)
+        pk_columns = inspector.get_pk_constraint(table_name).get("constrained_columns", [])
+        fk_info = inspector.get_foreign_keys(table_name)
+
+        # Build foreign key lookup
+        fk_lookup: Dict[str, ForeignKeyRef] = {}
+        for fk in fk_info:
+            for i, col in enumerate(fk.get("constrained_columns", [])):
+                ref_cols = fk.get("referred_columns", [])
+                if i < len(ref_cols):
+                    fk_lookup[col] = ForeignKeyRef(
+                        table=fk.get("referred_table", ""),
+                        column=ref_cols[i]
+                    )
+
+        for col in column_info:
+            col_name = col["name"]
+            columns.append(ColumnSchema(
+                name=col_name,
+                data_type=str(col["type"]),
+                nullable=col.get("nullable", True),
+                default_value=str(col.get("default")) if col.get("default") else None,
+                is_primary_key=col_name in pk_columns,
+                is_foreign_key=col_name in fk_lookup,
+                references=fk_lookup.get(col_name),
+                sample_values=await self._get_sample_values(table_name, col_name)
+            ))
+
+        # Get indexes
+        indexes = [
+            IndexSchema(
+                name=idx["name"] or f"{table_name}_idx",
+                columns=idx["column_names"],
+                unique=idx.get("unique", False)
+            )
+            for idx in inspector.get_indexes(table_name)
+        ]
+
+        # Get approximate row count
+        row_count = await self._get_row_count(table_name)
+
+        return TableSchema(
+            name=table_name,
+            columns=columns,
+            primary_key=pk_columns,
+            indexes=indexes,
+            row_count=row_count
+        )
+
+    async def _get_sample_values(
+        self,
+        table_name: str,
+        column_name: str,
+        limit: int = 5
+    ) -> List[Any]:
+        """Get sample values for a column."""
+        try:
+            with self.engine.connect() as conn:
+                # Use parameterized query for safety
+                query = text(
+                    f"SELECT DISTINCT \"{column_name}\" FROM \"{table_name}\" "
+                    f"WHERE \"{column_name}\" IS NOT NULL LIMIT :limit"
+                )
+                result = conn.execute(query, {"limit": limit})
+                return [row[0] for row in result.fetchall()]
+        except Exception as e:
+            logger.warning(f"Could not get samples for {table_name}.{column_name}: {e}")
+            return []
+
+    async def _get_row_count(self, table_name: str) -> int:
+        """Get approximate row count for a table."""
+        try:
+            with self.engine.connect() as conn:
+                # For large tables, use approximate count if available
+                if self.settings.database_type == "postgresql":
+                    query = text(
+                        "SELECT reltuples::bigint FROM pg_class "
+                        "WHERE relname = :table_name"
+                    )
+                    result = conn.execute(query, {"table_name": table_name})
+                    row = result.fetchone()
+                    if row and row[0] > 0:
+                        return int(row[0])
+
+                # Fallback to exact count (may be slow for large tables)
+                query = text(f"SELECT COUNT(*) FROM \"{table_name}\"")
+                result = conn.execute(query)
+                return result.scalar() or 0
+        except Exception as e:
+            logger.warning(f"Could not get row count for {table_name}: {e}")
+            return 0
+
+    def _get_database_name(self) -> str:
+        """Extract database name from URL."""
+        url = self.settings.database_url
+        if "sqlite" in url:
+            return url.split("/")[-1].replace(".db", "")
+        elif "postgresql" in url:
+            return url.split("/")[-1].split("?")[0]
+        return "database"
+
+    def get_schema_context(self) -> str:
+        """Get pre-computed schema context for LLM."""
+        if self._schema_context is None:
+            raise RuntimeError("Schema not loaded. Call load_schema() first.")
+        return self._schema_context
+
+    def get_schema(self) -> DatabaseSchema:
+        """Get cached schema."""
+        if self._schema is None:
+            raise RuntimeError("Schema not loaded. Call load_schema() first.")
+        return self._schema
+
+
+# Global instance
+schema_loader = SchemaLoader()
+```
+
+**Key Implementation Details**:
+
+- **Lazy Loading**: Schema is loaded once at startup and cached for all subsequent requests
+- **Sample Values**: Collecting sample values helps the LLM understand data patterns (e.g., knowing a `status` column contains "active", "pending", "closed")
+- **Relationship Detection**: Foreign keys are automatically detected and included in the context
+- **Approximate Counts**: For PostgreSQL, uses `pg_class` for fast approximate counts on large tables
+
+### SQL Generator Service
+
+<Mermaid
+  chart={`
+graph TD
+    Question[Natural Language Question] --> Context[Build Context]
+    Context --> Schema[+ Schema Info]
+    Schema --> Examples[+ Few-Shot Examples]
+    Examples --> LLM[GPT-4o Structured Output]
+    LLM --> SQL[Generated SQL]
+    
+    SQL --> Validate{Valid?}
+    Validate -->|Yes| Return[Return SQL]
+    Validate -->|No| Retry[Retry with Error]
+    Retry --> LLM
+    
+    style LLM fill:#f3e5f5,stroke:#7b1fa2
+    style SQL fill:#e8f5e9,stroke:#2e7d32
+`}
+  caption="SQL Generation: Schema-aware translation with validation loop."
+/>
+
+```python
+# services/sql_generator.py
+"""Natural language to SQL translation using LLM."""
+
+import json
+import logging
+from typing import Optional
+from openai import AsyncOpenAI
+from pydantic import BaseModel, Field
+
+from config import get_settings
+from services.schema_loader import schema_loader
+
+logger = logging.getLogger(__name__)
+
+
+class GeneratedSQL(BaseModel):
+    """Structured output for SQL generation."""
+    sql: str = Field(description="The generated SQL SELECT query")
+    confidence: float = Field(
+        description="Confidence score 0-1 for the generated query",
+        ge=0.0, le=1.0
+    )
+    assumptions: list[str] = Field(
+        default_factory=list,
+        description="Assumptions made during query generation"
+    )
+    tables_used: list[str] = Field(
+        default_factory=list,
+        description="Tables referenced in the query"
+    )
+
+
+class SQLGenerator:
+    """Generates SQL from natural language using GPT-4o."""
+
+    SYSTEM_PROMPT = """You are an expert SQL query generator. Your task is to translate natural language questions into accurate, efficient SQL queries.
+
+RULES:
+1. Generate ONLY SELECT queries - never INSERT, UPDATE, DELETE, DROP, or any DDL
+2. Always use table and column names exactly as they appear in the schema
+3. Use appropriate JOINs when data spans multiple tables
+4. Include WHERE clauses to filter data appropriately
+5. Use aggregate functions (COUNT, SUM, AVG, etc.) when the question asks for totals or averages
+6. Add ORDER BY for questions about "top", "highest", "lowest", etc.
+7. Use LIMIT when the question asks for a specific number of results
+8. Handle NULL values appropriately
+9. Use aliases for readability in complex queries
+10. Prefer explicit JOIN syntax over implicit joins
+
+IMPORTANT:
+- If the question cannot be answered with the given schema, explain why in assumptions
+- If the question is ambiguous, make reasonable assumptions and document them
+- Always validate that referenced tables and columns exist in the schema"""
+
+    FEW_SHOT_EXAMPLES = [
+        {
+            "question": "What are the top 5 products by revenue?",
+            "sql": """SELECT p.name, SUM(oi.quantity * oi.unit_price) as revenue
+FROM products p
+JOIN order_items oi ON p.id = oi.product_id
+GROUP BY p.id, p.name
+ORDER BY revenue DESC
+LIMIT 5""",
+            "assumptions": ["Revenue calculated as quantity * unit_price", "Using order_items for sales data"]
+        },
+        {
+            "question": "How many orders were placed last month?",
+            "sql": """SELECT COUNT(*) as order_count
+FROM orders
+WHERE created_at >= DATE('now', '-1 month')
+  AND created_at < DATE('now', 'start of month')""",
+            "assumptions": ["Using created_at as the order date", "Last month means the previous calendar month"]
+        },
+        {
+            "question": "Show me customers who haven't ordered anything",
+            "sql": """SELECT c.id, c.name, c.email
+FROM customers c
+LEFT JOIN orders o ON c.id = o.customer_id
+WHERE o.id IS NULL""",
+            "assumptions": ["Using LEFT JOIN to find customers without matching orders"]
+        }
+    ]
+
+    def __init__(self):
+        self.settings = get_settings()
+        self.client = AsyncOpenAI(api_key=self.settings.openai_api_key)
+
+    async def generate(
+        self,
+        question: str,
+        max_retries: int = 3
+    ) -> GeneratedSQL:
+        """Generate SQL from natural language question."""
+        schema_context = schema_loader.get_schema_context()
+
+        # Build the prompt with schema and examples
+        user_prompt = self._build_prompt(question, schema_context)
+
+        last_error: Optional[str] = None
+
+        for attempt in range(max_retries):
+            try:
+                # Add error context for retries
+                if last_error:
+                    user_prompt += f"\n\nPrevious attempt failed with error: {last_error}\nPlease fix the query."
+
+                response = await self.client.beta.chat.completions.parse(
+                    model=self.settings.openai_model,
+                    temperature=self.settings.llm_temperature,
+                    messages=[
+                        {"role": "system", "content": self.SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    response_format=GeneratedSQL
+                )
+
+                result = response.choices[0].message.parsed
+
+                if result is None:
+                    raise ValueError("Failed to parse LLM response")
+
+                logger.info(f"Generated SQL (attempt {attempt + 1}): {result.sql[:100]}...")
+                return result
+
+            except Exception as e:
+                last_error = str(e)
+                logger.warning(f"SQL generation attempt {attempt + 1} failed: {e}")
+
+                if attempt == max_retries - 1:
+                    raise RuntimeError(f"Failed to generate SQL after {max_retries} attempts: {e}")
+
+        raise RuntimeError("SQL generation failed")
+
+    def _build_prompt(self, question: str, schema_context: str) -> str:
+        """Build the complete prompt with schema and examples."""
+        examples_text = "\n\n".join([
+            f"Question: {ex['question']}\nSQL:\n{ex['sql']}\nAssumptions: {', '.join(ex['assumptions'])}"
+            for ex in self.FEW_SHOT_EXAMPLES
+        ])
+
+        return f"""DATABASE SCHEMA:
+{schema_context}
+
+EXAMPLES:
+{examples_text}
+
+USER QUESTION:
+{question}
+
+Generate a SQL SELECT query to answer this question. Include your confidence level and any assumptions made."""
+
+
+# Global instance
+sql_generator = SQLGenerator()
+```
+
+**Key Implementation Details**:
+
+- **Structured Outputs**: Uses OpenAI's `response_format` for guaranteed JSON schema compliance
+- **Few-Shot Examples**: Provides examples to guide the LLM toward correct patterns
+- **Retry Logic**: Automatically retries with error context if generation fails
+- **Confidence Scoring**: LLM provides confidence score to help identify uncertain queries
+- **Assumption Tracking**: Documents assumptions for transparency with users
+
+### Query Validator Service
+
+<Mermaid
+  chart={`
+graph TD
+    SQL[Generated SQL] --> L1[Layer 1: Pattern Detection]
+    L1 -->|Pass| L2[Layer 2: AST Parsing]
+    L2 -->|Pass| L3[Layer 3: Statement Type Check]
+    L3 -->|Pass| L4[Layer 4: Table/Column Validation]
+    L4 -->|Pass| Safe[✅ Safe to Execute]
+    
+    L1 -->|Fail| Reject1[❌ Injection Detected]
+    L2 -->|Fail| Reject2[❌ Syntax Error]
+    L3 -->|Fail| Reject3[❌ Non-SELECT Query]
+    L4 -->|Fail| Reject4[❌ Invalid Reference]
+    
+    style Safe fill:#c8e6c9,stroke:#2e7d32
+    style Reject1 fill:#ffcdd2,stroke:#c62828
+    style Reject2 fill:#ffcdd2,stroke:#c62828
+    style Reject3 fill:#ffcdd2,stroke:#c62828
+    style Reject4 fill:#ffcdd2,stroke:#c62828
+`}
+  caption="Query Validation: Defense in depth against malicious queries."
+/>
+
+```python
+# services/query_validator.py
+"""SQL query validation and security checking."""
+
+import re
+import logging
+from typing import Tuple, Optional, Set
+from enum import Enum
+import sqlparse
+from sqlparse.sql import Statement, Token
+from sqlparse.tokens import Keyword, DML
+
+from services.schema_loader import schema_loader
+
+logger = logging.getLogger(__name__)
+
+
+class ValidationError(Enum):
+    """Types of validation errors."""
+    INJECTION_DETECTED = "injection_detected"
+    WRITE_OPERATION = "write_operation"
+    SYNTAX_ERROR = "syntax_error"
+    INVALID_TABLE = "invalid_table"
+    INVALID_COLUMN = "invalid_column"
+    MULTIPLE_STATEMENTS = "multiple_statements"
+    DANGEROUS_FUNCTION = "dangerous_function"
+
+
+class QueryValidator:
+    """Multi-layer SQL query validation."""
+
+    # Patterns that indicate SQL injection attempts
+    INJECTION_PATTERNS = [
+        r";\s*--",                          # Statement termination with comment
+        r";\s*(DROP|DELETE|UPDATE|INSERT)", # Statement chaining with DML/DDL
+        r"UNION\s+ALL\s+SELECT",            # UNION-based injection
+        r"OR\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+['\"]?",  # OR 1=1 pattern
+        r"AND\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+['\"]?", # AND 1=1 pattern
+        r"'\s*OR\s*'",                      # String-based OR injection
+        r"--\s*$",                          # Trailing comment
+        r"/\*.*\*/",                        # Block comments (potential bypass)
+        r"EXEC\s*\(",                       # EXEC calls
+        r"xp_\w+",                          # Extended stored procedures
+        r"WAITFOR\s+DELAY",                 # Time-based injection
+        r"BENCHMARK\s*\(",                  # MySQL benchmark
+        r"SLEEP\s*\(",                      # Sleep function
+        r"LOAD_FILE\s*\(",                  # File access
+        r"INTO\s+(OUTFILE|DUMPFILE)",       # File writing
+    ]
+
+    # Dangerous SQL functions that should be blocked
+    DANGEROUS_FUNCTIONS = {
+        "load_file", "into outfile", "into dumpfile",
+        "benchmark", "sleep", "waitfor",
+        "exec", "execute", "xp_cmdshell",
+        "pg_read_file", "pg_write_file",
+        "dbms_pipe", "utl_http"
+    }
+
+    # Allowed statement types
+    ALLOWED_STATEMENTS = {"SELECT"}
+
+    # Blocked keywords that indicate write operations
+    BLOCKED_KEYWORDS = {
+        "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER",
+        "TRUNCATE", "REPLACE", "MERGE", "GRANT", "REVOKE",
+        "COMMIT", "ROLLBACK", "SAVEPOINT"
+    }
+
+    def __init__(self):
+        self._compiled_patterns = [
+            re.compile(pattern, re.IGNORECASE)
+            for pattern in self.INJECTION_PATTERNS
+        ]
+
+    def validate(self, sql: str) -> Tuple[bool, Optional[ValidationError], Optional[str]]:
+        """
+        Validate SQL query through multiple security layers.
+
+        Returns:
+            Tuple of (is_valid, error_type, error_message)
+        """
+        # Layer 1: Pattern-based injection detection
+        is_safe, error = self._check_injection_patterns(sql)
+        if not is_safe:
+            return False, ValidationError.INJECTION_DETECTED, error
+
+        # Layer 2: Parse and validate syntax
+        try:
+            parsed = sqlparse.parse(sql)
+        except Exception as e:
+            return False, ValidationError.SYNTAX_ERROR, f"Failed to parse SQL: {e}"
+
+        if not parsed:
+            return False, ValidationError.SYNTAX_ERROR, "Empty or invalid SQL"
+
+        # Layer 3: Check for multiple statements
+        if len(parsed) > 1:
+            return False, ValidationError.MULTIPLE_STATEMENTS, "Multiple statements not allowed"
+
+        statement = parsed[0]
+
+        # Layer 4: Validate statement type
+        is_select, error = self._validate_statement_type(statement)
+        if not is_select:
+            return False, ValidationError.WRITE_OPERATION, error
+
+        # Layer 5: Check for dangerous functions
+        has_dangerous, func = self._check_dangerous_functions(sql)
+        if has_dangerous:
+            return False, ValidationError.DANGEROUS_FUNCTION, f"Dangerous function detected: {func}"
+
+        # Layer 6: Validate table and column references
+        is_valid, error = self._validate_references(sql)
+        if not is_valid:
+            return False, ValidationError.INVALID_TABLE, error
+
+        logger.info("Query validation passed all checks")
+        return True, None, None
+
+    def _check_injection_patterns(self, sql: str) -> Tuple[bool, Optional[str]]:
+        """Check for common SQL injection patterns."""
+        for pattern in self._compiled_patterns:
+            if pattern.search(sql):
+                return False, f"Suspicious pattern detected: {pattern.pattern}"
+        return True, None
+
+    def _validate_statement_type(self, statement: Statement) -> Tuple[bool, Optional[str]]:
+        """Ensure the statement is a SELECT query."""
+        # Get the first meaningful token
+        first_token = statement.token_first(skip_cm=True, skip_ws=True)
+
+        if first_token is None:
+            return False, "Empty statement"
+
+        # Check if it's a SELECT statement
+        if first_token.ttype is DML and first_token.value.upper() == "SELECT":
+            # Additional check: ensure no blocked keywords appear
+            sql_upper = statement.value.upper()
+            for keyword in self.BLOCKED_KEYWORDS:
+                # Check for keyword as a standalone word (not part of column name)
+                if re.search(rf'\b{keyword}\b', sql_upper):
+                    return False, f"Blocked keyword detected: {keyword}"
+            return True, None
+
+        return False, f"Only SELECT statements allowed, got: {first_token.value}"
+
+    def _check_dangerous_functions(self, sql: str) -> Tuple[bool, Optional[str]]:
+        """Check for dangerous SQL functions."""
+        sql_lower = sql.lower()
+        for func in self.DANGEROUS_FUNCTIONS:
+            if func in sql_lower:
+                return True, func
+        return False, None
+
+    def _validate_references(self, sql: str) -> Tuple[bool, Optional[str]]:
+        """Validate that referenced tables exist in schema."""
+        try:
+            schema = schema_loader.get_schema()
+            valid_tables = {t.name.lower() for t in schema.tables}
+
+            # Extract table names from query (simplified extraction)
+            # This catches most common patterns: FROM table, JOIN table
+            table_pattern = r'\b(?:FROM|JOIN)\s+["\']?(\w+)["\']?'
+            referenced_tables = re.findall(table_pattern, sql, re.IGNORECASE)
+
+            for table in referenced_tables:
+                if table.lower() not in valid_tables:
+                    return False, f"Unknown table: {table}"
+
+            return True, None
+
+        except Exception as e:
+            logger.warning(f"Could not validate table references: {e}")
+            # Don't fail validation if schema check fails
+            return True, None
+
+    def sanitize_for_logging(self, sql: str) -> str:
+        """Sanitize SQL for safe logging (remove potential sensitive data)."""
+        # Replace string literals with placeholders
+        sanitized = re.sub(r"'[^']*'", "'***'", sql)
+        sanitized = re.sub(r'"[^"]*"', '"***"', sanitized)
+        return sanitized
+
+
+# Global instance
+query_validator = QueryValidator()
+```
+
+**Security Implementation Details**:
+
+- **Pattern Detection**: Regex patterns catch common injection vectors like `; DROP TABLE`, `OR 1=1`, `UNION SELECT`
+- **AST Parsing**: Uses `sqlparse` to properly parse SQL and validate structure
+- **Statement Type Enforcement**: Only SELECT statements pass validation
+- **Dangerous Function Blocking**: Blocks functions that could access files or cause delays
+- **Schema Validation**: Ensures referenced tables actually exist in the database
+- **Logging Sanitization**: Removes sensitive data before logging queries
+
+### Query Executor Service
+
+```python
+# services/query_executor.py
+"""Safe SQL query execution with timeouts and limits."""
+
+import asyncio
+import logging
+from typing import List, Any, Optional
+from datetime import datetime
+from contextlib import asynccontextmanager
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
+
+from config import get_settings
+from models.query import QueryResult
+
+logger = logging.getLogger(__name__)
+
+
+class QueryExecutionError(Exception):
+    """Custom exception for query execution failures."""
+    def __init__(self, message: str, sql: Optional[str] = None):
+        super().__init__(message)
+        self.sql = sql
+
+
+class QueryExecutor:
+    """Executes SQL queries safely with read-only connections."""
+
+    def __init__(self):
+        self.settings = get_settings()
+        self._engine: Optional[Engine] = None
+
+    @property
+    def engine(self) -> Engine:
+        """Get or create read-only database engine."""
+        if self._engine is None:
+            connect_args = {}
+
+            if self.settings.database_type == "sqlite":
+                connect_args["check_same_thread"] = False
+                # SQLite read-only mode via URI
+                if self.settings.database_read_only:
+                    url = self.settings.database_url
+                    if "?" not in url:
+                        url += "?mode=ro"
+                    else:
+                        url += "&mode=ro"
+                    connect_args["uri"] = True
+
+            elif self.settings.database_type == "postgresql":
+                # PostgreSQL read-only transaction mode
+                connect_args["options"] = "-c default_transaction_read_only=on"
+
+            self._engine = create_engine(
+                self.settings.database_url,
+                connect_args=connect_args,
+                pool_pre_ping=True,
+                pool_recycle=3600,
+                echo=self.settings.debug
+            )
+
+        return self._engine
+
+    async def execute(
+        self,
+        sql: str,
+        max_rows: int = 100,
+        timeout_seconds: int = 30
+    ) -> QueryResult:
+        """
+        Execute SQL query with safety constraints.
+
+        Args:
+            sql: The SQL query to execute
+            max_rows: Maximum rows to return
+            timeout_seconds: Query timeout in seconds
+
+        Returns:
+            QueryResult with columns, rows, and metadata
+        """
+        # Enforce row limit by adding/modifying LIMIT clause
+        limited_sql = self._enforce_limit(sql, max_rows)
+
+        start_time = datetime.utcnow()
+
+        try:
+            # Execute with timeout
+            result = await asyncio.wait_for(
+                self._execute_query(limited_sql),
+                timeout=timeout_seconds
+            )
+
+            execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            logger.info(f"Query executed in {execution_time:.0f}ms, {len(result['rows'])} rows")
+
+            return QueryResult(
+                columns=result["columns"],
+                rows=result["rows"],
+                row_count=len(result["rows"]),
+                truncated=len(result["rows"]) >= max_rows
+            )
+
+        except asyncio.TimeoutError:
+            raise QueryExecutionError(
+                f"Query timed out after {timeout_seconds} seconds",
+                sql=sql
+            )
+        except SQLAlchemyError as e:
+            raise QueryExecutionError(f"Database error: {str(e)}", sql=sql)
+        except Exception as e:
+            raise QueryExecutionError(f"Execution failed: {str(e)}", sql=sql)
+
+    async def _execute_query(self, sql: str) -> dict:
+        """Execute query in thread pool to avoid blocking."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._sync_execute, sql)
+
+    def _sync_execute(self, sql: str) -> dict:
+        """Synchronous query execution."""
+        with self.engine.connect() as conn:
+            # Set statement timeout for PostgreSQL
+            if self.settings.database_type == "postgresql":
+                conn.execute(text(
+                    f"SET statement_timeout = '{self.settings.query_timeout_seconds * 1000}'"
+                ))
+
+            result = conn.execute(text(sql))
+
+            columns = list(result.keys())
+            rows = [list(row) for row in result.fetchall()]
+
+            return {"columns": columns, "rows": rows}
+
+    def _enforce_limit(self, sql: str, max_rows: int) -> str:
+        """Ensure query has a LIMIT clause."""
+        sql_upper = sql.upper().strip()
+
+        # Check if LIMIT already exists
+        if "LIMIT" in sql_upper:
+            # Extract existing limit and enforce maximum
+            import re
+            match = re.search(r'LIMIT\s+(\d+)', sql_upper)
+            if match:
+                existing_limit = int(match.group(1))
+                if existing_limit > max_rows:
+                    # Replace with enforced limit
+                    sql = re.sub(
+                        r'LIMIT\s+\d+',
+                        f'LIMIT {max_rows}',
+                        sql,
+                        flags=re.IGNORECASE
+                    )
+            return sql
+
+        # Add LIMIT clause
+        # Handle queries ending with semicolon
+        sql = sql.rstrip().rstrip(';')
+        return f"{sql} LIMIT {max_rows}"
+
+    async def test_connection(self) -> bool:
+        """Test database connectivity."""
+        try:
+            with self.engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return True
+        except Exception as e:
+            logger.error(f"Database connection test failed: {e}")
+            return False
+
+
+# Global instance
+query_executor = QueryExecutor()
+```
+
+### Visualizer Service
+
+<Mermaid
+  chart={`
+graph TD
+    Results[Query Results] --> Analyze[Analyze Data Shape]
+    
+    Analyze --> Type{Data Type?}
+    
+    Type -->|Time Series| Line[📈 Line Chart]
+    Type -->|Categories| Bar[📊 Bar Chart]
+    Type -->|Proportions| Pie[🥧 Pie Chart]
+    Type -->|Correlation| Scatter[⚫ Scatter Plot]
+    Type -->|Raw Data| Table[📋 Table]
+    
+    Line --> Render[Render HTML]
+    Bar --> Render
+    Pie --> Render
+    Scatter --> Render
+    Table --> Render
+    
+    style Analyze fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Visualization Selection: Automatic chart type based on data characteristics."
+/>
+
+```python
+# services/visualizer.py
+"""Automatic visualization generation for query results."""
+
+import json
+import logging
+from typing import List, Any, Optional
+from datetime import datetime, date
+
+from models.query import (
+    QueryResult, Visualization, VisualizationConfig, VisualizationType
+)
+from config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+class Visualizer:
+    """Generates appropriate visualizations for query results."""
+
+    # Plotly CDN for rendering
+    PLOTLY_CDN = "https://cdn.plot.ly/plotly-2.27.0.min.js"
+
+    def __init__(self):
+        self.settings = get_settings()
+
+    def visualize(
+        self,
+        result: QueryResult,
+        title: str = "Query Results"
+    ) -> Optional[Visualization]:
+        """
+        Generate appropriate visualization for query results.
+
+        Args:
+            result: Query execution result
+            title: Chart title
+
+        Returns:
+            Visualization object with HTML and config
+        """
+        if not result.rows:
+            return None
+
+        # Determine best visualization type
+        viz_type = self._select_visualization_type(result)
+        config = self._build_config(result, viz_type, title)
+
+        # Generate HTML based on type
+        if viz_type == VisualizationType.TABLE:
+            html = self._render_table(result, config)
+        else:
+            html = self._render_plotly_chart(result, config)
+
+        return Visualization(
+            type=viz_type,
+            html=html,
+            config=config
+        )
+
+    def _select_visualization_type(self, result: QueryResult) -> VisualizationType:
+        """Select the most appropriate visualization type."""
+        columns = result.columns
+        rows = result.rows
+
+        if not rows or not columns:
+            return VisualizationType.TABLE
+
+        num_columns = len(columns)
+        num_rows = len(rows)
+
+        # Analyze column types
+        numeric_cols = []
+        date_cols = []
+        text_cols = []
+
+        for i, col in enumerate(columns):
+            sample_values = [row[i] for row in rows[:10] if row[i] is not None]
+            if not sample_values:
+                continue
+
+            col_type = self._infer_column_type(sample_values)
+            if col_type == "numeric":
+                numeric_cols.append(i)
+            elif col_type == "date":
+                date_cols.append(i)
+            else:
+                text_cols.append(i)
+
+        # Decision logic
+        # Time series: date column + numeric column
+        if date_cols and numeric_cols:
+            return VisualizationType.LINE
+
+        # Pie chart: 2 columns, one text, one numeric, few rows
+        if num_columns == 2 and text_cols and numeric_cols and num_rows <= 10:
+            return VisualizationType.PIE
+
+        # Bar chart: text column + numeric column(s)
+        if text_cols and numeric_cols and num_rows <= 20:
+            return VisualizationType.BAR
+
+        # Scatter: 2+ numeric columns
+        if len(numeric_cols) >= 2:
+            return VisualizationType.SCATTER
+
+        # Default to table
+        return VisualizationType.TABLE
+
+    def _infer_column_type(self, values: List[Any]) -> str:
+        """Infer column type from sample values."""
+        for val in values:
+            if val is None:
+                continue
+            if isinstance(val, (int, float)):
+                return "numeric"
+            if isinstance(val, (datetime, date)):
+                return "date"
+            if isinstance(val, str):
+                # Try to parse as date
+                try:
+                    datetime.fromisoformat(val.replace('Z', '+00:00'))
+                    return "date"
+                except (ValueError, AttributeError):
+                    pass
+                # Try to parse as number
+                try:
+                    float(val.replace(',', ''))
+                    return "numeric"
+                except (ValueError, AttributeError):
+                    pass
+        return "text"
+
+    def _build_config(
+        self,
+        result: QueryResult,
+        viz_type: VisualizationType,
+        title: str
+    ) -> VisualizationConfig:
+        """Build visualization configuration."""
+        columns = result.columns
+
+        # Find appropriate x and y columns
+        x_col = columns[0] if columns else None
+        y_cols = columns[1:] if len(columns) > 1 else []
+
+        return VisualizationConfig(
+            type=viz_type,
+            x_column=x_col,
+            y_columns=y_cols,
+            title=title,
+            x_label=x_col or "",
+            y_label=y_cols[0] if y_cols else ""
+        )
+
+    def _render_plotly_chart(
+        self,
+        result: QueryResult,
+        config: VisualizationConfig
+    ) -> str:
+        """Render Plotly chart as HTML."""
+        x_idx = result.columns.index(config.x_column) if config.x_column in result.columns else 0
+        x_values = [row[x_idx] for row in result.rows]
+
+        traces = []
+
+        for y_col in config.y_columns:
+            if y_col not in result.columns:
+                continue
+            y_idx = result.columns.index(y_col)
+            y_values = [row[y_idx] for row in result.rows]
+
+            trace = {
+                "x": x_values,
+                "y": y_values,
+                "name": y_col,
+                "type": self._plotly_trace_type(config.type)
+            }
+
+            if config.type == VisualizationType.PIE:
+                trace = {
+                    "labels": x_values,
+                    "values": y_values,
+                    "type": "pie"
+                }
+
+            traces.append(trace)
+
+        layout = {
+            "title": config.title,
+            "xaxis": {"title": config.x_label},
+            "yaxis": {"title": config.y_label},
+            "width": self.settings.default_chart_width,
+            "height": self.settings.default_chart_height
+        }
+
+        chart_id = f"chart_{id(result)}"
+
+        return f"""
+<div id="{chart_id}"></div>
+<script src="{self.PLOTLY_CDN}"></script>
+<script>
+    Plotly.newPlot('{chart_id}', {json.dumps(traces)}, {json.dumps(layout)});
+</script>
+"""
+
+    def _plotly_trace_type(self, viz_type: VisualizationType) -> str:
+        """Map visualization type to Plotly trace type."""
+        mapping = {
+            VisualizationType.BAR: "bar",
+            VisualizationType.LINE: "scatter",
+            VisualizationType.SCATTER: "scatter",
+            VisualizationType.AREA: "scatter",
+            VisualizationType.PIE: "pie"
+        }
+        return mapping.get(viz_type, "scatter")
+
+    def _render_table(self, result: QueryResult, config: VisualizationConfig) -> str:
+        """Render results as HTML table."""
+        html = ['<table class="sql-results" style="border-collapse: collapse; width: 100%;">']
+
+        # Header
+        html.append('<thead><tr>')
+        for col in result.columns:
+            html.append(f'<th style="border: 1px solid #ddd; padding: 8px; background: #f4f4f4;">{col}</th>')
+        html.append('</tr></thead>')
+
+        # Body
+        html.append('<tbody>')
+        for row in result.rows:
+            html.append('<tr>')
+            for val in row:
+                display_val = "" if val is None else str(val)
+                html.append(f'<td style="border: 1px solid #ddd; padding: 8px;">{display_val}</td>')
+            html.append('</tr>')
+        html.append('</tbody>')
+
+        html.append('</table>')
+
+        if result.truncated:
+            html.append(f'<p style="color: #666; font-style: italic;">Showing {result.row_count} rows (results truncated)</p>')
+
+        return '\n'.join(html)
+
+
+# Global instance
+visualizer = Visualizer()
+```
+
+### Query Explainer Service
+
+```python
+# services/explainer.py
+"""SQL query explanation in plain English."""
+
+import logging
+from typing import Optional
+from openai import AsyncOpenAI
+
+from config import get_settings
+from services.schema_loader import schema_loader
+
+logger = logging.getLogger(__name__)
+
+
+class QueryExplainer:
+    """Explains SQL queries in plain English."""
+
+    SYSTEM_PROMPT = """You are a SQL expert who explains queries in simple, non-technical language.
+
+Your explanations should:
+1. Describe what data the query retrieves
+2. Explain any filtering conditions in plain terms
+3. Describe how data is grouped or sorted
+4. Mention any calculations being performed
+5. Be concise (2-4 sentences for simple queries, more for complex ones)
+
+Do NOT:
+- Use technical SQL terminology unless necessary
+- Explain SQL syntax
+- Be overly verbose
+
+Example:
+Query: SELECT name, SUM(amount) FROM orders WHERE status = 'completed' GROUP BY name ORDER BY SUM(amount) DESC LIMIT 10
+Explanation: This finds the top 10 customers by total order value, looking only at completed orders. It shows each customer's name and their total spending, sorted from highest to lowest."""
+
+    def __init__(self):
+        self.settings = get_settings()
+        self.client = AsyncOpenAI(api_key=self.settings.openai_api_key)
+
+    async def explain(
+        self,
+        sql: str,
+        question: Optional[str] = None
+    ) -> str:
+        """
+        Generate plain English explanation of SQL query.
+
+        Args:
+            sql: The SQL query to explain
+            question: Original natural language question (for context)
+
+        Returns:
+            Plain English explanation
+        """
+        schema_context = schema_loader.get_schema_context()
+
+        prompt = f"""Database Schema:
+{schema_context}
+
+SQL Query:
+{sql}
+"""
+
+        if question:
+            prompt += f"\nOriginal Question: {question}\n"
+
+        prompt += "\nExplain what this query does in plain English:"
+
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.settings.openai_model,
+                temperature=0.3,
+                max_tokens=300,
+                messages=[
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+
+            return response.choices[0].message.content.strip()
+
+        except Exception as e:
+            logger.error(f"Failed to generate explanation: {e}")
+            return "Unable to generate explanation for this query."
+
+
+# Global instance
+query_explainer = QueryExplainer()
+```
+
+### Query Optimizer Service
+
+```python
+# services/optimizer.py
+"""SQL query optimization suggestions."""
+
+import re
+import logging
+from typing import List, Optional
+from openai import AsyncOpenAI
+
+from config import get_settings
+from services.schema_loader import schema_loader
+from models.query import OptimizationSuggestion
+
+logger = logging.getLogger(__name__)
+
+
+class QueryOptimizer:
+    """Analyzes queries and suggests optimizations."""
+
+    SYSTEM_PROMPT = """You are a database performance expert. Analyze SQL queries and suggest optimizations.
+
+Focus on:
+1. Missing indexes that could speed up the query
+2. Inefficient JOIN patterns
+3. Suboptimal WHERE clause ordering
+4. Unnecessary columns in SELECT
+5. Missing LIMIT clauses for large result sets
+6. N+1 query patterns
+7. Opportunities for query rewriting
+
+Provide specific, actionable suggestions. If the query is already optimal, say so.
+
+Format your response as a JSON object:
+{
+    "suggestions": ["suggestion 1", "suggestion 2"],
+    "estimated_improvement": "description of potential improvement",
+    "optimized_sql": "rewritten query if applicable, or null"
+}"""
+
+    def __init__(self):
+        self.settings = get_settings()
+        self.client = AsyncOpenAI(api_key=self.settings.openai_api_key)
+
+    async def analyze(self, sql: str) -> OptimizationSuggestion:
+        """
+        Analyze query and suggest optimizations.
+
+        Args:
+            sql: The SQL query to analyze
+
+        Returns:
+            OptimizationSuggestion with recommendations
+        """
+        # First, do rule-based analysis
+        rule_suggestions = self._rule_based_analysis(sql)
+
+        # Then, get LLM suggestions
+        llm_suggestions = await self._llm_analysis(sql)
+
+        # Combine suggestions
+        all_suggestions = list(set(rule_suggestions + llm_suggestions.suggestions))
+
+        return OptimizationSuggestion(
+            suggestions=all_suggestions,
+            estimated_improvement=llm_suggestions.estimated_improvement,
+            optimized_sql=llm_suggestions.optimized_sql
+        )
+
+    def _rule_based_analysis(self, sql: str) -> List[str]:
+        """Apply rule-based optimization checks."""
+        suggestions = []
+        sql_upper = sql.upper()
+
+        # Check for SELECT *
+        if "SELECT *" in sql_upper or "SELECT  *" in sql_upper:
+            suggestions.append(
+                "Avoid SELECT * - specify only the columns you need to reduce data transfer"
+            )
+
+        # Check for missing LIMIT
+        if "LIMIT" not in sql_upper and "COUNT(" not in sql_upper:
+            suggestions.append(
+                "Consider adding a LIMIT clause to prevent returning too many rows"
+            )
+
+        # Check for LIKE with leading wildcard
+        if re.search(r"LIKE\s+['\"]%", sql, re.IGNORECASE):
+            suggestions.append(
+                "LIKE patterns starting with % cannot use indexes - consider full-text search"
+            )
+
+        # Check for functions on indexed columns in WHERE
+        if re.search(r"WHERE.*\b(UPPER|LOWER|DATE|YEAR|MONTH)\s*\(", sql, re.IGNORECASE):
+            suggestions.append(
+                "Functions on columns in WHERE clause prevent index usage - consider computed columns"
+            )
+
+        # Check for OR conditions
+        if " OR " in sql_upper and "WHERE" in sql_upper:
+            suggestions.append(
+                "OR conditions can prevent index usage - consider UNION for better performance"
+            )
+
+        # Check for implicit type conversion
+        if re.search(r"=\s*['\"]?\d+['\"]", sql):
+            suggestions.append(
+                "Potential implicit type conversion detected - ensure data types match"
+            )
+
+        # Check for NOT IN with subquery
+        if "NOT IN" in sql_upper and "SELECT" in sql_upper.split("NOT IN")[1]:
+            suggestions.append(
+                "NOT IN with subquery can be slow - consider NOT EXISTS or LEFT JOIN"
+            )
+
+        return suggestions
+
+    async def _llm_analysis(self, sql: str) -> OptimizationSuggestion:
+        """Get LLM-based optimization suggestions."""
+        schema_context = schema_loader.get_schema_context()
+
+        prompt = f"""Database Schema:
+{schema_context}
+
+SQL Query to Optimize:
+{sql}
+
+Analyze this query and provide optimization suggestions."""
+
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.settings.openai_model,
+                temperature=0.2,
+                max_tokens=500,
+                messages=[
+                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"}
+            )
+
+            import json
+            result = json.loads(response.choices[0].message.content)
+
+            return OptimizationSuggestion(
+                suggestions=result.get("suggestions", []),
+                estimated_improvement=result.get("estimated_improvement", ""),
+                optimized_sql=result.get("optimized_sql")
+            )
+
+        except Exception as e:
+            logger.error(f"LLM optimization analysis failed: {e}")
+            return OptimizationSuggestion(
+                suggestions=[],
+                estimated_improvement="Unable to analyze query"
+            )
+
+
+# Global instance
+query_optimizer = QueryOptimizer()
+```
+
+### API Router
+
+```python
+# routers/query.py
+"""API endpoints for SQL Query Agent."""
+
+import logging
+from datetime import datetime
+from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
+
+from models.query import (
+    QueryRequest, QueryResponse, QueryResult, QueryError,
+    QueryHistoryItem, QueryHistoryResponse
+)
+from models.schema import DatabaseSchema
+from services.schema_loader import schema_loader
+from services.sql_generator import sql_generator
+from services.query_validator import query_validator, ValidationError
+from services.query_executor import query_executor, QueryExecutionError
+from services.visualizer import visualizer
+from services.explainer import query_explainer
+from services.optimizer import query_optimizer
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api", tags=["query"])
+
+# In-memory query history (use database in production)
+query_history: List[QueryHistoryItem] = []
+
+
+@router.post("/query", response_model=QueryResponse)
+async def execute_query(request: QueryRequest):
+    """
+    Execute a natural language query against the database.
+
+    Translates the question to SQL, validates, executes, and returns
+    results with optional visualization and explanation.
+    """
+    start_time = datetime.utcnow()
+
+    try:
+        # Step 1: Generate SQL from natural language
+        logger.info(f"Processing question: {request.question[:100]}...")
+        generated = await sql_generator.generate(request.question)
+        sql = generated.sql
+
+        # Step 2: Validate the generated SQL
+        is_valid, error_type, error_msg = query_validator.validate(sql)
+
+        if not is_valid:
+            logger.warning(f"Query validation failed: {error_msg}")
+            raise HTTPException(
+                status_code=400,
+                detail=QueryError(
+                    detail="Query validation failed",
+                    reason=error_type.value if error_type else "unknown",
+                    sql=sql
+                ).model_dump()
+            )
+
+        # Step 3: Execute the query
+        result = await query_executor.execute(
+            sql=sql,
+            max_rows=request.max_rows,
+            timeout_seconds=request.timeout_seconds
+        )
+
+        # Step 4: Generate visualization (optional)
+        viz = None
+        if request.include_visualization and result.rows:
+            viz = visualizer.visualize(result, title=request.question[:50])
+
+        # Step 5: Generate explanation (optional)
+        explanation = None
+        if request.include_explanation:
+            explanation = await query_explainer.explain(sql, request.question)
+
+        # Step 6: Generate optimization suggestions (optional)
+        optimization = None
+        if request.include_optimization:
+            optimization = await query_optimizer.analyze(sql)
+
+        # Calculate execution time
+        execution_time_ms = int(
+            (datetime.utcnow() - start_time).total_seconds() * 1000
+        )
+
+        # Record in history
+        history_item = QueryHistoryItem(
+            id=str(len(query_history) + 1),
+            question=request.question,
+            sql=sql,
+            executed_at=datetime.utcnow(),
+            execution_time_ms=execution_time_ms,
+            row_count=result.row_count,
+            success=True
+        )
+        query_history.append(history_item)
+
+        return QueryResponse(
+            question=request.question,
+            sql=sql,
+            results=result,
+            visualization=viz,
+            explanation=explanation,
+            optimization=optimization,
+            execution_time_ms=execution_time_ms,
+            cached=False
+        )
+
+    except QueryExecutionError as e:
+        logger.error(f"Query execution failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=QueryError(
+                detail="Query execution failed",
+                reason=str(e),
+                sql=e.sql
+            ).model_dump()
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.exception(f"Unexpected error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=QueryError(
+                detail="An unexpected error occurred",
+                reason=str(e)
+            ).model_dump()
+        )
+
+
+@router.get("/schema", response_model=DatabaseSchema)
+async def get_schema():
+    """Get the database schema."""
+    try:
+        return schema_loader.get_schema()
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/history", response_model=QueryHistoryResponse)
+async def get_history(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0)
+):
+    """Get query execution history."""
+    total = len(query_history)
+    items = query_history[offset:offset + limit]
+
+    return QueryHistoryResponse(
+        queries=list(reversed(items)),  # Most recent first
+        total=total,
+        limit=limit,
+        offset=offset
+    )
+
+
+@router.get("/health")
+async def health_check():
+    """Check service health."""
+    db_healthy = await query_executor.test_connection()
+
+    return {
+        "status": "healthy" if db_healthy else "degraded",
+        "database": "connected" if db_healthy else "disconnected",
+        "schema_loaded": schema_loader._schema is not None
+    }
+```
+
+### Main Application
+
+```python
+# main.py
+"""FastAPI application entry point for SQL Query Agent."""
+
+import logging
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from config import get_settings
+from services.schema_loader import schema_loader
+from routers.query import router as query_router
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler."""
+    # Startup
+    logger.info("Starting SQL Query Agent...")
+    settings = get_settings()
+
+    # Load database schema
+    try:
+        await schema_loader.load_schema()
+        logger.info("Database schema loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to load schema: {e}")
+        raise
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down SQL Query Agent...")
+
+
+# Create FastAPI application
+app = FastAPI(
+    title="SQL Query Agent",
+    description="Natural language to SQL query agent with visualization and explanation",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(query_router)
+
+
+@app.get("/")
+async def root():
+    """Root endpoint with API information."""
+    return {
+        "name": "SQL Query Agent",
+        "version": "1.0.0",
+        "endpoints": {
+            "query": "/api/query",
+            "schema": "/api/schema",
+            "history": "/api/history",
+            "health": "/api/health"
+        }
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+---
+
+## Sample Database Setup
+
+### Docker Compose Configuration
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+
+services:
+  sql-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_TYPE=sqlite
+      - DATABASE_URL=sqlite:///./data/sample.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - init-db
+
+  init-db:
+    image: python:3.11-slim
+    volumes:
+      - ./data:/data
+      - ./database:/database
+    command: python /database/init_sample_db.py
+
+  # Optional: PostgreSQL for production
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: sql_agent
+      POSTGRES_USER: readonly_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init_postgres.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:
+```
+
+### Sample Database Initialization
+
+```python
+# database/init_sample_db.py
+"""Initialize sample SQLite database with e-commerce data."""
+
+import sqlite3
+import random
+from datetime import datetime, timedelta
+from pathlib import Path
+
+# Ensure data directory exists
+Path("/data").mkdir(exist_ok=True)
+
+conn = sqlite3.connect("/data/sample.db")
+cursor = conn.cursor()
+
+# Create tables
+cursor.executescript("""
+-- Customers table
+CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    city TEXT,
+    country TEXT DEFAULT 'USA',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Products table
+CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    price DECIMAL(10, 2) NOT NULL,
+    stock_quantity INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Orders table
+CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    total_amount DECIMAL(10, 2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers(id)
+);
+
+-- Order items table
+CREATE TABLE IF NOT EXISTS order_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit_price DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id),
+    FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+""")
+
+# Sample data
+FIRST_NAMES = ["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Henry", "Ivy", "Jack"]
+LAST_NAMES = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez"]
+CITIES = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "Philadelphia", "San Antonio", "San Diego", "Dallas", "San Jose"]
+CATEGORIES = ["Electronics", "Clothing", "Home & Garden", "Sports", "Books", "Toys", "Food", "Beauty"]
+STATUSES = ["pending", "processing", "shipped", "delivered", "cancelled"]
+
+# Insert customers
+customers = []
+for i in range(100):
+    name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
+    email = f"customer{i+1}@example.com"
+    city = random.choice(CITIES)
+    customers.append((name, email, city))
+
+cursor.executemany(
+    "INSERT INTO customers (name, email, city) VALUES (?, ?, ?)",
+    customers
+)
+
+# Insert products
+products = [
+    ("Laptop Pro 15", "Electronics", 1299.99, 50),
+    ("Wireless Mouse", "Electronics", 29.99, 200),
+    ("USB-C Hub", "Electronics", 49.99, 150),
+    ("Mechanical Keyboard", "Electronics", 149.99, 75),
+    ("4K Monitor", "Electronics", 399.99, 30),
+    ("Cotton T-Shirt", "Clothing", 19.99, 500),
+    ("Denim Jeans", "Clothing", 59.99, 200),
+    ("Running Shoes", "Sports", 89.99, 100),
+    ("Yoga Mat", "Sports", 29.99, 150),
+    ("Garden Tools Set", "Home & Garden", 79.99, 60),
+    ("Indoor Plant Pot", "Home & Garden", 24.99, 200),
+    ("Programming Book", "Books", 44.99, 100),
+    ("Fiction Novel", "Books", 14.99, 300),
+    ("Board Game", "Toys", 34.99, 80),
+    ("Face Cream", "Beauty", 39.99, 120),
+    ("Organic Coffee", "Food", 19.99, 250),
+]
+
+cursor.executemany(
+    "INSERT INTO products (name, category, price, stock_quantity) VALUES (?, ?, ?, ?)",
+    products
+)
+
+# Insert orders and order items
+base_date = datetime.now() - timedelta(days=365)
+
+for order_id in range(1, 501):
+    customer_id = random.randint(1, 100)
+    status = random.choice(STATUSES)
+    order_date = base_date + timedelta(days=random.randint(0, 365))
+
+    cursor.execute(
+        "INSERT INTO orders (customer_id, status, created_at) VALUES (?, ?, ?)",
+        (customer_id, status, order_date.isoformat())
+    )
+
+    # Add 1-5 items per order
+    num_items = random.randint(1, 5)
+    total = 0
+
+    for _ in range(num_items):
+        product_id = random.randint(1, len(products))
+        quantity = random.randint(1, 3)
+
+        # Get product price
+        cursor.execute("SELECT price FROM products WHERE id = ?", (product_id,))
+        price = cursor.fetchone()[0]
+
+        cursor.execute(
+            "INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)",
+            (order_id, product_id, quantity, price)
+        )
+        total += price * quantity
+
+    # Update order total
+    cursor.execute(
+        "UPDATE orders SET total_amount = ? WHERE id = ?",
+        (round(total, 2), order_id)
+    )
+
+conn.commit()
+conn.close()
+
+print("Sample database initialized successfully!")
+print("- 100 customers")
+print(f"- {len(products)} products")
+print("- 500 orders with items")
+```
+
+### Requirements
+
+```text
+# requirements.txt
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+sqlalchemy==2.0.25
+openai==1.10.0
+sqlparse==0.4.4
+plotly==5.18.0
+python-multipart==0.0.6
+httpx==0.26.0
+```
+
+---
+
+## Testing
+
+### Unit Tests
+
+```python
+# tests/test_validator.py
+"""Tests for query validation."""
+
+import pytest
+from services.query_validator import QueryValidator, ValidationError
+
+
+@pytest.fixture
+def validator():
+    return QueryValidator()
+
+
+class TestInjectionDetection:
+    """Test SQL injection detection."""
+
+    def test_detects_statement_termination(self, validator):
+        sql = "SELECT * FROM users; DROP TABLE users--"
+        is_valid, error, _ = validator.validate(sql)
+        assert not is_valid
+        assert error == ValidationError.MULTIPLE_STATEMENTS
+
+    def test_detects_union_injection(self, validator):
+        sql = "SELECT name FROM users UNION ALL SELECT password FROM admin"
+        is_valid, error, _ = validator.validate(sql)
+        assert not is_valid
+        assert error == ValidationError.INJECTION_DETECTED
+
+    def test_detects_or_1_equals_1(self, validator):
+        sql = "SELECT * FROM users WHERE id = 1 OR 1=1"
+        is_valid, error, _ = validator.validate(sql)
+        assert not is_valid
+        assert error == ValidationError.INJECTION_DETECTED
+
+    def test_detects_comment_injection(self, validator):
+        sql = "SELECT * FROM users WHERE name = 'admin'--"
+        is_valid, error, _ = validator.validate(sql)
+        assert not is_valid
+        assert error == ValidationError.INJECTION_DETECTED
+
+    def test_allows_valid_select(self, validator):
+        sql = "SELECT id, name FROM customers WHERE city = 'New York'"
+        is_valid, error, _ = validator.validate(sql)
+        assert is_valid
+        assert error is None
+
+
+class TestStatementTypeValidation:
+    """Test statement type enforcement."""
+
+    def test_blocks_insert(self, validator):
+        sql = "INSERT INTO users (name) VALUES ('hacker')"
+        is_valid, error, _ = validator.validate(sql)
+        assert not is_valid
+        assert error == ValidationError.WRITE_OPERATION
+
+    def test_blocks_update(self, validator):
+        sql = "UPDATE users SET admin = true WHERE id = 1"
+        is_valid, error, _ = validator.validate(sql)
+        assert not is_valid
+        assert error == ValidationError.WRITE_OPERATION
+
+    def test_blocks_delete(self, validator):
+        sql = "DELETE FROM users WHERE id = 1"
+        is_valid, error, _ = validator.validate(sql)
+        assert not is_valid
+        assert error == ValidationError.WRITE_OPERATION
+
+    def test_blocks_drop(self, validator):
+        sql = "DROP TABLE users"
+        is_valid, error, _ = validator.validate(sql)
+        assert not is_valid
+        assert error == ValidationError.WRITE_OPERATION
+
+    def test_allows_complex_select(self, validator):
+        sql = """
+        SELECT c.name, COUNT(o.id) as order_count
+        FROM customers c
+        LEFT JOIN orders o ON c.id = o.customer_id
+        WHERE o.created_at > '2024-01-01'
+        GROUP BY c.id, c.name
+        HAVING COUNT(o.id) > 5
+        ORDER BY order_count DESC
+        LIMIT 10
+        """
+        is_valid, error, _ = validator.validate(sql)
+        assert is_valid
+
+
+class TestDangerousFunctions:
+    """Test dangerous function detection."""
+
+    def test_blocks_sleep(self, validator):
+        sql = "SELECT SLEEP(10)"
+        is_valid, error, _ = validator.validate(sql)
+        assert not is_valid
+        assert error == ValidationError.DANGEROUS_FUNCTION
+
+    def test_blocks_load_file(self, validator):
+        sql = "SELECT LOAD_FILE('/etc/passwd')"
+        is_valid, error, _ = validator.validate(sql)
+        assert not is_valid
+        assert error == ValidationError.DANGEROUS_FUNCTION
+
+    def test_blocks_benchmark(self, validator):
+        sql = "SELECT BENCHMARK(10000000, SHA1('test'))"
+        is_valid, error, _ = validator.validate(sql)
+        assert not is_valid
+        assert error == ValidationError.DANGEROUS_FUNCTION
+```
+
+```python
+# tests/test_generator.py
+"""Tests for SQL generation."""
+
+import pytest
+from unittest.mock import AsyncMock, patch, MagicMock
+from services.sql_generator import SQLGenerator, GeneratedSQL
+
+
+@pytest.fixture
+def generator():
+    return SQLGenerator()
+
+
+class TestSQLGeneration:
+    """Test SQL generation from natural language."""
+
+    @pytest.mark.asyncio
+    async def test_generates_valid_sql(self, generator):
+        """Test that generator produces valid SQL structure."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.parsed = GeneratedSQL(
+            sql="SELECT * FROM customers LIMIT 10",
+            confidence=0.95,
+            assumptions=["Returning all columns"],
+            tables_used=["customers"]
+        )
+
+        with patch.object(
+            generator.client.beta.chat.completions,
+            'parse',
+            new_callable=AsyncMock,
+            return_value=mock_response
+        ):
+            with patch('services.sql_generator.schema_loader') as mock_schema:
+                mock_schema.get_schema_context.return_value = "customers: id, name, email"
+
+                result = await generator.generate("Show me all customers")
+
+                assert result.sql == "SELECT * FROM customers LIMIT 10"
+                assert result.confidence == 0.95
+                assert "customers" in result.tables_used
+
+    @pytest.mark.asyncio
+    async def test_retries_on_failure(self, generator):
+        """Test retry logic on generation failure."""
+        call_count = 0
+
+        async def mock_parse(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise Exception("API error")
+
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.parsed = GeneratedSQL(
+                sql="SELECT 1",
+                confidence=0.9,
+                assumptions=[],
+                tables_used=[]
+            )
+            return mock_response
+
+        with patch.object(
+            generator.client.beta.chat.completions,
+            'parse',
+            side_effect=mock_parse
+        ):
+            with patch('services.sql_generator.schema_loader') as mock_schema:
+                mock_schema.get_schema_context.return_value = "test schema"
+
+                result = await generator.generate("test query")
+
+                assert call_count == 3
+                assert result.sql == "SELECT 1"
+```
+
+### Integration Tests
+
+```python
+# tests/test_integration.py
+"""End-to-end integration tests."""
+
+import pytest
+from httpx import AsyncClient, ASGITransport
+from unittest.mock import patch, AsyncMock, MagicMock
+
+from main import app
+from services.sql_generator import GeneratedSQL
+from models.schema import DatabaseSchema, TableSchema, ColumnSchema
+
+
+@pytest.fixture
+def mock_schema():
+    """Create mock database schema."""
+    return DatabaseSchema(
+        database_name="test_db",
+        database_type="sqlite",
+        tables=[
+            TableSchema(
+                name="customers",
+                columns=[
+                    ColumnSchema(name="id", data_type="INTEGER", is_primary_key=True),
+                    ColumnSchema(name="name", data_type="TEXT"),
+                    ColumnSchema(name="email", data_type="TEXT"),
+                ],
+                row_count=100
+            ),
+            TableSchema(
+                name="orders",
+                columns=[
+                    ColumnSchema(name="id", data_type="INTEGER", is_primary_key=True),
+                    ColumnSchema(name="customer_id", data_type="INTEGER"),
+                    ColumnSchema(name="total_amount", data_type="DECIMAL"),
+                ],
+                row_count=500
+            )
+        ],
+        relationships=[]
+    )
+
+
+@pytest.fixture
+async def client():
+    """Create test client."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test"
+    ) as ac:
+        yield ac
+
+
+class TestQueryEndpoint:
+    """Test /api/query endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_successful_query(self, client, mock_schema):
+        """Test successful query execution."""
+        with patch('services.schema_loader.schema_loader') as mock_loader:
+            mock_loader.get_schema.return_value = mock_schema
+            mock_loader.get_schema_context.return_value = "test schema"
+            mock_loader._schema = mock_schema
+
+            with patch('services.sql_generator.sql_generator') as mock_gen:
+                mock_gen.generate = AsyncMock(return_value=GeneratedSQL(
+                    sql="SELECT id, name FROM customers LIMIT 10",
+                    confidence=0.95,
+                    assumptions=[],
+                    tables_used=["customers"]
+                ))
+
+                with patch('services.query_executor.query_executor') as mock_exec:
+                    from models.query import QueryResult
+                    mock_exec.execute = AsyncMock(return_value=QueryResult(
+                        columns=["id", "name"],
+                        rows=[[1, "Alice"], [2, "Bob"]],
+                        row_count=2,
+                        truncated=False
+                    ))
+
+                    with patch('services.explainer.query_explainer') as mock_explain:
+                        mock_explain.explain = AsyncMock(
+                            return_value="This query retrieves customer names."
+                        )
+
+                        response = await client.post(
+                            "/api/query",
+                            json={
+                                "question": "Show me customer names",
+                                "include_visualization": False,
+                                "include_optimization": False
+                            }
+                        )
+
+                        assert response.status_code == 200
+                        data = response.json()
+                        assert data["sql"] == "SELECT id, name FROM customers LIMIT 10"
+                        assert len(data["results"]["rows"]) == 2
+                        assert data["explanation"] is not None
+
+    @pytest.mark.asyncio
+    async def test_rejects_injection_attempt(self, client, mock_schema):
+        """Test that injection attempts are rejected."""
+        with patch('services.schema_loader.schema_loader') as mock_loader:
+            mock_loader.get_schema.return_value = mock_schema
+            mock_loader.get_schema_context.return_value = "test schema"
+            mock_loader._schema = mock_schema
+
+            with patch('services.sql_generator.sql_generator') as mock_gen:
+                # Simulate LLM generating malicious SQL
+                mock_gen.generate = AsyncMock(return_value=GeneratedSQL(
+                    sql="SELECT * FROM customers; DROP TABLE customers--",
+                    confidence=0.5,
+                    assumptions=[],
+                    tables_used=["customers"]
+                ))
+
+                response = await client.post(
+                    "/api/query",
+                    json={"question": "Delete all customers"}
+                )
+
+                assert response.status_code == 400
+                data = response.json()
+                assert "validation failed" in data["detail"]["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_handles_execution_timeout(self, client, mock_schema):
+        """Test timeout handling."""
+        with patch('services.schema_loader.schema_loader') as mock_loader:
+            mock_loader.get_schema.return_value = mock_schema
+            mock_loader.get_schema_context.return_value = "test schema"
+            mock_loader._schema = mock_schema
+
+            with patch('services.sql_generator.sql_generator') as mock_gen:
+                mock_gen.generate = AsyncMock(return_value=GeneratedSQL(
+                    sql="SELECT * FROM customers",
+                    confidence=0.9,
+                    assumptions=[],
+                    tables_used=["customers"]
+                ))
+
+                with patch('services.query_executor.query_executor') as mock_exec:
+                    from services.query_executor import QueryExecutionError
+                    mock_exec.execute = AsyncMock(
+                        side_effect=QueryExecutionError("Query timed out")
+                    )
+
+                    response = await client.post(
+                        "/api/query",
+                        json={"question": "Complex query", "timeout_seconds": 1}
+                    )
+
+                    assert response.status_code == 500
+                    assert "timed out" in response.json()["detail"]["reason"].lower()
+
+
+class TestSchemaEndpoint:
+    """Test /api/schema endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_returns_schema(self, client, mock_schema):
+        """Test schema retrieval."""
+        with patch('services.schema_loader.schema_loader') as mock_loader:
+            mock_loader.get_schema.return_value = mock_schema
+            mock_loader._schema = mock_schema
+
+            response = await client.get("/api/schema")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["database_name"] == "test_db"
+            assert len(data["tables"]) == 2
+
+
+class TestHealthEndpoint:
+    """Test /api/health endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_health_check(self, client):
+        """Test health check endpoint."""
+        with patch('services.query_executor.query_executor') as mock_exec:
+            mock_exec.test_connection = AsyncMock(return_value=True)
+
+            with patch('services.schema_loader.schema_loader') as mock_loader:
+                mock_loader._schema = MagicMock()
+
+                response = await client.get("/api/health")
+
+                assert response.status_code == 200
+                data = response.json()
+                assert data["status"] == "healthy"
+                assert data["database"] == "connected"
+```
+
+---
+
+## Practical Example: SQL Agent in Action
+
+Let's walk through a complete interaction with the SQL Agent:
+
+**User Question**: "What are our top 5 customers by total spending this year?"
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant API
+    participant Generator
+    participant Validator
+    participant Executor
+    participant Visualizer
+    participant Explainer
+    
+    User->>API: POST /query
+    Note right of User: "Top 5 customers by spending"
+    
+    API->>Generator: Generate SQL
+    Generator->>Generator: Load schema context
+    Generator->>Generator: Build prompt with examples
+    Generator-->>API: SQL + confidence
+    
+    API->>Validator: Validate SQL
+    Validator->>Validator: Check injection patterns
+    Validator->>Validator: Verify SELECT only
+    Validator->>Validator: Validate table refs
+    Validator-->>API: ✅ Valid
+    
+    API->>Executor: Execute query
+    Executor->>Executor: Add LIMIT if needed
+    Executor->>Executor: Run with timeout
+    Executor-->>API: Results (5 rows)
+    
+    API->>Visualizer: Generate chart
+    Visualizer->>Visualizer: Detect: bar chart
+    Visualizer-->>API: HTML + config
+    
+    API->>Explainer: Explain query
+    Explainer-->>API: Plain English
+    
+    API-->>User: Complete response
+`}
+  caption="Complete Query Flow: From question to visualized answer."
+/>
+
+**Generated SQL**:
+
+```sql
+SELECT
+    c.name,
+    SUM(o.total_amount) as total_spending
+FROM customers c
+JOIN orders o ON c.id = o.customer_id
+WHERE o.created_at >= DATE('now', 'start of year')
+  AND o.status = 'delivered'
+GROUP BY c.id, c.name
+ORDER BY total_spending DESC
+LIMIT 5
+```
+
+**Response**:
+
+```json
+{
+  "question": "What are our top 5 customers by total spending this year?",
+  "sql": "SELECT c.name, SUM(o.total_amount) as total_spending...",
+  "results": {
+    "columns": ["name", "total_spending"],
+    "rows": [
+      ["Alice Smith", 4523.45],
+      ["Bob Johnson", 3891.2],
+      ["Charlie Brown", 3456.78],
+      ["Diana Garcia", 2987.65],
+      ["Eve Williams", 2654.32]
+    ],
+    "row_count": 5,
+    "truncated": false
+  },
+  "visualization": {
+    "type": "bar",
+    "html": "<div id='chart_123'>...</div>",
+    "config": {
+      "x_column": "name",
+      "y_columns": ["total_spending"],
+      "title": "Top 5 Customers by Spending"
+    }
+  },
+  "explanation": "This query finds the top 5 customers who have spent the most money this year. It only counts delivered orders and shows each customer's name alongside their total spending, sorted from highest to lowest.",
+  "execution_time_ms": 45
+}
+```
+
+---
+
+## Extension Challenges
+
+<Callout type="tip">
+  **Level Up**: These challenges extend the base project with advanced features.
+</Callout>
+
+### Challenge 1: Query Caching (Intermediate)
+
+Implement intelligent query caching to avoid re-executing identical queries:
+
+```python
+# services/cache.py
+"""Query result caching with TTL."""
+
+import hashlib
+import json
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any
+from dataclasses import dataclass
+
+
+@dataclass
+class CacheEntry:
+    result: Dict[str, Any]
+    created_at: datetime
+    ttl_seconds: int
+
+    def is_expired(self) -> bool:
+        return datetime.utcnow() > self.created_at + timedelta(seconds=self.ttl_seconds)
+
+
+class QueryCache:
+    """LRU cache for query results."""
+
+    def __init__(self, max_size: int = 100, default_ttl: int = 300):
+        self.max_size = max_size
+        self.default_ttl = default_ttl
+        self._cache: Dict[str, CacheEntry] = {}
+
+    def _hash_query(self, sql: str, params: Optional[Dict] = None) -> str:
+        """Generate cache key from SQL and parameters."""
+        key_data = {"sql": sql.strip().lower(), "params": params or {}}
+        return hashlib.sha256(json.dumps(key_data, sort_keys=True).encode()).hexdigest()
+
+    def get(self, sql: str, params: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+        """Get cached result if available and not expired."""
+        key = self._hash_query(sql, params)
+        entry = self._cache.get(key)
+
+        if entry is None:
+            return None
+
+        if entry.is_expired():
+            del self._cache[key]
+            return None
+
+        return entry.result
+
+    def set(
+        self,
+        sql: str,
+        result: Dict[str, Any],
+        params: Optional[Dict] = None,
+        ttl: Optional[int] = None
+    ) -> None:
+        """Cache query result."""
+        # Evict oldest entries if at capacity
+        if len(self._cache) >= self.max_size:
+            oldest_key = min(self._cache.keys(), key=lambda k: self._cache[k].created_at)
+            del self._cache[oldest_key]
+
+        key = self._hash_query(sql, params)
+        self._cache[key] = CacheEntry(
+            result=result,
+            created_at=datetime.utcnow(),
+            ttl_seconds=ttl or self.default_ttl
+        )
+
+    def invalidate(self, pattern: Optional[str] = None) -> int:
+        """Invalidate cache entries. If pattern provided, only matching entries."""
+        if pattern is None:
+            count = len(self._cache)
+            self._cache.clear()
+            return count
+
+        # Simple pattern matching on SQL
+        keys_to_delete = [
+            k for k, v in self._cache.items()
+            if pattern.lower() in str(v.result.get("sql", "")).lower()
+        ]
+        for key in keys_to_delete:
+            del self._cache[key]
+        return len(keys_to_delete)
+```
+
+### Challenge 2: Multi-Database Support (Advanced)
+
+Extend the agent to query multiple databases and join results:
+
+```python
+# services/multi_db.py
+"""Multi-database query support."""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from services.schema_loader import SchemaLoader
+
+
+@dataclass
+class DatabaseConfig:
+    name: str
+    url: str
+    db_type: str
+    description: str
+
+
+class MultiDatabaseManager:
+    """Manage connections to multiple databases."""
+
+    def __init__(self):
+        self.databases: Dict[str, DatabaseConfig] = {}
+        self.loaders: Dict[str, SchemaLoader] = {}
+
+    def register_database(self, config: DatabaseConfig) -> None:
+        """Register a new database."""
+        self.databases[config.name] = config
+        # Create schema loader for this database
+        loader = SchemaLoader()
+        loader.settings.database_url = config.url
+        loader.settings.database_type = config.db_type
+        self.loaders[config.name] = loader
+
+    def get_combined_schema_context(self) -> str:
+        """Get schema context for all databases."""
+        contexts = []
+        for name, loader in self.loaders.items():
+            db_config = self.databases[name]
+            contexts.append(f"=== Database: {name} ({db_config.description}) ===")
+            contexts.append(loader.get_schema_context())
+        return "\n\n".join(contexts)
+
+    def route_query(self, sql: str) -> str:
+        """Determine which database a query should run against."""
+        # Simple routing based on table names
+        sql_lower = sql.lower()
+
+        for name, loader in self.loaders.items():
+            schema = loader.get_schema()
+            for table in schema.tables:
+                if table.name.lower() in sql_lower:
+                    return name
+
+        # Default to first database
+        return list(self.databases.keys())[0]
+```
+
+### Challenge 3: Natural Language Filters (Advanced)
+
+Allow users to refine results with follow-up natural language:
+
+```python
+# services/filter_parser.py
+"""Parse natural language filters and apply to results."""
+
+from typing import List, Any, Dict, Optional
+from openai import AsyncOpenAI
+from pydantic import BaseModel
+
+
+class FilterCondition(BaseModel):
+    column: str
+    operator: str  # eq, ne, gt, lt, gte, lte, contains, startswith
+    value: Any
+
+
+class ParsedFilter(BaseModel):
+    conditions: List[FilterCondition]
+    sort_column: Optional[str] = None
+    sort_direction: str = "asc"
+    limit: Optional[int] = None
+
+
+class FilterParser:
+    """Parse natural language into filter conditions."""
+
+    SYSTEM_PROMPT = """Parse natural language filter requests into structured conditions.
+
+Given a filter request and available columns, extract:
+1. Filter conditions (column, operator, value)
+2. Sort preferences
+3. Limit preferences
+
+Operators: eq (equals), ne (not equals), gt (greater than), lt (less than),
+           gte (>=), lte (<=), contains, startswith
+
+Example:
+Input: "only show amounts over 1000, sorted by date"
+Columns: ["id", "amount", "date", "status"]
+Output: {
+    "conditions": [{"column": "amount", "operator": "gt", "value": 1000}],
+    "sort_column": "date",
+    "sort_direction": "asc"
+}"""
+
+    def __init__(self):
+        self.client = AsyncOpenAI()
+
+    async def parse(
+        self,
+        filter_text: str,
+        columns: List[str]
+    ) -> ParsedFilter:
+        """Parse natural language filter into structured format."""
+        response = await self.client.beta.chat.completions.parse(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "user", "content": f"Columns: {columns}\nFilter: {filter_text}"}
+            ],
+            response_format=ParsedFilter
+        )
+        return response.choices[0].message.parsed
+
+    def apply_filter(
+        self,
+        rows: List[List[Any]],
+        columns: List[str],
+        parsed: ParsedFilter
+    ) -> List[List[Any]]:
+        """Apply parsed filter to result rows."""
+        filtered = rows
+
+        # Apply conditions
+        for condition in parsed.conditions:
+            if condition.column not in columns:
+                continue
+            col_idx = columns.index(condition.column)
+            filtered = [
+                row for row in filtered
+                if self._matches_condition(row[col_idx], condition)
+            ]
+
+        # Apply sort
+        if parsed.sort_column and parsed.sort_column in columns:
+            sort_idx = columns.index(parsed.sort_column)
+            reverse = parsed.sort_direction == "desc"
+            filtered = sorted(filtered, key=lambda r: r[sort_idx] or "", reverse=reverse)
+
+        # Apply limit
+        if parsed.limit:
+            filtered = filtered[:parsed.limit]
+
+        return filtered
+
+    def _matches_condition(self, value: Any, condition: FilterCondition) -> bool:
+        """Check if value matches condition."""
+        target = condition.value
+
+        if condition.operator == "eq":
+            return value == target
+        elif condition.operator == "ne":
+            return value != target
+        elif condition.operator == "gt":
+            return value > target
+        elif condition.operator == "lt":
+            return value < target
+        elif condition.operator == "gte":
+            return value >= target
+        elif condition.operator == "lte":
+            return value <= target
+        elif condition.operator == "contains":
+            return str(target).lower() in str(value).lower()
+        elif condition.operator == "startswith":
+            return str(value).lower().startswith(str(target).lower())
+
+        return True
+```
+
+---
+
+## Key Takeaways
+
+<Mermaid
+  chart={`
+mindmap
+  root((SQL Agent))
+    Schema Awareness
+      Extract at startup
+      Cache for context
+      Include samples
+    Security First
+      Multi-layer validation
+      Read-only connections
+      Injection prevention
+    User Experience
+      Auto visualization
+      Plain explanations
+      Optimization tips
+    Production Ready
+      Timeouts
+      Row limits
+      Error handling
+`}
+  caption="Key Takeaways: Building a production-ready SQL agent."
+/>
+
+1. **Schema is Context**: The quality of SQL generation depends heavily on providing rich schema context to the LLM. Include table relationships, sample values, and row counts.
+
+2. **Defense in Depth**: Never trust a single security layer. Combine pattern matching, AST parsing, statement type validation, and read-only connections.
+
+3. **Structured Outputs**: Use LLM structured outputs (JSON schema) to get predictable, parseable responses. This eliminates regex parsing of free-form text.
+
+4. **Graceful Degradation**: If visualization fails, return tables. If explanation fails, return raw results. Always provide value to the user.
+
+5. **Transparency**: Show users the generated SQL, explain what it does, and document assumptions. This builds trust and helps users learn.
+
+<ModuleSummary
+  points={[
+    "Natural language to SQL translation democratizes database access for non-technical users",
+    "Schema-aware generation with sample values dramatically improves SQL accuracy",
+    "Multi-layer security (patterns, AST, permissions) prevents SQL injection attacks",
+    "Automatic visualization selection based on data characteristics enhances understanding",
+    "Query explanation and optimization suggestions provide educational value",
+  ]}
+/>
+
+---
+
+## Next Steps
+
+After completing this project, consider:
+
+1. **Add Conversation Memory**: Allow follow-up questions that reference previous queries
+2. **Implement Query Templates**: Save and reuse common query patterns
+3. **Add Data Export**: Export results to CSV, Excel, or JSON
+4. **Build a Web UI**: Create a chat-like interface for natural interaction
+5. **Add Query Scheduling**: Schedule recurring queries with email reports

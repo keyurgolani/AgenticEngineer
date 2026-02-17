@@ -1,0 +1,3746 @@
+---
+title: "Mini Project: Agentic Code Review Bot"
+description: "Build a GitHub bot that automatically reviews pull requests, suggests improvements, checks for security issues, and ensures code quality standards using AST analysis and LLM-powered insights."
+week: 13
+day: 93
+---
+
+<ReadingTime minutes={75} />
+
+<SkillLevel
+  level="advanced"
+  description="GitHub integration, AST analysis, and security scanning"
+/>
+
+<Prerequisites
+  items={[
+    "Strong Python programming skills with async/await patterns",
+    "Understanding of GitHub webhooks and REST API",
+    "Familiarity with Abstract Syntax Trees (AST) concepts",
+    "Experience with FastAPI or similar web frameworks",
+    "Basic understanding of code security vulnerabilities",
+  ]}
+/>
+
+<LearningObjectives
+  objectives={[
+    "Implement GitHub webhook handlers for PR events",
+    "Parse and analyze code diffs using AST techniques",
+    "Detect security vulnerabilities using static analysis",
+    "Generate contextual code review comments with LLMs",
+    "Post threaded review comments on GitHub PRs",
+    "Build a background task queue for async processing",
+    "Create actionable fix suggestions with code snippets",
+  ]}
+/>
+
+<Callout type="info">
+  **Project Context:** This advanced project builds a production-grade GitHub
+  bot that goes beyond simple linting to understand code context and intent.
+  Duration: 15-20 hours. Ideal for teams wanting to automate code review
+  workflows and enforce quality standards at scale.
+</Callout>
+
+<KeyTerms
+  terms={[
+    {
+      term: "GitHub Webhook",
+      definition:
+        "HTTP callbacks that notify your application when events occur in a GitHub repository, such as pull request creation or updates",
+    },
+    {
+      term: "AST (Abstract Syntax Tree)",
+      definition:
+        "A tree representation of source code structure that enables programmatic analysis of code patterns, complexity, and potential issues",
+    },
+    {
+      term: "Static Analysis",
+      definition:
+        "Examining code without executing it to find bugs, security vulnerabilities, and code quality issues",
+    },
+    {
+      term: "Bandit",
+      definition:
+        "A Python security linter that finds common security issues in Python code using AST analysis",
+    },
+    {
+      term: "PR Diff",
+      definition:
+        "The set of changes between the base branch and the PR branch, showing added, modified, and deleted lines",
+    },
+    {
+      term: "Review Thread",
+      definition:
+        "A conversation on a specific line or range of lines in a pull request, allowing contextual discussion",
+    },
+  ]}
+/>
+
+## Project Overview
+
+**Objective**: Build an intelligent GitHub bot that automatically reviews pull requests by analyzing code changes, detecting security vulnerabilities, suggesting performance improvements, and posting contextual review comments—all powered by AST analysis and LLM reasoning.
+
+**Why This Matters**: Code review is a critical bottleneck in software development. Human reviewers often miss subtle bugs, security issues, or performance problems due to time constraints. An AI-powered review bot provides consistent, thorough analysis on every PR, catching issues before they reach production while freeing human reviewers to focus on architecture and design decisions.
+
+<Mermaid
+  chart={`
+graph LR
+    PR[Pull Request] --> Webhook[GitHub Webhook]
+    Webhook --> Queue[Task Queue]
+    Queue --> Analyzer[Code Analyzer]
+    
+    Analyzer --> AST[AST Parser]
+    Analyzer --> Security[Security Scanner]
+    Analyzer --> Quality[Quality Checker]
+    
+    AST --> LLM[LLM Reviewer]
+    Security --> LLM
+    Quality --> LLM
+    
+    LLM --> Comments[Review Comments]
+    Comments --> GitHub[GitHub API]
+    
+    style LLM fill:#f9f,stroke:#333
+    style Security fill:#ffcdd2,stroke:#c62828
+    style Quality fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Code Review Pipeline: From PR webhook to posted review comments."
+/>
+
+**Real-World Analogy**: Think of the bot as a tireless senior developer who reviews every line of every PR with perfect consistency. Unlike human reviewers who might miss issues when tired or rushed, the bot applies the same rigorous standards to every change, 24/7. It's like having a security expert, performance specialist, and style guide enforcer all reviewing simultaneously.
+
+**Skills Showcased**:
+
+- GitHub App/webhook integration
+- AST-based code analysis
+- Security vulnerability detection
+- LLM-powered contextual review
+- Background task processing
+- API rate limiting and error handling
+
+## Module Summary
+
+In this advanced project, we build a comprehensive code review automation system:
+
+1. **GitHub Webhook Handler**: We receive and validate webhook events for pull request creation and updates, ensuring secure communication with GitHub.
+
+2. **Diff Analysis Pipeline**: We parse PR diffs to extract changed files, identify the specific lines modified, and prepare code for analysis.
+
+3. **AST-Based Code Analysis**: We parse Python code into ASTs to detect complexity issues, code smells, and structural problems that simple regex can't catch.
+
+4. **Security Scanning**: We integrate Bandit and custom security rules to identify vulnerabilities like SQL injection, hardcoded secrets, and unsafe deserialization.
+
+5. **LLM-Powered Review**: We use GPT-4o with structured outputs to generate contextual, actionable review comments that understand code intent.
+
+6. **GitHub Comment Threading**: We post review comments on specific lines, create review threads, and suggest fixes with proper GitHub API integration.
+
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> ReceiveWebhook
+    ReceiveWebhook --> ValidateSignature
+    ValidateSignature --> QueueTask
+    
+    QueueTask --> FetchDiff
+    FetchDiff --> ParseFiles
+    
+    ParseFiles --> AnalyzeAST
+    ParseFiles --> ScanSecurity
+    ParseFiles --> CheckQuality
+    
+    AnalyzeAST --> AggregateFindings
+    ScanSecurity --> AggregateFindings
+    CheckQuality --> AggregateFindings
+    
+    AggregateFindings --> GenerateReview
+    GenerateReview --> PostComments
+    PostComments --> [*]
+`}
+  caption="Review State Machine: From webhook receipt to posted comments."
+/>
+
+---
+
+## Architecture
+
+<Mermaid
+  chart={`
+graph TB
+    subgraph "Code Review Bot Service"
+        API[FastAPI Server] --> WebhookHandler[Webhook Handler]
+        WebhookHandler --> SignatureValidator[Signature Validator]
+        
+        subgraph "Task Processing"
+            TaskQueue[Background Queue]
+            Worker[Async Worker]
+        end
+        
+        subgraph "Analysis Layer"
+            DiffParser[Diff Parser]
+            ASTAnalyzer[AST Analyzer]
+            SecurityScanner[Security Scanner]
+            QualityChecker[Quality Checker]
+            TestAnalyzer[Test Coverage Analyzer]
+        end
+        
+        subgraph "Review Generation"
+            FindingAggregator[Finding Aggregator]
+            LLMReviewer[LLM Reviewer]
+            CommentFormatter[Comment Formatter]
+        end
+        
+        subgraph "GitHub Integration"
+            GitHubClient[GitHub API Client]
+            RateLimiter[Rate Limiter]
+            CommentPoster[Comment Poster]
+        end
+        
+        SignatureValidator --> TaskQueue
+        TaskQueue --> Worker
+        
+        Worker --> DiffParser
+        DiffParser --> ASTAnalyzer
+        DiffParser --> SecurityScanner
+        DiffParser --> QualityChecker
+        DiffParser --> TestAnalyzer
+        
+        ASTAnalyzer --> FindingAggregator
+        SecurityScanner --> FindingAggregator
+        QualityChecker --> FindingAggregator
+        TestAnalyzer --> FindingAggregator
+        
+        FindingAggregator --> LLMReviewer
+        LLMReviewer --> CommentFormatter
+        CommentFormatter --> GitHubClient
+        GitHubClient --> RateLimiter
+        RateLimiter --> CommentPoster
+    end
+    
+    GitHub[GitHub] <--> API
+    
+    style LLMReviewer fill:#f9f,stroke:#333
+    style SecurityScanner fill:#ffcdd2,stroke:#c62828
+    style QualityChecker fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="System Architecture: Multi-layer analysis with LLM-powered review generation."
+/>
+
+---
+
+## Detailed Requirements Specification
+
+### Functional Requirements (FR)
+
+| ID    | Requirement            | Description                                                                           | Priority |
+| ----- | ---------------------- | ------------------------------------------------------------------------------------- | -------- |
+| FR-01 | Webhook Reception      | The system shall receive and process GitHub webhook events for pull_request actions   | P0       |
+| FR-02 | Signature Validation   | The system shall validate webhook signatures using HMAC-SHA256                        | P0       |
+| FR-03 | Diff Parsing           | The system shall parse PR diffs to extract changed files and line numbers             | P0       |
+| FR-04 | AST Analysis           | The system shall parse Python files into ASTs for structural analysis                 | P0       |
+| FR-05 | Security Scanning      | The system shall detect common security vulnerabilities (SQL injection, XSS, secrets) | P0       |
+| FR-06 | Code Quality Checks    | The system shall identify code smells, complexity issues, and style violations        | P1       |
+| FR-07 | LLM Review Generation  | The system shall generate contextual review comments using GPT-4o                     | P0       |
+| FR-08 | Comment Posting        | The system shall post review comments on specific PR lines via GitHub API             | P0       |
+| FR-09 | Fix Suggestions        | The system shall provide actionable code fix suggestions                              | P1       |
+| FR-10 | Test Coverage Analysis | The system shall analyze whether new code has corresponding tests                     | P2       |
+| FR-11 | Review Threading       | The system shall create threaded conversations for multi-part feedback                | P2       |
+| FR-12 | Background Processing  | The system shall process reviews asynchronously to handle webhook timeouts            | P1       |
+
+### Non-Functional Requirements (NFR)
+
+| ID     | Requirement         | Target                                                      | Measurement         |
+| ------ | ------------------- | ----------------------------------------------------------- | ------------------- |
+| NFR-01 | Webhook Response    | Webhook acknowledgment shall complete in < 1 second         | Response time       |
+| NFR-02 | Review Latency      | Full review shall complete within 60 seconds of PR creation | End-to-end timing   |
+| NFR-03 | False Positive Rate | Security findings shall have < 10% false positive rate      | Manual verification |
+| NFR-04 | API Rate Compliance | System shall respect GitHub API rate limits                 | No 429 errors       |
+| NFR-05 | Availability        | Service shall maintain 99.9% uptime                         | Monitoring          |
+| NFR-06 | Concurrent PRs      | System shall handle 10+ simultaneous PR reviews             | Load testing        |
+
+### API Contract
+
+#### POST /webhook/github - Receive GitHub Webhooks
+
+**Headers:**
+
+```
+X-GitHub-Event: pull_request
+X-Hub-Signature-256: sha256=<signature>
+X-GitHub-Delivery: <delivery-id>
+```
+
+**Request Body (pull_request event):**
+
+```json
+{
+  "action": "opened | synchronize | reopened",
+  "number": 123,
+  "pull_request": {
+    "id": 1234567890,
+    "number": 123,
+    "title": "Add new feature",
+    "head": {
+      "sha": "abc123...",
+      "ref": "feature-branch"
+    },
+    "base": {
+      "sha": "def456...",
+      "ref": "main"
+    },
+    "diff_url": "https://github.com/owner/repo/pull/123.diff",
+    "user": {
+      "login": "developer"
+    }
+  },
+  "repository": {
+    "id": 987654321,
+    "full_name": "owner/repo",
+    "private": false
+  },
+  "installation": {
+    "id": 12345678
+  }
+}
+```
+
+**Response (202 Accepted):**
+
+```json
+{
+  "status": "queued",
+  "review_id": "uuid",
+  "message": "Review queued for processing"
+}
+```
+
+#### GET /reviews/{review_id} - Get Review Status
+
+**Response (200 OK):**
+
+```json
+{
+  "review_id": "uuid",
+  "status": "pending | processing | completed | failed",
+  "pr_number": 123,
+  "repository": "owner/repo",
+  "findings_count": 5,
+  "comments_posted": 5,
+  "created_at": "2024-01-15T10:30:00Z",
+  "completed_at": "2024-01-15T10:30:45Z"
+}
+```
+
+### Data Models
+
+```
+Review Request Flow:
+┌─────────────────────────────────────────────────────────────┐
+│                     ReviewTask                               │
+├─────────────────────────────────────────────────────────────┤
+│ id: UUID                                                    │
+│ pr_number: INTEGER                                          │
+│ repository: STRING                                          │
+│ head_sha: STRING                                            │
+│ base_sha: STRING                                            │
+│ status: ReviewStatus                                        │
+│ created_at: DATETIME                                        │
+│ completed_at: DATETIME | null                               │
+└─────────────────────────────────────────────────────────────┘
+
+Finding Model:
+┌─────────────────────────────────────────────────────────────┐
+│                      Finding                                 │
+├─────────────────────────────────────────────────────────────┤
+│ id: UUID                                                    │
+│ file_path: STRING                                           │
+│ line_number: INTEGER                                        │
+│ end_line: INTEGER | null                                    │
+│ severity: 'critical' | 'high' | 'medium' | 'low' | 'info'  │
+│ category: 'security' | 'quality' | 'performance' | 'style' │
+│ title: STRING                                               │
+│ description: STRING                                         │
+│ suggestion: STRING | null                                   │
+│ code_snippet: STRING | null                                 │
+└─────────────────────────────────────────────────────────────┘
+
+Review Comment:
+┌─────────────────────────────────────────────────────────────┐
+│                   ReviewComment                              │
+├─────────────────────────────────────────────────────────────┤
+│ finding_id: UUID                                            │
+│ body: STRING (markdown)                                     │
+│ path: STRING                                                │
+│ line: INTEGER                                               │
+│ side: 'RIGHT'                                               │
+│ commit_id: STRING                                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Error Handling Matrix
+
+| Error Code        | HTTP Status | Cause                               | Response Body                                   | Recovery Action          |
+| ----------------- | ----------- | ----------------------------------- | ----------------------------------------------- | ------------------------ |
+| INVALID_SIGNATURE | 401         | Webhook signature validation failed | `{"detail": "Invalid webhook signature"}`       | Check webhook secret     |
+| UNSUPPORTED_EVENT | 400         | Non-PR webhook event received       | `{"detail": "Event type not supported"}`        | Configure webhook events |
+| RATE_LIMITED      | 429         | GitHub API rate limit exceeded      | `{"detail": "Rate limited", "retry_after": 60}` | Wait and retry           |
+| PARSE_ERROR       | 500         | Failed to parse code file           | `{"detail": "Parse error", "file": "..."}`      | Check file syntax        |
+| LLM_ERROR         | 500         | LLM API call failed                 | `{"detail": "LLM service unavailable"}`         | Retry with backoff       |
+| GITHUB_API_ERROR  | 502         | GitHub API returned error           | `{"detail": "GitHub API error", "status": 500}` | Check GitHub status      |
+
+---
+
+## Core Implementation
+
+### Step 1: Project Setup and Configuration
+
+First, let's set up the project structure with proper configuration management.
+
+```python
+# config.py
+from pydantic_settings import BaseSettings
+from pydantic import Field
+from typing import Optional
+from functools import lru_cache
+
+class Settings(BaseSettings):
+    """Application configuration with environment variable support."""
+
+    # GitHub App Configuration
+    github_app_id: int = Field(..., description="GitHub App ID")
+    github_private_key: str = Field(..., description="GitHub App private key (PEM)")
+    github_webhook_secret: str = Field(..., description="Webhook secret for signature validation")
+
+    # OpenAI Configuration
+    openai_api_key: str = Field(..., description="OpenAI API key")
+    openai_model: str = Field(default="gpt-4o", description="Model for review generation")
+
+    # Application Settings
+    max_files_per_review: int = Field(default=20, description="Maximum files to review per PR")
+    max_file_size_kb: int = Field(default=500, description="Maximum file size to analyze")
+    review_batch_size: int = Field(default=5, description="Findings to batch per LLM call")
+
+    # Security Scanner Settings
+    security_scan_enabled: bool = Field(default=True)
+    bandit_severity_threshold: str = Field(default="LOW")
+
+    # Rate Limiting
+    github_api_rate_limit: int = Field(default=5000, description="Requests per hour")
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    return Settings()
+```
+
+```python
+# models.py
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from enum import Enum
+from datetime import datetime
+import uuid
+
+class ReviewStatus(str, Enum):
+    """Status of a review task."""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+class Severity(str, Enum):
+    """Severity levels for findings."""
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFO = "info"
+
+class FindingCategory(str, Enum):
+    """Categories of code review findings."""
+    SECURITY = "security"
+    QUALITY = "quality"
+    PERFORMANCE = "performance"
+    STYLE = "style"
+    TEST = "test"
+
+class FileDiff(BaseModel):
+    """Represents a changed file in a PR."""
+    path: str
+    status: str  # added, modified, removed
+    additions: int
+    deletions: int
+    patch: Optional[str] = None
+    content: Optional[str] = None
+
+class Finding(BaseModel):
+    """A single code review finding."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    file_path: str
+    line_number: int
+    end_line: Optional[int] = None
+    severity: Severity
+    category: FindingCategory
+    title: str
+    description: str
+    suggestion: Optional[str] = None
+    code_snippet: Optional[str] = None
+    rule_id: Optional[str] = None
+
+class ReviewComment(BaseModel):
+    """A comment to post on GitHub."""
+    body: str
+    path: str
+    line: int
+    side: str = "RIGHT"
+    commit_id: str
+
+class ReviewTask(BaseModel):
+    """A queued review task."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    pr_number: int
+    repository: str
+    head_sha: str
+    base_sha: str
+    installation_id: int
+    status: ReviewStatus = ReviewStatus.PENDING
+    findings: List[Finding] = Field(default_factory=list)
+    comments_posted: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+
+class WebhookPayload(BaseModel):
+    """Parsed GitHub webhook payload for PR events."""
+    action: str
+    pr_number: int
+    pr_title: str
+    head_sha: str
+    base_sha: str
+    head_ref: str
+    base_ref: str
+    repository: str
+    installation_id: int
+    sender: str
+    diff_url: str
+```
+
+### Step 2: GitHub Webhook Handler with Signature Validation
+
+Secure webhook handling is critical. We validate every request using HMAC-SHA256.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant GitHub
+    participant Webhook as Webhook Handler
+    participant Validator as Signature Validator
+    participant Queue as Task Queue
+    
+    GitHub->>Webhook: POST /webhook/github
+    Note over Webhook: X-Hub-Signature-256 header
+    
+    Webhook->>Validator: Validate signature
+    Validator->>Validator: HMAC-SHA256(secret, body)
+    
+    alt Signature Valid
+        Validator-->>Webhook: ✓ Valid
+        Webhook->>Queue: Queue review task
+        Webhook-->>GitHub: 202 Accepted
+    else Signature Invalid
+        Validator-->>Webhook: ✗ Invalid
+        Webhook-->>GitHub: 401 Unauthorized
+    end
+`}
+  caption="Webhook Security: HMAC signature validation flow."
+/>
+
+```python
+# webhook/handler.py
+import hmac
+import hashlib
+from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
+from typing import Optional
+import logging
+
+from config import get_settings
+from models import WebhookPayload, ReviewTask, ReviewStatus
+from queue.task_queue import task_queue
+from review.orchestrator import ReviewOrchestrator
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+class WebhookSignatureValidator:
+    """Validates GitHub webhook signatures using HMAC-SHA256."""
+
+    def __init__(self, secret: str):
+        self.secret = secret.encode('utf-8')
+
+    def validate(self, payload: bytes, signature: str) -> bool:
+        """
+        Validate webhook signature.
+
+        Args:
+            payload: Raw request body bytes
+            signature: X-Hub-Signature-256 header value
+
+        Returns:
+            True if signature is valid, False otherwise
+        """
+        if not signature or not signature.startswith('sha256='):
+            return False
+
+        expected_signature = signature[7:]  # Remove 'sha256=' prefix
+
+        computed_signature = hmac.new(
+            self.secret,
+            payload,
+            hashlib.sha256
+        ).hexdigest()
+
+        # Use constant-time comparison to prevent timing attacks
+        return hmac.compare_digest(computed_signature, expected_signature)
+
+def parse_pr_webhook(payload: dict) -> Optional[WebhookPayload]:
+    """Parse pull_request webhook payload into structured format."""
+    try:
+        pr = payload.get("pull_request", {})
+        repo = payload.get("repository", {})
+        installation = payload.get("installation", {})
+
+        return WebhookPayload(
+            action=payload.get("action", ""),
+            pr_number=pr.get("number", 0),
+            pr_title=pr.get("title", ""),
+            head_sha=pr.get("head", {}).get("sha", ""),
+            base_sha=pr.get("base", {}).get("sha", ""),
+            head_ref=pr.get("head", {}).get("ref", ""),
+            base_ref=pr.get("base", {}).get("ref", ""),
+            repository=repo.get("full_name", ""),
+            installation_id=installation.get("id", 0),
+            sender=payload.get("sender", {}).get("login", ""),
+            diff_url=pr.get("diff_url", "")
+        )
+    except Exception as e:
+        logger.error(f"Failed to parse webhook payload: {e}")
+        return None
+
+@router.post("/webhook/github")
+async def handle_github_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    x_github_event: str = Header(..., alias="X-GitHub-Event"),
+    x_hub_signature_256: str = Header(..., alias="X-Hub-Signature-256"),
+    x_github_delivery: str = Header(..., alias="X-GitHub-Delivery")
+):
+    """
+    Handle incoming GitHub webhook events.
+
+    Validates signature, parses payload, and queues review tasks
+    for pull_request events.
+    """
+    settings = get_settings()
+
+    # Read raw body for signature validation
+    body = await request.body()
+
+    # Validate webhook signature
+    validator = WebhookSignatureValidator(settings.github_webhook_secret)
+    if not validator.validate(body, x_hub_signature_256):
+        logger.warning(f"Invalid webhook signature for delivery {x_github_delivery}")
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    # Only process pull_request events
+    if x_github_event != "pull_request":
+        logger.info(f"Ignoring event type: {x_github_event}")
+        return {"status": "ignored", "event": x_github_event}
+
+    # Parse payload
+    payload = await request.json()
+    webhook_data = parse_pr_webhook(payload)
+
+    if not webhook_data:
+        raise HTTPException(status_code=400, detail="Failed to parse webhook payload")
+
+    # Only review on opened, synchronize (new commits), or reopened
+    reviewable_actions = {"opened", "synchronize", "reopened"}
+    if webhook_data.action not in reviewable_actions:
+        logger.info(f"Ignoring PR action: {webhook_data.action}")
+        return {"status": "ignored", "action": webhook_data.action}
+
+    # Create review task
+    task = ReviewTask(
+        pr_number=webhook_data.pr_number,
+        repository=webhook_data.repository,
+        head_sha=webhook_data.head_sha,
+        base_sha=webhook_data.base_sha,
+        installation_id=webhook_data.installation_id,
+        status=ReviewStatus.PENDING
+    )
+
+    # Queue for background processing
+    await task_queue.enqueue(task)
+
+    # Start background processing
+    background_tasks.add_task(process_review, task.id)
+
+    logger.info(f"Queued review {task.id} for PR #{webhook_data.pr_number}")
+
+    return {
+        "status": "queued",
+        "review_id": task.id,
+        "message": "Review queued for processing"
+    }
+
+async def process_review(task_id: str):
+    """Background task to process a review."""
+    orchestrator = ReviewOrchestrator()
+    await orchestrator.run_review(task_id)
+```
+
+**Security Considerations**:
+
+- **Constant-time comparison**: We use `hmac.compare_digest()` to prevent timing attacks
+- **Raw body validation**: We validate against the raw bytes, not parsed JSON
+- **Signature prefix check**: We verify the `sha256=` prefix before comparison
+- **Logging without secrets**: We log delivery IDs but never log signatures or secrets
+
+### Step 3: GitHub API Client with App Authentication
+
+GitHub Apps use JWT-based authentication. We generate installation tokens for API access.
+
+```python
+# github/client.py
+import jwt
+import time
+import httpx
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta
+import logging
+from dataclasses import dataclass
+
+from config import get_settings
+from models import FileDiff, ReviewComment
+
+logger = logging.getLogger(__name__)
+
+@dataclass
+class InstallationToken:
+    """Cached installation access token."""
+    token: str
+    expires_at: datetime
+
+class GitHubAppClient:
+    """GitHub API client with App authentication."""
+
+    BASE_URL = "https://api.github.com"
+
+    def __init__(self):
+        self.settings = get_settings()
+        self._installation_tokens: Dict[int, InstallationToken] = {}
+
+    def _generate_jwt(self) -> str:
+        """Generate a JWT for GitHub App authentication."""
+        now = int(time.time())
+
+        payload = {
+            "iat": now - 60,  # Issued 60 seconds ago (clock skew)
+            "exp": now + (10 * 60),  # Expires in 10 minutes
+            "iss": self.settings.github_app_id
+        }
+
+        return jwt.encode(
+            payload,
+            self.settings.github_private_key,
+            algorithm="RS256"
+        )
+
+    async def _get_installation_token(self, installation_id: int) -> str:
+        """Get or refresh installation access token."""
+        cached = self._installation_tokens.get(installation_id)
+
+        # Return cached token if still valid (with 5 min buffer)
+        if cached and cached.expires_at > datetime.utcnow() + timedelta(minutes=5):
+            return cached.token
+
+        # Request new installation token
+        jwt_token = self._generate_jwt()
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.BASE_URL}/app/installations/{installation_id}/access_tokens",
+                headers={
+                    "Authorization": f"Bearer {jwt_token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28"
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        # Cache the token
+        expires_at = datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00"))
+        self._installation_tokens[installation_id] = InstallationToken(
+            token=data["token"],
+            expires_at=expires_at.replace(tzinfo=None)
+        )
+
+        return data["token"]
+
+    async def _request(
+        self,
+        method: str,
+        endpoint: str,
+        installation_id: int,
+        **kwargs
+    ) -> Any:
+        """Make an authenticated request to GitHub API."""
+        token = await self._get_installation_token(installation_id)
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.request(
+                method,
+                f"{self.BASE_URL}{endpoint}",
+                headers=headers,
+                **kwargs
+            )
+
+            # Handle rate limiting
+            if response.status_code == 429:
+                retry_after = int(response.headers.get("Retry-After", 60))
+                logger.warning(f"Rate limited, retry after {retry_after}s")
+                raise RateLimitError(retry_after)
+
+            response.raise_for_status()
+            return response.json() if response.content else None
+
+    async def get_pr_files(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        installation_id: int
+    ) -> List[FileDiff]:
+        """Get list of files changed in a PR."""
+        endpoint = f"/repos/{owner}/{repo}/pulls/{pr_number}/files"
+
+        files = await self._request("GET", endpoint, installation_id)
+
+        return [
+            FileDiff(
+                path=f["filename"],
+                status=f["status"],
+                additions=f["additions"],
+                deletions=f["deletions"],
+                patch=f.get("patch")
+            )
+            for f in files
+        ]
+
+    async def get_file_content(
+        self,
+        owner: str,
+        repo: str,
+        path: str,
+        ref: str,
+        installation_id: int
+    ) -> Optional[str]:
+        """Get file content at a specific ref."""
+        import base64
+
+        endpoint = f"/repos/{owner}/{repo}/contents/{path}"
+
+        try:
+            data = await self._request(
+                "GET", endpoint, installation_id,
+                params={"ref": ref}
+            )
+
+            if data.get("encoding") == "base64":
+                return base64.b64decode(data["content"]).decode("utf-8")
+            return data.get("content")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            raise
+
+    async def create_review(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        installation_id: int,
+        comments: List[ReviewComment],
+        body: str = "",
+        event: str = "COMMENT"
+    ) -> Dict:
+        """Create a PR review with comments."""
+        endpoint = f"/repos/{owner}/{repo}/pulls/{pr_number}/reviews"
+
+        review_comments = [
+            {
+                "path": c.path,
+                "line": c.line,
+                "side": c.side,
+                "body": c.body
+            }
+            for c in comments
+        ]
+
+        payload = {
+            "commit_id": comments[0].commit_id if comments else "",
+            "body": body,
+            "event": event,
+            "comments": review_comments
+        }
+
+        return await self._request(
+            "POST", endpoint, installation_id,
+            json=payload
+        )
+
+    async def create_review_comment(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        installation_id: int,
+        comment: ReviewComment
+    ) -> Dict:
+        """Create a single review comment on a PR."""
+        endpoint = f"/repos/{owner}/{repo}/pulls/{pr_number}/comments"
+
+        payload = {
+            "body": comment.body,
+            "commit_id": comment.commit_id,
+            "path": comment.path,
+            "line": comment.line,
+            "side": comment.side
+        }
+
+        return await self._request(
+            "POST", endpoint, installation_id,
+            json=payload
+        )
+
+class RateLimitError(Exception):
+    """Raised when GitHub API rate limit is exceeded."""
+    def __init__(self, retry_after: int):
+        self.retry_after = retry_after
+        super().__init__(f"Rate limited, retry after {retry_after} seconds")
+```
+
+### Step 4: Diff Parser and File Analysis
+
+We parse PR diffs to understand exactly what changed and where.
+
+<Mermaid
+  chart={`
+graph TD
+    Diff[PR Diff] --> Parser[Diff Parser]
+    Parser --> Hunks[Change Hunks]
+    
+    Hunks --> Added[Added Lines]
+    Hunks --> Modified[Modified Lines]
+    Hunks --> Deleted[Deleted Lines]
+    
+    Added --> LineMap[Line Number Map]
+    Modified --> LineMap
+    
+    LineMap --> Analysis[Ready for Analysis]
+    
+    style LineMap fill:#fff9c4,stroke:#fbc02d
+`}
+  caption="Diff Parsing: Extracting actionable change information."
+/>
+
+```python
+# analysis/diff_parser.py
+import re
+from typing import List, Dict, Optional, Tuple
+from dataclasses import dataclass, field
+
+@dataclass
+class DiffHunk:
+    """A single hunk of changes in a diff."""
+    old_start: int
+    old_count: int
+    new_start: int
+    new_count: int
+    lines: List[Tuple[str, str, int]]  # (type, content, new_line_number)
+
+@dataclass
+class ParsedFile:
+    """A parsed file diff with line mappings."""
+    path: str
+    status: str
+    hunks: List[DiffHunk] = field(default_factory=list)
+    added_lines: Dict[int, str] = field(default_factory=dict)
+    modified_context: Dict[int, List[str]] = field(default_factory=dict)
+
+class DiffParser:
+    """Parse unified diff format into structured data."""
+
+    HUNK_HEADER_PATTERN = re.compile(
+        r'^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@'
+    )
+
+    def parse_patch(self, patch: str, file_path: str, status: str) -> ParsedFile:
+        """
+        Parse a unified diff patch into structured format.
+
+        Args:
+            patch: The patch content from GitHub API
+            file_path: Path to the file
+            status: File status (added, modified, removed)
+
+        Returns:
+            ParsedFile with hunks and line mappings
+        """
+        parsed = ParsedFile(path=file_path, status=status)
+
+        if not patch:
+            return parsed
+
+        lines = patch.split('\n')
+        current_hunk: Optional[DiffHunk] = None
+        new_line_num = 0
+
+        for line in lines:
+            # Check for hunk header
+            header_match = self.HUNK_HEADER_PATTERN.match(line)
+            if header_match:
+                if current_hunk:
+                    parsed.hunks.append(current_hunk)
+
+                current_hunk = DiffHunk(
+                    old_start=int(header_match.group(1)),
+                    old_count=int(header_match.group(2) or 1),
+                    new_start=int(header_match.group(3)),
+                    new_count=int(header_match.group(4) or 1),
+                    lines=[]
+                )
+                new_line_num = current_hunk.new_start
+                continue
+
+            if current_hunk is None:
+                continue
+
+            # Parse diff lines
+            if line.startswith('+') and not line.startswith('+++'):
+                # Added line
+                content = line[1:]
+                current_hunk.lines.append(('add', content, new_line_num))
+                parsed.added_lines[new_line_num] = content
+                new_line_num += 1
+
+            elif line.startswith('-') and not line.startswith('---'):
+                # Removed line (don't increment new line number)
+                content = line[1:]
+                current_hunk.lines.append(('remove', content, -1))
+
+            elif line.startswith(' '):
+                # Context line
+                content = line[1:]
+                current_hunk.lines.append(('context', content, new_line_num))
+                new_line_num += 1
+
+        # Don't forget the last hunk
+        if current_hunk:
+            parsed.hunks.append(current_hunk)
+
+        # Build context for modified lines
+        self._build_context(parsed)
+
+        return parsed
+
+    def _build_context(self, parsed: ParsedFile, context_lines: int = 3):
+        """Build context around each added line for better analysis."""
+        for hunk in parsed.hunks:
+            all_lines = [(t, c, n) for t, c, n in hunk.lines if n > 0]
+
+            for i, (line_type, content, line_num) in enumerate(all_lines):
+                if line_type == 'add':
+                    # Get surrounding context
+                    start = max(0, i - context_lines)
+                    end = min(len(all_lines), i + context_lines + 1)
+
+                    context = [
+                        all_lines[j][1] for j in range(start, end)
+                    ]
+                    parsed.modified_context[line_num] = context
+
+    def get_reviewable_lines(self, parsed: ParsedFile) -> List[int]:
+        """Get list of line numbers that can receive review comments."""
+        # GitHub only allows comments on added lines or context lines
+        reviewable = set()
+
+        for hunk in parsed.hunks:
+            for line_type, _, line_num in hunk.lines:
+                if line_num > 0 and line_type in ('add', 'context'):
+                    reviewable.add(line_num)
+
+        return sorted(reviewable)
+
+    def find_nearest_reviewable_line(
+        self,
+        parsed: ParsedFile,
+        target_line: int
+    ) -> Optional[int]:
+        """Find the nearest line that can receive a review comment."""
+        reviewable = self.get_reviewable_lines(parsed)
+
+        if not reviewable:
+            return None
+
+        if target_line in reviewable:
+            return target_line
+
+        # Find closest reviewable line
+        closest = min(reviewable, key=lambda x: abs(x - target_line))
+        return closest
+```
+
+### Step 5: AST-Based Code Analysis
+
+We use Python's AST module to detect code quality issues that simple regex can't catch.
+
+<Mermaid
+  chart={`
+graph TD
+    Code[Python Code] --> Parse[ast.parse]
+    Parse --> Tree[AST Tree]
+    
+    Tree --> Visitor[AST Visitor]
+    
+    Visitor --> Complexity[Complexity Check]
+    Visitor --> Patterns[Pattern Detection]
+    Visitor --> Types[Type Analysis]
+    
+    Complexity --> Findings[Findings]
+    Patterns --> Findings
+    Types --> Findings
+    
+    style Visitor fill:#e1f5fe,stroke:#01579b
+`}
+  caption="AST Analysis: Walking the syntax tree for deep code inspection."
+/>
+
+```python
+# analysis/ast_analyzer.py
+import ast
+from typing import List, Dict, Optional, Set
+from dataclasses import dataclass, field
+import logging
+
+from models import Finding, Severity, FindingCategory
+
+logger = logging.getLogger(__name__)
+
+@dataclass
+class ComplexityMetrics:
+    """Code complexity measurements."""
+    cyclomatic: int = 0
+    cognitive: int = 0
+    nesting_depth: int = 0
+    lines_of_code: int = 0
+
+class ASTAnalyzer(ast.NodeVisitor):
+    """
+    Analyze Python code using AST for quality issues.
+
+    Detects:
+    - High cyclomatic complexity
+    - Deep nesting
+    - Long functions
+    - Unused variables
+    - Bare except clauses
+    - Mutable default arguments
+    - Global variable usage
+    """
+
+    # Thresholds for findings
+    MAX_CYCLOMATIC_COMPLEXITY = 10
+    MAX_COGNITIVE_COMPLEXITY = 15
+    MAX_NESTING_DEPTH = 4
+    MAX_FUNCTION_LINES = 50
+    MAX_FUNCTION_ARGS = 5
+
+    def __init__(self, file_path: str, source_lines: Dict[int, str]):
+        self.file_path = file_path
+        self.source_lines = source_lines  # Only analyze changed lines
+        self.findings: List[Finding] = []
+
+        # Tracking state
+        self._current_function: Optional[str] = None
+        self._nesting_depth = 0
+        self._complexity = 0
+        self._cognitive_complexity = 0
+        self._defined_names: Set[str] = set()
+        self._used_names: Set[str] = set()
+
+    def analyze(self, source_code: str) -> List[Finding]:
+        """
+        Analyze source code and return findings.
+
+        Args:
+            source_code: Complete Python source code
+
+        Returns:
+            List of findings for issues detected
+        """
+        try:
+            tree = ast.parse(source_code)
+        except SyntaxError as e:
+            # Syntax errors are handled elsewhere
+            logger.warning(f"Syntax error in {self.file_path}: {e}")
+            return []
+
+        self.visit(tree)
+
+        return self.findings
+
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        """Analyze function definitions."""
+        self._analyze_function(node)
+        self.generic_visit(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+        """Analyze async function definitions."""
+        self._analyze_function(node)
+        self.generic_visit(node)
+
+    def _analyze_function(self, node):
+        """Common function analysis logic."""
+        # Only analyze if function touches changed lines
+        if not self._touches_changed_lines(node):
+            return
+
+        # Check function length
+        func_lines = node.end_lineno - node.lineno + 1
+        if func_lines > self.MAX_FUNCTION_LINES:
+            self._add_finding(
+                line=node.lineno,
+                severity=Severity.MEDIUM,
+                category=FindingCategory.QUALITY,
+                title="Function too long",
+                description=f"Function `{node.name}` has {func_lines} lines. "
+                           f"Consider breaking it into smaller functions.",
+                rule_id="FUNC_LENGTH"
+            )
+
+        # Check argument count
+        total_args = (
+            len(node.args.args) +
+            len(node.args.posonlyargs) +
+            len(node.args.kwonlyargs)
+        )
+        if total_args > self.MAX_FUNCTION_ARGS:
+            self._add_finding(
+                line=node.lineno,
+                severity=Severity.LOW,
+                category=FindingCategory.QUALITY,
+                title="Too many arguments",
+                description=f"Function `{node.name}` has {total_args} arguments. "
+                           f"Consider using a configuration object or dataclass.",
+                rule_id="ARG_COUNT"
+            )
+
+        # Check for mutable default arguments
+        self._check_mutable_defaults(node)
+
+        # Calculate complexity
+        complexity = self._calculate_complexity(node)
+        if complexity > self.MAX_CYCLOMATIC_COMPLEXITY:
+            self._add_finding(
+                line=node.lineno,
+                severity=Severity.HIGH,
+                category=FindingCategory.QUALITY,
+                title="High cyclomatic complexity",
+                description=f"Function `{node.name}` has complexity {complexity}. "
+                           f"Consider simplifying the logic or extracting methods.",
+                rule_id="COMPLEXITY"
+            )
+
+    def _check_mutable_defaults(self, node):
+        """Check for mutable default arguments (common Python gotcha)."""
+        for default in node.args.defaults + node.args.kw_defaults:
+            if default is None:
+                continue
+            if isinstance(default, (ast.List, ast.Dict, ast.Set)):
+                self._add_finding(
+                    line=node.lineno,
+                    severity=Severity.HIGH,
+                    category=FindingCategory.QUALITY,
+                    title="Mutable default argument",
+                    description=f"Function `{node.name}` uses a mutable default argument. "
+                               f"This can cause unexpected behavior. Use `None` and "
+                               f"initialize inside the function.",
+                    suggestion=f"def {node.name}(..., param=None):\n"
+                              f"    if param is None:\n"
+                              f"        param = []  # or {{}} for dict",
+                    rule_id="MUTABLE_DEFAULT"
+                )
+
+    def visit_ExceptHandler(self, node: ast.ExceptHandler):
+        """Check for bare except clauses."""
+        if not self._touches_changed_lines(node):
+            self.generic_visit(node)
+            return
+
+        if node.type is None:
+            self._add_finding(
+                line=node.lineno,
+                severity=Severity.HIGH,
+                category=FindingCategory.QUALITY,
+                title="Bare except clause",
+                description="Bare `except:` catches all exceptions including "
+                           "KeyboardInterrupt and SystemExit. Catch specific "
+                           "exceptions instead.",
+                suggestion="except Exception as e:  # Or more specific exception",
+                rule_id="BARE_EXCEPT"
+            )
+
+        self.generic_visit(node)
+
+    def visit_Global(self, node: ast.Global):
+        """Flag global variable usage."""
+        if not self._in_changed_lines(node.lineno):
+            return
+
+        self._add_finding(
+            line=node.lineno,
+            severity=Severity.MEDIUM,
+            category=FindingCategory.QUALITY,
+            title="Global variable usage",
+            description=f"Using global variables ({', '.join(node.names)}) "
+                       f"makes code harder to test and reason about. "
+                       f"Consider passing values as parameters.",
+            rule_id="GLOBAL_VAR"
+        )
+
+    def visit_Assert(self, node: ast.Assert):
+        """Check for assert statements that might be stripped in production."""
+        if not self._in_changed_lines(node.lineno):
+            return
+
+        self._add_finding(
+            line=node.lineno,
+            severity=Severity.INFO,
+            category=FindingCategory.QUALITY,
+            title="Assert statement in production code",
+            description="Assert statements are removed when Python runs with "
+                       "optimization (-O flag). Use explicit validation for "
+                       "production code.",
+            rule_id="ASSERT_PROD"
+        )
+
+    def visit_Compare(self, node: ast.Compare):
+        """Check for common comparison issues."""
+        if not self._in_changed_lines(node.lineno):
+            self.generic_visit(node)
+            return
+
+        # Check for `== None` instead of `is None`
+        for op, comparator in zip(node.ops, node.comparators):
+            if isinstance(op, (ast.Eq, ast.NotEq)):
+                if isinstance(comparator, ast.Constant) and comparator.value is None:
+                    self._add_finding(
+                        line=node.lineno,
+                        severity=Severity.LOW,
+                        category=FindingCategory.STYLE,
+                        title="Use 'is None' instead of '== None'",
+                        description="PEP 8 recommends using `is None` or `is not None` "
+                                   "for None comparisons.",
+                        suggestion="if value is None:" if isinstance(op, ast.Eq)
+                                  else "if value is not None:",
+                        rule_id="NONE_COMPARE"
+                    )
+
+        self.generic_visit(node)
+
+    def _calculate_complexity(self, node) -> int:
+        """Calculate cyclomatic complexity of a function."""
+        complexity = 1  # Base complexity
+
+        for child in ast.walk(node):
+            # Decision points add complexity
+            if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor)):
+                complexity += 1
+            elif isinstance(child, ast.ExceptHandler):
+                complexity += 1
+            elif isinstance(child, ast.BoolOp):
+                # and/or add complexity
+                complexity += len(child.values) - 1
+            elif isinstance(child, ast.comprehension):
+                complexity += 1
+                if child.ifs:
+                    complexity += len(child.ifs)
+
+        return complexity
+
+    def _touches_changed_lines(self, node) -> bool:
+        """Check if a node spans any changed lines."""
+        if not hasattr(node, 'lineno') or not hasattr(node, 'end_lineno'):
+            return False
+
+        for line in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+            if line in self.source_lines:
+                return True
+        return False
+
+    def _in_changed_lines(self, lineno: int) -> bool:
+        """Check if a specific line was changed."""
+        return lineno in self.source_lines
+
+    def _add_finding(
+        self,
+        line: int,
+        severity: Severity,
+        category: FindingCategory,
+        title: str,
+        description: str,
+        suggestion: Optional[str] = None,
+        rule_id: Optional[str] = None
+    ):
+        """Add a finding to the results."""
+        # Get code snippet if available
+        snippet = self.source_lines.get(line, "")
+
+        self.findings.append(Finding(
+            file_path=self.file_path,
+            line_number=line,
+            severity=severity,
+            category=category,
+            title=title,
+            description=description,
+            suggestion=suggestion,
+            code_snippet=snippet,
+            rule_id=rule_id
+        ))
+```
+
+### Step 6: Security Vulnerability Scanner
+
+Security scanning is critical for catching vulnerabilities before they reach production.
+
+<Mermaid
+  chart={`
+graph TD
+    Code[Source Code] --> Scanner[Security Scanner]
+    
+    Scanner --> Bandit[Bandit Analysis]
+    Scanner --> Custom[Custom Rules]
+    Scanner --> Secrets[Secret Detection]
+    
+    Bandit --> SQLi[SQL Injection]
+    Bandit --> XSS[XSS Vulnerabilities]
+    Bandit --> Crypto[Weak Crypto]
+    
+    Custom --> Hardcoded[Hardcoded Secrets]
+    Custom --> Unsafe[Unsafe Deserialization]
+    Custom --> SSRF[SSRF Patterns]
+    
+    Secrets --> API[API Keys]
+    Secrets --> Passwords[Passwords]
+    Secrets --> Tokens[Tokens]
+    
+    SQLi --> Findings[Security Findings]
+    XSS --> Findings
+    Crypto --> Findings
+    Hardcoded --> Findings
+    Unsafe --> Findings
+    SSRF --> Findings
+    API --> Findings
+    Passwords --> Findings
+    Tokens --> Findings
+    
+    style Findings fill:#ffcdd2,stroke:#c62828
+`}
+  caption="Security Scanner: Multi-layer vulnerability detection."
+/>
+
+```python
+# analysis/security_scanner.py
+import ast
+import re
+from typing import List, Dict, Optional, Set
+from dataclasses import dataclass
+import subprocess
+import json
+import tempfile
+import os
+import logging
+
+from models import Finding, Severity, FindingCategory
+
+logger = logging.getLogger(__name__)
+
+@dataclass
+class SecurityRule:
+    """A custom security detection rule."""
+    id: str
+    name: str
+    pattern: re.Pattern
+    severity: Severity
+    description: str
+    cwe: Optional[str] = None
+
+class SecurityScanner:
+    """
+    Scan code for security vulnerabilities.
+
+    Combines:
+    - Bandit for Python-specific security issues
+    - Custom regex patterns for secrets
+    - AST-based detection for injection patterns
+    """
+
+    # Patterns for detecting hardcoded secrets
+    SECRET_PATTERNS = [
+        SecurityRule(
+            id="SEC001",
+            name="Hardcoded API Key",
+            pattern=re.compile(
+                r'(?:api[_-]?key|apikey)\s*[=:]\s*["\'][a-zA-Z0-9]{20,}["\']',
+                re.IGNORECASE
+            ),
+            severity=Severity.CRITICAL,
+            description="Hardcoded API key detected. Store secrets in environment variables.",
+            cwe="CWE-798"
+        ),
+        SecurityRule(
+            id="SEC002",
+            name="Hardcoded Password",
+            pattern=re.compile(
+                r'(?:password|passwd|pwd)\s*[=:]\s*["\'][^"\']{4,}["\']',
+                re.IGNORECASE
+            ),
+            severity=Severity.CRITICAL,
+            description="Hardcoded password detected. Use secure secret management.",
+            cwe="CWE-798"
+        ),
+        SecurityRule(
+            id="SEC003",
+            name="AWS Access Key",
+            pattern=re.compile(r'AKIA[0-9A-Z]{16}'),
+            severity=Severity.CRITICAL,
+            description="AWS Access Key ID detected. Rotate immediately and use IAM roles.",
+            cwe="CWE-798"
+        ),
+        SecurityRule(
+            id="SEC004",
+            name="Private Key",
+            pattern=re.compile(r'-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----'),
+            severity=Severity.CRITICAL,
+            description="Private key detected in code. Never commit private keys.",
+            cwe="CWE-321"
+        ),
+        SecurityRule(
+            id="SEC005",
+            name="JWT Secret",
+            pattern=re.compile(
+                r'(?:jwt[_-]?secret|secret[_-]?key)\s*[=:]\s*["\'][^"\']{8,}["\']',
+                re.IGNORECASE
+            ),
+            severity=Severity.CRITICAL,
+            description="Hardcoded JWT secret detected. Use environment variables.",
+            cwe="CWE-798"
+        ),
+        SecurityRule(
+            id="SEC006",
+            name="Database Connection String",
+            pattern=re.compile(
+                r'(?:postgres|mysql|mongodb)://[^:]+:[^@]+@',
+                re.IGNORECASE
+            ),
+            severity=Severity.HIGH,
+            description="Database connection string with credentials detected.",
+            cwe="CWE-798"
+        ),
+    ]
+
+    # Dangerous function patterns
+    DANGEROUS_PATTERNS = [
+        SecurityRule(
+            id="SEC010",
+            name="eval() Usage",
+            pattern=re.compile(r'\beval\s*\('),
+            severity=Severity.HIGH,
+            description="eval() can execute arbitrary code. Use ast.literal_eval() for data parsing.",
+            cwe="CWE-95"
+        ),
+        SecurityRule(
+            id="SEC011",
+            name="exec() Usage",
+            pattern=re.compile(r'\bexec\s*\('),
+            severity=Severity.HIGH,
+            description="exec() can execute arbitrary code. Avoid if possible.",
+            cwe="CWE-95"
+        ),
+        SecurityRule(
+            id="SEC012",
+            name="Pickle Deserialization",
+            pattern=re.compile(r'pickle\.loads?\s*\('),
+            severity=Severity.HIGH,
+            description="Pickle can deserialize malicious objects. Use JSON for untrusted data.",
+            cwe="CWE-502"
+        ),
+        SecurityRule(
+            id="SEC013",
+            name="Shell Injection Risk",
+            pattern=re.compile(r'subprocess\.\w+\([^)]*shell\s*=\s*True'),
+            severity=Severity.HIGH,
+            description="shell=True can lead to command injection. Use shell=False with list args.",
+            cwe="CWE-78"
+        ),
+        SecurityRule(
+            id="SEC014",
+            name="SQL String Formatting",
+            pattern=re.compile(
+                r'(?:execute|cursor\.execute)\s*\(\s*[f"\'].*?%s.*?["\'].*?%|'
+                r'(?:execute|cursor\.execute)\s*\(\s*f["\']'
+            ),
+            severity=Severity.HIGH,
+            description="SQL query uses string formatting. Use parameterized queries.",
+            cwe="CWE-89"
+        ),
+    ]
+
+    def __init__(self, use_bandit: bool = True):
+        self.use_bandit = use_bandit
+
+    def scan(
+        self,
+        source_code: str,
+        file_path: str,
+        changed_lines: Dict[int, str]
+    ) -> List[Finding]:
+        """
+        Scan source code for security vulnerabilities.
+
+        Args:
+            source_code: Complete source code
+            file_path: Path to the file
+            changed_lines: Dict of line_number -> line_content for changed lines
+
+        Returns:
+            List of security findings
+        """
+        findings = []
+
+        # Run custom pattern matching
+        findings.extend(self._scan_patterns(source_code, file_path, changed_lines))
+
+        # Run Bandit if available
+        if self.use_bandit:
+            findings.extend(self._run_bandit(source_code, file_path, changed_lines))
+
+        # Run AST-based security checks
+        findings.extend(self._scan_ast(source_code, file_path, changed_lines))
+
+        return findings
+
+    def _scan_patterns(
+        self,
+        source_code: str,
+        file_path: str,
+        changed_lines: Dict[int, str]
+    ) -> List[Finding]:
+        """Scan using regex patterns."""
+        findings = []
+        lines = source_code.split('\n')
+
+        all_patterns = self.SECRET_PATTERNS + self.DANGEROUS_PATTERNS
+
+        for line_num, line in enumerate(lines, 1):
+            # Only check changed lines
+            if line_num not in changed_lines:
+                continue
+
+            for rule in all_patterns:
+                if rule.pattern.search(line):
+                    findings.append(Finding(
+                        file_path=file_path,
+                        line_number=line_num,
+                        severity=rule.severity,
+                        category=FindingCategory.SECURITY,
+                        title=rule.name,
+                        description=rule.description,
+                        code_snippet=line.strip(),
+                        rule_id=rule.id
+                    ))
+
+        return findings
+
+    def _run_bandit(
+        self,
+        source_code: str,
+        file_path: str,
+        changed_lines: Dict[int, str]
+    ) -> List[Finding]:
+        """Run Bandit security scanner."""
+        findings = []
+
+        # Write code to temp file
+        with tempfile.NamedTemporaryFile(
+            mode='w',
+            suffix='.py',
+            delete=False
+        ) as f:
+            f.write(source_code)
+            temp_path = f.name
+
+        try:
+            result = subprocess.run(
+                [
+                    'bandit',
+                    '-f', 'json',
+                    '-ll',  # Only medium and above
+                    temp_path
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.stdout:
+                bandit_results = json.loads(result.stdout)
+
+                for issue in bandit_results.get('results', []):
+                    line_num = issue.get('line_number', 0)
+
+                    # Only report issues on changed lines
+                    if line_num not in changed_lines:
+                        continue
+
+                    severity_map = {
+                        'HIGH': Severity.HIGH,
+                        'MEDIUM': Severity.MEDIUM,
+                        'LOW': Severity.LOW
+                    }
+
+                    findings.append(Finding(
+                        file_path=file_path,
+                        line_number=line_num,
+                        severity=severity_map.get(
+                            issue.get('issue_severity', 'LOW'),
+                            Severity.LOW
+                        ),
+                        category=FindingCategory.SECURITY,
+                        title=issue.get('issue_text', 'Security Issue'),
+                        description=f"{issue.get('issue_text', '')} "
+                                   f"(CWE: {issue.get('issue_cwe', {}).get('id', 'N/A')})",
+                        code_snippet=issue.get('code', ''),
+                        rule_id=issue.get('test_id', '')
+                    ))
+
+        except FileNotFoundError:
+            logger.warning("Bandit not installed, skipping Bandit scan")
+        except subprocess.TimeoutExpired:
+            logger.warning("Bandit scan timed out")
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse Bandit output")
+        finally:
+            os.unlink(temp_path)
+
+        return findings
+
+    def _scan_ast(
+        self,
+        source_code: str,
+        file_path: str,
+        changed_lines: Dict[int, str]
+    ) -> List[Finding]:
+        """AST-based security scanning for complex patterns."""
+        findings = []
+
+        try:
+            tree = ast.parse(source_code)
+        except SyntaxError:
+            return findings
+
+        for node in ast.walk(tree):
+            # Check for unsafe YAML loading
+            if isinstance(node, ast.Call):
+                if self._is_unsafe_yaml_load(node):
+                    if node.lineno in changed_lines:
+                        findings.append(Finding(
+                            file_path=file_path,
+                            line_number=node.lineno,
+                            severity=Severity.HIGH,
+                            category=FindingCategory.SECURITY,
+                            title="Unsafe YAML Loading",
+                            description="yaml.load() without Loader is unsafe. "
+                                       "Use yaml.safe_load() instead.",
+                            suggestion="yaml.safe_load(data)",
+                            rule_id="SEC020"
+                        ))
+
+                # Check for requests without timeout
+                if self._is_request_without_timeout(node):
+                    if node.lineno in changed_lines:
+                        findings.append(Finding(
+                            file_path=file_path,
+                            line_number=node.lineno,
+                            severity=Severity.MEDIUM,
+                            category=FindingCategory.SECURITY,
+                            title="HTTP Request Without Timeout",
+                            description="HTTP requests without timeout can hang indefinitely. "
+                                       "Always specify a timeout.",
+                            suggestion="requests.get(url, timeout=30)",
+                            rule_id="SEC021"
+                        ))
+
+        return findings
+
+    def _is_unsafe_yaml_load(self, node: ast.Call) -> bool:
+        """Check if this is an unsafe yaml.load() call."""
+        if isinstance(node.func, ast.Attribute):
+            if node.func.attr == 'load':
+                # Check if Loader is specified
+                for keyword in node.keywords:
+                    if keyword.arg == 'Loader':
+                        return False
+                return True
+        return False
+
+    def _is_request_without_timeout(self, node: ast.Call) -> bool:
+        """Check if this is a requests call without timeout."""
+        if isinstance(node.func, ast.Attribute):
+            if node.func.attr in ('get', 'post', 'put', 'delete', 'patch'):
+                # Check if it's from requests module
+                if isinstance(node.func.value, ast.Name):
+                    if node.func.value.id == 'requests':
+                        # Check for timeout keyword
+                        for keyword in node.keywords:
+                            if keyword.arg == 'timeout':
+                                return False
+                        return True
+        return False
+```
+
+### Step 7: LLM-Powered Review Generation
+
+The LLM synthesizes findings into actionable, contextual review comments.
+
+<Mermaid
+  chart={`
+graph TD
+    Findings[Analysis Findings] --> Aggregator[Finding Aggregator]
+    Context[Code Context] --> Aggregator
+    
+    Aggregator --> Prompt[Prompt Builder]
+    Prompt --> LLM[GPT-4o]
+    
+    LLM --> Structured[Structured Output]
+    Structured --> Comments[Review Comments]
+    
+    Comments --> Formatter[Markdown Formatter]
+    Formatter --> Final[Final Comments]
+    
+    style LLM fill:#f9f,stroke:#333
+    style Structured fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="LLM Review: From findings to actionable comments."
+/>
+
+````python
+# review/llm_reviewer.py
+from typing import List, Dict, Optional
+from pydantic import BaseModel, Field
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+import json
+import logging
+
+from config import get_settings
+from models import Finding, Severity, FindingCategory
+
+logger = logging.getLogger(__name__)
+
+class ReviewCommentOutput(BaseModel):
+    """Structured output for a single review comment."""
+    title: str = Field(description="Brief title for the issue")
+    explanation: str = Field(description="Clear explanation of the problem")
+    impact: str = Field(description="Why this matters / potential consequences")
+    suggestion: str = Field(description="Specific fix recommendation")
+    code_example: Optional[str] = Field(
+        default=None,
+        description="Example code showing the fix"
+    )
+    severity_justification: str = Field(
+        description="Why this severity level is appropriate"
+    )
+
+class ReviewBatchOutput(BaseModel):
+    """Structured output for a batch of review comments."""
+    comments: List[ReviewCommentOutput]
+    summary: str = Field(description="Brief summary of all issues found")
+
+class LLMReviewer:
+    """
+    Generate contextual code review comments using LLM.
+
+    Uses structured outputs to ensure consistent, actionable feedback.
+    """
+
+    SYSTEM_PROMPT = """You are an expert code reviewer with deep knowledge of:
+- Python best practices and idioms
+- Security vulnerabilities and secure coding
+- Performance optimization
+- Clean code principles
+- Testing strategies
+
+Your reviews should be:
+1. **Constructive**: Focus on improvement, not criticism
+2. **Specific**: Point to exact issues with concrete fixes
+3. **Educational**: Explain WHY something is problematic
+4. **Actionable**: Provide clear steps to resolve issues
+5. **Prioritized**: Focus on high-impact issues first
+
+When reviewing findings:
+- Validate that the finding is a real issue (not a false positive)
+- Provide context-aware explanations
+- Suggest idiomatic Python solutions
+- Consider the broader codebase context
+- Be concise but thorough
+
+Format code examples using markdown code blocks with language hints."""
+
+    def __init__(self):
+        settings = get_settings()
+        self.llm = ChatOpenAI(
+            model=settings.openai_model,
+            temperature=0.3,
+            api_key=settings.openai_api_key
+        )
+        self.batch_size = settings.review_batch_size
+
+    async def generate_review_comments(
+        self,
+        findings: List[Finding],
+        file_content: str,
+        file_path: str
+    ) -> List[Dict]:
+        """
+        Generate review comments for a list of findings.
+
+        Args:
+            findings: List of findings from analysis
+            file_content: Full content of the file
+            file_path: Path to the file
+
+        Returns:
+            List of formatted review comments
+        """
+        if not findings:
+            return []
+
+        # Process in batches to manage context length
+        all_comments = []
+
+        for i in range(0, len(findings), self.batch_size):
+            batch = findings[i:i + self.batch_size]
+            batch_comments = await self._process_batch(
+                batch, file_content, file_path
+            )
+            all_comments.extend(batch_comments)
+
+        return all_comments
+
+    async def _process_batch(
+        self,
+        findings: List[Finding],
+        file_content: str,
+        file_path: str
+    ) -> List[Dict]:
+        """Process a batch of findings."""
+
+        # Build context with relevant code sections
+        context = self._build_context(findings, file_content)
+
+        # Format findings for the prompt
+        findings_text = self._format_findings(findings)
+
+        user_prompt = f"""Review the following code findings and generate helpful review comments.
+
+**File**: `{file_path}`
+
+**Relevant Code Context**:
+```python
+{context}
+````
+
+**Findings to Review**:
+{findings_text}
+
+For each finding:
+
+1. Verify it's a valid issue (not a false positive)
+2. Explain the problem clearly
+3. Describe the potential impact
+4. Provide a specific fix with code example if helpful
+
+Generate structured review comments for each valid finding."""
+
+        messages = [
+            SystemMessage(content=self.SYSTEM_PROMPT),
+            HumanMessage(content=user_prompt)
+        ]
+
+        try:
+            # Use structured output
+            structured_llm = self.llm.with_structured_output(ReviewBatchOutput)
+            result: ReviewBatchOutput = await structured_llm.ainvoke(messages)
+
+            # Map comments back to findings
+            comments = []
+            for finding, comment in zip(findings, result.comments):
+                comments.append({
+                    "finding": finding,
+                    "title": comment.title,
+                    "explanation": comment.explanation,
+                    "impact": comment.impact,
+                    "suggestion": comment.suggestion,
+                    "code_example": comment.code_example
+                })
+
+            return comments
+
+        except Exception as e:
+            logger.error(f"LLM review generation failed: {e}")
+            # Fall back to basic comments
+            return self._generate_fallback_comments(findings)
+
+    def _build_context(
+        self,
+        findings: List[Finding],
+        file_content: str,
+        context_lines: int = 5
+    ) -> str:
+        """Build relevant code context around findings."""
+        lines = file_content.split('\n')
+        relevant_ranges = set()
+
+        for finding in findings:
+            start = max(0, finding.line_number - context_lines - 1)
+            end = min(len(lines), finding.line_number + context_lines)
+            for i in range(start, end):
+                relevant_ranges.add(i)
+
+        # Build context with line numbers
+        context_parts = []
+        sorted_lines = sorted(relevant_ranges)
+
+        prev_line = -2
+        for line_idx in sorted_lines:
+            if line_idx - prev_line > 1:
+                context_parts.append("...")
+            context_parts.append(f"{line_idx + 1:4d} | {lines[line_idx]}")
+            prev_line = line_idx
+
+        return '\n'.join(context_parts)
+
+    def _format_findings(self, findings: List[Finding]) -> str:
+        """Format findings for the prompt."""
+        parts = []
+
+        for i, finding in enumerate(findings, 1):
+            parts.append(f"""
+
+**Finding {i}**:
+
+- Line: {finding.line_number}
+- Severity: {finding.severity.value}
+- Category: {finding.category.value}
+- Title: {finding.title}
+- Description: {finding.description}
+- Code: `{finding.code_snippet or 'N/A'}`
+- Rule: {finding.rule_id or 'N/A'}
+  """)
+  return '\n'.join(parts)
+
+      def _generate_fallback_comments(
+          self,
+          findings: List[Finding]
+      ) -> List[Dict]:
+          """Generate basic comments when LLM fails."""
+          return [
+              {
+                  "finding": finding,
+                  "title": finding.title,
+                  "explanation": finding.description,
+                  "impact": f"Severity: {finding.severity.value}",
+                  "suggestion": finding.suggestion or "Please review and address.",
+                  "code_example": None
+              }
+              for finding in findings
+          ]
+
+```
+
+```
+
+### Step 8: Comment Formatter and GitHub Poster
+
+We format review comments as markdown and post them to GitHub.
+
+````python
+# review/comment_formatter.py
+from typing import List, Dict, Optional
+from models import Finding, Severity, ReviewComment
+
+class CommentFormatter:
+    """Format review findings as GitHub-compatible markdown comments."""
+
+    SEVERITY_EMOJI = {
+        Severity.CRITICAL: "🚨",
+        Severity.HIGH: "⚠️",
+        Severity.MEDIUM: "📝",
+        Severity.LOW: "💡",
+        Severity.INFO: "ℹ️"
+    }
+
+    CATEGORY_LABELS = {
+        "security": "Security",
+        "quality": "Code Quality",
+        "performance": "Performance",
+        "style": "Style",
+        "test": "Testing"
+    }
+
+    def format_comment(
+        self,
+        finding: Finding,
+        llm_review: Dict,
+        commit_id: str
+    ) -> ReviewComment:
+        """
+        Format a finding as a GitHub review comment.
+
+        Args:
+            finding: The original finding
+            llm_review: LLM-generated review content
+            commit_id: The commit SHA for the comment
+
+        Returns:
+            Formatted ReviewComment ready for posting
+        """
+        emoji = self.SEVERITY_EMOJI.get(finding.severity, "📝")
+        category = self.CATEGORY_LABELS.get(finding.category.value, "Review")
+
+        # Build markdown body
+        body_parts = [
+            f"{emoji} **{category}**: {llm_review.get('title', finding.title)}",
+            "",
+            llm_review.get('explanation', finding.description),
+            ""
+        ]
+
+        # Add impact section
+        impact = llm_review.get('impact')
+        if impact:
+            body_parts.extend([
+                "**Impact:**",
+                impact,
+                ""
+            ])
+
+        # Add suggestion
+        suggestion = llm_review.get('suggestion', finding.suggestion)
+        if suggestion:
+            body_parts.extend([
+                "**Suggestion:**",
+                suggestion,
+                ""
+            ])
+
+        # Add code example if provided
+        code_example = llm_review.get('code_example')
+        if code_example:
+            body_parts.extend([
+                "**Example fix:**",
+                "```python",
+                code_example,
+                "```",
+                ""
+            ])
+
+        # Add metadata footer
+        body_parts.extend([
+            "---",
+            f"<sub>Rule: `{finding.rule_id or 'N/A'}` | "
+            f"Severity: {finding.severity.value}</sub>"
+        ])
+
+        return ReviewComment(
+            body='\n'.join(body_parts),
+            path=finding.file_path,
+            line=finding.line_number,
+            side="RIGHT",
+            commit_id=commit_id
+        )
+
+    def format_summary_comment(
+        self,
+        findings: List[Finding],
+        files_reviewed: int
+    ) -> str:
+        """
+        Format a summary comment for the entire review.
+
+        Args:
+            findings: All findings from the review
+            files_reviewed: Number of files analyzed
+
+        Returns:
+            Markdown summary comment
+        """
+        # Count by severity
+        severity_counts = {}
+        for finding in findings:
+            severity_counts[finding.severity] = (
+                severity_counts.get(finding.severity, 0) + 1
+            )
+
+        # Count by category
+        category_counts = {}
+        for finding in findings:
+            category_counts[finding.category.value] = (
+                category_counts.get(finding.category.value, 0) + 1
+            )
+
+        # Build summary
+        parts = [
+            "## 🤖 Automated Code Review Summary",
+            "",
+            f"Analyzed **{files_reviewed}** files and found "
+            f"**{len(findings)}** issues.",
+            ""
+        ]
+
+        # Severity breakdown
+        if severity_counts:
+            parts.append("### By Severity")
+            for severity in [Severity.CRITICAL, Severity.HIGH,
+                           Severity.MEDIUM, Severity.LOW, Severity.INFO]:
+                count = severity_counts.get(severity, 0)
+                if count > 0:
+                    emoji = self.SEVERITY_EMOJI[severity]
+                    parts.append(f"- {emoji} {severity.value.title()}: {count}")
+            parts.append("")
+
+        # Category breakdown
+        if category_counts:
+            parts.append("### By Category")
+            for category, count in sorted(category_counts.items()):
+                label = self.CATEGORY_LABELS.get(category, category)
+                parts.append(f"- {label}: {count}")
+            parts.append("")
+
+        # Add helpful note
+        parts.extend([
+            "---",
+            "<sub>This review was generated automatically. "
+            "Please verify suggestions before applying.</sub>"
+        ])
+
+        return '\n'.join(parts)
+````
+
+```python
+# review/comment_poster.py
+import asyncio
+from typing import List, Dict
+import logging
+
+from github.client import GitHubAppClient, RateLimitError
+from models import ReviewComment, Finding
+
+logger = logging.getLogger(__name__)
+
+class CommentPoster:
+    """Post review comments to GitHub with rate limiting."""
+
+    def __init__(self, github_client: GitHubAppClient):
+        self.github = github_client
+        self._rate_limit_delay = 0
+
+    async def post_review(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        installation_id: int,
+        comments: List[ReviewComment],
+        summary: str
+    ) -> Dict:
+        """
+        Post a complete review with comments to GitHub.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            pr_number: Pull request number
+            installation_id: GitHub App installation ID
+            comments: List of review comments
+            summary: Summary comment body
+
+        Returns:
+            Dict with posting results
+        """
+        results = {
+            "comments_posted": 0,
+            "comments_failed": 0,
+            "errors": []
+        }
+
+        if not comments:
+            logger.info("No comments to post")
+            return results
+
+        # Respect rate limits
+        if self._rate_limit_delay > 0:
+            logger.info(f"Waiting {self._rate_limit_delay}s for rate limit")
+            await asyncio.sleep(self._rate_limit_delay)
+            self._rate_limit_delay = 0
+
+        try:
+            # Post as a single review with all comments
+            # This is more efficient and creates a proper review
+            await self.github.create_review(
+                owner=owner,
+                repo=repo,
+                pr_number=pr_number,
+                installation_id=installation_id,
+                comments=comments,
+                body=summary,
+                event="COMMENT"  # or "REQUEST_CHANGES" for blocking
+            )
+
+            results["comments_posted"] = len(comments)
+            logger.info(f"Posted review with {len(comments)} comments")
+
+        except RateLimitError as e:
+            self._rate_limit_delay = e.retry_after
+            results["errors"].append(f"Rate limited: retry after {e.retry_after}s")
+            logger.warning(f"Rate limited, will retry after {e.retry_after}s")
+
+        except Exception as e:
+            # Fall back to posting comments individually
+            logger.warning(f"Batch review failed, posting individually: {e}")
+
+            for comment in comments:
+                try:
+                    await self._post_single_comment(
+                        owner, repo, pr_number, installation_id, comment
+                    )
+                    results["comments_posted"] += 1
+
+                    # Small delay between individual posts
+                    await asyncio.sleep(0.5)
+
+                except Exception as ce:
+                    results["comments_failed"] += 1
+                    results["errors"].append(str(ce))
+                    logger.error(f"Failed to post comment: {ce}")
+
+        return results
+
+    async def _post_single_comment(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        installation_id: int,
+        comment: ReviewComment
+    ):
+        """Post a single review comment."""
+        await self.github.create_review_comment(
+            owner=owner,
+            repo=repo,
+            pr_number=pr_number,
+            installation_id=installation_id,
+            comment=comment
+        )
+```
+
+### Step 9: Review Orchestrator
+
+The orchestrator coordinates all components to execute a complete review.
+
+```python
+# review/orchestrator.py
+import asyncio
+from typing import List, Optional
+import logging
+from datetime import datetime
+
+from config import get_settings
+from models import (
+    ReviewTask, ReviewStatus, Finding, FileDiff, ReviewComment
+)
+from github.client import GitHubAppClient
+from analysis.diff_parser import DiffParser
+from analysis.ast_analyzer import ASTAnalyzer
+from analysis.security_scanner import SecurityScanner
+from review.llm_reviewer import LLMReviewer
+from review.comment_formatter import CommentFormatter
+from review.comment_poster import CommentPoster
+from queue.task_queue import task_queue
+
+logger = logging.getLogger(__name__)
+
+class ReviewOrchestrator:
+    """
+    Orchestrate the complete code review process.
+
+    Coordinates:
+    1. Fetching PR diff and file contents
+    2. Running all analyzers
+    3. Generating LLM-powered comments
+    4. Posting review to GitHub
+    """
+
+    SUPPORTED_EXTENSIONS = {'.py'}  # Start with Python, extend later
+
+    def __init__(self):
+        self.settings = get_settings()
+        self.github = GitHubAppClient()
+        self.diff_parser = DiffParser()
+        self.security_scanner = SecurityScanner()
+        self.llm_reviewer = LLMReviewer()
+        self.comment_formatter = CommentFormatter()
+        self.comment_poster = CommentPoster(self.github)
+
+    async def run_review(self, task_id: str) -> None:
+        """
+        Execute a complete code review for a PR.
+
+        Args:
+            task_id: ID of the review task to process
+        """
+        # Get task from queue
+        task = await task_queue.get(task_id)
+        if not task:
+            logger.error(f"Task {task_id} not found")
+            return
+
+        try:
+            # Update status
+            task.status = ReviewStatus.PROCESSING
+            await task_queue.update(task)
+
+            logger.info(f"Starting review for PR #{task.pr_number} in {task.repository}")
+
+            # Parse repository info
+            owner, repo = task.repository.split('/')
+
+            # Fetch PR files
+            files = await self.github.get_pr_files(
+                owner, repo, task.pr_number, task.installation_id
+            )
+
+            # Filter to supported files
+            reviewable_files = self._filter_reviewable_files(files)
+
+            if not reviewable_files:
+                logger.info("No reviewable files in PR")
+                task.status = ReviewStatus.COMPLETED
+                task.completed_at = datetime.utcnow()
+                await task_queue.update(task)
+                return
+
+            # Analyze each file
+            all_findings: List[Finding] = []
+
+            for file_diff in reviewable_files:
+                findings = await self._analyze_file(
+                    owner, repo, task.head_sha, task.installation_id, file_diff
+                )
+                all_findings.extend(findings)
+
+            # Store findings
+            task.findings = all_findings
+
+            if not all_findings:
+                logger.info("No issues found in PR")
+                task.status = ReviewStatus.COMPLETED
+                task.completed_at = datetime.utcnow()
+                await task_queue.update(task)
+                return
+
+            # Generate and post review comments
+            await self._generate_and_post_review(
+                owner, repo, task.pr_number, task.installation_id,
+                task.head_sha, all_findings, reviewable_files, len(reviewable_files)
+            )
+
+            # Mark complete
+            task.status = ReviewStatus.COMPLETED
+            task.completed_at = datetime.utcnow()
+            task.comments_posted = len(all_findings)
+            await task_queue.update(task)
+
+            logger.info(
+                f"Review complete for PR #{task.pr_number}: "
+                f"{len(all_findings)} findings posted"
+            )
+
+        except Exception as e:
+            logger.exception(f"Review failed for task {task_id}: {e}")
+            task.status = ReviewStatus.FAILED
+            task.error_message = str(e)
+            task.completed_at = datetime.utcnow()
+            await task_queue.update(task)
+
+    def _filter_reviewable_files(self, files: List[FileDiff]) -> List[FileDiff]:
+        """Filter files to those we can review."""
+        reviewable = []
+
+        for file in files:
+            # Skip deleted files
+            if file.status == 'removed':
+                continue
+
+            # Check extension
+            ext = '.' + file.path.rsplit('.', 1)[-1] if '.' in file.path else ''
+            if ext not in self.SUPPORTED_EXTENSIONS:
+                continue
+
+            # Skip files that are too large
+            if file.additions + file.deletions > self.settings.max_file_size_kb * 10:
+                logger.info(f"Skipping large file: {file.path}")
+                continue
+
+            reviewable.append(file)
+
+        # Limit number of files
+        return reviewable[:self.settings.max_files_per_review]
+
+    async def _analyze_file(
+        self,
+        owner: str,
+        repo: str,
+        ref: str,
+        installation_id: int,
+        file_diff: FileDiff
+    ) -> List[Finding]:
+        """Analyze a single file for issues."""
+        findings = []
+
+        # Get full file content
+        content = await self.github.get_file_content(
+            owner, repo, file_diff.path, ref, installation_id
+        )
+
+        if not content:
+            logger.warning(f"Could not fetch content for {file_diff.path}")
+            return findings
+
+        # Parse the diff to get changed lines
+        parsed = self.diff_parser.parse_patch(
+            file_diff.patch or '',
+            file_diff.path,
+            file_diff.status
+        )
+
+        # Only analyze changed lines
+        changed_lines = parsed.added_lines
+
+        if not changed_lines:
+            return findings
+
+        # Run AST analysis
+        ast_analyzer = ASTAnalyzer(file_diff.path, changed_lines)
+        findings.extend(ast_analyzer.analyze(content))
+
+        # Run security scanning
+        security_findings = self.security_scanner.scan(
+            content, file_diff.path, changed_lines
+        )
+        findings.extend(security_findings)
+
+        # Deduplicate findings on same line
+        findings = self._deduplicate_findings(findings)
+
+        return findings
+
+    def _deduplicate_findings(self, findings: List[Finding]) -> List[Finding]:
+        """Remove duplicate findings on the same line."""
+        seen = set()
+        unique = []
+
+        for finding in findings:
+            key = (finding.file_path, finding.line_number, finding.rule_id)
+            if key not in seen:
+                seen.add(key)
+                unique.append(finding)
+
+        return unique
+
+    async def _generate_and_post_review(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        installation_id: int,
+        commit_id: str,
+        findings: List[Finding],
+        files: List[FileDiff],
+        files_reviewed: int
+    ) -> None:
+        """Generate LLM comments and post review."""
+
+        # Group findings by file for context
+        findings_by_file: dict = {}
+        for finding in findings:
+            if finding.file_path not in findings_by_file:
+                findings_by_file[finding.file_path] = []
+            findings_by_file[finding.file_path].append(finding)
+
+        # Generate comments for each file
+        all_comments: List[ReviewComment] = []
+
+        for file_path, file_findings in findings_by_file.items():
+            # Get file content for context
+            content = await self.github.get_file_content(
+                owner, repo, file_path, commit_id, installation_id
+            )
+
+            if not content:
+                continue
+
+            # Generate LLM-powered comments
+            llm_reviews = await self.llm_reviewer.generate_review_comments(
+                file_findings, content, file_path
+            )
+
+            # Format as GitHub comments
+            for review in llm_reviews:
+                comment = self.comment_formatter.format_comment(
+                    review['finding'],
+                    review,
+                    commit_id
+                )
+                all_comments.append(comment)
+
+        # Generate summary
+        summary = self.comment_formatter.format_summary_comment(
+            findings, files_reviewed
+        )
+
+        # Post to GitHub
+        await self.comment_poster.post_review(
+            owner, repo, pr_number, installation_id,
+            all_comments, summary
+        )
+```
+
+### Step 10: Background Task Queue
+
+We use an in-memory queue for simplicity, but this can be replaced with Redis or a database for production.
+
+```python
+# queue/task_queue.py
+import asyncio
+from typing import Dict, Optional
+from datetime import datetime
+import logging
+
+from models import ReviewTask, ReviewStatus
+
+logger = logging.getLogger(__name__)
+
+class InMemoryTaskQueue:
+    """
+    Simple in-memory task queue for review tasks.
+
+    For production, replace with Redis, PostgreSQL, or a proper
+    message queue like RabbitMQ or AWS SQS.
+    """
+
+    def __init__(self):
+        self._tasks: Dict[str, ReviewTask] = {}
+        self._lock = asyncio.Lock()
+
+    async def enqueue(self, task: ReviewTask) -> str:
+        """Add a task to the queue."""
+        async with self._lock:
+            self._tasks[task.id] = task
+            logger.info(f"Enqueued task {task.id}")
+            return task.id
+
+    async def get(self, task_id: str) -> Optional[ReviewTask]:
+        """Get a task by ID."""
+        return self._tasks.get(task_id)
+
+    async def update(self, task: ReviewTask) -> None:
+        """Update a task in the queue."""
+        async with self._lock:
+            self._tasks[task.id] = task
+
+    async def get_pending(self) -> list:
+        """Get all pending tasks."""
+        return [
+            t for t in self._tasks.values()
+            if t.status == ReviewStatus.PENDING
+        ]
+
+    async def cleanup_old(self, max_age_hours: int = 24) -> int:
+        """Remove completed tasks older than max_age_hours."""
+        async with self._lock:
+            now = datetime.utcnow()
+            to_remove = []
+
+            for task_id, task in self._tasks.items():
+                if task.completed_at:
+                    age = (now - task.completed_at).total_seconds() / 3600
+                    if age > max_age_hours:
+                        to_remove.append(task_id)
+
+            for task_id in to_remove:
+                del self._tasks[task_id]
+
+            return len(to_remove)
+
+# Global queue instance
+task_queue = InMemoryTaskQueue()
+```
+
+### Step 11: FastAPI Application
+
+Bringing it all together with the FastAPI application.
+
+```python
+# main.py
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+import logging
+import asyncio
+
+from webhook.handler import router as webhook_router
+from queue.task_queue import task_queue
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager."""
+    logger.info("Starting Code Review Bot")
+
+    # Start background cleanup task
+    cleanup_task = asyncio.create_task(periodic_cleanup())
+
+    yield
+
+    # Cleanup on shutdown
+    cleanup_task.cancel()
+    logger.info("Shutting down Code Review Bot")
+
+async def periodic_cleanup():
+    """Periodically clean up old tasks."""
+    while True:
+        try:
+            await asyncio.sleep(3600)  # Every hour
+            removed = await task_queue.cleanup_old(max_age_hours=24)
+            if removed:
+                logger.info(f"Cleaned up {removed} old tasks")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Cleanup error: {e}")
+
+app = FastAPI(
+    title="Code Review Bot",
+    description="Automated GitHub PR code review with AI-powered analysis",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS middleware (adjust for your deployment)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(webhook_router, tags=["webhooks"])
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}
+
+@app.get("/reviews/{review_id}")
+async def get_review_status(review_id: str):
+    """Get the status of a review task."""
+    task = await task_queue.get(review_id)
+
+    if not task:
+        return {"error": "Review not found"}, 404
+
+    return {
+        "review_id": task.id,
+        "status": task.status.value,
+        "pr_number": task.pr_number,
+        "repository": task.repository,
+        "findings_count": len(task.findings),
+        "comments_posted": task.comments_posted,
+        "created_at": task.created_at.isoformat(),
+        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        "error": task.error_message
+    }
+
+@app.get("/stats")
+async def get_stats():
+    """Get bot statistics."""
+    tasks = list(task_queue._tasks.values())
+
+    return {
+        "total_reviews": len(tasks),
+        "pending": sum(1 for t in tasks if t.status == "pending"),
+        "processing": sum(1 for t in tasks if t.status == "processing"),
+        "completed": sum(1 for t in tasks if t.status == "completed"),
+        "failed": sum(1 for t in tasks if t.status == "failed"),
+        "total_findings": sum(len(t.findings) for t in tasks)
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+### Step 12: Test Coverage Analyzer
+
+Analyze whether new code has corresponding tests.
+
+```python
+# analysis/test_analyzer.py
+import ast
+import re
+from typing import List, Dict, Set, Optional
+from dataclasses import dataclass
+import logging
+
+from models import Finding, Severity, FindingCategory
+
+logger = logging.getLogger(__name__)
+
+@dataclass
+class FunctionInfo:
+    """Information about a function definition."""
+    name: str
+    line_number: int
+    is_public: bool
+    is_test: bool
+    complexity: int
+
+class TestCoverageAnalyzer:
+    """
+    Analyze test coverage for new code.
+
+    Checks:
+    - New public functions have corresponding tests
+    - Test file exists for new modules
+    - Test naming conventions are followed
+    """
+
+    TEST_FILE_PATTERNS = [
+        r'test_.*\.py$',
+        r'.*_test\.py$',
+        r'tests/.*\.py$',
+    ]
+
+    def __init__(self):
+        self.test_patterns = [re.compile(p) for p in self.TEST_FILE_PATTERNS]
+
+    def analyze(
+        self,
+        source_code: str,
+        file_path: str,
+        changed_lines: Dict[int, str],
+        all_pr_files: List[str]
+    ) -> List[Finding]:
+        """
+        Analyze test coverage for changed code.
+
+        Args:
+            source_code: The source code content
+            file_path: Path to the file
+            changed_lines: Dict of changed line numbers
+            all_pr_files: List of all files in the PR
+
+        Returns:
+            List of findings about test coverage
+        """
+        findings = []
+
+        # Skip if this is a test file
+        if self._is_test_file(file_path):
+            return findings
+
+        # Parse the source code
+        try:
+            tree = ast.parse(source_code)
+        except SyntaxError:
+            return findings
+
+        # Find new public functions
+        new_functions = self._find_new_functions(tree, changed_lines)
+
+        if not new_functions:
+            return findings
+
+        # Check if corresponding test file exists in PR
+        test_file = self._find_test_file(file_path, all_pr_files)
+
+        if not test_file:
+            # No test file in PR - suggest adding tests
+            for func in new_functions:
+                if func.is_public and not func.is_test:
+                    findings.append(Finding(
+                        file_path=file_path,
+                        line_number=func.line_number,
+                        severity=Severity.MEDIUM,
+                        category=FindingCategory.TEST,
+                        title="New function without tests",
+                        description=f"Function `{func.name}` was added but no "
+                                   f"corresponding test file was found in this PR.",
+                        suggestion=f"Consider adding tests in `test_{file_path.split('/')[-1]}` "
+                                  f"or `{file_path.replace('.py', '_test.py')}`",
+                        rule_id="TEST001"
+                    ))
+
+        return findings
+
+    def _is_test_file(self, file_path: str) -> bool:
+        """Check if a file is a test file."""
+        return any(p.search(file_path) for p in self.test_patterns)
+
+    def _find_new_functions(
+        self,
+        tree: ast.AST,
+        changed_lines: Dict[int, str]
+    ) -> List[FunctionInfo]:
+        """Find functions that were added or modified."""
+        functions = []
+
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                # Check if function definition line is in changed lines
+                if node.lineno in changed_lines:
+                    functions.append(FunctionInfo(
+                        name=node.name,
+                        line_number=node.lineno,
+                        is_public=not node.name.startswith('_'),
+                        is_test=node.name.startswith('test_'),
+                        complexity=self._calculate_complexity(node)
+                    ))
+
+        return functions
+
+    def _find_test_file(
+        self,
+        source_file: str,
+        all_files: List[str]
+    ) -> Optional[str]:
+        """Find corresponding test file in PR files."""
+        # Generate possible test file names
+        base_name = source_file.split('/')[-1].replace('.py', '')
+        possible_names = [
+            f'test_{base_name}.py',
+            f'{base_name}_test.py',
+            f'tests/test_{base_name}.py',
+            f'tests/{base_name}_test.py',
+        ]
+
+        for test_name in possible_names:
+            for pr_file in all_files:
+                if pr_file.endswith(test_name):
+                    return pr_file
+
+        return None
+
+    def _calculate_complexity(self, node: ast.AST) -> int:
+        """Calculate cyclomatic complexity."""
+        complexity = 1
+        for child in ast.walk(node):
+            if isinstance(child, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
+                complexity += 1
+            elif isinstance(child, ast.BoolOp):
+                complexity += len(child.values) - 1
+        return complexity
+```
+
+---
+
+## Testing the Bot
+
+### Unit Tests
+
+```python
+# tests/test_webhook_handler.py
+import pytest
+import hmac
+import hashlib
+import json
+from fastapi.testclient import TestClient
+
+from main import app
+from webhook.handler import WebhookSignatureValidator
+
+client = TestClient(app)
+
+class TestWebhookSignatureValidator:
+    """Test webhook signature validation."""
+
+    def test_valid_signature(self):
+        """Test that valid signatures are accepted."""
+        secret = "test_secret"
+        validator = WebhookSignatureValidator(secret)
+
+        payload = b'{"test": "data"}'
+        signature = "sha256=" + hmac.new(
+            secret.encode(),
+            payload,
+            hashlib.sha256
+        ).hexdigest()
+
+        assert validator.validate(payload, signature) is True
+
+    def test_invalid_signature(self):
+        """Test that invalid signatures are rejected."""
+        validator = WebhookSignatureValidator("test_secret")
+
+        payload = b'{"test": "data"}'
+        signature = "sha256=invalid_signature"
+
+        assert validator.validate(payload, signature) is False
+
+    def test_missing_prefix(self):
+        """Test that signatures without sha256= prefix are rejected."""
+        validator = WebhookSignatureValidator("test_secret")
+
+        payload = b'{"test": "data"}'
+        signature = "just_a_hash"
+
+        assert validator.validate(payload, signature) is False
+
+    def test_empty_signature(self):
+        """Test that empty signatures are rejected."""
+        validator = WebhookSignatureValidator("test_secret")
+
+        assert validator.validate(b'data', "") is False
+        assert validator.validate(b'data', None) is False
+
+
+# tests/test_diff_parser.py
+import pytest
+from analysis.diff_parser import DiffParser
+
+class TestDiffParser:
+    """Test diff parsing functionality."""
+
+    def test_parse_simple_addition(self):
+        """Test parsing a simple file addition."""
+        parser = DiffParser()
+
+        patch = """@@ -0,0 +1,3 @@
++def hello():
++    print("Hello")
++    return True"""
+
+        result = parser.parse_patch(patch, "test.py", "added")
+
+        assert result.path == "test.py"
+        assert len(result.hunks) == 1
+        assert 1 in result.added_lines
+        assert 2 in result.added_lines
+        assert 3 in result.added_lines
+
+    def test_parse_modification(self):
+        """Test parsing a file modification."""
+        parser = DiffParser()
+
+        patch = """@@ -10,4 +10,5 @@ def existing():
+     pass
+
+ def modified():
+-    return False
++    # Updated implementation
++    return True"""
+
+        result = parser.parse_patch(patch, "test.py", "modified")
+
+        assert len(result.hunks) == 1
+        assert 13 in result.added_lines  # New comment line
+        assert 14 in result.added_lines  # New return line
+
+    def test_get_reviewable_lines(self):
+        """Test getting lines that can receive comments."""
+        parser = DiffParser()
+
+        patch = """@@ -1,3 +1,4 @@
+ context line
++added line
+ more context
++another added"""
+
+        result = parser.parse_patch(patch, "test.py", "modified")
+        reviewable = parser.get_reviewable_lines(result)
+
+        # Should include context and added lines
+        assert 1 in reviewable  # context
+        assert 2 in reviewable  # added
+        assert 3 in reviewable  # context
+        assert 4 in reviewable  # added
+
+
+# tests/test_ast_analyzer.py
+import pytest
+from analysis.ast_analyzer import ASTAnalyzer
+from models import Severity
+
+class TestASTAnalyzer:
+    """Test AST-based code analysis."""
+
+    def test_detect_mutable_default(self):
+        """Test detection of mutable default arguments."""
+        code = '''
+def bad_function(items=[]):
+    items.append(1)
+    return items
+'''
+        analyzer = ASTAnalyzer("test.py", {2: "def bad_function(items=[]):"})
+        findings = analyzer.analyze(code)
+
+        assert len(findings) >= 1
+        mutable_finding = next(
+            (f for f in findings if f.rule_id == "MUTABLE_DEFAULT"),
+            None
+        )
+        assert mutable_finding is not None
+        assert mutable_finding.severity == Severity.HIGH
+
+    def test_detect_bare_except(self):
+        """Test detection of bare except clauses."""
+        code = '''
+def risky():
+    try:
+        do_something()
+    except:
+        pass
+'''
+        analyzer = ASTAnalyzer("test.py", {5: "    except:"})
+        findings = analyzer.analyze(code)
+
+        bare_except = next(
+            (f for f in findings if f.rule_id == "BARE_EXCEPT"),
+            None
+        )
+        assert bare_except is not None
+
+    def test_no_false_positives_on_unchanged_lines(self):
+        """Test that we don't report issues on unchanged lines."""
+        code = '''
+def good_function():
+    pass
+
+def bad_function(items=[]):
+    pass
+'''
+        # Only line 2 changed, not line 5
+        analyzer = ASTAnalyzer("test.py", {2: "def good_function():"})
+        findings = analyzer.analyze(code)
+
+        # Should not report the mutable default on line 5
+        mutable_findings = [f for f in findings if f.rule_id == "MUTABLE_DEFAULT"]
+        assert len(mutable_findings) == 0
+
+
+# tests/test_security_scanner.py
+import pytest
+from analysis.security_scanner import SecurityScanner
+from models import Severity
+
+class TestSecurityScanner:
+    """Test security vulnerability scanning."""
+
+    def test_detect_hardcoded_password(self):
+        """Test detection of hardcoded passwords."""
+        scanner = SecurityScanner(use_bandit=False)
+
+        code = '''
+password = "super_secret_123"
+'''
+        findings = scanner.scan(code, "config.py", {2: 'password = "super_secret_123"'})
+
+        assert len(findings) >= 1
+        pwd_finding = next(
+            (f for f in findings if "password" in f.title.lower()),
+            None
+        )
+        assert pwd_finding is not None
+        assert pwd_finding.severity == Severity.CRITICAL
+
+    def test_detect_eval_usage(self):
+        """Test detection of eval() usage."""
+        scanner = SecurityScanner(use_bandit=False)
+
+        code = '''
+result = eval(user_input)
+'''
+        findings = scanner.scan(code, "handler.py", {2: "result = eval(user_input)"})
+
+        eval_finding = next(
+            (f for f in findings if "eval" in f.title.lower()),
+            None
+        )
+        assert eval_finding is not None
+        assert eval_finding.severity == Severity.HIGH
+
+    def test_detect_sql_injection(self):
+        """Test detection of SQL injection patterns."""
+        scanner = SecurityScanner(use_bandit=False)
+
+        code = '''
+cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
+'''
+        findings = scanner.scan(
+            code, "db.py",
+            {2: 'cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")'}
+        )
+
+        sql_finding = next(
+            (f for f in findings if "sql" in f.title.lower()),
+            None
+        )
+        assert sql_finding is not None
+
+    def test_no_false_positive_on_safe_code(self):
+        """Test that safe code doesn't trigger findings."""
+        scanner = SecurityScanner(use_bandit=False)
+
+        code = '''
+import os
+api_key = os.environ.get("API_KEY")
+'''
+        findings = scanner.scan(code, "config.py", {3: 'api_key = os.environ.get("API_KEY")'})
+
+        # Should not flag environment variable usage
+        key_findings = [f for f in findings if "api" in f.title.lower()]
+        assert len(key_findings) == 0
+```
+
+### Integration Tests
+
+```python
+# tests/test_integration.py
+import pytest
+import asyncio
+from unittest.mock import AsyncMock, patch, MagicMock
+
+from review.orchestrator import ReviewOrchestrator
+from models import ReviewTask, ReviewStatus, FileDiff
+
+class TestReviewOrchestrator:
+    """Integration tests for the review orchestrator."""
+
+    @pytest.fixture
+    def orchestrator(self):
+        return ReviewOrchestrator()
+
+    @pytest.fixture
+    def sample_task(self):
+        return ReviewTask(
+            pr_number=123,
+            repository="owner/repo",
+            head_sha="abc123",
+            base_sha="def456",
+            installation_id=12345
+        )
+
+    @pytest.mark.asyncio
+    async def test_filter_reviewable_files(self, orchestrator):
+        """Test that only Python files are reviewed."""
+        files = [
+            FileDiff(path="src/main.py", status="modified", additions=10, deletions=5),
+            FileDiff(path="README.md", status="modified", additions=5, deletions=0),
+            FileDiff(path="src/utils.py", status="added", additions=50, deletions=0),
+            FileDiff(path="package.json", status="modified", additions=1, deletions=1),
+            FileDiff(path="deleted.py", status="removed", additions=0, deletions=100),
+        ]
+
+        reviewable = orchestrator._filter_reviewable_files(files)
+
+        assert len(reviewable) == 2
+        assert all(f.path.endswith('.py') for f in reviewable)
+        assert all(f.status != 'removed' for f in reviewable)
+
+    @pytest.mark.asyncio
+    async def test_deduplicate_findings(self, orchestrator):
+        """Test that duplicate findings are removed."""
+        from models import Finding, Severity, FindingCategory
+
+        findings = [
+            Finding(
+                file_path="test.py",
+                line_number=10,
+                severity=Severity.HIGH,
+                category=FindingCategory.SECURITY,
+                title="Issue 1",
+                description="Description",
+                rule_id="SEC001"
+            ),
+            Finding(
+                file_path="test.py",
+                line_number=10,
+                severity=Severity.HIGH,
+                category=FindingCategory.SECURITY,
+                title="Issue 1 duplicate",
+                description="Same issue",
+                rule_id="SEC001"
+            ),
+            Finding(
+                file_path="test.py",
+                line_number=20,
+                severity=Severity.MEDIUM,
+                category=FindingCategory.QUALITY,
+                title="Different issue",
+                description="Different",
+                rule_id="QUAL001"
+            ),
+        ]
+
+        unique = orchestrator._deduplicate_findings(findings)
+
+        assert len(unique) == 2
+
+    @pytest.mark.asyncio
+    async def test_full_review_flow(self, orchestrator, sample_task):
+        """Test the complete review flow with mocked GitHub."""
+        with patch.object(orchestrator.github, 'get_pr_files') as mock_files, \
+             patch.object(orchestrator.github, 'get_file_content') as mock_content, \
+             patch.object(orchestrator.comment_poster, 'post_review') as mock_post, \
+             patch('queue.task_queue.task_queue') as mock_queue:
+
+            # Setup mocks
+            mock_queue.get = AsyncMock(return_value=sample_task)
+            mock_queue.update = AsyncMock()
+
+            mock_files.return_value = [
+                FileDiff(
+                    path="src/handler.py",
+                    status="modified",
+                    additions=10,
+                    deletions=2,
+                    patch="@@ -1,3 +1,4 @@\n+password = 'secret123'"
+                )
+            ]
+
+            mock_content.return_value = "password = 'secret123'\n"
+            mock_post.return_value = {"comments_posted": 1}
+
+            # Run review
+            await orchestrator.run_review(sample_task.id)
+
+            # Verify interactions
+            mock_files.assert_called_once()
+            mock_content.assert_called()
+            mock_post.assert_called_once()
+```
+
+### Running Tests
+
+```bash
+# Install test dependencies
+pip install pytest pytest-asyncio pytest-cov
+
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=. --cov-report=html
+
+# Run specific test file
+pytest tests/test_security_scanner.py -v
+
+# Run tests matching a pattern
+pytest tests/ -k "security" -v
+```
+
+---
+
+## Deployment Guide
+
+### Docker Deployment
+
+```dockerfile
+# Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Bandit for security scanning
+RUN pip install bandit
+
+# Copy application code
+COPY . .
+
+# Create non-root user
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+
+services:
+  code-review-bot:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - GITHUB_APP_ID=${GITHUB_APP_ID}
+      - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+
+### GitHub App Setup
+
+1. **Create a GitHub App**:
+   - Go to GitHub Settings → Developer settings → GitHub Apps
+   - Click "New GitHub App"
+   - Set the following:
+     - **Name**: Your Code Review Bot
+     - **Homepage URL**: Your deployment URL
+     - **Webhook URL**: `https://your-domain.com/webhook/github`
+     - **Webhook secret**: Generate a secure random string
+     - **Permissions**:
+       - Pull requests: Read & Write
+       - Contents: Read
+       - Metadata: Read
+     - **Subscribe to events**: Pull request
+
+2. **Generate Private Key**:
+   - After creating the app, generate a private key
+   - Download and store securely
+
+3. **Install the App**:
+   - Install on your repositories
+   - Note the installation ID
+
+### Environment Variables
+
+```bash
+# .env.example
+GITHUB_APP_ID=123456
+GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
+GITHUB_WEBHOOK_SECRET=your_webhook_secret_here
+OPENAI_API_KEY=sk-...
+
+# Optional configuration
+OPENAI_MODEL=gpt-4o
+MAX_FILES_PER_REVIEW=20
+MAX_FILE_SIZE_KB=500
+REVIEW_BATCH_SIZE=5
+SECURITY_SCAN_ENABLED=true
+```
+
+---
+
+## Extension Challenges
+
+<Callout type="tip">
+  These challenges extend the base project with advanced features. Each builds
+  on the core implementation and introduces new concepts.
+</Callout>
+
+### Challenge 1: Multi-Language Support
+
+Extend the bot to review TypeScript, Go, and Rust code.
+
+**Requirements**:
+
+- Add language detection based on file extension
+- Implement language-specific AST parsers
+- Create language-specific security rules
+- Map findings to language-appropriate suggestions
+
+**Hints**:
+
+```python
+# Language-specific analyzer registry
+ANALYZERS = {
+    '.py': PythonAnalyzer,
+    '.ts': TypeScriptAnalyzer,
+    '.tsx': TypeScriptAnalyzer,
+    '.go': GoAnalyzer,
+    '.rs': RustAnalyzer,
+}
+
+def get_analyzer(file_path: str) -> Optional[BaseAnalyzer]:
+    ext = '.' + file_path.rsplit('.', 1)[-1]
+    analyzer_class = ANALYZERS.get(ext)
+    return analyzer_class() if analyzer_class else None
+```
+
+### Challenge 2: Learning from Feedback
+
+Implement a feedback loop where the bot learns from developer responses.
+
+**Requirements**:
+
+- Track which comments are resolved vs dismissed
+- Store feedback in a database
+- Adjust severity thresholds based on feedback
+- Reduce false positives over time
+
+**Architecture**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Feedback Learning System                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Comment Posted → Developer Response → Feedback Stored      │
+│                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │  Resolved   │    │  Dismissed  │    │   Ignored   │     │
+│  │  (Helpful)  │    │  (False+)   │    │  (Neutral)  │     │
+│  └─────────────┘    └─────────────┘    └─────────────┘     │
+│         │                  │                  │             │
+│         ▼                  ▼                  ▼             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              Rule Confidence Adjuster                │   │
+│  │  - Increase weight for helpful rules                 │   │
+│  │  - Decrease weight for false positive rules          │   │
+│  │  - Track per-repository preferences                  │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Challenge 3: Custom Rule Configuration
+
+Allow repositories to configure custom rules via a `.codereview.yml` file.
+
+**Example Configuration**:
+
+```yaml
+# .codereview.yml
+version: 1
+
+rules:
+  # Disable specific rules
+  disabled:
+    - NONE_COMPARE
+    - ASSERT_PROD
+
+  # Adjust severity levels
+  severity_overrides:
+    MUTABLE_DEFAULT: low
+    BARE_EXCEPT: critical
+
+  # Custom patterns to detect
+  custom_patterns:
+    - id: CUSTOM001
+      name: "Deprecated API Usage"
+      pattern: "old_api\\.deprecated_method"
+      severity: high
+      message: "Use new_api.modern_method() instead"
+
+  # Files to exclude
+  exclude:
+    - "tests/**"
+    - "migrations/**"
+    - "*.generated.py"
+
+  # Minimum severity to report
+  min_severity: low
+
+  # Maximum comments per PR
+  max_comments: 20
+```
+
+### Challenge 4: Performance Profiling Integration
+
+Add performance analysis for Python code.
+
+**Requirements**:
+
+- Detect O(n²) patterns in loops
+- Identify unnecessary list copies
+- Flag inefficient string concatenation
+- Suggest generator expressions over list comprehensions
+
+**Detection Patterns**:
+
+```python
+# Detect nested loops over same collection (O(n²))
+for item in items:
+    for other in items:  # ⚠️ O(n²) complexity
+        if item != other:
+            process(item, other)
+
+# Suggest: Use itertools.combinations instead
+from itertools import combinations
+for item, other in combinations(items, 2):
+    process(item, other)
+```
+
+### Challenge 5: PR Summary Generation
+
+Generate an executive summary of the PR for reviewers.
+
+**Requirements**:
+
+- Summarize what the PR does (not just what changed)
+- Identify potential risks
+- Suggest reviewers based on code ownership
+- Estimate review complexity
+
+**Example Output**:
+
+```markdown
+## 📋 PR Summary
+
+**What this PR does:**
+This PR adds user authentication via OAuth2, including:
+
+- New `AuthService` class for token management
+- Login/logout endpoints in the API
+- Session middleware for request authentication
+
+**Risk Assessment:** 🟡 Medium
+
+- Touches authentication logic (security-sensitive)
+- Adds new external dependency (oauth2-client)
+- No migration required
+
+**Suggested Reviewers:**
+
+- @security-team (authentication changes)
+- @backend-lead (API changes)
+
+**Review Complexity:** Medium (~30 min)
+
+- 5 files changed
+- 3 new classes
+- 2 security-sensitive areas
+```
+
+### Challenge 6: Automated Fix PRs
+
+Automatically create fix PRs for simple issues.
+
+**Requirements**:
+
+- Identify auto-fixable issues (formatting, simple refactors)
+- Generate fix commits
+- Create PR with fixes
+- Link to original PR
+
+**Workflow**:
+
+```
+Original PR → Bot Review → Auto-fixable Issues Found
+                              ↓
+                    Create Fix Branch
+                              ↓
+                    Apply Automated Fixes
+                              ↓
+                    Create Fix PR → Link to Original
+```
+
+---
+
+## Summary
+
+In this project, you built a production-grade GitHub code review bot that:
+
+1. **Receives webhooks** securely with HMAC signature validation
+2. **Parses PR diffs** to identify exactly what changed
+3. **Analyzes code** using AST for deep structural inspection
+4. **Scans for security** vulnerabilities with Bandit and custom rules
+5. **Generates reviews** using LLM with structured outputs
+6. **Posts comments** on specific lines with actionable suggestions
+
+**Key Takeaways**:
+
+- **Webhook security** is critical—always validate signatures
+- **AST analysis** catches issues that regex cannot
+- **LLM structured outputs** ensure consistent, parseable responses
+- **Background processing** prevents webhook timeouts
+- **Rate limiting** is essential for GitHub API compliance
+
+**Production Considerations**:
+
+- Replace in-memory queue with Redis or PostgreSQL
+- Add monitoring and alerting (Prometheus, Grafana)
+- Implement retry logic with exponential backoff
+- Add caching for file contents and LLM responses
+- Consider multi-region deployment for reliability
+
+<Callout type="success">
+  **Congratulations!** You've built a sophisticated code review automation
+  system. This project demonstrates advanced integration patterns, security
+  practices, and AI-powered code analysis that are directly applicable to
+  enterprise development workflows.
+</Callout>
+
+## Further Reading
+
+- [GitHub Apps Documentation](https://docs.github.com/en/apps)
+- [Python AST Module](https://docs.python.org/3/library/ast.html)
+- [Bandit Security Scanner](https://bandit.readthedocs.io/)
+- [OpenAI Structured Outputs](https://platform.openai.com/docs/guides/structured-outputs)
+- [FastAPI Background Tasks](https://fastapi.tiangolo.com/tutorial/background-tasks/)

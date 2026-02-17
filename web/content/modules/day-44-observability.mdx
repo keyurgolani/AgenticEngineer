@@ -33,15 +33,24 @@ day: 44
 
 Debugging agentic systems is uniquely challenging. Agents fail silently, loop endlessly, or produce subtly incorrect outputs. The only clue is often buried in massive, nested JSON logs.
 
-{/* IMAGE_PLACEHOLDER: Create an illustration showing the "debugging nightmare":
-
-- Left side: A confused developer looking at a massive wall of nested JSON logs on multiple monitors
-- Right side: The same developer smiling while viewing a clean, visual trace diagram with clear step-by-step flow
-- Visual metaphor: Chaos vs. Clarity
-- Style: Modern tech illustration with a touch of humor
-- Color scheme: Dark background with syntax highlighting colors
-- Placement: Between the opening paragraph and the Key Insight callout
-  */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Debugging Nightmare"
+        A[JSON Logs] --> B{Confusion}
+        B --> C[Hidden Errors]
+    end
+    
+    subgraph "Observability Bliss"
+        D[Trace View] --> E{Clarity}
+        E --> F[Instant Fix]
+    end
+    
+    style A fill:#ffcdd2
+    style D fill:#c8e6c9
+`}
+  caption="From chaos to clarity: The power of structured observability."
+/>
 
 > **Key Insight**: Traditional logging is insufficient. You need specialized observability tools designed for multi-step, non-deterministic workflows.
 
@@ -51,15 +60,18 @@ Debugging agentic systems is uniquely challenging. Agents fail silently, loop en
 
 ## 44.1 The Observability Stack
 
-{/* IMAGE_PLACEHOLDER: Create a modern observability dashboard screenshot showing:
-
-- Top row: Key metrics cards (Request Rate, Error Rate, P95 Latency, Daily Cost)
-- Middle section: Real-time trace timeline with color-coded spans (LLM calls in blue, tool calls in green, errors in red)
-- Bottom section: Token usage graph over time and cost breakdown by model
-- Dark theme with vibrant accent colors
-- Style: Modern SaaS dashboard aesthetic similar to Datadog/Grafana
-- Placement: Full-width image above the Mermaid diagram
-  */}
+<Mermaid
+  chart={`
+grid
+    title Observability Dashboard
+    columns 2
+    "Request Rate" : "245 req/min"
+    "Error Rate" : "0.5%"
+    "P95 Latency" : "1.2s"
+    "Daily Cost" : "$12.50"
+`}
+  caption="Mission Control: Real-time visibility into agent health."
+/>
 
 ![Observability Dashboard](/images/observability_dashboard.png)
 
@@ -161,17 +173,23 @@ os.environ["LANGCHAIN_PROJECT"] = "my-agent-project"
 
 ### What LangSmith Shows
 
-{/* IMAGE_PLACEHOLDER: Create a LangSmith trace visualization showing:
-
-- Tree-style hierarchical view of a research agent execution
-- Parent span: "research_agent_invoke" (2.5s total)
-- Child spans with indentation showing iterations, LLM calls, and tool calls
-- Each span shows: name, duration, token count, and status icon (✓ or ✗)
-- Color coding: Blue for LLM calls, green for tool calls, purple for agent loops
-- Expandable sections showing input/output previews
-- Style: Clean, professional UI similar to LangSmith's actual interface
-- Placement: Replace or supplement the ASCII tree diagram
-  */}
+<Mermaid
+  chart={`
+gantt
+    title Research Agent Trace
+    dateFormat s
+    axisFormat %S
+    
+    section Iteration 1
+    LLM Call (gpt-4o)      :active, l1, 0, 1.2s
+    Web Search             :w1, after l1, 0.8s
+    
+    section Iteration 2
+    LLM Call (gpt-4o)      :l2, after w1, 0.9s
+    Summarize              :s1, after l2, 0.3s
+`}
+  caption="Trace Visualization: Seeing the timeline of execution."
+/>
 
 ```
 Trace: research_agent_invoke
@@ -210,16 +228,23 @@ def my_custom_tool(query: str) -> str:
 
 ## 44.3 AgentPrism: Visual Debugging
 
-{/* IMAGE_PLACEHOLDER: Create a split-screen comparison showing AgentPrism's three views:
-
-- Left panel: Tree View showing hierarchical structure with expand/collapse nodes
-- Center panel: Timeline View showing Gantt-style bars with duration and overlap
-- Right panel: Sequence Diagram showing message flow between Agent, LLM, and Tools
-- All three views showing the same trace data for consistency
-- Modern React component styling with smooth animations
-- Style: Clean, developer-friendly UI with syntax highlighting
-- Placement: Right after the section heading, before the description
-  */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph AgentPrism
+        A[Tree View]
+        B[Timeline View]
+        C[Sequence View]
+    end
+    
+    A -->|Structure| User
+    B -->|Bottlenecks| User
+    C -->|Flow| User
+    
+    style AgentPrism fill:#f3e5f5
+`}
+  caption="AgentPrism: Three perspectives for debugging."
+/>
 
 [AgentPrism](https://github.com/evilmartians/agent-prism) is an open-source React component library from Evil Martians for visualizing agent traces. It transforms complex trace data into clear, visual diagrams for faster debugging.
 
@@ -545,17 +570,16 @@ def summarize_results(results: list) -> str:
 
 ## 44.6 Cost Tracking & Budget Management
 
-{/* IMAGE_PLACEHOLDER: Create an infographic showing LLM cost escalation:
-
-- Left: Small startup icon with "$50/day" label
-- Center: Growth arrow with "3 months later" text
-- Right: Same company icon with "$5,000/day" label and shocked emoji
-- Bottom: Breakdown showing: "10x users + 2x queries/user + 2.5x avg tokens = 50x cost"
-- Visual warning signs and dollar symbols
-- Style: Clean infographic with bold numbers and icons
-- Color scheme: Green (good) transitioning to red (danger)
-- Placement: At the start of section 44.6 to emphasize the importance
-  */}
+<Mermaid
+  chart={`
+xychart-beta
+    title "The Cost of Scale"
+    x-axis [Month 1, Month 2, Month 3]
+    y-axis "Cost ($)" 0 --> 5000
+    line [200, 1500, 4800]
+`}
+  caption="Budget Shock: Why cost monitoring is non-negotiable."
+/>
 
 LLM costs can spiral quickly in production. Effective cost tracking requires per-request attribution, tenant-level budgets, and proactive alerting.
 
@@ -707,17 +731,16 @@ class BudgetManager:
 
 ### Cost Dashboard Queries
 
-{/* IMAGE_PLACEHOLDER: Create a cost dashboard mockup showing:
-
-- Top: Date range selector and total cost for period ($1,247.83)
-- Chart 1: Line graph of daily costs over 30 days with trend line
-- Chart 2: Pie chart showing cost breakdown by model (GPT-4o: 65%, Claude: 25%, GPT-4o-mini: 10%)
-- Chart 3: Bar chart showing top 5 tenants by cost
-- Table: Recent high-cost requests with model, tokens, cost, and timestamp
-- Style: Modern analytics dashboard with interactive elements
-- Color scheme: Professional blues and greens with red highlights for anomalies
-- Placement: Above the SQL queries to show what the queries produce
-  */}
+<Mermaid
+  chart={`
+pie
+    title "Cost by Model"
+    "GPT-4o (65%)" : 65
+    "Claude Sonnet (25%)" : 25
+    "GPT-4o-mini (10%)" : 10
+`}
+  caption="Cost Attribution: Knowing where your money goes."
+/>
 
 ```sql
 -- Daily cost by tenant
@@ -996,30 +1019,42 @@ def agent_node(state: dict) -> dict:
 
 ## 44.9 Debugging Common Issues
 
-{/* IMAGE_PLACEHOLDER: Create a diagnostic flowchart showing:
-
-- Three branches for common issues: "Infinite Loops", "Context Overflow", "Tool Failures"
-- Each branch shows: Symptoms → Detection → Solution
-- Visual icons: Loop symbol, overflowing container, broken tool
-- Color-coded severity: Yellow (warning), Orange (degraded), Red (critical)
-- Style: Clean flowchart with icons and short text labels
-- Placement: At the start of section 44.9 as an overview
-  */}
+<Mermaid
+  chart={`
+graph TD
+    Issue{Issue Type}
+    Issue -->|Infinite Loop| A[Token Spike]
+    Issue -->|Context Overflow| B[Quality Drop]
+    Issue -->|Tool Failure| C[Exception]
+    
+    A --> FixA[Loop Detection]
+    B --> FixB[Pruning/Summarizing]
+    C --> FixC[Retry Logic]
+`}
+  caption="Diagnostic Flowchart: Categorizing and fixing common agent issues."
+/>
 
 ### Issue 1: Infinite Loops
 
 **Symptoms**: Agent never completes, token usage spikes
 
-{/* IMAGE_PLACEHOLDER: Create an animated visualization concept showing:
-
-- Circular diagram with agent repeatedly calling the same tool
-- Iteration counter incrementing: 1, 2, 3... 15, 16, 17...
-- Red warning indicator appearing at iteration 20
-- "LOOP DETECTED - TERMINATING" message
-- Style: Simple animation frames or storyboard
-- Purpose: Visual representation of loop detection in action
-- Placement: Between symptoms and detection code
-  */}
+<Mermaid
+  chart={`
+stateDiagram-v2
+    [*] --> Iter1
+    Iter1 --> Iter2
+    Iter2 --> Iter3
+    Iter3 --> ...
+    ... --> Iter20
+    Iter20 --> Terminate : Max Loops Reached
+    
+    state Terminate {
+        direction LR
+        warn[Log Warning] --> stop[Stop Execution]
+    }
+`}
+  caption="Loop Detection: Putting safeguards on autonomy."
+/>
 
 **Detection**:
 
@@ -1044,17 +1079,27 @@ def agent_with_loop_detection(state: dict) -> dict:
 
 **Symptoms**: Quality degrades, model ignores instructions
 
-{/* IMAGE_PLACEHOLDER: Create a visual metaphor for context overflow:
-
-- Container/bucket representing context window (128K tokens)
-- Water/liquid filling up representing messages being added
-- System prompt at bottom (5%) getting "diluted" as container fills
-- Overflow indicator at 100K+ tokens showing quality degradation
-- Visual markers at 50%, 75%, 90%, 100% capacity
-- Style: Clean infographic with percentage indicators
-- Color gradient: Green → Yellow → Orange → Red as it fills
-- Placement: Between symptoms and detection code
-  */}
+<Mermaid
+  chart={`
+graph BT
+    subgraph "Healthy Context"
+        Sys1[System Prompt] --> User1[User Msg]
+    end
+    
+    subgraph "Overflow Context"
+        Sys2[System Prompt]
+        Msg1[...]
+        Msg2[...]
+        Msg3[...]
+        Msg4[...]
+        
+        Sys2 -.->|Diluted| Msg4
+    end
+    
+    style Sys2 fill:#ffcdd2
+`}
+  caption="Context Overflow: When the signal gets lost in the noise."
+/>
 
 > **Analogy**: Context overflow is like trying to have a conversation in a crowded, noisy room. At first, you can hear clearly (low token count). As more people join (more messages), the important instructions (system prompt) get drowned out by the noise. Eventually, the model can't "hear" what you originally asked it to do.
 
@@ -1122,17 +1167,21 @@ def tool_with_diagnostics(func):
 
 ## 44.10 Building a Debug Dashboard
 
-{/* IMAGE_PLACEHOLDER: Create a comprehensive debug dashboard mockup showing:
-
-- Top row: Real-time metrics (Active Sessions: 47, Requests/min: 234, Error Rate: 2.3%, Avg Latency: 1.2s)
-- Second row: Time-series graphs (Request volume, Latency percentiles, Token usage)
-- Third row: Recent errors table with timestamp, error type, trace link
-- Fourth row: Tool call success rates as horizontal bar chart
-- Bottom: Live trace feed showing recent requests scrolling
-- Style: Dark theme, professional monitoring dashboard
-- Inspired by: Grafana, Datadog, New Relic aesthetics
-- Placement: At the start of section 44.10 to show the end goal
-  */}
+<Mermaid
+  chart={`
+grid
+    title Debug Dashboard
+    columns 4
+    Sessions, Requests, Errors, Latency
+    "47 Active", "234/min", "2.3%", "1.2s"
+    
+    columns 1
+    "Time Series: Request Volume (Line Chart)"
+    "Bar Chart: Tool Success Rates"
+    "Live Trace Feed (Scrolling)"
+`}
+  caption="The ideal debug dashboard: All signals in one place."
+/>
 
 ### Metrics to Display
 
@@ -1169,21 +1218,37 @@ def process_request(request):
 
 ## 🧪 Lab Exercise: Instrument Your Agent
 
-{/* INTERACTIVE_COMPONENT_SUGGESTION: Build a "Trace Visualizer Playground"
-
-- Left panel: Code editor where users can define a simple agent with steps
-- Right panel: Live visualization showing the trace as it executes
-- Features:
-  - Step-by-step execution with play/pause controls
-  - Real-time metrics: latency, tokens, cost
-  - Simulated delays to show timing
-  - Toggle between Tree View, Timeline View, and Sequence Diagram
-  - Inject errors to see how they appear in traces
-- Example agents: Simple Q&A, Web Search + Summarize, Multi-tool Research
-- Educational value: Hands-on understanding of how traces work
-- Tech stack: React + Monaco Editor + D3.js/Mermaid for visualization
-- Placement: Replace or supplement the static lab exercise
-  */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Editor
+    participant Agent
+    participant Visualizer
+    
+    Editor->>Agent: Define Steps
+    Note right of Editor: User writes code
+    
+    Editor->>Agent: Run
+    activate Agent
+    
+    Agent->>Visualizer: Start Trace
+    Visualizer->>Visualizer: Render Root Span
+    
+    Agent->>Agent: Step 1: Search
+    Agent->>Visualizer: Emit Span (Search)
+    Visualizer->>Visualizer: Update Timeline
+    
+    Agent->>Agent: Step 2: Summarize
+    Agent->>Visualizer: Emit Span (LLM)
+    Visualizer->>Visualizer: Show Token Usage & Cost
+    
+    deactivate Agent
+    Visualizer->>Visualizer: Complete Trace
+    
+    Note right of Visualizer: User toggles views<br/>(Tree / Timeline)
+`}
+  chartAlt="Trace Visualizer: Watching the agent think in real-time."
+/>
 
 **Objective**: Add comprehensive observability to an existing agent.
 
@@ -1195,38 +1260,267 @@ def process_request(request):
 4. Context health monitoring
 5. Tool call diagnostics
 
-### Starter Code
+### Complete Implementation
 
 ```python
 import structlog
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Histogram, Gauge
+import time
+from typing import Dict, List, Any
+from collections import deque
+import hashlib
 
-# TODO: Configure structured logging
+# Configure structured logging
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
+
 logger = structlog.get_logger()
 
-# TODO: Define metrics
-request_latency = Histogram(...)
-token_usage = Histogram(...)
+# Define Prometheus metrics
+request_latency = Histogram(
+    'agent_request_duration_seconds',
+    'Time spent processing agent requests',
+    buckets=(0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0)
+)
+
+token_usage = Histogram(
+    'agent_token_usage',
+    'Number of tokens used per request',
+    buckets=(100, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000)
+)
+
+iteration_count = Histogram(
+    'agent_iterations',
+    'Number of iterations per request',
+    buckets=(1, 2, 3, 5, 10, 15, 20, 30, 50)
+)
+
+loop_detected = Counter(
+    'agent_loops_detected_total',
+    'Number of infinite loops detected'
+)
+
+context_overflow = Counter(
+    'agent_context_overflow_total',
+    'Number of context window overflows'
+)
+
+error_count = Counter(
+    'agent_errors_total',
+    'Total number of agent errors',
+    ['error_type']
+)
+
+active_requests = Gauge(
+    'agent_active_requests',
+    'Number of currently active agent requests'
+)
 
 class ObservableAgent:
-    def __init__(self, agent):
+    """Agent wrapper with comprehensive observability."""
+
+    def __init__(self, agent, max_iterations: int = 20, context_window: int = 128000):
         self.agent = agent
-        self.max_iterations = 20
+        self.max_iterations = max_iterations
+        self.context_window = context_window
+        self.state_history = deque(maxlen=50)  # Keep last 50 states for loop detection
 
     def invoke(self, input: dict) -> dict:
-        # TODO: Add request tracking
-        # TODO: Add loop detection
-        # TODO: Add context monitoring
-        # TODO: Add error handling with logging
-        pass
+        """Execute agent with full observability."""
+        request_id = hashlib.md5(str(time.time()).encode()).hexdigest()[:8]
+
+        # Bind request context to logger
+        log = logger.bind(request_id=request_id)
+
+        log.info("agent_request_started", input_keys=list(input.keys()))
+
+        active_requests.inc()
+        start_time = time.time()
+
+        try:
+            # Track iterations
+            iterations = 0
+            total_tokens = 0
+            state = input.copy()
+
+            while iterations < self.max_iterations:
+                iterations += 1
+
+                log.info(
+                    "agent_iteration",
+                    iteration=iterations,
+                    state_keys=list(state.keys())
+                )
+
+                # Check for infinite loops
+                if self._check_loop(state):
+                    loop_detected.inc()
+                    log.warning(
+                        "infinite_loop_detected",
+                        iteration=iterations,
+                        state_hash=self._hash_state(state)
+                    )
+                    error_count.labels(error_type="infinite_loop").inc()
+                    raise RuntimeError(f"Infinite loop detected at iteration {iterations}")
+
+                # Check context health
+                context_health = self._check_context_health(state.get("messages", []))
+
+                if context_health["overflow_risk"]:
+                    context_overflow.inc()
+                    log.warning(
+                        "context_overflow_risk",
+                        **context_health
+                    )
+
+                # Execute agent step
+                try:
+                    result = self.agent.invoke(state)
+
+                    # Track token usage if available
+                    if "token_usage" in result:
+                        tokens = result["token_usage"].get("total_tokens", 0)
+                        total_tokens += tokens
+                        token_usage.observe(tokens)
+
+                        log.info(
+                            "tokens_used",
+                            iteration=iterations,
+                            tokens=tokens,
+                            cumulative_tokens=total_tokens
+                        )
+
+                    # Check if agent is done
+                    if result.get("status") == "complete":
+                        log.info("agent_completed", iterations=iterations)
+                        break
+
+                    state = result
+
+                except Exception as e:
+                    error_count.labels(error_type=type(e).__name__).inc()
+                    log.error(
+                        "agent_step_failed",
+                        iteration=iterations,
+                        error=str(e),
+                        error_type=type(e).__name__
+                    )
+                    raise
+
+            # Record metrics
+            duration = time.time() - start_time
+            request_latency.observe(duration)
+            iteration_count.observe(iterations)
+
+            log.info(
+                "agent_request_completed",
+                duration_seconds=duration,
+                iterations=iterations,
+                total_tokens=total_tokens
+            )
+
+            return state
+
+        except Exception as e:
+            duration = time.time() - start_time
+            request_latency.observe(duration)
+
+            log.error(
+                "agent_request_failed",
+                duration_seconds=duration,
+                error=str(e),
+                error_type=type(e).__name__
+            )
+            raise
+
+        finally:
+            active_requests.dec()
 
     def _check_loop(self, state: dict) -> bool:
-        # TODO: Implement loop detection
-        pass
+        """Detect infinite loops by checking state repetition."""
+        state_hash = self._hash_state(state)
+
+        # Add to history
+        self.state_history.append(state_hash)
+
+        # Check if we've seen this exact state recently
+        if len(self.state_history) < 3:
+            return False
+
+        # Count occurrences of current state in recent history
+        recent_states = list(self.state_history)[-10:]  # Last 10 states
+        occurrences = recent_states.count(state_hash)
+
+        # If we've seen the same state 3+ times in last 10 iterations, it's a loop
+        return occurrences >= 3
+
+    def _hash_state(self, state: dict) -> str:
+        """Create a hash of the state for loop detection."""
+        # Hash only the relevant parts that indicate progress
+        relevant_keys = ["messages", "current_step", "tool_calls", "output"]
+        relevant_state = {k: state.get(k) for k in relevant_keys if k in state}
+
+        state_str = str(sorted(relevant_state.items()))
+        return hashlib.md5(state_str.encode()).hexdigest()
 
     def _check_context_health(self, messages: list) -> dict:
-        # TODO: Implement context health check
-        pass
+        """Monitor context window usage and health."""
+        if not messages:
+            return {
+                "total_tokens": 0,
+                "utilization": 0.0,
+                "overflow_risk": False,
+                "message_count": 0
+            }
+
+        # Estimate tokens (rough approximation: 1 token ≈ 4 characters)
+        total_chars = sum(len(str(msg)) for msg in messages)
+        estimated_tokens = total_chars // 4
+
+        utilization = estimated_tokens / self.context_window
+        overflow_risk = utilization > 0.8  # 80% threshold
+
+        return {
+            "total_tokens": estimated_tokens,
+            "utilization": round(utilization, 3),
+            "overflow_risk": overflow_risk,
+            "message_count": len(messages),
+            "context_window": self.context_window
+        }
+
+# Usage Example
+from langgraph.graph import StateGraph
+
+# Create your agent
+workflow = StateGraph(AgentState)
+# ... add nodes and edges ...
+agent = workflow.compile()
+
+# Wrap with observability
+observable_agent = ObservableAgent(
+    agent=agent,
+    max_iterations=20,
+    context_window=128000
+)
+
+# Use it
+result = observable_agent.invoke({"input": "Research quantum computing"})
+
+# Metrics are automatically exported for Prometheus scraping
 ```
 
 ### Evaluation

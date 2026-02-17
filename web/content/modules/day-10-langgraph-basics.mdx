@@ -85,7 +85,11 @@ day: 10
 
 In Day 01, we learned that agents require a **Loop** to handle uncertainty. In Day 02, we explored how to manage context effectively. Today, we build that loop with real code.
 
-{/* IMAGE_PLACEHOLDER: Create a visual diagram showing the progression from Day 01 concepts (the agent loop) to Day 02 (context management) to Day 10 (implementing with LangGraph). Show three connected panels: 1) Abstract loop diagram with "Think-Act-Observe", 2) Memory hierarchy pyramid from Day 02, 3) LangGraph code structure with nodes and edges. Use arrows to show how concepts evolve into implementation. Style: Modern, clean illustration with code snippets visible in the third panel. */}
+<ConceptVisual
+  image="/images/day_10_01_progression_visual_1768961123760.png"
+  caption="Evolution of agent concepts: From abstract loops (Day 01) to theoretical structure (Day 02) to concrete LangGraph implementation (Day 10)."
+  alt="Diagram showing progression from agent loop to context hierarchy to LangGraph code"
+/>
 
 <ConceptIntro
   title="LangGraph"
@@ -94,7 +98,11 @@ In Day 01, we learned that agents require a **Loop** to handle uncertainty. In D
   whyItMatters="LangGraph gives you explicit control over agent behavior. Unlike 'magic' frameworks that hide the logic, you can see exactly how your agent makes decisions and debug when things go wrong. The 1.0 release guarantees API stability with no breaking changes until 2.0. Over the next 90 days of this course, you'll use LangGraph to build increasingly sophisticated multi-agent systems."
 />
 
-{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison showing a traditional static flowchart on the left (with boxes and arrows, looking flat and lifeless) versus an animated LangGraph execution on the right (showing nodes lighting up in sequence, state flowing between them, and a loop back arrow glowing). Add small icons: brain for reasoning nodes, wrench for tool nodes, database for state. Style: Vibrant, animated feel with subtle glow effects. */}
+<ConceptVisual
+  image="/images/day_10_02_flowchart_vs_langgraph_1768961147549.png"
+  caption="Static Flowchart vs. Living Graph: LangGraph adds state, cycles, and persistence to traditional workflows."
+  alt="Comparison of static flowchart vs animated LangGraph execution"
+/>
 
 ### The Graph Model
 
@@ -107,7 +115,11 @@ LangGraph treats your agent as a graph where:
 | **State**    | Typed schema for shared memory     | `{"messages": [...], "tool_results": [...]}` |
 | **Reducers** | Functions controlling state merges | `operator.add` appends lists                 |
 
-{/* IMAGE_PLACEHOLDER: Create an interactive-looking diagram showing the anatomy of a LangGraph component. Show a 3D exploded view with four layers stacked vertically: bottom layer shows State (as a glowing database/memory icon), middle layers show Nodes (as function blocks with code snippets visible), and top layer shows Edges (as flowing arrows with conditional logic). Add labels pointing to each component with the examples from the table. Style: Technical blueprint aesthetic with a modern twist, using depth and shadows. */}
+<ConceptVisual
+  image="/images/day_10_03_component_anatomy_3d_1768961167252.png"
+  caption="Anatomy of a Graph: State forms the foundation, Nodes provide the logic, and Edges define the flow."
+  alt="3D exploded view of LangGraph components: State, Nodes, and Edges"
+/>
 
 <Mermaid
   chart={`
@@ -195,7 +207,11 @@ This tells LangGraph how to merge state updates using a **reducer**. When a node
 
 Without a reducer, each update would overwrite the previous value entirely.
 
-{/* IMAGE_PLACEHOLDER: Create a before/after comparison showing state updates. Left side labeled "Without Reducer": show a list being completely replaced (old messages disappearing, only new message remains). Right side labeled "With operator.add Reducer": show new messages being appended to the list (old messages stay, new one added to end). Use animation-style arrows and highlight the difference. Style: Educational diagram with clear visual distinction between the two approaches. */}
+<ConceptVisual
+  image="/images/day_10_04_state_reducer_comparison_1768961193799.png"
+  caption="Reducers in Action: Without a reducer, state is overwritten. With operator.add, history is preserved."
+  alt="Comparison showing state replacement vs state appending with reducers"
+/>
 
 </Callout>
 
@@ -226,7 +242,11 @@ def call_model(state: AgentState) -> dict:
 
 We wire the nodes and edges together using `StateGraph`.
 
-{/* IMAGE_PLACEHOLDER: Create a step-by-step visual guide showing the graph construction process. Show three frames: 1) Empty StateGraph being initialized with the schema, 2) Node being added (show the function being "plugged in" to the graph), 3) Edges being drawn connecting START → agent → END. Use a construction/assembly metaphor with pieces clicking together. Style: Instructional diagram with numbered steps and visual flow. */}
+<ConceptVisual
+  image="/images/day_10_05_graph_construction_steps_1768961237201.png"
+  caption="Building the Graph: Initialize State -> Add Nodes -> Connect Edges -> Compile."
+  alt="Step-by-step visual guide to constructing a StateGraph"
+/>
 
 ```python
 from langgraph.graph import StateGraph, START, END
@@ -349,7 +369,11 @@ Now let's implement the ReAct pattern from Day 01. The agent will:
 3. **Observe** the result
 4. **Loop** back or finish
 
-{/* IMAGE_PLACEHOLDER: Create a circular flow diagram showing the ReAct loop in action. Show four connected stages arranged in a circle: "Reason" (brain icon), "Act" (tool/wrench icon), "Observe" (eye icon), and a decision diamond "Done?" with two paths: one looping back to "Reason" and one exiting to "Finish". Add small example text bubbles at each stage showing what happens. Use arrows with motion lines to emphasize the cyclical nature. Style: Dynamic circular diagram with clear visual flow and decision point. */}
+<ConceptVisual
+  image="/images/day_10_06_react_loop_circular_1768961297331.png"
+  caption="The ReAct Loop: Reason -> Act -> Observe. This cycle enables agents to solve complex problems incrementally."
+  alt="Circular flow diagram showing the ReAct loop: Reason, Act, Observe"
+/>
 
 ```python
 from typing import TypedDict, Annotated, Literal
@@ -653,7 +677,11 @@ One of LangGraph's most powerful features is built-in persistence. Checkpointers
 - **Human-in-the-loop**: Pause for human approval, then continue
 - **Time travel**: Replay or branch from any previous state
 
-{/* IMAGE_PLACEHOLDER: Create a timeline visualization showing checkpointing in action. Show a horizontal timeline with checkpoint markers (like save points in a video game). Illustrate three scenarios: 1) Normal execution with checkpoints being saved at each node, 2) A crash occurring and then resumption from the last checkpoint, 3) A branch point where execution splits into two paths from a checkpoint. Use icons: floppy disk for saves, lightning bolt for crash, fork symbol for branching. Style: Game-like save point aesthetic with a technical twist. */}
+<ConceptVisual
+  image="/images/day_10_07_checkpointing_timeline_1768961314453.png"
+  caption="Checkpointing: Saving state allows resumption after crashes and branching for alternative explorations."
+  alt="Timeline visualization showing checkpointing, crash recovery, and branching"
+/>
 
 ```python
 from langgraph.checkpoint.memory import MemorySaver
@@ -811,7 +839,11 @@ As your agents grow complex, **subgraphs** let you nest graphs within graphs. Th
 - **Encapsulation**: Hide complexity behind a clean interface
 - **Team collaboration**: Different teams own different subgraphs
 
-{/* IMAGE_PLACEHOLDER: Create a nested box diagram showing subgraphs within a parent graph. Show a large outer box labeled "Parent Agent Graph" containing three smaller boxes labeled "Research Subgraph", "Analysis Subgraph", and "Reporting Subgraph". Each subgraph box should show a mini graph inside with 2-3 nodes. Use connecting arrows showing how the parent orchestrates the subgraphs. Add team icons next to each subgraph to emphasize the collaboration aspect. Style: Architectural diagram with clear hierarchy and containment relationships. */}
+<ConceptVisual
+  image="/images/day_10_08_subgraph_nested_boxes_1768961334987.png"
+  caption="Subgraphs: Encapsulating complexity. The Parent Graph orchestrates specialized subgraphs like Research and Analysis."
+  alt="Nested box diagram showing subgraphs within a parent agent graph"
+/>
 
 ### Creating a Subgraph
 
@@ -981,7 +1013,11 @@ app = builder.compile()
 
 Building locally is great, but production agents need robust infrastructure. **LangGraph Platform** (part of LangSmith) provides deployment options for stateful, long-running agents.
 
-{/* IMAGE_PLACEHOLDER: Create a deployment architecture diagram showing three deployment options side by side. Left: "Cloud SaaS" (cloud icon with auto-scaling indicators), Center: "Self-Hosted" (server racks with Kubernetes logo), Right: "Hybrid" (combination of cloud and on-premise). Show data flow arrows and key features listed below each option. Add security badges and compliance icons. Style: Enterprise architecture diagram with professional color scheme. */}
+<ConceptVisual
+  image="/images/day_10_09_deployment_architecture_1768961359227.png"
+  caption="Deployment Options: From fully managed Cloud SaaS to Self-Hosted compliance to Hybrid architectures."
+  alt="Enterprise deployment architecture showing Cloud, Self-Hosted, and Hybrid options"
+/>
 
 ### Deployment Options
 

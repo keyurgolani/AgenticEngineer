@@ -25,7 +25,7 @@ day: 17
     "Use embedding models to convert text to vectors (OpenAI, Voyage, Cohere, open-source)",
     "Build a complete RAG pipeline with ChromaDB",
     "Apply hybrid search combining keyword and semantic approaches",
-    "Understand advanced RAG patterns: HyDE, RAPTOR, GraphRAG, and Agentic RAG",
+    "Understand advanced RAG patterns: HyDE, RAPTOR, GraphRAG, Agentic RAG, Self-RAG, CRAG, Multi-hop, and Query Decomposition",
   ]}
 />
 
@@ -65,6 +65,26 @@ day: 17
       definition:
         "Hypothetical Document Embeddings—generating a hypothetical answer to improve retrieval",
     },
+    {
+      term: "Self-RAG",
+      definition:
+        "Self-reflective RAG that evaluates retrieval quality and answer grounding, iterating until satisfied",
+    },
+    {
+      term: "CRAG",
+      definition:
+        "Corrective RAG—detects retrieval errors and falls back to alternative strategies like web search",
+    },
+    {
+      term: "Multi-hop Reasoning",
+      definition:
+        "Chaining multiple retrievals to answer complex questions requiring information from multiple sources",
+    },
+    {
+      term: "Query Decomposition",
+      definition:
+        "Breaking complex queries into simpler sub-queries for parallel retrieval and synthesis",
+    },
   ]}
 />
 
@@ -72,7 +92,20 @@ day: 17
 
 ## Giving Your Agent a Brain
 
-{/* IMAGE_PLACEHOLDER: Create a hero illustration showing a brain (representing the LLM) connected to a library of books (representing the knowledge base). The brain should have a search beam scanning through the books, with relevant pages floating up and being fed into the brain. Use a modern, clean design with blue/purple gradients. Place this at the top of the module, right after the KeyTerms section. */}
+<Mermaid
+  chart={`
+graph LR
+    Brain[LLM Brain] -->|Limited Knowledge| Ans1[Generic Answer]
+    Brain -->|Connected| Lib[Knowledge Library]
+    Lib -->|Retrieved Facts| Brain
+    Brain -->|Grounded| Ans2[Accurate Answer]
+    
+    style Brain fill:#e1bee7,stroke:#4a148c
+    style Lib fill:#fff9c4,stroke:#fbc02d
+    style Ans2 fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="RAG Concept: Connecting the LLM 'brain' to your knowledge library."
+/>
 
 <ConceptIntro
   title="Retrieval-Augmented Generation (RAG)"
@@ -92,7 +125,18 @@ day: 17
 
 ## 5.1 The RAG Architecture
 
-{/* IMAGE_PLACEHOLDER: Create an interactive diagram showing the RAG pipeline with two parallel flows: (1) Indexing Pipeline on the left showing Documents → Chunking → Embedding → Vector DB with icons for each step, and (2) Query Pipeline on the right showing User Query → Query Embedding → Similarity Search → Retrieved Context → LLM → Answer. Use arrows to show data flow and highlight the Vector DB as the central storage component. Make it colorful and modern with icons representing each step (document icon, scissors for chunking, neural network for embedding, database cylinder, magnifying glass for search, brain for LLM). This should be placed prominently at the start of section 5.1. */}
+<Mermaid
+  chart={`
+graph LR
+    Docs[Documents] --> Indexing
+    Indexing --> RAG[RAG System]
+    Query[User Question] --> RAG
+    RAG --> Answer[Grounded Answer]
+    
+    style RAG fill:#e1f5fe,stroke:#01579b
+`}
+  caption="The RAG Pipeline: From Documents to Answers."
+/>
 
 ![RAG Data Flow](/images/rag_pipeline.png)
 
@@ -154,7 +198,27 @@ def fixed_chunk(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str
 
 ### Semantic Chunking
 
-{/* IMAGE_PLACEHOLDER: Create a side-by-side comparison illustration showing "Bad Chunking" vs "Good Chunking". On the left, show a document being split mid-sentence with broken context (use red highlights and broken chain icons). On the right, show the same document being split at natural paragraph boundaries with intact context (use green highlights and connected chain icons). Add labels pointing out "Context Lost" vs "Context Preserved". This visual should be placed right before the semantic chunking code example. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Bad Chunking"
+        T1[Text Stream] -->|Hard Cut| C1[Chunk 1: ...the function]
+        T1 -->|Hard Cut| C2[Chunk 2: returns the result...]
+        C1 -.-> C2
+    end
+    
+    subgraph "Semantic Chunking"
+        T2[Text Stream] -->|Natural Split| SC1[Chunk 1: Full Function Definition]
+        T2 -->|Natural Split| SC2[Chunk 2: Full Docstring]
+    end
+    
+    style C1 fill:#ffcdd2
+    style C2 fill:#ffcdd2
+    style SC1 fill:#c8e6c9
+    style SC2 fill:#c8e6c9
+`}
+  caption="Chunking Strategy: Preserving context is key."
+/>
 
 Better: Split on natural boundaries (paragraphs, sections, functions):
 
@@ -280,7 +344,25 @@ def late_chunking(
 
 ## 5.3 Embedding Models
 
-{/* IMAGE_PLACEHOLDER: Create an interactive visualization showing how embeddings work. Show three example sentences: "The cat sat on the mat", "A feline rested on the rug", and "The dog ran in the park". Display them as points in a 3D space where the first two sentences are close together (similar meaning) and the third is farther away (different meaning). Use connecting lines to show similarity distances. Add a slider or toggle that lets users see how different embedding models might position these points differently. This should be an engaging, colorful 3D visualization placed at the start of section 5.3. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Vector Space"
+        Point1[King]
+        Point2[Queen]
+        Point3[Man]
+        Point4[Woman]
+        
+        Point1 <-->|Similar| Point3
+        Point2 <-->|Similar| Point4
+        Point1 <-->|Relation| Point2
+    end
+    
+    style Point1 fill:#e1bee7
+    style Point2 fill:#e1bee7
+`}
+  caption="Embeddings: Mapping meaning to 3D space."
+/>
 
 Embeddings convert text to vectors that capture semantic meaning. The choice of embedding model significantly impacts retrieval quality.
 
@@ -309,7 +391,25 @@ Embeddings convert text to vectors that capture semantic meaning. The choice of 
 
 ### Matryoshka Embeddings
 
-{/* IMAGE_PLACEHOLDER: Create an interactive diagram showing Matryoshka embeddings as nested Russian dolls. The largest doll represents 1536 dimensions (full accuracy), medium doll shows 512 dimensions (balanced), and smallest doll shows 256 dimensions (fast search). Each doll should display its speed multiplier (6x, 3x, 1x) and quality retention percentage (95%, 98%, 100%). Add visual indicators showing the trade-off between speed and accuracy. Place this right before the Matryoshka code example. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Matryoshka Scaling"
+        Full[1536 dims (Full Quality)]
+        Half[1024 dims (Fast)]
+        Small[512 dims (Faster)]
+        Tiny[256 dims (Fastest)]
+        
+        Full --> Half
+        Half --> Small
+        Small --> Tiny
+    end
+    
+    style Full fill:#2e7d32,color:white
+    style Tiny fill:#c8e6c9
+`}
+  caption="Matryoshka Embeddings: Efficient storage and retrieval."
+/>
 
 Modern embedding models like Voyage 3.5 and OpenAI's text-embedding-3 support **Matryoshka representations**—you can truncate embeddings to smaller dimensions while preserving most of the semantic information:
 
@@ -430,7 +530,22 @@ def get_multimodal_embedding(text: str, image_path: str) -> list[float]:
 
 ## 5.4 Vector Databases
 
-{/* IMAGE_PLACEHOLDER: Create an interactive comparison visualization showing how vector databases work vs traditional databases. On the left, show a traditional database with exact keyword matching (searching "car" only finds "car"). On the right, show a vector database with semantic search (searching "car" finds "car", "automobile", "vehicle" based on vector proximity). Use a 2D scatter plot with clusters of related concepts. Add hover states that show similarity scores. This should be placed at the start of section 5.4. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Search Types"
+        K[Keyword Search] -->|Exact| Match1["'error 503'"]
+        V[Vector Search] -->|Meaning| Match2["'service unavailable'"]
+        
+        Match1 --> Goal[User Intent]
+        Match2 --> Goal
+    end
+    
+    style K fill:#ffcc80
+    style V fill:#90caf9
+`}
+  caption="Vector vs. Keyword Search: Finding meaning, not just matches."
+/>
 
 ### ChromaDB (Recommended for Learning)
 
@@ -560,7 +675,28 @@ results = client.search(
 
 ## 5.5 Building a Complete RAG Pipeline
 
-{/* IMAGE_PLACEHOLDER: Create an interactive "RAG Pipeline Playground" component that visualizes the entire RAG process step-by-step. Users should be able to: (1) Input a sample document and see it get chunked (with adjustable chunk size slider), (2) See the chunks get embedded (show as vector representations), (3) Input a query and watch it get embedded, (4) See the similarity search in action (highlight matching chunks with similarity scores), (5) View the final generated answer with source citations. Use animations to show data flowing through each step. This should be a comprehensive, interactive learning tool placed at the start of section 5.5. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Interactive RAG Playground"
+        Input[Raw Document] --> Chunk[Chunker]
+        Chunk -->|Text Chunks| Embed[Embedding Model]
+        Embed -->|Vectors| DB[(Vector DB)]
+        
+        Query[User Query] --> QEmbed[Query Embedder]
+        QEmbed --> Match{Similarity Match}
+        DB --> Match
+        
+        Match -->|Top-K Chunks| Context[Context Window]
+        Context --> LLM[Generation]
+        LLM --> Answer[Final Output]
+    end
+    
+    style DB fill:#ffe0b2,stroke:#f57c00
+    style LLM fill:#e1bee7,stroke:#8e24aa
+`}
+  caption="Visualizing the RAG Data Flow: From raw text to answered query."
+/>
 
 ```python
 import os
@@ -675,7 +811,22 @@ Modern RAG systems go far beyond simple retrieve-and-generate. Here are the most
 
 ### HyDE (Hypothetical Document Embeddings)
 
-{/* IMAGE_PLACEHOLDER: Create an animated flow diagram showing the HyDE process. Start with a short user query "How do I handle rate limits?" → LLM generates a detailed hypothetical answer (show as a document icon expanding) → The hypothetical answer gets embedded (show as vector transformation) → Search finds similar real documents (show matching documents lighting up) → Final answer generated. Use animation arrows and highlight the key insight that the hypothetical answer matches documentation style better than the short query. Place this right after the HyDE section title. */}
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant User
+    participant LLM
+    participant DB
+    
+    User->>LLM: "How to fix OOM?"
+    Note right of LLM: Generating hypothetical answer...
+    LLM->>LLM: "To fix Out of Memory, increase limits..."
+    LLM->>DB: Search with hypothetical answer
+    DB-->>LLM: Retrieve Docs relating to limits
+    LLM-->>User: Final Answer grounded in docs
+`}
+  caption="HyDE Process: Using hypothetical answers to improve search."
+/>
 
 The problem: User queries are often short and don't match the style of documents in your corpus. HyDE solves this by generating a hypothetical answer first, then using that to search:
 
@@ -979,7 +1130,18 @@ class SimpleGraphRAG:
 
 ### Reranking
 
-{/* IMAGE_PLACEHOLDER: Create a funnel visualization showing the reranking process. Top of funnel shows 20 candidate documents retrieved by vector search (use document icons in a wide array). Middle shows a cross-encoder model analyzing each document (use a neural network icon). Bottom shows the top 5 reranked results (use star ratings or score badges). Add labels showing "Cast Wide Net" → "Deep Analysis" → "Best Results". Use color coding to show how lower-quality results get filtered out. Place this before the reranking code example. */}
+<Mermaid
+  chart={`
+graph TD
+    Docs[1000s of Documents] -->|Retrieve top-k| Initial[20 Candidates]
+    Initial -->|Cross-Encoder| Rerank[Reranking]
+    Rerank -->|Sort by Score| Final[Top 5 Relevant]
+    
+    style Initial fill:#ffcc80
+    style Final fill:#c8e6c9,stroke:#2e7d32
+`}
+  caption="Reranking Funnel: Casting a wide net, then refining."
+/>
 
 Initial retrieval casts a wide net; reranking refines results using a cross-encoder model:
 
@@ -1137,7 +1299,26 @@ def ingest_with_context(self, documents: list[dict]):
 
 ### Hybrid Search (BM25 + Vector)
 
-{/* IMAGE_PLACEHOLDER: Create a Venn diagram showing hybrid search. Left circle labeled "BM25 Keyword Search" (finds exact matches like product codes, technical terms). Right circle labeled "Vector Semantic Search" (finds meaning-based matches). Overlapping center labeled "Hybrid Search - Best of Both Worlds". Show example queries and which approach finds them: "SKU-12345" (keyword), "affordable transportation" (semantic), "Tesla Model 3" (both). Use icons and color coding. Place this before the hybrid search code. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Hybrid Search"
+        Vector((Vector))
+        Keyword((Keyword))
+        
+        Vector -->|Semantic| Results
+        Keyword -->|Exact| Results
+        
+        Results -->|Wait| Rank[Rank Fusion]
+        Rank --> Top[Best Matches]
+    end
+    
+    style Vector fill:#90caf9
+    style Keyword fill:#ffcc80
+    style Top fill:#c8e6c9
+`}
+  caption="Hybrid Search: Combining keyword precision with semantic understanding."
+/>
 
 Combine keyword and semantic search:
 
@@ -1329,23 +1510,832 @@ answer = agentic_rag.run("How do I implement rate limiting with Redis?")
   loops. (4) Log the agent's reasoning for debugging retrieval issues.
 </Callout>
 
+### Self-RAG (Self-Reflective RAG)
+
+Self-RAG adds reflection and self-critique to the RAG pipeline. The model evaluates its own retrieval and generation quality, deciding when to retrieve more, when the answer is sufficient, and when to regenerate:
+
+<Mermaid
+  chart={`
+flowchart TB
+    Q[User Question] --> DECIDE{Need Retrieval?}
+    
+    DECIDE -->|No| GEN1[Generate without retrieval]
+    DECIDE -->|Yes| RET[Retrieve Documents]
+    
+    RET --> EVAL{Evaluate Relevance}
+    EVAL -->|Irrelevant| RET
+    EVAL -->|Relevant| GEN2[Generate with Context]
+    
+    GEN1 --> CRITIQUE{Self-Critique}
+    GEN2 --> CRITIQUE
+    
+    CRITIQUE -->|Supported & Useful| RESPOND[Final Response]
+    CRITIQUE -->|Not Supported| REGEN[Regenerate]
+    CRITIQUE -->|Not Useful| REFINE[Refine Query]
+    
+    REGEN --> CRITIQUE
+    REFINE --> RET
+    
+    style DECIDE fill:#e1bee7,stroke:#333
+    style EVAL fill:#bbf,stroke:#333
+    style CRITIQUE fill:#c8e6c9,stroke:#333
+`}
+/>
+
+```python
+from typing import Literal
+from pydantic import BaseModel, Field
+import json
+
+class RetrievalNeed(BaseModel):
+    """Assess whether retrieval is needed."""
+    needs_retrieval: bool
+    reasoning: str
+
+class RelevanceScore(BaseModel):
+    """Evaluate document relevance."""
+    is_relevant: bool
+    relevance_score: float = Field(ge=0, le=1)
+    reasoning: str
+
+class SupportScore(BaseModel):
+    """Evaluate if answer is supported by context."""
+    is_supported: bool
+    support_score: float = Field(ge=0, le=1)
+    unsupported_claims: list[str] = Field(default_factory=list)
+
+class UsefulnessScore(BaseModel):
+    """Evaluate if answer is useful."""
+    is_useful: bool
+    usefulness_score: float = Field(ge=0, le=1)
+    improvement_suggestions: list[str] = Field(default_factory=list)
+
+class SelfRAG:
+    """
+    Self-RAG: Retrieval with self-reflection and critique.
+    The model decides when to retrieve, evaluates relevance,
+    and critiques its own answers for support and usefulness.
+    """
+
+    def __init__(self, client: OpenAI, collection):
+        self.client = client
+        self.collection = collection
+
+    def query(self, question: str, max_iterations: int = 3) -> dict:
+        """Run Self-RAG with reflection loop."""
+        iteration = 0
+        context = []
+
+        while iteration < max_iterations:
+            # Step 1: Decide if retrieval is needed
+            if not context:
+                need = self._assess_retrieval_need(question)
+                if need.needs_retrieval:
+                    docs = self._retrieve(question)
+                    context = self._filter_relevant(question, docs)
+
+            # Step 2: Generate answer
+            answer = self._generate(question, context)
+
+            # Step 3: Self-critique
+            support = self._check_support(answer, context)
+            usefulness = self._check_usefulness(question, answer)
+
+            # Step 4: Decide next action
+            if support.is_supported and usefulness.is_useful:
+                return {
+                    "answer": answer,
+                    "support_score": support.support_score,
+                    "usefulness_score": usefulness.usefulness_score,
+                    "iterations": iteration + 1,
+                    "context_used": len(context)
+                }
+
+            # Need to improve - either retrieve more or regenerate
+            if not support.is_supported:
+                # Retrieve more context for unsupported claims
+                for claim in support.unsupported_claims[:2]:
+                    new_docs = self._retrieve(claim)
+                    context.extend(self._filter_relevant(claim, new_docs))
+
+            iteration += 1
+
+        # Return best effort
+        return {
+            "answer": answer,
+            "support_score": support.support_score,
+            "usefulness_score": usefulness.usefulness_score,
+            "iterations": iteration,
+            "context_used": len(context),
+            "warning": "Max iterations reached"
+        }
+
+    def _assess_retrieval_need(self, question: str) -> RetrievalNeed:
+        """Decide if retrieval is needed for this question."""
+        response = self.client.beta.chat.completions.parse(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": """Assess if external retrieval is needed to answer this question.
+Retrieval IS needed for: specific facts, recent information, domain-specific knowledge.
+Retrieval is NOT needed for: general knowledge, simple reasoning, opinions."""
+            }, {
+                "role": "user",
+                "content": question
+            }],
+            response_format=RetrievalNeed
+        )
+        return response.choices[0].message.parsed
+
+    def _retrieve(self, query: str, n: int = 5) -> list[str]:
+        """Retrieve documents for a query."""
+        results = self.collection.query(query_texts=[query], n_results=n)
+        return results["documents"][0] if results["documents"] else []
+
+    def _filter_relevant(self, question: str, docs: list[str]) -> list[str]:
+        """Filter documents by relevance."""
+        relevant = []
+        for doc in docs:
+            response = self.client.beta.chat.completions.parse(
+                model="gpt-4o-mini",
+                messages=[{
+                    "role": "system",
+                    "content": "Evaluate if this document is relevant to answering the question."
+                }, {
+                    "role": "user",
+                    "content": f"Question: {question}\n\nDocument: {doc}"
+                }],
+                response_format=RelevanceScore
+            )
+            score = response.choices[0].message.parsed
+            if score.is_relevant and score.relevance_score > 0.5:
+                relevant.append(doc)
+        return relevant
+
+    def _generate(self, question: str, context: list[str]) -> str:
+        """Generate answer from context."""
+        ctx = "\n\n".join(context) if context else "No context available."
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": "Answer based on the provided context. If context is insufficient, say so."
+            }, {
+                "role": "user",
+                "content": f"Context:\n{ctx}\n\nQuestion: {question}"
+            }]
+        )
+        return response.choices[0].message.content
+
+    def _check_support(self, answer: str, context: list[str]) -> SupportScore:
+        """Check if answer is supported by context."""
+        ctx = "\n\n".join(context) if context else "No context."
+        response = self.client.beta.chat.completions.parse(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": """Evaluate if the answer is fully supported by the context.
+Identify any claims that are not supported by the provided documents."""
+            }, {
+                "role": "user",
+                "content": f"Context:\n{ctx}\n\nAnswer:\n{answer}"
+            }],
+            response_format=SupportScore
+        )
+        return response.choices[0].message.parsed
+
+    def _check_usefulness(self, question: str, answer: str) -> UsefulnessScore:
+        """Check if answer is useful for the question."""
+        response = self.client.beta.chat.completions.parse(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": """Evaluate if this answer is useful for the question.
+A useful answer is complete, accurate, and directly addresses what was asked."""
+            }, {
+                "role": "user",
+                "content": f"Question: {question}\n\nAnswer: {answer}"
+            }],
+            response_format=UsefulnessScore
+        )
+        return response.choices[0].message.parsed
+```
+
+<Callout type="info">
+  **Self-RAG vs Basic RAG**: Self-RAG adds 3-4 LLM calls per query for
+  reflection, but significantly improves answer quality by catching
+  hallucinations and irrelevant retrievals. Use it when accuracy is critical and
+  latency is acceptable.
+</Callout>
+
+### Corrective RAG (CRAG)
+
+CRAG adds error detection and correction to the RAG pipeline. When retrieval quality is poor, it falls back to alternative strategies like web search:
+
+<Mermaid
+  chart={`
+flowchart TB
+    Q[User Question] --> RET[Retrieve from Knowledge Base]
+    RET --> EVAL{Evaluate Retrieval Quality}
+    
+    EVAL -->|Correct| USE[Use Retrieved Docs]
+    EVAL -->|Ambiguous| REFINE[Refine + Augment]
+    EVAL -->|Incorrect| FALLBACK[Web Search Fallback]
+    
+    REFINE --> DECOMP[Decompose Query]
+    DECOMP --> RET2[Re-retrieve]
+    RET2 --> USE
+    
+    FALLBACK --> WEB[Search Web]
+    WEB --> FILTER[Filter & Verify]
+    FILTER --> USE
+    
+    USE --> GEN[Generate Answer]
+    GEN --> VERIFY{Verify Grounding}
+    VERIFY -->|Grounded| RESPOND[Final Response]
+    VERIFY -->|Not Grounded| FALLBACK
+    
+    style EVAL fill:#e1bee7,stroke:#333
+    style FALLBACK fill:#ffcdd2,stroke:#333
+    style VERIFY fill:#c8e6c9,stroke:#333
+`}
+/>
+
+```python
+from typing import Literal
+from pydantic import BaseModel, Field
+import requests
+
+class RetrievalQuality(BaseModel):
+    """Assess retrieval quality."""
+    quality: Literal["correct", "ambiguous", "incorrect"]
+    confidence: float = Field(ge=0, le=1)
+    reasoning: str
+
+class CRAGPipeline:
+    """
+    Corrective RAG: Detect retrieval errors and apply corrections.
+    Falls back to web search when knowledge base retrieval fails.
+    """
+
+    def __init__(self, client: OpenAI, collection, web_search_api_key: str = None):
+        self.client = client
+        self.collection = collection
+        self.web_api_key = web_search_api_key
+
+    def query(self, question: str) -> dict:
+        """Run CRAG pipeline with error correction."""
+
+        # Step 1: Initial retrieval
+        docs = self._retrieve(question)
+
+        # Step 2: Evaluate retrieval quality
+        quality = self._evaluate_retrieval(question, docs)
+
+        # Step 3: Apply corrective action based on quality
+        if quality.quality == "correct":
+            # Good retrieval - use directly
+            context = docs
+            source = "knowledge_base"
+
+        elif quality.quality == "ambiguous":
+            # Partial match - refine and augment
+            refined_docs = self._refine_retrieval(question, docs)
+            context = docs + refined_docs
+            source = "knowledge_base_refined"
+
+        else:  # incorrect
+            # Poor retrieval - fall back to web search
+            if self.web_api_key:
+                web_results = self._web_search(question)
+                context = self._filter_web_results(question, web_results)
+                source = "web_search"
+            else:
+                # No web search available - try query decomposition
+                context = self._decompose_and_retrieve(question)
+                source = "decomposed_retrieval"
+
+        # Step 4: Generate answer
+        answer = self._generate(question, context)
+
+        # Step 5: Verify grounding
+        is_grounded = self._verify_grounding(answer, context)
+
+        return {
+            "answer": answer,
+            "source": source,
+            "retrieval_quality": quality.quality,
+            "confidence": quality.confidence,
+            "grounded": is_grounded,
+            "context_count": len(context)
+        }
+
+    def _retrieve(self, query: str, n: int = 5) -> list[str]:
+        """Retrieve from knowledge base."""
+        results = self.collection.query(query_texts=[query], n_results=n)
+        return results["documents"][0] if results["documents"] else []
+
+    def _evaluate_retrieval(self, question: str, docs: list[str]) -> RetrievalQuality:
+        """Evaluate if retrieved documents can answer the question."""
+        docs_text = "\n\n---\n\n".join(docs) if docs else "No documents retrieved."
+
+        response = self.client.beta.chat.completions.parse(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": """Evaluate retrieval quality:
+- "correct": Documents contain information to fully answer the question
+- "ambiguous": Documents are partially relevant but may need augmentation
+- "incorrect": Documents are irrelevant or misleading for this question"""
+            }, {
+                "role": "user",
+                "content": f"Question: {question}\n\nRetrieved Documents:\n{docs_text}"
+            }],
+            response_format=RetrievalQuality
+        )
+        return response.choices[0].message.parsed
+
+    def _refine_retrieval(self, question: str, initial_docs: list[str]) -> list[str]:
+        """Refine retrieval with query reformulation."""
+        # Generate alternative queries
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": "Generate 2 alternative search queries that might find missing information."
+            }, {
+                "role": "user",
+                "content": f"Original question: {question}\nPartially relevant docs found. Generate alternative queries."
+            }]
+        )
+
+        alt_queries = response.choices[0].message.content.strip().split("\n")
+        additional_docs = []
+        for q in alt_queries[:2]:
+            docs = self._retrieve(q.strip(), n=3)
+            additional_docs.extend(docs)
+
+        return additional_docs
+
+    def _web_search(self, query: str) -> list[dict]:
+        """Search the web for information (using Tavily, Serper, or similar)."""
+        # Example using a generic web search API
+        # Replace with your preferred search API
+        try:
+            response = requests.post(
+                "https://api.tavily.com/search",
+                json={"query": query, "max_results": 5},
+                headers={"Authorization": f"Bearer {self.web_api_key}"}
+            )
+            return response.json().get("results", [])
+        except Exception:
+            return []
+
+    def _filter_web_results(self, question: str, results: list[dict]) -> list[str]:
+        """Filter and extract relevant content from web results."""
+        filtered = []
+        for result in results:
+            content = result.get("content", result.get("snippet", ""))
+            if content:
+                # Verify relevance
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{
+                        "role": "system",
+                        "content": "Is this web result relevant to the question? Reply YES or NO."
+                    }, {
+                        "role": "user",
+                        "content": f"Question: {question}\n\nWeb result: {content[:500]}"
+                    }]
+                )
+                if "YES" in response.choices[0].message.content.upper():
+                    filtered.append(content)
+        return filtered
+
+    def _decompose_and_retrieve(self, question: str) -> list[str]:
+        """Decompose question and retrieve for each part."""
+        # Generate sub-questions
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": "Break this question into 2-3 simpler sub-questions."
+            }, {
+                "role": "user",
+                "content": question
+            }]
+        )
+
+        sub_questions = response.choices[0].message.content.strip().split("\n")
+        all_docs = []
+        for sq in sub_questions[:3]:
+            docs = self._retrieve(sq.strip(), n=3)
+            all_docs.extend(docs)
+
+        return list(set(all_docs))  # Deduplicate
+
+    def _generate(self, question: str, context: list[str]) -> str:
+        """Generate answer from context."""
+        ctx = "\n\n".join(context) if context else "No context available."
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": "Answer based on the provided context. Cite sources when possible."
+            }, {
+                "role": "user",
+                "content": f"Context:\n{ctx}\n\nQuestion: {question}"
+            }]
+        )
+        return response.choices[0].message.content
+
+    def _verify_grounding(self, answer: str, context: list[str]) -> bool:
+        """Verify answer is grounded in context."""
+        ctx = "\n\n".join(context)
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": "Is this answer fully supported by the context? Reply YES or NO."
+            }, {
+                "role": "user",
+                "content": f"Context:\n{ctx}\n\nAnswer:\n{answer}"
+            }]
+        )
+        return "YES" in response.choices[0].message.content.upper()
+```
+
+<Callout type="warning">
+  **CRAG Web Search**: Web search fallback requires an API key (Tavily, Serper,
+  or similar). Without it, CRAG falls back to query decomposition. Always verify
+  web results for accuracy before including them in context.
+</Callout>
+
+### Multi-hop Reasoning
+
+Multi-hop RAG handles complex questions that require chaining multiple retrievals and reasoning across documents:
+
+<Mermaid
+  chart={`
+flowchart LR
+    Q["Who founded the company<br/>that made the iPhone?"]
+    
+    Q --> HOP1[Hop 1: What company made iPhone?]
+    HOP1 --> R1[Retrieved: Apple Inc.]
+    
+    R1 --> HOP2[Hop 2: Who founded Apple?]
+    HOP2 --> R2[Retrieved: Steve Jobs,<br/>Steve Wozniak, Ronald Wayne]
+    
+    R2 --> SYNTH[Synthesize]
+    SYNTH --> A["Steve Jobs, Steve Wozniak,<br/>and Ronald Wayne"]
+    
+    style HOP1 fill:#e1bee7
+    style HOP2 fill:#bbdefb
+    style SYNTH fill:#c8e6c9
+`}
+/>
+
+```python
+from typing import List, Optional
+from pydantic import BaseModel, Field
+
+class ReasoningStep(BaseModel):
+    """A single reasoning step in multi-hop retrieval."""
+    question: str
+    retrieved_info: str
+    extracted_entities: list[str]
+    next_question: Optional[str] = None
+
+class MultiHopRAG:
+    """
+    Multi-hop RAG: Chain retrievals for complex questions.
+    Extracts entities and follows relationships across documents.
+    """
+
+    def __init__(self, client: OpenAI, collection):
+        self.client = client
+        self.collection = collection
+
+    def query(self, question: str, max_hops: int = 3) -> dict:
+        """Execute multi-hop reasoning."""
+        reasoning_chain: List[ReasoningStep] = []
+        current_question = question
+        accumulated_context = []
+
+        for hop in range(max_hops):
+            # Retrieve for current question
+            docs = self._retrieve(current_question)
+            accumulated_context.extend(docs)
+
+            # Extract relevant information and entities
+            step = self._reason_step(
+                original_question=question,
+                current_question=current_question,
+                retrieved_docs=docs,
+                previous_steps=reasoning_chain
+            )
+            reasoning_chain.append(step)
+
+            # Check if we can answer or need another hop
+            if step.next_question is None:
+                break
+
+            current_question = step.next_question
+
+        # Synthesize final answer from all hops
+        answer = self._synthesize(question, reasoning_chain)
+
+        return {
+            "answer": answer,
+            "hops": len(reasoning_chain),
+            "reasoning_chain": [
+                {"question": s.question, "info": s.retrieved_info[:200]}
+                for s in reasoning_chain
+            ]
+        }
+
+    def _retrieve(self, query: str, n: int = 3) -> list[str]:
+        """Retrieve documents for a query."""
+        results = self.collection.query(query_texts=[query], n_results=n)
+        return results["documents"][0] if results["documents"] else []
+
+    def _reason_step(
+        self,
+        original_question: str,
+        current_question: str,
+        retrieved_docs: list[str],
+        previous_steps: list[ReasoningStep]
+    ) -> ReasoningStep:
+        """Perform one reasoning step."""
+        docs_text = "\n\n".join(retrieved_docs)
+        prev_context = "\n".join([
+            f"- {s.question}: {s.retrieved_info}"
+            for s in previous_steps
+        ]) if previous_steps else "None"
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": """You are performing multi-hop reasoning.
+Given the original question, current sub-question, and retrieved documents:
+1. Extract the key information that answers the current question
+2. Identify important entities (people, places, concepts)
+3. Determine if another retrieval is needed to answer the original question
+4. If yes, formulate the next question to search for
+
+Return JSON:
+{
+    "retrieved_info": "key information extracted",
+    "extracted_entities": ["entity1", "entity2"],
+    "can_answer_original": true/false,
+    "next_question": "follow-up question or null if can answer"
+}"""
+            }, {
+                "role": "user",
+                "content": f"""Original question: {original_question}
+Current question: {current_question}
+Previous findings: {prev_context}
+
+Retrieved documents:
+{docs_text}"""
+            }],
+            response_format={"type": "json_object"}
+        )
+
+        data = json.loads(response.choices[0].message.content)
+
+        return ReasoningStep(
+            question=current_question,
+            retrieved_info=data["retrieved_info"],
+            extracted_entities=data["extracted_entities"],
+            next_question=data.get("next_question")
+        )
+
+    def _synthesize(self, question: str, chain: list[ReasoningStep]) -> str:
+        """Synthesize final answer from reasoning chain."""
+        chain_summary = "\n\n".join([
+            f"Step {i+1} - {step.question}:\n{step.retrieved_info}"
+            for i, step in enumerate(chain)
+        ])
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": "Synthesize a complete answer from the multi-hop reasoning chain."
+            }, {
+                "role": "user",
+                "content": f"Question: {question}\n\nReasoning chain:\n{chain_summary}"
+            }]
+        )
+        return response.choices[0].message.content
+```
+
+<Callout type="tip">
+  **Multi-hop Use Cases**: Multi-hop RAG excels at questions requiring entity
+  linking ("Who is the CEO of the company that acquired Twitter?") or temporal
+  reasoning ("What happened after the merger was announced?"). It's overkill for
+  simple factual lookups.
+</Callout>
+
+### Query Decomposition
+
+Break complex queries into simpler sub-queries, retrieve in parallel, and synthesize results:
+
+<Mermaid
+  chart={`
+flowchart TB
+    Q["Compare Python and Rust<br/>for building web APIs"]
+    
+    Q --> DECOMP{Decompose}
+    
+    DECOMP --> SQ1["Python web frameworks<br/>and performance"]
+    DECOMP --> SQ2["Rust web frameworks<br/>and performance"]
+    DECOMP --> SQ3["Python vs Rust<br/>developer experience"]
+    
+    SQ1 --> R1[Retrieve]
+    SQ2 --> R2[Retrieve]
+    SQ3 --> R3[Retrieve]
+    
+    R1 --> SYNTH[Synthesize Comparison]
+    R2 --> SYNTH
+    R3 --> SYNTH
+    
+    SYNTH --> A[Comprehensive Answer]
+    
+    style DECOMP fill:#e1bee7
+    style SYNTH fill:#c8e6c9
+`}
+/>
+
+```python
+from typing import List
+from pydantic import BaseModel, Field
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+class SubQuery(BaseModel):
+    """A decomposed sub-query."""
+    query: str
+    purpose: str = Field(description="What this sub-query aims to find")
+
+class DecomposedQueries(BaseModel):
+    """Result of query decomposition."""
+    sub_queries: List[SubQuery]
+    synthesis_strategy: str = Field(description="How to combine results")
+
+class QueryDecompositionRAG:
+    """
+    Query Decomposition RAG: Break complex queries into sub-queries,
+    retrieve in parallel, and synthesize results.
+    """
+
+    def __init__(self, client: OpenAI, collection):
+        self.client = client
+        self.collection = collection
+
+    def query(self, question: str) -> dict:
+        """Execute query decomposition RAG."""
+
+        # Step 1: Decompose the query
+        decomposition = self._decompose(question)
+
+        # Step 2: Retrieve for each sub-query in parallel
+        sub_results = self._parallel_retrieve(decomposition.sub_queries)
+
+        # Step 3: Synthesize results
+        answer = self._synthesize(
+            question,
+            sub_results,
+            decomposition.synthesis_strategy
+        )
+
+        return {
+            "answer": answer,
+            "sub_queries": [sq.query for sq in decomposition.sub_queries],
+            "synthesis_strategy": decomposition.synthesis_strategy,
+            "total_docs_retrieved": sum(len(r["docs"]) for r in sub_results)
+        }
+
+    def _decompose(self, question: str) -> DecomposedQueries:
+        """Decompose a complex question into sub-queries."""
+        response = self.client.beta.chat.completions.parse(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": """Decompose this complex question into 2-4 simpler sub-queries.
+Each sub-query should:
+- Be self-contained and searchable
+- Address a specific aspect of the original question
+- Together, cover all aspects needed to answer the original
+
+Also specify how to synthesize the results (e.g., "compare", "combine", "sequence")."""
+            }, {
+                "role": "user",
+                "content": question
+            }],
+            response_format=DecomposedQueries
+        )
+        return response.choices[0].message.parsed
+
+    def _parallel_retrieve(self, sub_queries: List[SubQuery]) -> List[dict]:
+        """Retrieve for all sub-queries in parallel."""
+        results = []
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {
+                executor.submit(self._retrieve_for_subquery, sq): sq
+                for sq in sub_queries
+            }
+
+            for future in as_completed(futures):
+                sq = futures[future]
+                docs = future.result()
+                results.append({
+                    "query": sq.query,
+                    "purpose": sq.purpose,
+                    "docs": docs
+                })
+
+        return results
+
+    def _retrieve_for_subquery(self, sq: SubQuery) -> list[str]:
+        """Retrieve documents for a single sub-query."""
+        results = self.collection.query(query_texts=[sq.query], n_results=3)
+        return results["documents"][0] if results["documents"] else []
+
+    def _synthesize(
+        self,
+        original_question: str,
+        sub_results: List[dict],
+        strategy: str
+    ) -> str:
+        """Synthesize final answer from sub-query results."""
+        # Format sub-results
+        formatted_results = []
+        for r in sub_results:
+            docs_text = "\n".join(r["docs"][:2])  # Limit docs per sub-query
+            formatted_results.append(
+                f"### {r['purpose']}\nQuery: {r['query']}\nFindings:\n{docs_text}"
+            )
+
+        all_results = "\n\n".join(formatted_results)
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "system",
+                "content": f"""Synthesize a comprehensive answer using the '{strategy}' approach.
+Combine information from all sub-query results to fully answer the original question.
+Ensure the answer is coherent and addresses all aspects of the question."""
+            }, {
+                "role": "user",
+                "content": f"Original question: {original_question}\n\nSub-query results:\n{all_results}"
+            }]
+        )
+        return response.choices[0].message.content
+
+
+# Example usage
+decomp_rag = QueryDecompositionRAG(client, collection)
+
+# Complex comparison question
+result = decomp_rag.query(
+    "Compare the authentication approaches in Django, FastAPI, and Express.js"
+)
+print(f"Sub-queries used: {result['sub_queries']}")
+print(f"Answer: {result['answer']}")
+```
+
+<Callout type="info">
+  **Parallel Retrieval**: Query decomposition enables parallel retrieval,
+  reducing latency for complex questions. A question decomposed into 3
+  sub-queries can be answered in roughly the same time as a single query, while
+  gathering 3x more relevant context.
+</Callout>
+
 ### Choosing the Right RAG Pattern
 
-| Pattern           | Best For                         | Trade-offs                                |
-| :---------------- | :------------------------------- | :---------------------------------------- |
-| **Basic RAG**     | Simple Q&A, documentation        | Fast, simple, but limited context         |
-| **Hybrid Search** | Mixed queries (exact + semantic) | Slightly more complex, better recall      |
-| **Reranking**     | High-precision needs             | Adds latency, improves top-k quality      |
-| **HyDE**          | Short queries, technical docs    | Extra LLM call, better query matching     |
-| **RAPTOR**        | Multi-hop questions, long docs   | High indexing cost, great for synthesis   |
-| **GraphRAG**      | Relationship questions, themes   | Expensive to build, corpus-level insights |
-| **Agentic RAG**   | Complex, multi-step research     | Most flexible, requires good prompting    |
+| Pattern                 | Best For                           | Trade-offs                                |
+| :---------------------- | :--------------------------------- | :---------------------------------------- |
+| **Basic RAG**           | Simple Q&A, documentation          | Fast, simple, but limited context         |
+| **Hybrid Search**       | Mixed queries (exact + semantic)   | Slightly more complex, better recall      |
+| **Reranking**           | High-precision needs               | Adds latency, improves top-k quality      |
+| **HyDE**                | Short queries, technical docs      | Extra LLM call, better query matching     |
+| **RAPTOR**              | Multi-hop questions, long docs     | High indexing cost, great for synthesis   |
+| **GraphRAG**            | Relationship questions, themes     | Expensive to build, corpus-level insights |
+| **Agentic RAG**         | Complex, multi-step research       | Most flexible, requires good prompting    |
+| **Self-RAG**            | High-accuracy, critical answers    | 3-4x LLM calls, catches hallucinations    |
+| **CRAG**                | Unreliable retrieval, web fallback | Adds complexity, robust error handling    |
+| **Multi-hop**           | Entity linking, chained facts      | Multiple retrievals, reasoning overhead   |
+| **Query Decomposition** | Complex comparisons, analysis      | Parallel retrieval, synthesis required    |
 
 <Callout type="info">
   **Start Simple**: Begin with basic RAG + reranking. Add hybrid search if you
   have exact-match needs. Consider HyDE for technical documentation. Use RAPTOR
   or GraphRAG only when you need corpus-level understanding or multi-hop
-  reasoning.
+  reasoning. For production systems requiring high accuracy, consider Self-RAG
+  or CRAG for self-correction capabilities.
 </Callout>
 
 ---
@@ -1487,6 +2477,10 @@ Question: {question}"""
     "Hybrid search combines keyword (BM25) and semantic (vector) approaches",
     "Advanced patterns: HyDE for query expansion, RAPTOR for hierarchical retrieval, GraphRAG for relationships",
     "Agentic RAG lets the agent control retrieval strategy dynamically",
+    "Self-RAG adds reflection and self-critique for higher accuracy answers",
+    "CRAG provides error detection and web search fallback for robust retrieval",
+    "Multi-hop reasoning chains retrievals for complex entity-linking questions",
+    "Query decomposition enables parallel retrieval for complex comparisons",
   ]}
 />
 
@@ -1496,12 +2490,26 @@ Question: {question}"""
 
 <Callout type="tip">
   **Builds Toward Capstone:** RAG is the knowledge backbone of the AgentOS
-  capstone (Month 3, Days 81-90). Your research agents will use vector databases to retrieve relevant
-  documentation, your code analysis agents will search codebases semantically,
-  and your memory systems will store and retrieve episodic experiences. The RAG patterns you learn here—chunking strategies, hybrid search, and reranking—will be essential for building production-grade agents throughout the 90-day curriculum.
+  capstone (Month 3, Days 81-90). Your research agents will use vector databases
+  to retrieve relevant documentation, your code analysis agents will search
+  codebases semantically, and your memory systems will store and retrieve
+  episodic experiences. The RAG patterns you learn here—chunking strategies,
+  hybrid search, and reranking—will be essential for building production-grade
+  agents throughout the 90-day curriculum.
 </Callout>
 
-{/* IMAGE_PLACEHOLDER: Create an interactive "Similarity Calculator" component that lets users input two sentences and see their cosine similarity score. Display the sentences as points in a 2D space with a line connecting them, labeled with the similarity score (0.0 to 1.0). Add example sentence pairs like "The cat sat" vs "A feline rested" (high similarity) and "The cat sat" vs "Python programming" (low similarity). Include a visual color gradient from red (low similarity) to green (high similarity). This should be an engaging, hands-on tool placed in the "Hands-On Practice" section. */}
+<Mermaid
+  chart={`
+graph LR
+    A[Sentence A] ---|Cosine Similarity: 0.89| B[Sentence B]
+    A ---|Cosine Similarity: 0.12| C[Sentence C]
+    
+    style A fill:#b2dfdb
+    style B fill:#a5d6a7
+    style C fill:#ef9a9a
+`}
+  caption="Similarity Score: Measuring distance in semantic space."
+/>
 
 ### Recommended Exercises
 
@@ -1515,7 +2523,20 @@ Complete these exercises to reinforce the concepts from this module:
 
 ### What's Next
 
-{/* IMAGE_PLACEHOLDER: Create a roadmap visualization showing the progression from RAG (Day 17) to Memory Systems (Day 20) to Multi-Agent Systems (Month 2). Use a timeline or path diagram with icons representing each concept: a database for RAG, a brain for memory, and connected nodes for multi-agent systems. Add arrows showing how these concepts build on each other. Use a modern, clean design with the course color scheme. Place this at the end of the "What's Next" section. */}
+<Mermaid
+  chart={`
+graph LR
+    RAG[RAG Foundation] --> Mem[Memory Systems]
+    Mem --> Agent[Agentic Patterns]
+    Agent --> Multi[Multi-Agent Systems]
+    
+    style RAG fill:#e1bee7,stroke:#4a148c
+    style Mem fill:#ce93d8
+    style Agent fill:#ba68c8
+    style Multi fill:#8e24aa
+`}
+  caption="Agentic Roadmap: RAG to Memory to Multi-Agent Systems."
+/>
 
 RAG provides the retrieval foundation, but agents also need memory that persists across sessions. The next module (Day 20) on Memory Systems shows how to combine RAG with working, episodic, and semantic memory for truly intelligent agents. You'll learn how to build agents that remember past conversations, learn from experience, and maintain context across multiple interactions—essential skills for the multi-agent systems and production deployments you'll tackle in Month 2 (Days 31-60).
 

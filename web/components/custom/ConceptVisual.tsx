@@ -12,8 +12,13 @@ interface ConceptVisualProps {
 }
 
 export function ConceptVisual({ src, alt, caption, pixels }: ConceptVisualProps) {
+  // Don't render if src is missing or empty
+  if (!src) {
+    return null
+  }
+
   return (
-    <figure className="my-12 relative group w-full max-w-4xl mx-auto -ml-4 md:-ml-12 lg:-ml-16 pr-4 md:pr-12 lg:pr-16">
+    <figure className="my-12 relative group w-full max-w-4xl mx-auto">
       <div className="relative rounded-xl overflow-hidden border border-white/5 bg-zinc-900/50 backdrop-blur-sm shadow-2xl">
         {/* Glow Effect */}
         <div className="absolute -inset-1 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-700" />

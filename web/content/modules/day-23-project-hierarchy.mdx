@@ -8,27 +8,58 @@ day: 23
 <ReadingTime minutes={30} />
 
 <Callout type="info">
-  **Learning Philosophy:** This 90-day course uses a progressive project hierarchy
-  where each level builds upon the previous. By the end of the 3-month journey, you'll have constructed
-  a complete self-hosted agentic ecosystem from components you've built and
-  understood across 12 weeks of structured learning.
+  **Learning Philosophy:** This 90-day course uses a progressive project
+  hierarchy where each level builds upon the previous. By the end of the 3-month
+  journey, you'll have constructed a complete self-hosted agentic ecosystem from
+  components you've built and understood across 12 weeks of structured learning.
 </Callout>
 
-{/* IMAGE_PLACEHOLDER: Create a visual pyramid diagram showing the 5-tier project hierarchy. The pyramid should have 5 levels from bottom to top: (1) Exercises at the base (widest), (2) POCs, (3) Mini Projects, (4) Projects, (5) Capstone at the peak. Each level should show the time investment (15-30min, 1-2hrs, 2-4hrs, 4-8hrs, 20+hrs) and number of items. Use a gradient color scheme from light blue at the base to deep purple at the peak. Include small icons for each tier: checkmark for exercises, beaker for POCs, cube for mini projects, puzzle pieces for projects, and crown for capstone. Place this after the Learning Philosophy callout. */}
+<Mermaid
+  chart={`
+pyramid
+    title 5-Tier Project Hierarchy
+    "Capstone (Full Ecosystem) - Wk 9-12"
+    "Projects (End-to-End) - Wk 6-10"
+    "Mini Projects (Microservices) - Wk 5-8"
+    "POCs (Prototypes) - Wk 1-4"
+    "Exercises (Foundations) - Wk 1-4"
+`}
+  caption="The Ladder: Building complexity step by step."
+/>
 
 ## The Five Tiers of Project Work
 
 Throughout the 90-day curriculum, you'll progress through five distinct tiers of hands-on work. Each tier builds upon the previous, creating a scaffolded learning experience that takes you from basic concepts to production-ready systems.
 
-{/* IMAGE_PLACEHOLDER: Create an interactive progress tracker showing all 90 days of the course with color-coded markers for each project tier. Days 1-30 (Month 1) should show exercises and POCs in light blue, Days 31-60 (Month 2) should show mini projects and projects in medium blue, Days 61-90 (Month 3) should show advanced projects and capstone work in deep blue/purple. Include hover states that show which specific exercise/project occurs on each day. This should be a horizontal timeline with week markers (12 weeks total) and month divisions clearly visible. Place this before the table. */}
+<Mermaid
+  chart={`
+gantt
+    title Course Progress Tracker
+    dateFormat YYYY-MM-DD
+    axisFormat W%W
+    
+    section Month 1
+    Exercises (15)      :active, t1, 2025-01-01, 30d
+    POCs (6)            :active, t2, 2025-01-01, 30d
+    
+    section Month 2
+    Mini Projects (5)   :t3, 2025-02-01, 30d
+    Projects 1-2        :t4, 2025-02-15, 15d
+    
+    section Month 3
+    Projects 3-5        :t5, 2025-03-01, 15d
+    Capstone            :crit, t6, 2025-03-01, 30d
+`}
+  caption="90-Day Roadmap: From foundations to mastery."
+/>
 
-| Tier | Type              | Time      | Purpose                 | Outcome                          | Course Phase        |
-| ---- | ----------------- | --------- | ----------------------- | -------------------------------- | ------------------- |
-| 1    | **Exercises**     | 15-30 min | Quick skill practice    | Immediate concept validation     | Weeks 1-4 (Month 1) |
-| 2    | **POCs**          | 1-2 hours | Prove a component works | Working prototype of one concept | Weeks 1-4 (Month 1) |
-| 3    | **Mini Projects** | 2-4 hours | Standalone service      | Deployable microservice          | Weeks 5-8 (Month 2) |
-| 4    | **Projects**      | 4-8 hours | End-to-end system       | Complete solution to one problem | Weeks 6-10          |
-| 5    | **Capstone**      | 20+ hours | Full ecosystem          | Self-hosted agentic platform     | Weeks 9-12 (Month 3)|
+| Tier | Type              | Time      | Purpose                 | Outcome                          | Course Phase         |
+| ---- | ----------------- | --------- | ----------------------- | -------------------------------- | -------------------- |
+| 1    | **Exercises**     | 15-30 min | Quick skill practice    | Immediate concept validation     | Weeks 1-4 (Month 1)  |
+| 2    | **POCs**          | 1-2 hours | Prove a component works | Working prototype of one concept | Weeks 1-4 (Month 1)  |
+| 3    | **Mini Projects** | 2-4 hours | Standalone service      | Deployable microservice          | Weeks 5-8 (Month 2)  |
+| 4    | **Projects**      | 4-8 hours | End-to-end system       | Complete solution to one problem | Weeks 6-10           |
+| 5    | **Capstone**      | 20+ hours | Full ecosystem          | Self-hosted agentic platform     | Weeks 9-12 (Month 3) |
 
 ---
 
@@ -36,7 +67,23 @@ Throughout the 90-day curriculum, you'll progress through five distinct tiers of
 
 Quick, focused exercises that validate understanding of a single concept. Each exercise has immediate, observable outcomes. These form the foundation of your learning in the first month (Weeks 1-4).
 
-{/* IMAGE_PLACEHOLDER: Create a grid layout showing all 15 exercises (EX-01 through EX-15) as interactive cards. Each card should display: exercise number, title, estimated time, and a small icon representing the concept (e.g., API icon for LLM call, brain for memory, search icon for embeddings). Cards should have a subtle hover effect that reveals "Builds Toward" information. Use a consistent color scheme with light backgrounds and accent colors. Arrange in a 3x5 grid. Place this after the tier description. */}
+<Mermaid
+  chart={`
+graph TD
+    subgraph "Month 1: Foundations"
+        EX1(Ex 1-5: Basics) --> EX2(Ex 6-10: Patterns)
+        EX2 --> EX3(Ex 11-15: Memory/RAG)
+        
+        EX1 -.->|Unlocks| POCs
+        EX2 -.->|Unlocks| MiniProjocts
+        EX3 -.->|Unlocks| Projects
+    end
+    style EX1 fill:#e3f2fd
+    style EX2 fill:#bbdefb
+    style EX3 fill:#90caf9
+`}
+  caption="15 Exercises: The building blocks of your AgentOS."
+/>
 
 ### Month 1: Foundations (Weeks 1-4)
 
@@ -807,7 +854,75 @@ The statement is correctly classified as a preference (subjective choice) rather
 
 POCs prove that a specific component or pattern works. They are more substantial than exercises but focused on one concept. These bridge the gap between basic exercises and full services, typically completed during Weeks 1-4 alongside exercises.
 
-{/* IMAGE_PLACEHOLDER: Create a visual flowchart showing how POCs connect to both exercises (below) and mini projects (above). Show 6 POC boxes (POC-01 through POC-06) with arrows indicating: (1) which exercises they build upon (dotted lines going down), and (2) which mini projects they enable (solid lines going up). Use a layered design with exercises at bottom, POCs in middle, mini projects at top. Include small preview icons for each POC (state machine diagram for POC-01, vector space for POC-02, cloud providers for POC-03, version tree for POC-04, search icon for POC-05, classification matrix for POC-06). Place this after the tier description. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    subgraph Mini_Projects [Mini Projects (Tier 3)]
+        MP01[MP-01: Memory Service]
+        MP02[MP-02: RAG Service]
+        MP03[MP-03: Tool Service]
+        MP04[MP-04: Agent Service]
+        MP05[MP-05: Gateway Service]
+    end
+
+    subgraph POCs [POCs (Tier 2)]
+        POC01[POC-01: ReAct Loop]
+        POC02[POC-02: Vector Store]
+        POC03[POC-03: Prompt Templates]
+        POC04[POC-04: Tool Register]
+        POC05[POC-05: Router]
+        POC06[POC-06: State Machine]
+    end
+
+    subgraph Exercises [Exercises (Tier 1)]
+        EX01[EX-01: First Call]
+        EX02[EX-02: Structured Output]
+        EX03[EX-03: Tool Definition]
+        EX04[EX-04: Env Config]
+        EX05[EX-05: Templates]
+        EX06[EX-06: ReAct Loop]
+        EX07[EX-07: Memory]
+        EX08[EX-08: Router]
+        EX09[EX-09: Embeddings]
+        EX10[EX-10: FastAPI]
+        EX11[EX-11: Redis]
+        EX12[EX-12: Chunking]
+        EX13[EX-13: ChromaDB]
+        EX14[EX-14: RAG Query]
+        EX15[EX-15: Fact Extraction]
+    end
+
+    %% Connections Exercises -> POCs (Dotted)
+    EX06 -.-> POC01
+    EX13 -.-> POC02
+    EX05 -.-> POC03
+    EX03 -.-> POC04
+    EX08 -.-> POC05
+    EX06 -.-> POC06
+
+    %% Connections POCs -> Mini Projects (Solid)
+    POC06 --> MP01
+    POC02 --> MP02
+    POC04 --> MP03
+    POC01 --> MP04
+    POC05 --> MP05
+
+    %% Styling
+    classDef tier3 fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef tier2 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef tier1 fill:#fff3e0,stroke:#ef6c00,stroke-width:2px;
+
+    class MP01,MP02,MP03,MP04,MP05 tier3;
+    class POC01,POC02,POC03,POC04,POC05,POC06 tier2;
+    class EX01,EX02,EX03,EX04,EX05,EX06,EX07,EX08,EX09,EX10,EX11,EX12,EX13,EX14,EX15 tier1;
+      ```
+    </div>
+
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Progression from atomic Exercises to POCs and Mini Projects</p>
+</div>
 
 ### POC-01: LangGraph State Machine
 
@@ -1406,15 +1521,45 @@ Return (agent, confidence, reasoning)
 
 Mini Projects are standalone services that can be deployed independently. They form the building blocks of the capstone ecosystem. These are the focus of Weeks 5-8 (Month 2), where you'll build production-ready microservices.
 
-{/* IMAGE_PLACEHOLDER: Create a microservices architecture diagram showing all 5 mini projects as service boxes with their ports. Each service box should include: service name, port number, key features (3-4 bullet points), and technology icons (FastAPI, Redis, PostgreSQL, etc.). Show inter-service communication with labeled arrows (e.g., "Memory Service → RAG Service: context retrieval"). Use a modern cloud architecture style with rounded rectangles, subtle shadows, and a professional color palette. Include a legend explaining the arrow types (sync call, async message, data flow). Place this before the table. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph LR
+    subgraph Service_Layer [Service Layer]
+        direction LR
+        MS[Memory Service<br/>Port: 8001]
+        RS[RAG Service<br/>Port: 8002]
+        TS[Tool Service<br/>Port: 8003]
+        AS[Agent Service<br/>Port: 8004]
+        GW[Gateway Service<br/>Port: 8000]
+    end
 
-| MP  | Service        | Port | Purpose                                 | Week Coverage |
-| --- | -------------- | ---- | --------------------------------------- | ------------- |
-| 01  | Prompt Library | 8001 | Prompt storage, versioning, rendering   | Week 6 (Day 37)|
-| 02  | Memory Service | 8002 | STM (Redis), LTM (PostgreSQL), Episodic | Week 6 (Day 38)|
-| 03  | RAG Service    | 8003 | Document ingestion, vector search       | Week 6 (Day 39)|
-| 04  | LLM Router     | 8004 | Multi-provider routing, fallback        | Week 7 (Day 40)|
-| 05  | Research Agent | 8005 | Web search, synthesis                   | Week 7 (Day 41)|
+    GW --> MS
+    GW --> RS
+    GW --> TS
+    GW --> AS
+    AS --> MS
+    AS --> RS
+    AS --> TS
+    RS --> MS
+
+    classDef service fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    class MS,RS,TS,AS,GW service;
+      ```
+    </div>
+
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Microservices Architecture of the 5 Mini Projects</p>
+</div>
+
+| MP  | Service        | Port | Purpose                                 | Week Coverage   |
+| --- | -------------- | ---- | --------------------------------------- | --------------- |
+| 01  | Prompt Library | 8001 | Prompt storage, versioning, rendering   | Week 6 (Day 37) |
+| 02  | Memory Service | 8002 | STM (Redis), LTM (PostgreSQL), Episodic | Week 6 (Day 38) |
+| 03  | RAG Service    | 8003 | Document ingestion, vector search       | Week 6 (Day 39) |
+| 04  | LLM Router     | 8004 | Multi-provider routing, fallback        | Week 7 (Day 40) |
+| 05  | Research Agent | 8005 | Web search, synthesis                   | Week 7 (Day 41) |
 
 Each mini project is covered in detail in Days 37-41. See those modules for complete implementations.
 
@@ -1424,7 +1569,18 @@ Each mini project is covered in detail in Days 37-41. See those modules for comp
 
 Full projects combine multiple concepts into end-to-end systems. These span Weeks 6-10 and represent significant milestones in your 90-day journey. Each project integrates multiple mini-projects and demonstrates production-ready patterns.
 
-{/* IMAGE_PLACEHOLDER: Create a project roadmap visualization showing the 5 major projects as milestone markers on a curved path. Each project should be represented by a circular node with: project number, title, day number, estimated hours, and 2-3 key technology icons. Connect the nodes with a flowing path line that shows progression. Add small branch indicators showing which mini-projects (MP-01 through MP-05) feed into each project. Use a journey/roadmap aesthetic with subtle animations on hover. Include week markers (Week 6, 7, 8, 9, 10) along the path. Place this after the tier description. */}
+<Mermaid
+  chart={`
+timeline
+    title Project Roadmap
+    Week 2 : P1: Deep Research Analyst
+    Week 2 : P2: K8s Operator
+    Week 3 : P3: Data Analyst
+    Week 3 : P4: Code Refactorer
+    Week 4 : P5: Fraud Swarm
+`}
+  caption="5 Major Projects: Applying skills to real-world problems."
+/>
 
 ### Project 1: Deep Research Analyst (Day 08)
 
@@ -1502,7 +1658,62 @@ A multi-agent swarm that detects fraud patterns in real-time transaction streams
 
 The capstone integrates everything into a self-hosted agentic ecosystem. This is the culmination of your 90-day journey, bringing together all exercises, POCs, mini-projects, and projects into a unified platform.
 
-{/* IMAGE_PLACEHOLDER: Create an animated system architecture diagram showing the complete AgentOS ecosystem. Use a layered approach with 4 distinct layers: (1) UI Layer at top (Web Dashboard, REST API, CLI), (2) Core Layer (API Gateway, Smart Orchestrator, 5 specialized agents), (3) Service Layer (5 mini-projects with their ports), (4) Infrastructure Layer at bottom (Docker, Redis, PostgreSQL, Vector DB). Show data flow with animated arrows between components. Use a modern dark theme with glowing connection lines and subtle pulse animations on active components. Include a legend explaining component types and connection patterns. This should be an interactive diagram where hovering over a component highlights its dependencies. Place this before the Mermaid diagram. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+graph TD
+    subgraph UI_Layer [UI Layer]
+        Dashboard[Web Dashboard]
+        CLI[CLI Tool]
+    end
+
+    subgraph Core_Layer [Core Layer]
+        Gateway[API Gateway]
+        Orchestrator[Smart Orchestrator]
+    end
+
+    subgraph Service_Layer [Service Layer]
+        MP01[MP-01: Memory]
+        MP02[MP-02: RAG]
+        MP03[MP-03: Tools]
+        MP04[MP-04: Agents]
+    end
+
+    subgraph Infrastructure [Infrastructure]
+        Redis[(Redis)]
+        Postgres[(PostgreSQL)]
+        VectorDB[(ChromaDB)]
+    end
+
+    Dashboard --> Gateway
+    CLI --> Gateway
+    Gateway --> Orchestrator
+    Orchestrator --> MP04
+    Orchestrator --> MP01
+    Orchestrator --> MP02
+    Orchestrator --> MP03
+
+    MP01 --> Redis
+    MP01 --> Postgres
+    MP02 --> VectorDB
+    MP04 --> MP03
+
+    classDef ui fill:#e3f2fd,stroke:#1565c0;
+    classDef core fill:#f3e5f5,stroke:#7b1fa2;
+    classDef svc fill:#e8f5e9,stroke:#2e7d32;
+    classDef infra fill:#fff3e0,stroke:#ef6c00;
+
+    class Dashboard,CLI ui;
+    class Gateway,Orchestrator core;
+    class MP01,MP02,MP03,MP04 svc;
+    class Redis,Postgres,VectorDB infra;
+      ```
+    </div>
+
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Complete AgentOS Ecosystem</p>
+</div>
 
 <Mermaid
   chart={`
@@ -1551,7 +1762,35 @@ graph TB
 
 The capstone is structured across the final month (Weeks 9-12) of your 90-day journey. Each phase builds incrementally toward a fully functional agentic platform.
 
-{/* IMAGE_PLACEHOLDER: Create a Gantt chart-style timeline showing the 5 capstone phases across Weeks 9-12. Each phase should be a horizontal bar showing: phase name, duration in hours, week span, and key deliverables. Use different colors for each phase (Phase 1: blue, Phase 2: green, Phase 3: purple, Phase 4: orange, Phase 5: red). Include milestone markers at the end of each phase. Show dependencies with connecting lines between phases. Add a progress indicator showing cumulative hours (0 to 20+). Place this before the phase descriptions. */}
+<div className="my-8">
+  <div className="flex justify-center">
+    <div className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-lg shadow-sm p-4 overflow-x-auto">
+      ```mermaid
+gantt
+    title Capstone Project Phases (Weeks 9-12)
+    dateFormat YYYY-MM-DD
+    axisFormat W%W
+
+    section Phase 1
+    Core Architecture       :p1, 2025-03-01, 7d
+
+    section Phase 2
+    Service Integration     :p2, after p1, 7d
+
+    section Phase 3
+    Agent Calibration       :p3, after p2, 5d
+
+    section Phase 4
+    UI & Monitoring         :p4, after p3, 5d
+
+    section Phase 5
+    Final Polish & Demo     :p5, after p4, 4d
+      ```
+    </div>
+
+  </div>
+  <p className="text-center text-sm text-gray-500 mt-2">Figure: Capstone Implementation Timeline</p>
+</div>
 
 **Phase 1: Service Integration (4 hours)** | Week 9
 
@@ -1588,7 +1827,17 @@ The capstone is structured across the final month (Weeks 9-12) of your 90-day jo
 
 Use this comprehensive checklist to validate your completed AgentOS ecosystem. By the end of Week 12, all items should be checked off.
 
-{/* IMAGE_PLACEHOLDER: Create an interactive checklist dashboard with 4 sections matching the categories below. Each section should be a card with a progress ring showing completion percentage. Items within each section should have checkboxes that can be toggled (for demonstration purposes). Use green checkmarks for completed items, gray circles for incomplete. Include an overall progress indicator at the top showing total completion across all categories. Add small icons next to each item (server icon for services, brain for orchestrator, robot for agents, docker whale for infrastructure). Use a clean, modern design with subtle shadows and hover effects. Place this before the checklist text. */}
+<Mermaid
+  chart={`
+pie
+    title "Capstone Readiness Checklist"
+    "Services (Healthy)" : 100
+    "Orchestrator (Smart)" : 90
+    "Agents (Specialized)" : 85
+    "Infrastructure (Robust)" : 95
+`}
+  caption="Verification: Ensuring all systems are go."
+/>
 
 **Services:**
 
@@ -1630,7 +1879,23 @@ Use this comprehensive checklist to validate your completed AgentOS ecosystem. B
 
 This matrix shows how skills develop across the 90-day curriculum, from first introduction in exercises through mastery in the capstone. Track your progress as you move from left to right.
 
-{/* IMAGE_PLACEHOLDER: Create an interactive skill progression matrix visualization. Show 12 skills as rows (LLM Calls, Structured Output, Tool Use, State Machines, Embeddings, Vector Search, Redis, FastAPI, Multi-Provider, Prompt Templates, Web Search, Classification). Show 5 columns representing the tiers (Exercise, POC, Mini Project, Project, Capstone). Each cell should contain the specific exercise/project code (e.g., "EX-01", "POC-01") where that skill is used. Use a color gradient from light (first exposure) to dark (mastery) as you move left to right. Add hover tooltips showing skill descriptions and learning outcomes. Include a "Your Progress" overlay where users can mark completed items. Use a modern table design with alternating row colors and clear grid lines. Place this before the table. */}
+<Mermaid
+  chart={`
+grid
+    title Skill Progression Matrix
+    columns 6
+    Skill, Ex, POC, MP, Proj, Cap
+    "LLM Calls", "✅", "✅", "✅", "✅", "✅"
+    "Structured Output", "✅", "✅", "✅", "✅", "✅"
+    "State Machines", "--", "✅", "--", "✅", "✅"
+    "Embeddings", "✅", "✅", "✅", "✅", "✅"
+    "Vector Search", "✅", "✅", "✅", "✅", "✅"
+    "Redis", "✅", "--", "✅", "--", "✅"
+    "FastAPI", "✅", "--", "✅", "✅", "✅"
+    "Web Search", "--", "✅", "✅", "✅", "✅"
+`}
+  caption="Skill Matrix: Tracking your growth from novice to expert."
+/>
 
 | Skill             | Exercise | POC    | Mini Project | Project | Capstone       |
 | ----------------- | -------- | ------ | ------------ | ------- | -------------- |
@@ -1653,7 +1918,35 @@ This matrix shows how skills develop across the 90-day curriculum, from first in
 
 Your 90-day journey is structured to build skills progressively across three distinct months:
 
-{/* IMAGE_PLACEHOLDER: Create a three-panel infographic showing the learning path across the 90 days. Panel 1 (Month 1/Days 1-30): "Foundations" - show icons for exercises, POCs, and early projects with a foundation/building blocks theme. Panel 2 (Month 2/Days 31-60): "Production Skills" - show icons for mini-projects and services with a construction/assembly theme. Panel 3 (Month 3/Days 61-90): "Mastery" - show the complete AgentOS ecosystem with a rocket/launch theme. Use a horizontal layout with arrows connecting the panels. Include key metrics for each month (number of exercises, projects, hours invested). Use an inspiring color gradient from blue (start) to purple (mastery). Place this after the "Getting Started" heading. */}
+<Mermaid
+  chart={`
+graph LR
+    subgraph M1[Month 1: Foundations]
+        direction TB
+        E[Exercises]
+        P[POCs]
+    end
+    
+    subgraph M2[Month 2: Production]
+        direction TB
+        MP[Mini Projects]
+        S[Services]
+    end
+    
+    subgraph M3[Month 3: Mastery]
+        direction TB
+        Proj[Projects]
+        Cap[Capstone]
+    end
+    
+    M1 ==> M2 ==> M3
+    
+    style M1 fill:#e3f2fd,stroke:#1565c0
+    style M2 fill:#e8f5e9,stroke:#2e7d32
+    style M3 fill:#f3e5f5,stroke:#7b1fa2
+`}
+  caption="The 90-Day Learning Path: Foundation -> Production -> Mastery."
+/>
 
 1. **Month 1 (Weeks 1-4, Days 1-30):** Complete all exercises (EX-01 through EX-15) and build POCs (POC-01 through POC-06). Focus on fundamentals: LLM interactions, memory systems, RAG patterns, and basic agent architectures.
 
@@ -1674,6 +1967,7 @@ Begin with EX-01: First LLM Call. Set up your environment, make your first API c
 Once comfortable, work through the exercises in order. Each builds on the previous, creating a solid foundation for the POCs and projects ahead.
 
 **Your First Week Checklist:**
+
 - Day 1-2: Complete EX-01 through EX-05 (environment setup and basics)
 - Day 3-4: Complete EX-06 through EX-10 (agent patterns and APIs)
 - Day 5-6: Complete EX-11 through EX-15 (memory and RAG)

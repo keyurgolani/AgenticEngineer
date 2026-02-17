@@ -642,6 +642,344 @@ Create a skill that helps design database schemas:
 
 </Callout>
 
+## SKILL.md Frontmatter Reference
+
+The SKILL.md frontmatter controls how your skill behaves, when it's invoked, and what capabilities it has access to.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Unique identifier for the skill (kebab-case recommended) |
+| `description` | Yes | Brief description shown in skill catalog for discovery |
+| `argument-hint` | No | Placeholder text shown in UI when skill expects arguments |
+| `disable-model-invocation` | No | When `true`, skill can only be triggered manually by user |
+| `user-invocable` | No | When `false`, skill provides background knowledge only |
+| `allowed-tools` | No | Restricts which tools the skill can use |
+| `model` | No | Override the default model for this skill |
+| `context` | No | Set to `fork` to run skill in isolated subagent |
+| `agent` | No | Specify subagent type: `Explore`, `Plan`, `general-purpose`, or custom |
+| `hooks` | No | Define lifecycle hooks for the skill |
+
+```markdown
+---
+name: "security-audit"
+description: "Performs comprehensive security analysis of codebases"
+argument-hint: "path/to/code or PR number"
+disable-model-invocation: true
+allowed-tools:
+  - Read
+  - Grep
+  - Bash(npm audit)
+model: "claude-sonnet-4-20250514"
+context: fork
+agent: Explore
+---
+
+# Security Audit Skill
+
+Your security audit instructions here...
+```
+
+<Callout type="info">
+  **Tip**: Use `allowed-tools` to create sandboxed skills that can only perform specific operations. This is especially useful for skills that run automated tasks.
+</Callout>
+
+## String Substitutions
+
+Skills support dynamic argument injection using substitution patterns. This allows skills to receive and process user input.
+
+### Available Substitutions
+
+| Pattern | Description |
+|---------|-------------|
+| `$ARGUMENTS` | All arguments passed to the skill as a single string |
+| `$ARGUMENTS[N]` | Specific argument by index (0-based) |
+| `$0`, `$1`, `$2`... | Shorthand for `$ARGUMENTS[0]`, `$ARGUMENTS[1]`, etc. |
+| `${CLAUDE_SESSION_ID}` | Unique identifier for the current session |
+
+### Argument Behavior
+
+When you use substitution patterns, arguments replace the pattern inline. When no pattern is present, arguments are **appended** to the skill content.
+
+```markdown
+---
+name: "explain-file"
+description: "Explains the purpose and structure of a file"
+argument-hint: "filename"
+---
+
+# File Explainer
+
+Analyze and explain the file: $ARGUMENTS
+
+Focus on:
+1. Overall purpose
+2. Key functions/classes
+3. Dependencies
+4. Usage patterns
+```
+
+### Multi-Argument Example
+
+```markdown
+---
+name: "compare-files"
+description: "Compare two files and highlight differences"
+argument-hint: "file1 file2"
+---
+
+# File Comparison
+
+Compare these two files:
+- **Original**: $0
+- **Modified**: $1
+
+Identify:
+1. Structural changes
+2. Logic differences
+3. Potential breaking changes
+```
+
+<Callout type="warning">
+  **Note**: If `$ARGUMENTS` or indexed patterns aren't found in the skill content, arguments are automatically appended at the end. Use explicit patterns for precise control over argument placement.
+</Callout>
+
+## Dynamic Context Injection
+
+Skills can fetch live data before the LLM processes the content using the `!command` syntax. This preprocessing step runs shell commands and injects their output.
+
+```markdown
+---
+name: "pr-review"
+description: "Reviews the current pull request"
+---
+
+# PR Review Skill
+
+## Current PR Information
+
+!gh pr view --json title,body,additions,deletions,changedFiles
+
+## Changed Files
+
+!gh pr diff --name-only
+
+## Review Instructions
+
+Based on the PR information above, provide a comprehensive review covering:
+1. Code quality and best practices
+2. Potential bugs or edge cases
+3. Performance implications
+4. Security considerations
+```
+
+<Callout type="info">
+  **How It Works**: The `!command` lines are executed **before** the skill content is sent to the LLM. The command output replaces the `!command` line in the final prompt. This is preprocessing, not LLM-driven execution.
+</Callout>
+
+### Combining Dynamic Context with Arguments
+
+```markdown
+---
+name: "branch-summary"
+description: "Summarizes changes in a branch compared to main"
+argument-hint: "branch-name"
+---
+
+# Branch Summary
+
+## Commits in $ARGUMENTS
+
+!git log main..$ARGUMENTS --oneline
+
+## Files Changed
+
+!git diff main..$ARGUMENTS --stat
+
+## Summary Request
+
+Summarize the changes in branch `$ARGUMENTS` and identify:
+1. Main features or fixes
+2. Risk areas
+3. Testing recommendations
+```
+
+## Running Skills in Subagents
+
+For complex or long-running tasks, skills can execute in isolated subagents using the `context: fork` option. This prevents the skill from consuming the main conversation's context window.
+
+### The `context` Field
+
+```markdown
+---
+name: "deep-research"
+description: "Performs comprehensive research on a topic"
+context: fork
+---
+```
+
+When `context: fork` is set, the skill runs in a separate agent instance with its own context window.
+
+### The `agent` Field
+
+Specify which type of subagent should execute the skill:
+
+| Agent Type | Best For |
+|------------|----------|
+| `Explore` | Research, codebase exploration, information gathering |
+| `Plan` | Multi-step planning, architecture decisions |
+| `general-purpose` | Standard tasks without specialized behavior |
+| Custom name | Your own defined agent configurations |
+
+```markdown
+---
+name: "codebase-explorer"
+description: "Explores and maps the codebase structure"
+context: fork
+agent: Explore
+---
+
+# Codebase Explorer
+
+Thoroughly explore this codebase and create a comprehensive map:
+
+1. **Directory Structure**: Document the project layout
+2. **Entry Points**: Identify main entry points and their purposes
+3. **Dependencies**: Map internal and external dependencies
+4. **Patterns**: Identify architectural patterns in use
+5. **Key Files**: Highlight critical configuration and source files
+
+Return a structured summary that can guide future development tasks.
+```
+
+<Callout type="insight">
+  **Skill-Driven vs Subagent-Driven**: With `context: fork`, the **skill drives the subagent**—the skill's instructions define what the subagent does. This differs from manually invoking a subagent and giving it ad-hoc instructions. Skill-driven subagents are reusable and consistent.
+</Callout>
+
+### Example: Research Skill with Explore Agent
+
+```markdown
+---
+name: "api-research"
+description: "Researches an API and documents its usage patterns"
+argument-hint: "API name or endpoint"
+context: fork
+agent: Explore
+allowed-tools:
+  - Read
+  - Grep
+  - WebSearch
+  - WebFetch
+---
+
+# API Research
+
+Research the API: $ARGUMENTS
+
+## Investigation Steps
+
+1. Search the codebase for existing usage
+2. Find official documentation
+3. Identify authentication requirements
+4. Document request/response formats
+5. Find error handling patterns
+
+## Deliverable
+
+Provide a comprehensive API guide including:
+- Authentication setup
+- Common endpoints with examples
+- Error codes and handling
+- Best practices from official docs
+```
+
+## Controlling Skill Invocation
+
+Fine-tune when and how skills can be triggered using invocation controls.
+
+### Manual-Only Skills
+
+Use `disable-model-invocation: true` for skills that should only run when explicitly requested by the user:
+
+```markdown
+---
+name: "deploy-production"
+description: "Deploys the application to production"
+disable-model-invocation: true
+---
+
+# Production Deployment
+
+⚠️ This skill deploys to PRODUCTION. Only run when explicitly requested.
+
+## Deployment Steps
+...
+```
+
+<Callout type="warning">
+  **Use Case**: Critical operations like deployments, data migrations, or destructive actions should use `disable-model-invocation: true` to prevent accidental triggering.
+</Callout>
+
+### Background Knowledge Skills
+
+Use `user-invocable: false` for skills that provide context but shouldn't be directly called:
+
+```markdown
+---
+name: "team-conventions"
+description: "Team coding conventions and standards"
+user-invocable: false
+---
+
+# Team Conventions
+
+These conventions apply to all code in this repository:
+
+## Naming
+- Use camelCase for variables and functions
+- Use PascalCase for classes and types
+- Use SCREAMING_SNAKE_CASE for constants
+
+## File Organization
+...
+```
+
+These skills are loaded as background context but don't appear as invocable commands.
+
+### Tool Permission Syntax
+
+The `allowed-tools` field supports granular permission control:
+
+| Syntax | Description |
+|--------|-------------|
+| `Skill(name)` | Allow invoking a specific skill |
+| `Skill(name *)` | Allow skill with any arguments |
+| `Bash(command)` | Allow specific bash command |
+| `Read` | Allow file reading |
+| `Write` | Allow file writing |
+| `Grep` | Allow code search |
+
+```markdown
+---
+name: "safe-analyzer"
+description: "Analyzes code without modification capabilities"
+allowed-tools:
+  - Read
+  - Grep
+  - Skill(explain-file)
+  - Bash(npm test)
+  - Bash(npm run lint)
+---
+
+# Safe Analyzer
+
+This skill can read and search code, run tests and linting,
+and invoke the explain-file skill, but cannot modify any files.
+```
+
+<Callout type="success">
+  **Security Best Practice**: Always use the most restrictive `allowed-tools` set that still enables the skill to function. This follows the principle of least privilege.
+</Callout>
+
 ## Next Steps
 
 Next, we'll explore the **Router Lab**—building intelligent routing systems that direct queries to specialized agents.

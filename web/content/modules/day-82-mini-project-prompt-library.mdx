@@ -34,9 +34,31 @@ day: 82
   system across the 90-day course.
 </Callout>
 
-<ConceptVisual
-  src="/images/agentic_ecosystem_building_blocks.png"
-  alt="Agentic Ecosystem Building Blocks"
+<Mermaid
+  chart={`
+graph TD
+    App[Agent Fleet]
+    
+    subgraph Ecosystem
+        Prompt[Prompt Library]
+        Memory[Memory Service]
+        RAG[RAG Service]
+        Router[LLM Router]
+        Research[Research Agent]
+    end
+    
+    App --> Prompt
+    App --> Memory
+    App --> RAG
+    App --> Router
+    App --> Research
+    
+    style Prompt fill:#e1bee7,stroke:#4a148c
+    style Memory fill:#bbdefb,stroke:#0d47a1
+    style RAG fill:#c8e6c9,stroke:#1b5e20
+    style Router fill:#ffecb3,stroke:#ff6f00
+    style Research fill:#ffccbc,stroke:#bf360c
+`}
   caption="Five mini-projects stack together to form the complete Agentic Ecosystem."
 />
 
@@ -71,9 +93,19 @@ day: 82
 
 **Why This Matters**: Production agent systems need centralized prompt management. Hardcoded prompts become unmaintainable. This service enables A/B testing, rollbacks, and team collaboration on prompts.
 
-<ConceptVisual
-  src="/images/prompt_management_comparison.png"
-  alt="Hardcoded Chaos vs Centralized Control"
+<Mermaid
+  chart={`
+graph LR
+    Chaos[Hardcoded Prompts] -->|Unmanageable| Debt[Tech Debt]
+    Chaos -->|Rigid| NoChange[No Iteration]
+    
+    Managed[Prompt Service] -->|Versioned| Safe[Safe Changes]
+    Managed -->|Collaborative| Team[Team Access]
+    Managed -->|Dynamic| AB[A/B Testing]
+    
+    style Chaos fill:#ffcdd2,stroke:#c62828
+    style Managed fill:#c8e6c9,stroke:#2e7d32
+`}
   caption="Moving from hardcoded strings to a managed prompt service enables collaboration and versioning."
 />
 
@@ -89,9 +121,23 @@ day: 82
 
 ## Architecture
 
-<ConceptVisual
-  src="/images/prompt_library_architecture.png"
-  alt="Prompt Library Service Architecture"
+<Mermaid
+  chart={`
+graph TB
+    Client[Client App] -->|HTTP| API[FastAPI Service]
+    
+    subgraph Core
+        API --> Logic[Prompt Service]
+        Logic --> Engine[Template Engine]
+    end
+    
+    Logic --> DB[(Database)]
+    Logic --> Cache[Redis Cache]
+    
+    style API fill:#e1f5fe,stroke:#01579b
+    style Logic fill:#e8f5e9,stroke:#2e7d32
+    style DB fill:#f3e5f5,stroke:#4a148c
+`}
   caption="The architecture separates storage, caching, and serving concerns for scalability."
 />
 
@@ -267,9 +313,34 @@ graph TB
 
 ### Data Models
 
-<ConceptVisual
-  src="/images/prompt_library_erd.png"
-  alt="Prompt Library Database Schema"
+<Mermaid
+  chart={`
+erDiagram
+    PROMPT ||--o{ PROMPT_VERSION : has
+    PROMPT ||--o{ PROMPT_USAGE : tracks
+    PROMPT_VERSION ||--o{ PROMPT_USAGE : uses
+    
+    PROMPT {
+        int id PK
+        string name UK
+        string category
+        json tags
+    }
+    
+    PROMPT_VERSION {
+        int id PK
+        int prompt_id FK
+        int version
+        string template
+    }
+    
+    PROMPT_USAGE {
+        int id PK
+        string agent_id
+        int tokens
+        int latency
+    }
+`}
   caption="The data model tracks prompt history and usage analytics across versions."
 />
 
@@ -327,9 +398,27 @@ graph TB
 
 ### Error Handling Matrix
 
-<ConceptVisual
-  src="/images/prompt_rendering_flow.png"
-  alt="Prompt Rendering Error Handling"
+<Mermaid
+  chart={`
+flowchart TD
+    User([Agent]) -->|Request| Validate{Valid Name?}
+    
+    Validate -->|No| 404[404 Not Found]
+    Validate -->|Yes| Vars{Variables Present?}
+    
+    Vars -->|No| 400[400 Missing Variable]
+    Vars -->|Yes| Syntax{Valid Template?}
+    
+    Syntax -->|No| 500[500 Template Error]
+    Syntax -->|Yes| Render[Rendered Strings]
+    
+    Render --> 200([200 OK])
+    
+    style 404 fill:#ffcdd2,stroke:#c62828
+    style 400 fill:#ffcdd2,stroke:#c62828
+    style 500 fill:#ffcdd2,stroke:#c62828
+    style 200 fill:#c8e6c9,stroke:#2e7d32
+`}
   caption="Robust validation ensures that agents never receive malformed prompts."
 />
 
@@ -345,9 +434,22 @@ graph TB
 
 ### Integration Points
 
-<ConceptVisual
-  src="/images/prompt_integration_diagram.png"
-  alt="Prompt Service Integration Map"
+<Mermaid
+  chart={`
+graph LR
+    subgraph "Prompt Service"
+        API[API]
+    end
+    
+    Agent[Agent] -->|Get Prompt| API
+    
+    API -.->|Metrics| OBS[Observability]
+    API -.->|Hints| Router[LLM Router]
+    
+    Memory[Memory] -.->|Stats| Agent
+    
+    style API fill:#e1f5fe,stroke:#01579b
+`}
   caption="The Prompt Service acts as the central hub for all agent communications."
 />
 
@@ -391,9 +493,26 @@ graph TB
 
 ## Step-by-Step Implementation
 
-<ConceptVisual
-  src="/images/prompt_implementation_roadmap.png"
-  alt="Implementation Roadmap"
+<Mermaid
+  chart={`
+graph TD
+    P1[1. Setup] --> P2[2. Models]
+    P2 --> P3[3. Schemas]
+    P3 --> P4[4. Templates]
+    P4 --> P5[5. Service]
+    P5 --> P6[6. API]
+    P6 --> P7[7. Main]
+    P7 --> P8[8. Client]
+    
+    style P1 fill:#e0f7fa,stroke:#006064
+    style P2 fill:#e0f7fa,stroke:#006064
+    style P3 fill:#e0f7fa,stroke:#006064
+    style P4 fill:#b2ebf2,stroke:#006064
+    style P5 fill:#b2ebf2,stroke:#006064
+    style P6 fill:#80deea,stroke:#006064
+    style P7 fill:#4dd0e1,stroke:#006064
+    style P8 fill:#26c6da,stroke:#006064
+`}
   caption="Follow this eight-phase journey to build your production-grade prompt service."
 />
 
@@ -608,9 +727,27 @@ class PromptVersionResponse(BaseModel):
 
 ### Phase 4: Template Engine (20 minutes)
 
-<ConceptVisual
-  src="/images/template_substitution_visual.png"
-  alt="Template Engine Logic"
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant App
+    participant Engine
+    participant Jinja
+    
+    App->>Engine: render(template, vars)
+    Engine->>Engine: Validate Syntax
+    Engine->>Jinja: from_string(template)
+    Jinja-->>Engine: Template Object
+    
+    Engine->>Jinja: render(**vars)
+    activate Jinja
+    Jinja->>Jinja: Apply filters (upper, etc)
+    Jinja->>Jinja: Substitute values
+    Jinja-->>Engine: Rendered String
+    deactivate Jinja
+    
+    Engine-->>App: Result
+`}
   caption="The engine substitutes variables and applies transforms before sending to the LLM."
 />
 
@@ -814,7 +951,21 @@ class PromptService:
         self.db.add(version)
         self.db.commit()
 
-<ConceptVisual src="/images/prompt_versioning_timeline.png" alt="Version History and Rollbacks" caption="Service maintains complete history, allowing instant rollback to any previous version." />
+<Mermaid
+  chart={`
+gitGraph
+    commit id: "Initial"
+    commit id: "v1"
+    branch feature
+    checkout feature
+    commit id: "v1.1-beta"
+    checkout main
+    merge feature id: "v2"
+    commit id: "v3" tag: "Rollback Point"
+    commit id: "v3 (Reverted)"
+`}
+  caption="Service maintains complete history, allowing instant rollback."
+/>
 
     def get_prompt(self, name: str, version: int | None = None) -> Prompt | None:
         """Get a prompt by name, optionally at specific version."""
@@ -1179,9 +1330,21 @@ if __name__ == "__main__":
 
 ## Seed Data: Example Prompts
 
-<ConceptVisual
-  src="/images/seed_prompt_gallery.png"
-  alt="Seed Prompt Catalog"
+<Mermaid
+  chart={`
+mindmap
+  root((Seed Prompts))
+    Research
+        Analyst
+        Summarizer
+    Code
+        Reviewer
+        Refactor
+        DocGen
+    Analysis
+        Data Analyst
+        Trend Spotter
+`}
   caption="Start with foundational prompts for Research, Coding, and Analysis agents."
 />
 
@@ -1266,9 +1429,18 @@ if __name__ == "__main__":
 
 ## Testing
 
-<ConceptVisual
-  src="/images/service_testing_workflow.png"
-  alt="Testing Workflow"
+<Mermaid
+  chart={`
+graph LR
+    Start --> Seed[Seed DB]
+    Seed --> Test[Run Tests]
+    Test --> API{API OK?}
+    API -->|Yes| Render[Test Render]
+    API -->|No| Fix[Fix Code]
+    
+    style Seed fill:#fff176,stroke:#fbc02d
+    style Test fill:#a5d6a7,stroke:#2e7d32
+`}
   caption="Verify the service in three steps: Start, Seed, and Request."
 />
 
@@ -1292,9 +1464,21 @@ curl -X POST http://localhost:8001/prompts/research_analyst/render \
 
 ## Integration with Agents
 
-<ConceptVisual
-  src="/images/research_agent_interaction_sequence.png"
-  alt="Agent-Service Interaction Flow"
+<Mermaid
+  chart={`
+sequenceDiagram
+    participant Agent
+    participant Lib as Prompt Lib
+    participant LLM
+    
+    Agent->>Lib: get_prompt(name="research", topic="AI")
+    Lib-->>Agent: Rendered Prompt (System + User)
+    
+    Agent->>LLM: invoke(messages)
+    LLM-->>Agent: Response
+    
+    Agent->>Lib: record_usage(tokens, latency)
+`}
   caption="Agents decouple prompt logic by delegating rendering to the service."
 />
 
@@ -1346,9 +1530,18 @@ class ResearchAgent:
   prompt chaining support (one prompt references another)
 </Exercise>
 
-<ConceptVisual
-  src="/images/ab_testing_concept_visual.png"
-  alt="A/B Testing Prompts"
+<Mermaid
+  chart={`
+graph TD
+    User -->|Request| Router
+    Router -->|50%| V1[Version 1]
+    Router -->|50%| V2[Version 2]
+    
+    V1 -->|Result| Metrics
+    V2 -->|Result| Metrics
+    
+    Metrics -->|Compare| Dashboard
+`}
   caption="Compare prompt performance by routing traffic to different versions."
 />
 
@@ -1356,9 +1549,23 @@ class ResearchAgent:
 
 ## Key Takeaways
 
-<ConceptVisual
-  src="/images/prompt_library_key_takeaways.png"
-  alt="Key Takeaways"
+<Mermaid
+  chart={`
+mindmap
+  root((Takeaways))
+    Centralized
+        Collaboration
+        Versioning
+    Reusable
+        Templates
+        Variables
+    Safe
+        History
+        Rollbacks
+    Insightful
+        Usage Ops
+        Analytics
+`}
   caption="Moving prompts out of code is a critical step towards agent reliability."
 />
 

@@ -549,17 +549,96 @@ Now it's your turn to enhance the agent! These challenges will push you to think
 **Hint**: Use `requests` library for HTTP checks and consider integrating with services like Moz or Ahrefs for domain authority.
 
 ```python
+import requests
+from urllib.parse import urlparse
+from typing import Dict, List
+import time
+
 def verify_sources_node(state: ResearchState) -> dict:
     """Verify that cited sources are valid and accessible."""
     verified = []
     failed = []
 
-    for url in state["sources"]:
-        # TODO: Check if URL is accessible
-        # TODO: Check domain credibility
-        pass
+    # Trusted domains for credibility scoring
+    TRUSTED_DOMAINS = {
+        'edu': 0.9,  # Educational institutions
+        'gov': 0.95,  # Government sites
+        'org': 0.7,  # Organizations
+    }
 
-    return {"verified_sources": verified, "failed_sources": failed}
+    HIGH_AUTHORITY_DOMAINS = {
+        'nature.com', 'science.org', 'ieee.org', 'acm.org',
+        'arxiv.org', 'pubmed.ncbi.nlm.nih.gov', 'scholar.google.com',
+        'wikipedia.org', 'britannica.com', 'reuters.com', 'apnews.com'
+    }
+
+    for url in state["sources"]:
+        result = {
+            "url": url,
+            "accessible": False,
+            "status_code": None,
+            "credibility_score": 0.0,
+            "domain": None,
+            "error": None
+        }
+
+        try:
+            # Parse domain
+            parsed = urlparse(url)
+            domain = parsed.netloc.lower()
+            result["domain"] = domain
+
+            # Check accessibility with timeout
+            response = requests.head(url, timeout=5, allow_redirects=True)
+            result["status_code"] = response.status_code
+            result["accessible"] = 200 <= response.status_code < 400
+
+            # Calculate credibility score
+            credibility = 0.5  # Base score
+
+            # Check TLD
+            tld = domain.split('.')[-1]
+            if tld in TRUSTED_DOMAINS:
+                credibility = max(credibility, TRUSTED_DOMAINS[tld])
+
+            # Check high-authority domains
+            if any(auth_domain in domain for auth_domain in HIGH_AUTHORITY_DOMAINS):
+                credibility = 0.95
+
+            # Penalize if not HTTPS
+            if parsed.scheme != 'https':
+                credibility *= 0.8
+
+            result["credibility_score"] = credibility
+
+            if result["accessible"] and credibility >= 0.6:
+                verified.append(result)
+            else:
+                failed.append(result)
+
+        except requests.Timeout:
+            result["error"] = "Timeout"
+            failed.append(result)
+        except requests.RequestException as e:
+            result["error"] = str(e)
+            failed.append(result)
+        except Exception as e:
+            result["error"] = f"Unexpected error: {str(e)}"
+            failed.append(result)
+
+        # Rate limiting
+        time.sleep(0.5)
+
+    return {
+        "verified_sources": verified,
+        "failed_sources": failed,
+        "verification_summary": {
+            "total": len(state["sources"]),
+            "verified": len(verified),
+            "failed": len(failed),
+            "avg_credibility": sum(s["credibility_score"] for s in verified) / len(verified) if verified else 0
+        }
+    }
 ```
 
 ### Challenge 2: Add Fact-Checking
@@ -578,12 +657,141 @@ def verify_sources_node(state: ResearchState) -> dict:
 Implement cross-reference checking:
 
 ```python
+from langchain_openai import ChatOpenAI
+from langchain_core.pydantic_v1 import BaseModel, Field
+from typing import List
+from tavily import TavilyClient
+
+class FactualClaim(BaseModel):
+    """A factual claim extracted from text."""
+    claim: str = Field(description="The factual claim")
+    claim_type: str = Field(description="Type: date, number, name, event, statistic")
+    context: str = Field(description="Surrounding context for the claim")
+    line_number: int = Field(description="Approximate line number in draft")
+
+class ClaimVerification(BaseModel):
+    """Verification result for a claim."""
+    claim: str
+    verified: bool
+    confidence: float = Field(ge=0, le=1, description="Confidence in verification")
+    supporting_sources: List[str]
+    contradicting_sources: List[str]
+    verdict: str  # "VERIFIED", "UNVERIFIED", "CONTRADICTED"
+
 def fact_check_node(state: ResearchState) -> dict:
     """Cross-reference claims against multiple sources."""
-    # TODO: Extract claims from draft
-    # TODO: Search for corroborating sources
-    # TODO: Flag unsupported claims
-    pass
+
+    # Step 1: Extract factual claims from draft
+    extractor_llm = ChatOpenAI(model="gpt-4o").with_structured_output(
+        List[FactualClaim]
+    )
+
+    extraction_prompt = f"""
+Extract all factual claims from this research report that can be verified:
+
+{state["draft"]}
+
+Focus on:
+- Specific dates and years
+- Numerical statistics and percentages
+- Names of people, organizations, products
+- Historical events and their details
+- Technical specifications
+- Market data and financial figures
+
+Return a list of factual claims with their types and context.
+"""
+
+    claims = extractor_llm.invoke(extraction_prompt)
+
+    if not claims:
+        return {
+            "fact_check_results": [],
+            "fact_check_summary": {
+                "total_claims": 0,
+                "verified": 0,
+                "unverified": 0,
+                "contradicted": 0
+            }
+        }
+
+    # Step 2: Verify each claim
+    tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+    verifier_llm = ChatOpenAI(model="gpt-4o-mini")
+
+    verification_results = []
+
+    for claim in claims[:20]:  # Limit to 20 claims to control costs
+        try:
+            # Search for evidence
+            search_results = tavily.search(
+                query=claim.claim,
+                max_results=5,
+                search_depth="advanced"
+            )
+
+            # Analyze evidence
+            evidence_text = "\n\n".join([
+                f"Source: {r['url']}\n{r['content']}"
+                for r in search_results.get('results', [])
+            ])
+
+            verification_prompt = f"""
+Verify this claim against the evidence:
+
+CLAIM: {claim.claim}
+CONTEXT: {claim.context}
+
+EVIDENCE:
+{evidence_text}
+
+Determine:
+1. Is the claim supported by the evidence? (yes/no/contradicted)
+2. Confidence level (0.0-1.0)
+3. Which sources support it?
+4. Which sources contradict it?
+
+Return JSON with: verified (bool), confidence (float), supporting_sources (list), contradicting_sources (list), verdict (str)
+"""
+
+            result = verifier_llm.invoke(verification_prompt)
+
+            # Parse result (simplified - in production use structured output)
+            verification = ClaimVerification(
+                claim=claim.claim,
+                verified="yes" in result.content.lower(),
+                confidence=0.8,  # Would extract from LLM response
+                supporting_sources=[r['url'] for r in search_results.get('results', [])[:3]],
+                contradicting_sources=[],
+                verdict="VERIFIED" if "yes" in result.content.lower() else "UNVERIFIED"
+            )
+
+            verification_results.append(verification)
+
+        except Exception as e:
+            print(f"Error verifying claim '{claim.claim}': {e}")
+            verification_results.append(ClaimVerification(
+                claim=claim.claim,
+                verified=False,
+                confidence=0.0,
+                supporting_sources=[],
+                contradicting_sources=[],
+                verdict="ERROR"
+            ))
+
+    # Step 3: Generate summary
+    summary = {
+        "total_claims": len(claims),
+        "verified": sum(1 for v in verification_results if v.verdict == "VERIFIED"),
+        "unverified": sum(1 for v in verification_results if v.verdict == "UNVERIFIED"),
+        "contradicted": sum(1 for v in verification_results if v.verdict == "CONTRADICTED"),
+        "avg_confidence": sum(v.confidence for v in verification_results) / len(verification_results) if verification_results else 0
+    }
+
+    return {
+        "fact_check_results": [v.dict() for v in verification_results],
+        "fact_check_summary": summary
+    }
 ```
 
 ### Challenge 3: Add Export Formats
@@ -605,12 +813,190 @@ def fact_check_node(state: ResearchState) -> dict:
 Support multiple output formats:
 
 ```python
+import markdown
+from weasyprint import HTML
+from jinja2 import Template
+from pathlib import Path
+from datetime import datetime
+
 def export_node(state: ResearchState) -> dict:
     """Export report in multiple formats."""
-    # TODO: Generate Markdown
-    # TODO: Generate PDF
-    # TODO: Generate HTML
-    pass
+
+    output_dir = Path("output")
+    output_dir.mkdir(exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_filename = f"research_report_{timestamp}"
+
+    exports = {}
+
+    # 1. Generate Markdown (clean, GitHub-ready)
+    markdown_content = state["final_report"]
+    markdown_path = output_dir / f"{base_filename}.md"
+
+    with open(markdown_path, 'w', encoding='utf-8') as f:
+        f.write(markdown_content)
+
+    exports["markdown"] = str(markdown_path)
+
+    # 2. Generate HTML (styled, responsive)
+    html_template = Template("""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 3rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: #1a1a1a;
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 0.5rem;
+        }
+        h2 {
+            font-size: 1.8rem;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #0066cc;
+        }
+        h3 {
+            font-size: 1.3rem;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #333;
+        }
+        p { margin-bottom: 1rem; }
+        ul, ol {
+            margin-left: 2rem;
+            margin-bottom: 1rem;
+        }
+        li { margin-bottom: 0.5rem; }
+        code {
+            background: #f4f4f4;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .metadata {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+        .sources {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 2px solid #eee;
+        }
+        .sources h2 {
+            color: #666;
+        }
+        .sources ul {
+            list-style: none;
+            margin-left: 0;
+        }
+        .sources li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        @media print {
+            body { background: white; }
+            .container { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="metadata">
+            Generated: {{ timestamp }}<br>
+            Word Count: {{ word_count }}<br>
+            Sources: {{ source_count }}
+        </div>
+        {{ content | safe }}
+    </div>
+</body>
+</html>
+    """)
+
+    # Convert markdown to HTML
+    html_body = markdown.markdown(
+        markdown_content,
+        extensions=['extra', 'codehilite', 'toc']
+    )
+
+    html_content = html_template.render(
+        title=state.get("topic", "Research Report"),
+        timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        word_count=len(markdown_content.split()),
+        source_count=len(state.get("sources", [])),
+        content=html_body
+    )
+
+    html_path = output_dir / f"{base_filename}.html"
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+
+    exports["html"] = str(html_path)
+
+    # 3. Generate PDF (professional layout)
+    try:
+        pdf_path = output_dir / f"{base_filename}.pdf"
+
+        # Use WeasyPrint to convert HTML to PDF
+        HTML(string=html_content).write_pdf(pdf_path)
+
+        exports["pdf"] = str(pdf_path)
+    except Exception as e:
+        print(f"PDF generation failed: {e}")
+        print("Install WeasyPrint: pip install weasyprint")
+        exports["pdf"] = None
+
+    return {
+        "exports": exports,
+        "export_summary": {
+            "formats_generated": len([v for v in exports.values() if v]),
+            "output_directory": str(output_dir),
+            "base_filename": base_filename
+        }
+    }
 ```
 
 ---
